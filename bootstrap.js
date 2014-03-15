@@ -72,9 +72,12 @@ var windowListener = {
 			var PUIsync = aDOMWindow.document.querySelector('#PanelUI-fxa-status')
 			var dupeNode1 = PUIsync.cloneNode(true);
 			dupeNode1.setAttribute('id', 'PanelUI-profilist');
-			dupeNode1.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:1px solid transparent;');
+			dupeNode1.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
 			
 			var dupeNode2 = PUIsync.cloneNode(true);
+			dupeNode2.setAttribute('id', 'PanelUI-profilist');
+			dupeNode2.removeAttribute('status');
+			dupeNode2.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
 			
 			referenceNodes.profilist_stack.appendChild(dupeNode1);
 			referenceNodes.profilist_stack.appendChild(dupeNode2);

@@ -23,8 +23,8 @@
 
 #PanelUI-profilist > .toolbarbutton-text {
   margin: 0;
-  padding: 0 6px;
-  text-align: start;
+  padding: 0; /*xp*/ /*0 6px; this is on win7*/
+  text-align: start !important;
 }
 
 #PanelUI-profilist > .toolbarbutton-icon {
@@ -32,7 +32,7 @@
 }
 
 #PanelUI-profilist[status="active"] {
-  list-style-image: url(chrome://browser/skin/syncProgress-horizontalbar.png);
+  list-style-image: url(chrome://profilist/content/active-user.png);
 }
 
 
@@ -43,7 +43,7 @@
 }
 
 #PanelUI-profilist {
-  list-style-image: url(chrome://browser/skin/sync-horizontalbar.png);
+  list-style-image: url(chrome://profilist/content/inactive-user.png);
 }
 
 #PanelUI-profilist {
