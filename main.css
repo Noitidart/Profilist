@@ -1,0 +1,67 @@
+#PanelUI-profilist {
+  margin: 0;
+  padding: 10px 0;
+  min-height: 2em;
+  -moz-appearance: none;
+  box-shadow: none;
+  background-image: none;
+  border: none;  
+  border-radius: 0;
+  transition: background-color;
+  -moz-box-orient: horizontal;
+}
+
+#PanelUI-profilist {
+  border-top: 1px solid hsla(210,4%,10%,.14);
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+}
+
+#PanelUI-profilist > .toolbarbutton-text {
+  width: 0; /* Fancy cropping solution for flexbox. */
+}
+
+#PanelUI-profilist > .toolbarbutton-text {
+  margin: 0;
+  padding: 0 6px;
+  text-align: start;
+}
+
+#PanelUI-profilist > .toolbarbutton-icon {
+  -moz-margin-end: 0;
+}
+
+#PanelUI-profilist[status="active"] {
+  list-style-image: url(chrome://browser/skin/syncProgress-horizontalbar.png);
+}
+
+
+#PanelUI-profilist {
+  flex: 1;
+  -moz-padding-start: 15px;
+  -moz-border-start-style: none;
+}
+
+#PanelUI-profilist {
+  list-style-image: url(chrome://browser/skin/sync-horizontalbar.png);
+}
+
+#PanelUI-profilist {
+  -moz-image-region: rect(0, 16px, 16px, 0);
+}
+
+#PanelUI-profilist:not([disabled]):hover {
+  outline: 1px solid hsla(210,4%,10%,.07);
+  background-color: hsla(210,4%,10%,.07);
+}
+
+#PanelUI-profilist:not([disabled]):hover:active {
+  outline: 1px solid hsla(210,4%,10%,.12);
+  background-color: hsla(210,4%,10%,.12);
+  box-shadow: 0 1px 0 hsla(210,4%,10%,.05) inset;
+}
+
+#PanelUI-profilist:not([disabled]):hover,
+#PanelUI-profilist:not([disabled]):hover:active {
+  outline: none;
+}
