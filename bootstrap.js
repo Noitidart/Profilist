@@ -59,9 +59,19 @@ var windowListener = {
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
+			var PUIsync = aDOMWindow.document.querySelector('#PanelUI-fxa-status');
+			console.info('PUIsync on start up = ', PUIsync);
+			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
+			if (PUIsync_height == 0) {
+				console.warn('PUIsync unavail', PUIsync);
+				PanelUI.addEventListener('popupshowing', function() {
+					windowListener.loadIntoWindow(aDOMWindow);
+				}, false);
+				return;
+			}
 			var PUIf = aDOMWindow.document.querySelector('#PanelUI-footer');
 			var PUIcs = aDOMWindow.document.querySelector('#PanelUI-contents-scroller');
-			console.log('PUIcs.style.width',PUIcs.style.width);
+			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
 			['xul:vbox', {id: 'profilist_hbox'},
 				['xul:stack', {key:'profilist_stack',style:'width:100%'}]
@@ -69,18 +79,54 @@ var windowListener = {
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
 			
-			var PUIsync = aDOMWindow.document.querySelector('#PanelUI-fxa-status')
+			/*must insert the "Default: profile" into stack last*/
+			
 			var dupeNode1 = PUIsync.cloneNode(true);
-			dupeNode1.setAttribute('id', 'PanelUI-profilist');
+			dupeNode1.classList.add('PanelUI-profilist');
+			dupeNode1.setAttribute('label', 'Clean');
+			dupeNode1.removeAttribute('id');
+			dupeNode1.setAttribute('status','inactive');
+			dupeNode1.setAttribute('top',PUIsync_height);
 			dupeNode1.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
 			
 			var dupeNode2 = PUIsync.cloneNode(true);
-			dupeNode2.setAttribute('id', 'PanelUI-profilist');
-			dupeNode2.removeAttribute('status');
+			dupeNode2.classList.add('PanelUI-profilist');
+			dupeNode2.setAttribute('label', 'Default');
+			dupeNode2.setAttribute('status','active');
+			dupeNode2.setAttribute('top','0');
+			dupeNode2.removeAttribute('id');
 			dupeNode2.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
+
+			var dupeNode3 = PUIsync.cloneNode(true);
+			dupeNode3.classList.add('PanelUI-profilist');
+			dupeNode3.classList.add('advanced');
+			dupeNode3.setAttribute('label', 'Advanced Options');
+			dupeNode3.removeAttribute('status','active');
+			dupeNode3.removeAttribute('id');
+			dupeNode3.setAttribute('top',PUIsync_height*2);
+			dupeNode3.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
 			
+			referenceNodes.profilist_stack.style.height = PUIsync_height + 'px'
 			referenceNodes.profilist_stack.appendChild(dupeNode1);
+			referenceNodes.profilist_stack.appendChild(dupeNode3);
 			referenceNodes.profilist_stack.appendChild(dupeNode2);
+			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
+				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
+					return;
+				}
+				PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
+				referenceNodes.profilist_stack.style.height = PUIsync_height*3 + 'px';
+			}, false);
+			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
+				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
+					return;
+				}
+				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
+					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
+					PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
+				}, false);
+				referenceNodes.profilist_stack.style.height = PUIsync_height + 'px';
+			}, false);
 			PanelUI.addEventListener('popuphiding', prevHide, false)
 		}
 		
