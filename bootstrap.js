@@ -17,7 +17,9 @@ Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
+Cu.import('resource://gre/modules/FileUtils.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
+XPCOMUtils.defineLazyGetter(myServices, 'proc', function(){ return Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess) });
 
 var cProfDirPath = OS.Constants.Path.profileDir;
 var cProfDirName = OS.Path.basename(cProfDirPath);
@@ -66,8 +68,8 @@ promise.then(
 		//update stackDOMJson
 		if (stackDOMJson.length == 0) {
 			stackDOMJson = [
-				{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-				{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
+				{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+				{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(profToolkit.selectedProfile.name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
 			];
 			var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
 			var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
@@ -90,7 +92,7 @@ promise.then(
 				//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
 			} else {
 				console.log('splicing p = ', profToolkit.profiles[p]);
-				stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, status:'inactive', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
+				stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
 			}
 		}
 		console.info('stackDOMJson after promise fin = ', stackDOMJson);
@@ -155,11 +157,73 @@ var observers = {
     }
 };
 
+function renameProfile() {
+	//only allow certain chracters
+	//cannot rename profile to a name that already exists
+}
+
+function launchProfile(profName) {
+
+	Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
+
+	var found = false;
+	for (var p in profToolkit.profiles) {
+		if (profName == profToolkit.profiles[p].name) {
+			found = true;
+		}
+	}
+			
+	if (!found) {
+		Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while trying to launch profile named "' + profName + '": Proflie name not found in memory.');
+		console.info('dump of profiles = ', profToolkit.profiles);
+		return false;
+	}
+	
+	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+	myServices.proc.init(exe);
+	var args = ['-P', profName, '-no-remote'];
+	myServices.proc.run(false, args, args.length);
+}
+
+function createProfile() {
+	//creating profile with name that already exists does nothing
+	
+	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+	myServices.proc.init(exe);
+	
+	var profNamesCurrentlyInMenu = [];
+	for (var p in profToolkit.profiles) {
+		profNamesCurrentlyInMenu.push(profToolkit.profiles[p].name);
+	}
+	
+	var digit = 1;
+	var profName = 'Nameless Profile'; //creates with default name
+	while (profNamesCurrentlyInMenu.indexOf(profName + ' ' + digit) > -1) {
+		digit++;
+	}
+	profName = profName + ' ' + digit;
+
+		var obsToLaunchProfAfterCreate = {
+			observe: function(aSubject, aTopic, aData) {
+				console.info('incoming obsToLaunchProfAfterCreate: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData, {aSubject: aSubject, aTopic: aTopic, aData: aData});
+				var args = ['-P', profName, '-no-remote'];
+				process.run(false, args, args.length);
+				
+				//path to self xpi to install to this profile == self.aData.installPath.path
+			}
+		};
+
+	var args = ['-CreateProfile', profName, '-no-remote'];
+	process.runAsync(args, args.length, obsToLaunchProfAfterCreate);
+}
+
 function prevHide(e) {
 	//e.preventDefault();
 	//e.stopPropagation();
 }
 
+
+var addEventListenerFuncs
 function updateMenuDOM(aDOMWindow, json) {
 	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
 	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
@@ -195,8 +259,16 @@ function updateMenuDOM(aDOMWindow, json) {
 			console.log('el idented');
 		}
 		elRefs.push(el);
+		
 		for (var p in json[i]) {
 			if (p == 'nodeToClone' || p == 'identifier' || p == 'props') { continue }
+			if (p == 'addEventListener') {
+				(function(elClosure, jsonIClosure) {
+					console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+					elClosure.addEventListener(jsonIClosure.addEventListener[0], jsonIClosure.addEventListener[1], jsonIClosure.addEventListener[2]);
+				})(el, json[i]);
+				continue;
+			}
 			if (json[i][p] === null) {
 				el.removeAttribute(p);
 			} else {
@@ -311,8 +383,10 @@ var windowListener = {
 			console.log('PUIfi height', PUIfi.boxObject);
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
-					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
+					//{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					//{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
+					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(cProfName) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 				];
 			}
 			
