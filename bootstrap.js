@@ -11,6 +11,8 @@ var collapsedheight = 0; //holds height stack should be when collapsed
 var expandedheight = 0; //holds height stack should be when expanded
 var stackDOMJson = []; //array holding menu structure in stack
 
+var unloaders = {};
+
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
@@ -61,7 +63,10 @@ function updateMenuDOM(aDOMWindow, json) {
 			stack.appendChild(el);
 			console.log('appended', el);
 		}
-		console.log('el.boxObject.height = ' + el.boxObject.height);
+		console.log('el.boxObject.height = ', el.boxObject);
+		aDOMWindow.setTimeout(function() {
+			console.log('el.boxObject.height = ', el.boxObject);
+		}, 10000);
 		cumHeight += el.boxObject.height;
 		console.log('cumHeight after adding = ' + cumHeight);
 		if (i < json.length - 1) {
@@ -111,6 +116,11 @@ var windowListener = {
 			let aDOMWindow = DOMWindows.getNext();
 			windowListener.unloadFromWindow(aDOMWindow);
 		}
+		
+		for (var u in unloaders) {
+			unloaders[u]();
+		}
+		
 		//Stop listening so future added windows dont get this attached
 		Services.wm.removeListener(windowListener);
 	},
@@ -125,11 +135,20 @@ var windowListener = {
 			var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
 			console.info('PUIsync on start up = ', PUIsync);
 			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
-			if (PUIsync_height == 0) {
-				console.warn('PUIsync unavail', PUIsync);
-				PanelUI.addEventListener('popupshowing', function() {
+			if (PanelUI.state != 'open' && PanelUI.state != 'showing') { //no need to do an || state != 'showing' because if its showing it will trigger the showing function i add in this if. USED TO BE "if (PUIsync_height == 0)"
+				console.warn('PanelUI not open', PanelUI);
+				var unloaderId = new Date().getTime();
+				var createMenuOnPopup = function() {
+					PanelUI.removeEventListener('popupshowing', createMenuOnPopup, false);
+					delete unloaders[unloaderId];
+					console.warn('running loading into window to create menuuuuuuuuuu....');
 					windowListener.loadIntoWindow(aDOMWindow);
-				}, false);
+				}
+				unloaders[unloaderId] = function() {
+					console.log('RUNNING UNLOADER');
+					PanelUI.removeEventListener('popupshowing', createMenuOnPopup, false);
+				}
+				PanelUI.addEventListener('popupshowing', createMenuOnPopup, false);
 				return;
 			}
 			var PUIf = PanelUI.querySelector('#PanelUI-footer');
@@ -146,12 +165,12 @@ var windowListener = {
 			/*must insert the "Default: profile" into stack last*/
 			
 			console.log('CREATING MENU JSON');
-			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');			
+			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');
+			console.log('PUIsync height', PUIsync.boxObject);
+			console.log('PUIfi height', PUIfi.boxObject);
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
 					{nodeToClone:PUIsync, identifier:'[label="Clean"]', label:'Clean', class:'PanelUI-profilist', id:null, status:'inactive', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIfi},
-					{nodeToClone:PUIfi},
 					{nodeToClone:PUIsync, identifier:'.advanced', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					{nodeToClone:PUIsync, identifier:'.advanced', label:'Advanced Options', class:'PanelUI-profilist advanced', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					{nodeToClone:PUIsync, identifier:'[label="Default"]', label:'Default', class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
@@ -224,7 +243,9 @@ var windowListener = {
 		if (PanelUI) {
 			PanelUI.removeEventListener('popuphiding', prevHide, false)
 			var profilistHBox = aDOMWindow.document.querySelector('#profilist_box');
-			profilistHBox.parentNode.removeChild(profilistHBox);
+			if (profilistHBox) {
+				profilistHBox.parentNode.removeChild(profilistHBox);
+			}
 		}
 	}
 };
