@@ -16,11 +16,134 @@ var unloaders = {};
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
+Cu.import('resource://gre/modules/osfile.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 
+var cProfDirPath = OS.Constants.Path.profileDir;
+var cProfDirName = OS.Path.basename(cProf.dirPath);
+var cProfId = cProfDirName.substr(0, cProfDirName.indexOf('.')); //used to create initial menu if promise does not complete before PanelUI is shown
+var cProfName = cProfDirName.substr(cProfId.length + 1); //used to create initial menu if promise does not complete before PanelUI is shown
+
+var profDirPath = cProfDirPath.replace(cProfDirName, ''); //contains ending slash
+var profToolkit = {
+	dirPath: profDirPath, //path to default profile folder that holds all the profiles
+	profileDirs: [], //file entries
+	profileCount: 0,
+	profiles: {},
+	selectedProfile: 0, //reference to the profiles object but to the current profile in the profiles object
+};
+
+let iterator = new OS.File.DirectoryIterator(profToolkit.dirPath);
+let promise = iterator.forEach(
+	function onEntry(entry) {
+		/*entry structure
+		Object
+		isDir: true
+		isSymLink: false
+		name: "ncc90nnv.default"
+		path: "C:\Users\ali57233\AppData\Roaming\Mozilla\Firefox\Profiles\ncc90nnv.default"
+		winCreationDate:Date 2012-11-05T21:42:51.447Z
+		winLastAccessDate:Date 2014-03-19T01:59:46.290Z
+		winLastWriteDate:Date 2014-03-19T01:59:46.290Z
+		*/
+		if (entry.isDir) {
+			profToolkit.profileDirs.push(entry);
+			profToolkit.profileCount++;
+			profToolkit.profiles[entry.name] = {
+				dirFileEntry: entry,
+				dirName: entry.name,
+				id: entry.name.substr(0, entry.name.indexOf('.'));
+				name: entry.name.substr(entry.id.length + 1);
+			}
+		}
+	}
+);
+promise.then(
+	function onSuccess() {
+		//set selectedProfile to reference of current profile object
+		profToolkit.selectedProfile = profToolkit.profiles[cProfDirName];
+		
+		//update stackDOMJson
+		if (stackDOMJson.length == 0) {
+			stackDOMJson = [
+				{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+				{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
+			];
+		} else {
+			var profNamesCurrentlyInMenu = [];
+			var profIdsCurrentlyInMenu = [];
+			[].forEach.call(stackDOMJson, function(m, i) {
+				profNamesCurrentlyInMenu.push(m.props.profname);
+				profNamesCurrentlyInMenu.push(m.props.profid);
+			});
+			for (var p in profToolkit.profiles) {
+				if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
+				if (p.name == profToolkit.selectedProfile.name) {
+					//should never happend because stackDOMJson length was not 0 if in this else of the parent if
+					stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
+				} else {
+					stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
+				}
+			}
+			
+		}
+		
+		iterator.close();
+	},
+	function onFailure(reason) {
+		// Close the iterator, propagate any error
+		iterator.close();
+		Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while reading contenst of Default Profile folder. See Browser Console for details.');
+		console.warn('An error occured while reading contenst of Default Profile folder. Reason = ', reason)
+		throw reason;
+	}
+);
+
+
+var observers = {
+    /*
+    inlineOptsHid: {
+        observe:    function(aSubject, aTopic, aData) {
+                        //##Cu.reportError('incoming inlineOptsHid: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
+                        if (aTopic == 'addon-options-hidden' && aData == selfId + '@jetpack') {
+                            addonMgrXulWin = null; //trial as of 112713
+                        }
+                    },
+        reg:    function() {
+                obs.addObserver(observers.inlineOptsHid, 'addon-options-hidden', false);
+            },
+        unreg:    function() {
+                obs.removeObserver(observers.inlineOptsHid, 'addon-options-hidden');
+            }
+    }
+    */
+    'profile-do-change': {
+        observe: function(aSubject, aTopic, aData) {
+			console.info('incoming profile-do-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
+        },
+        reg: function() {
+			obs.addObserver(observers['profile-do-change'], 'profile-do-change', false);
+        },
+        unreg: function() {
+			obs.removeObserver(observers['profile-do-change'], 'profile-do-change');
+        }
+    },
+    'profile-before-change': {
+        observe: function(aSubject, aTopic, aData) {
+			console.info('incoming profile-before-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
+        },
+        reg: function() {
+			obs.addObserver(observers['profile-before-change'], 'profile-before-change', false);
+        },
+        unreg: function() {
+			obs.removeObserver(observers['profile-before-change'], 'profile-before-change');
+        }
+    }
+};
+
 function prevHide(e) {
-	e.preventDefault();
-	e.stopPropagation();
+	//e.preventDefault();
+	//e.stopPropagation();
 }
 
 function updateMenuDOM(aDOMWindow, json) {
@@ -34,6 +157,7 @@ function updateMenuDOM(aDOMWindow, json) {
 	var cumHeight = 0;
 	var elRefs = [];
 	var setTops = [];
+	var PUIsync;
 	for (var i=0; i<json.length; i++) {
 		console.log('in json arr = ', i);
 		var el = null;
@@ -44,6 +168,12 @@ function updateMenuDOM(aDOMWindow, json) {
 			console.log('el = ' + el);
 		}
 		if (!el) {
+			if (json[i].nodeToClone == 'PUIsync') {
+				if (!PUIsync) {
+					PUIsync = aDOMWindow.document.querySelector('#PanelUI-popup').querySelector('#PanelUI-fxa-status');
+				}
+				json[i].nodeToClone = PUIsync;
+			}
 			el = json[i].nodeToClone.cloneNode(true);
 			appendChild = true;
 			console.log('el created');
@@ -52,7 +182,7 @@ function updateMenuDOM(aDOMWindow, json) {
 		}
 		elRefs.push(el);
 		for (var p in json[i]) {
-			if (p == 'nodeToClone' || p == 'identifier') { continue }
+			if (p == 'nodeToClone' || p == 'identifier' || p == 'props') { continue }
 			if (json[i][p] === null) {
 				el.removeAttribute(p);
 			} else {
@@ -170,48 +300,15 @@ var windowListener = {
 			console.log('PUIfi height', PUIfi.boxObject);
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
-					{nodeToClone:PUIsync, identifier:'[label="Clean"]', label:'Clean', class:'PanelUI-profilist', id:null, status:'inactive', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'.advanced', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'.advanced', label:'Advanced Options', class:'PanelUI-profilist advanced', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="Default"]', label:'Default', class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
+					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIsync, identifier:'[label="' + cProf.name + '"]', label:cProf.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 				];
 			}
-			console.log('now running updateMenuDOM');
+			
 			updateMenuDOM(aDOMWindow, stackDOMJson);
-			console.log('COMPLETED running updateMenuDOM');
+			
 			referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
-			
-			/*
-			var dupeNode1 = PUIsync.cloneNode(true);
-			dupeNode1.classList.add('PanelUI-profilist');
-			dupeNode1.setAttribute('label', 'Clean');
-			dupeNode1.removeAttribute('id');
-			dupeNode1.setAttribute('status','inactive');
-			dupeNode1.setAttribute('top',PUIsync_height);
-			dupeNode1.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
-			
-			var dupeNode2 = PUIsync.cloneNode(true);
-			dupeNode2.classList.add('PanelUI-profilist');
-			dupeNode2.setAttribute('label', 'Default');
-			dupeNode2.setAttribute('status','active');
-			dupeNode2.setAttribute('top','0');
-			dupeNode2.removeAttribute('id');
-			dupeNode2.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
 
-			var dupeNode3 = PUIsync.cloneNode(true);
-			dupeNode3.classList.add('PanelUI-profilist');
-			dupeNode3.classList.add('advanced');
-			dupeNode3.setAttribute('label', 'Advanced Options');
-			dupeNode3.removeAttribute('status','active');
-			dupeNode3.removeAttribute('id');
-			dupeNode3.setAttribute('top',PUIsync_height*2);
-			dupeNode3.setAttribute('style', '-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);');
-			
-			referenceNodes.profilist_stack.style.height = PUIsync_height + 'px'
-			referenceNodes.profilist_stack.appendChild(dupeNode1);
-			referenceNodes.profilist_stack.appendChild(dupeNode3);
-			referenceNodes.profilist_stack.appendChild(dupeNode2);
-			*/
 			
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
@@ -331,10 +428,20 @@ function startup(aData, aReason) {
 	myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.USER_SHEET);
 	
 	windowListener.register();
+	
+	//register all observers
+	for (var o in observers) {
+		observers[o].reg();
+	}
 }
 
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
+	
+	//unregister all observers
+	for (var o in observers) {
+		observers[o].unreg();
+	}
 	
 	myServices.sss.unregisterSheet(cssUri, myServices.sss.USER_SHEET);
 	
