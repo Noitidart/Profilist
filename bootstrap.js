@@ -10,7 +10,7 @@ var cssUri;
 var collapsedheight = 0; //holds height stack should be when collapsed
 var expandedheight = 0; //holds height stack should be when expanded
 var stackDOMJson = []; //array holding menu structure in stack
-
+var exeInited = false;
 var unloaders = {};
 
 Cu.import('resource://gre/modules/Services.jsm');
@@ -31,90 +31,144 @@ var profToolkit = {
 	dirPath: profDirPath, //path to default profile folder that holds all the profiles
 	profileDirs: [], //file entries
 	profileCount: 0,
+	profileNames: [], //array of all profile names
+	profileIds: [], //array holding all profileIds
+	profileNameKey_IdVal: {}, //object with keys being the profile name, and its value being the profile id, a quick way to get the id of a profile name
 	profiles: {},
 	selectedProfile: 0, //reference to the profiles object but to the current profile in the profiles object
 };
 
-let iterator = new OS.File.DirectoryIterator(profToolkit.dirPath);
-let promise = iterator.forEach(
-	function onEntry(entry) {
-		/*entry structure
-		Object
-		isDir: true
-		isSymLink: false
-		name: "ncc90nnv.default"
-		path: "C:\Users\ali57233\AppData\Roaming\Mozilla\Firefox\Profiles\ncc90nnv.default"
-		winCreationDate:Date 2012-11-05T21:42:51.447Z
-		winLastAccessDate:Date 2014-03-19T01:59:46.290Z
-		winLastWriteDate:Date 2014-03-19T01:59:46.290Z
-		*/
-		if (entry.isDir) {
-			profToolkit.profileDirs.push(entry);
-			profToolkit.profileCount++;
-			profToolkit.profiles[entry.name] = {
-				dirFileEntry: entry,
-				dirName: entry.name,
-				id: entry.name.substr(0, entry.name.indexOf('.')),
-				name: entry.name.substr(entry.name.indexOf('.') + 1)
-			}
-		}
-	}
-);
-promise.then(
-	function onSuccess() {
-		//set selectedProfile to reference of current profile object
-		profToolkit.selectedProfile = profToolkit.profiles[cProfDirName];
-		
-		//update stackDOMJson
-		if (stackDOMJson.length == 0) {
-			stackDOMJson = [
-				{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-				{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(profToolkit.selectedProfile.name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
-			];
-			var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
-			var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
-		} else {
-			var profNamesCurrentlyInMenu = [];
-			var profIdsCurrentlyInMenu = [];
-			[].forEach.call(stackDOMJson, function(m, i) {
-				if ('props' in m && 'profid' in m.props) {
-					profNamesCurrentlyInMenu.push(m.props.profname);
-					profNamesCurrentlyInMenu.push(m.props.profid);
+function refreshProfToolkit() {
+	//goes through default profile dir and updates toolkit with all profiles that are not found already in it
+	
+	let iterator = new OS.File.DirectoryIterator(profToolkit.dirPath);
+	let promise = iterator.forEach(
+		function onEntry(entry) {
+			/*entry structure
+			Object
+			isDir: true
+			isSymLink: false
+			name: "ncc90nnv.default"
+			path: "C:\Users\ali57233\AppData\Roaming\Mozilla\Firefox\Profiles\ncc90nnv.default"
+			winCreationDate:Date 2012-11-05T21:42:51.447Z
+			winLastAccessDate:Date 2014-03-19T01:59:46.290Z
+			winLastWriteDate:Date 2014-03-19T01:59:46.290Z
+			*/
+			if (entry.isDir) {
+				var entryId = entry.name.substr(0, entry.name.indexOf('.'));
+				var entryName = entry.name.substr(entry.name.indexOf('.') + 1);
+				
+				if (profToolkit.profileNames.indexOf(entryName) == -1) {
+					if (profToolkit.profileIds.indexOf(entryId) > -1) {
+						//so since last refresh, it's been renamed. as id is already in toolkit but name is not.
+						var oldName = profToolkit.profiles[entryId].name;
+						profToolkit.profileNames.splice(profToolkit.profileNames.indexOf(oldName),1,entryName);
+						delete profToolkit.profiles[entryId];
+						delete profToolkit.profileNameKey_IdVal[oldName];
+					} else {
+						profToolkit.profileIds.push(entryId);
+					}
+					profToolkit.profileNames.push(entryName);
+					profToolkit.profileCount = profToolkit.profileNames.length;
+					
+					profToolkit.profileNameKey_IdVal[entryName] = entryId;
+					
+					profToolkit.profiles[entryId] = {
+						dirFileEntry: entry,
+						dirName: entry.name,
+						id: entryId,
+						name: entryName
+					}
 				}
-			});
+			}
 		}
-		for (var p in profToolkit.profiles) {
-			if (profIdsCurrentlyInMenu.indexOf(profToolkit.profiles[p].id) > -1) { continue }
+	);
+	promise.then(
+		function onSuccess() {
+			//set selectedProfile to reference of current profile object
+			profToolkit.selectedProfile = profToolkit.profiles[cProfId];
 			
-			if (profToolkit.profiles[p].id == profToolkit.selectedProfile.id) {
-				//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
-				continue;
-				//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
-			} else {
-				console.log('splicing p = ', profToolkit.profiles[p]);
-				stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
-			}
+			return updateStackDOMJson_basedOnToolkit();
+			
+			iterator.close();
+		},
+		function onFailure(reason) {
+			// Close the iterator, propagate any error
+			iterator.close();
+			Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while reading contenst of Default Profile folder. See Browser Console for details.');
+			console.warn('An error occured while reading contenst of Default Profile folder. Reason = ', reason)
+			throw reason;
 		}
-		console.info('stackDOMJson after promise fin = ', stackDOMJson);
-		let DOMWindows = Services.wm.getEnumerator(null);
-		while (DOMWindows.hasMoreElements()) {
-			let aDOMWindow = DOMWindows.getNext();
-			if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
-				updateMenuDOM(aDOMWindow, stackDOMJson);
-			}
-		}
-		
-		iterator.close();
-	},
-	function onFailure(reason) {
-		// Close the iterator, propagate any error
-		iterator.close();
-		Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while reading contenst of Default Profile folder. See Browser Console for details.');
-		console.warn('An error occured while reading contenst of Default Profile folder. Reason = ', reason)
-		throw reason;
-	}
-);
+	);
+	
+	return promise;
+}
 
+refreshProfToolkit();
+
+function updateStackDOMJson_basedOnToolkit() {
+			//update stackDOMJson based on profToolkit
+			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
+			if (stackDOMJson.length == 0) {
+				stackDOMJson = [
+					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(profToolkit.selectedProfile.name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
+				];
+				var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
+				var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
+				stackUpdated = true;
+			} else {
+				var profNamesCurrentlyInMenu = [];
+				var profIdsCurrentlyInMenu = [];
+				for (var i=0; i<stackDOMJson.length; i++) {
+					var m = stackDOMJson[i];
+					if ('props' in m && 'profid' in m.props) {
+						if (profToolkit.profileNames.indexOf(m.props.profname) == -1) {
+							//this is in the stack/menu but no longer exists so need to remove
+							stackUpdated = true;
+							stackDOMJson.splice(i, 1);
+							i--;
+						} else {
+							profNamesCurrentlyInMenu.push(m.props.profname);
+							profNamesCurrentlyInMenu.push(m.props.profid);
+						}
+					}
+				}
+			}			
+			
+			for (var p in profToolkit.profiles) {
+				if (profNamesCurrentlyInMenu.indexOf(profToolkit.profiles[p].name) > -1) { continue }
+				
+
+					console.log('splicing p = ', profToolkit.profiles[p]);
+					stackUpdated = true;
+					(function(pClosure) {
+						//stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[pClosure].name + '"]', label:profToolkit.profiles[pClosure].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[pClosure].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[pClosure].id, profname:profToolkit.profiles[pClosure].name}};
+						
+						
+						if (profToolkit.profiles[pClosure].name == profToolkit.selectedProfile.name) {
+							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
+							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
+							//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
+							objToSplice.status = 'active';
+						}
+						
+						stackDOMJson.splice(0, 0, objToSplice);
+					})(p);
+			}
+			console.info('stackDOMJson after promise fin = ', stackDOMJson);
+			if (stackUpdated) {
+				console.info('something was changed in stack so will update all menus now');
+				let DOMWindows = Services.wm.getEnumerator(null);
+				while (DOMWindows.hasMoreElements()) {
+					let aDOMWindow = DOMWindows.getNext();
+					if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
+						updateMenuDOM(aDOMWindow, stackDOMJson);
+					}
+				}
+			}
+}
 
 var observers = {
     /*
@@ -178,9 +232,16 @@ function launchProfile(profName) {
 		console.info('dump of profiles = ', profToolkit.profiles);
 		return false;
 	}
-	
-	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
-	myServices.proc.init(exe);
+
+	if (!exeInited) {
+		var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+		try {
+			myServices.proc.init(exe);
+			exeInited = true;
+		} catch (ex) {
+			console.warn('exception thrown on nsiProc.init of exe, probably already initalized: ex = ', ex);
+		}
+	}
 	var args = ['-P', profName, '-no-remote'];
 	myServices.proc.run(false, args, args.length);
 }
@@ -188,8 +249,15 @@ function launchProfile(profName) {
 function createProfile() {
 	//creating profile with name that already exists does nothing
 	
-	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
-	myServices.proc.init(exe);
+	if (!exeInited) {
+		var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+		try {
+			myServices.proc.init(exe);
+			exeInited = true;
+		} catch (ex) {
+			console.warn('exception thrown on nsiProc.init of exe, probably already initalized: ex = ', ex);
+		}
+	}
 	
 	var profNamesCurrentlyInMenu = [];
 	for (var p in profToolkit.profiles) {
@@ -205,16 +273,36 @@ function createProfile() {
 
 		var obsToLaunchProfAfterCreate = {
 			observe: function(aSubject, aTopic, aData) {
+				//update profToolkit then check if 
 				console.info('incoming obsToLaunchProfAfterCreate: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData, {aSubject: aSubject, aTopic: aTopic, aData: aData});
-				var args = ['-P', profName, '-no-remote'];
-				process.run(false, args, args.length);
+				
+				let promise = refreshProfToolkit();
+				promise.then(
+					function onSuccess() {
+						//set selectedProfile to reference of current profile object
+						console.log('obsToLaunch promise success');
+						if (profToolkit.profileNames.indexOf(profName) > -1) {
+							console.info('profName was succesfully made named = ' + profName + ' so launch it now');
+							var args = ['-P', profName, '-no-remote'];
+							myServices.proc.run(false, args, args.length);
+						} else {
+							console.warn('profName was FAILED to make named = ' + profName + ' so ya');
+							Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'New profile failed to be created due to an unknown excpetion.');
+						}
+					},
+					function onFailure(reason) {
+						// Close the iterator, propagate any error
+						console.log('obsToLaunch promise fail');
+						
+					}
+				);
 				
 				//path to self xpi to install to this profile == self.aData.installPath.path
 			}
 		};
 
 	var args = ['-CreateProfile', profName, '-no-remote'];
-	process.runAsync(args, args.length, obsToLaunchProfAfterCreate);
+	myServices.proc.runAsync(args, args.length, obsToLaunchProfAfterCreate);
 }
 
 function prevHide(e) {
@@ -222,8 +310,6 @@ function prevHide(e) {
 	//e.stopPropagation();
 }
 
-
-var addEventListenerFuncs
 function updateMenuDOM(aDOMWindow, json) {
 	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
 	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
@@ -232,6 +318,11 @@ function updateMenuDOM(aDOMWindow, json) {
 		return;
 	}
 	var stack = profilist_box.childNodes[0];
+	var stackChilds = stack.childNodes;
+	[].forEach.call(stackChilds, function(sc) {
+		stack.removeChild(sc);
+	});
+	
 	var cumHeight = 0;
 	var elRefs = [];
 	var setTops = [];
