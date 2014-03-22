@@ -35,6 +35,13 @@
   list-style-image: url(chrome://profilist/content/active-user.png);
 }
 
+.PanelUI-profilist:not([status="active"]) {
+  /*box-shadow: inset 0 0 40px 1px hsla(210,4%,5%,.05) !important;*/
+  /*background-color: hsla(210,4%,50%,.05) !important;*/
+  border-top: 1px solid transparent !important;
+  /*border-bottom: 0 !important;*/
+}
+
 
 .PanelUI-profilist {
   flex: 1;
@@ -59,20 +66,29 @@
 }
 
 .PanelUI-profilist:not([disabled]):hover {
-  outline: 1px solid hsla(210,4%,10%,.07);
-  background-color: hsla(210,4%,10%,.07);
+  /*outline: 1px solid hsla(210,4%,10%,.07);*/
+  background-color: hsla(210,4%,10%,.07) !important;
 }
 
-.PanelUI-profilist:not([disabled]):hover:active {
-  outline: 1px solid hsla(210,4%,10%,.12);
-  background-color: hsla(210,4%,10%,.12);
-  box-shadow: 0 1px 0 hsla(210,4%,10%,.05) inset;
+.PanelUI-profilist:not([disabled]):hover:active,
+.PanelUI-profilist.perm-hover:not([disabled]):active {
+  /*outline: 1px solid hsla(210,4%,10%,.12);*/
+  background-color: hsla(210,4%,10%,.12) !important;
+  /*box-shadow: 0 1px 0 hsla(210,4%,10%,.05) inset;*/
 }
 
 .PanelUI-profilist:not([disabled]):hover,
-.PanelUI-profilist:not([disabled]):hover:active {
+.PanelUI-profilist:not([disabled]):hover:active,
+.PanelUI-profilist.perm-hover:not([disabled]):active, {
   outline: none;
 }
+
+
+.PanelUI-profilist.perm-hover:not([disabled]) {
+	background-color: hsla(210,4%,10%,.07) !important;
+	box-shadow: inset 0 4px 4px 2px hsla(210,4%,10%,.05) !important;
+}
+
 
 #profilist_box stack {
 	transition: height 0.25s;

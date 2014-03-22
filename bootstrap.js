@@ -135,7 +135,7 @@ var windowListener = {
 			var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
 			console.info('PUIsync on start up = ', PUIsync);
 			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
-			if (PanelUI.state != 'open' && PanelUI.state != 'showing') { //no need to do an || state != 'showing' because if its showing it will trigger the showing function i add in this if. USED TO BE "if (PUIsync_height == 0)"
+			if (PanelUI.state != 'open' && PanelUI.state != 'showing') { //USED TO BE "if (PUIsync_height == 0)"
 				console.warn('PanelUI not open', PanelUI);
 				var unloaderId = new Date().getTime();
 				var createMenuOnPopup = function() {
@@ -219,6 +219,7 @@ var windowListener = {
 				}
 				PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
 				referenceNodes.profilist_stack.style.height = expandedheight + 'px';
+				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
@@ -229,6 +230,7 @@ var windowListener = {
 					PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
 				}, false);
 				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
+				referenceNodes.profilist_stack.lastChild.classList.remove('perm-hover');
 			}, false);
 			PanelUI.addEventListener('popuphiding', prevHide, false)
 		}
