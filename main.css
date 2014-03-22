@@ -86,7 +86,7 @@
 
 .PanelUI-profilist.perm-hover:not([disabled]) {
 	background-color: hsla(210,4%,10%,.07) !important;
-	box-shadow: inset 0 4px 4px 2px hsla(210,4%,10%,.05) !important;
+	box-shadow: inset 0 6px 4px 2px hsla(210,4%,10%,.05) !important;
 }
 
 

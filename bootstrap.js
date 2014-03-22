@@ -20,7 +20,7 @@ Cu.import('resource://gre/modules/osfile.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 
 var cProfDirPath = OS.Constants.Path.profileDir;
-var cProfDirName = OS.Path.basename(cProf.dirPath);
+var cProfDirName = OS.Path.basename(cProfDirPath);
 var cProfId = cProfDirName.substr(0, cProfDirName.indexOf('.')); //used to create initial menu if promise does not complete before PanelUI is shown
 var cProfName = cProfDirName.substr(cProfId.length + 1); //used to create initial menu if promise does not complete before PanelUI is shown
 
@@ -52,8 +52,8 @@ let promise = iterator.forEach(
 			profToolkit.profiles[entry.name] = {
 				dirFileEntry: entry,
 				dirName: entry.name,
-				id: entry.name.substr(0, entry.name.indexOf('.'));
-				name: entry.name.substr(entry.id.length + 1);
+				id: entry.name.substr(0, entry.name.indexOf('.')),
+				name: entry.name.substr(entry.name.indexOf('.') + 1)
 			}
 		}
 	}
@@ -69,23 +69,37 @@ promise.then(
 				{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 				{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
 			];
+			var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
+			var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
 		} else {
 			var profNamesCurrentlyInMenu = [];
 			var profIdsCurrentlyInMenu = [];
 			[].forEach.call(stackDOMJson, function(m, i) {
-				profNamesCurrentlyInMenu.push(m.props.profname);
-				profNamesCurrentlyInMenu.push(m.props.profid);
-			});
-			for (var p in profToolkit.profiles) {
-				if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
-				if (p.name == profToolkit.selectedProfile.name) {
-					//should never happend because stackDOMJson length was not 0 if in this else of the parent if
-					stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
-				} else {
-					stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
+				if ('props' in m && 'profid' in m.props) {
+					profNamesCurrentlyInMenu.push(m.props.profname);
+					profNamesCurrentlyInMenu.push(m.props.profid);
 				}
-			}
+			});
+		}
+		for (var p in profToolkit.profiles) {
+			if (profIdsCurrentlyInMenu.indexOf(profToolkit.profiles[p].id) > -1) { continue }
 			
+			if (profToolkit.profiles[p].id == profToolkit.selectedProfile.id) {
+				//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
+				continue;
+				//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
+			} else {
+				console.log('splicing p = ', profToolkit.profiles[p]);
+				stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, status:'inactive', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
+			}
+		}
+		console.info('stackDOMJson after promise fin = ', stackDOMJson);
+		let DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			let aDOMWindow = DOMWindows.getNext();
+			if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
+				updateMenuDOM(aDOMWindow, stackDOMJson);
+			}
 		}
 		
 		iterator.close();
@@ -122,10 +136,10 @@ var observers = {
 			console.info('incoming profile-do-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
         },
         reg: function() {
-			obs.addObserver(observers['profile-do-change'], 'profile-do-change', false);
+			Services.obs.addObserver(observers['profile-do-change'], 'profile-do-change', false);
         },
         unreg: function() {
-			obs.removeObserver(observers['profile-do-change'], 'profile-do-change');
+			Services.obs.removeObserver(observers['profile-do-change'], 'profile-do-change');
         }
     },
     'profile-before-change': {
@@ -133,10 +147,10 @@ var observers = {
 			console.info('incoming profile-before-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
         },
         reg: function() {
-			obs.addObserver(observers['profile-before-change'], 'profile-before-change', false);
+			Services.obs.addObserver(observers['profile-before-change'], 'profile-before-change', false);
         },
         unreg: function() {
-			obs.removeObserver(observers['profile-before-change'], 'profile-before-change');
+			Services.obs.removeObserver(observers['profile-before-change'], 'profile-before-change');
         }
     }
 };
@@ -194,9 +208,6 @@ function updateMenuDOM(aDOMWindow, json) {
 			console.log('appended', el);
 		}
 		console.log('el.boxObject.height = ', el.boxObject);
-		aDOMWindow.setTimeout(function() {
-			console.log('el.boxObject.height = ', el.boxObject);
-		}, 10000);
 		cumHeight += el.boxObject.height;
 		console.log('cumHeight after adding = ' + cumHeight);
 		if (i < json.length - 1) {
@@ -301,7 +312,7 @@ var windowListener = {
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
 					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + cProf.name + '"]', label:cProf.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
+					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 				];
 			}
 			
