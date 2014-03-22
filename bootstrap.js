@@ -7,6 +7,9 @@ const self = {
 
 const myServices = {};
 var cssUri;
+var collapsedheight = 0; //holds height stack should be when collapsed
+var expandedheight = 0; //holds height stack should be when expanded
+var stackDOMJson = []; //array holding menu structure in stack
 
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
@@ -16,6 +19,66 @@ XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.o
 function prevHide(e) {
 	e.preventDefault();
 	e.stopPropagation();
+}
+
+function updateMenuDOM(aDOMWindow, json) {
+	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
+	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
+	if (!profilist_box) {
+		console.warn('no profilist_box to add to');
+		return;
+	}
+	var stack = profilist_box.childNodes[0];
+	var cumHeight = 0;
+	var elRefs = [];
+	var setTops = [];
+	for (var i=0; i<json.length; i++) {
+		console.log('in json arr = ', i);
+		var el = null;
+		var appendChild = false;
+		if (json[i].identifier) {
+			el = stack.querySelector(json[i].identifier);
+			console.log('identifier  string = "' + json[i].identifier + '"');
+			console.log('el = ' + el);
+		}
+		if (!el) {
+			el = json[i].nodeToClone.cloneNode(true);
+			appendChild = true;
+			console.log('el created');
+		} else {
+			console.log('el idented');
+		}
+		elRefs.push(el);
+		for (var p in json[i]) {
+			if (p == 'nodeToClone' || p == 'identifier') { continue }
+			if (json[i][p] === null) {
+				el.removeAttribute(p);
+			} else {
+				el.setAttribute(p, json[i][p]);
+			}
+		}
+		if (appendChild) {
+			stack.appendChild(el);
+			console.log('appended', el);
+		}
+		console.log('el.boxObject.height = ' + el.boxObject.height);
+		cumHeight += el.boxObject.height;
+		console.log('cumHeight after adding = ' + cumHeight);
+		if (i < json.length - 1) {
+			//el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is 
+			setTops.push(cumHeight);
+		} else {
+			setTops.push(0);
+		}
+	}
+	collapsedheight = el.boxObject.height;
+	expandedheight = cumHeight;
+	console.log('collapsedheight', collapsedheight);
+	console.log('expandedheight', expandedheight);
+	
+	[].forEach.call(elRefs, function(elRef, i) {
+		elRef.setAttribute('top', setTops[i]);
+	});
 }
 
 /*start - windowlistener*/
@@ -59,7 +122,7 @@ var windowListener = {
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
-			var PUIsync = aDOMWindow.document.querySelector('#PanelUI-fxa-status');
+			var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
 			console.info('PUIsync on start up = ', PUIsync);
 			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
 			if (PUIsync_height == 0) {
@@ -69,11 +132,12 @@ var windowListener = {
 				}, false);
 				return;
 			}
-			var PUIf = aDOMWindow.document.querySelector('#PanelUI-footer');
-			var PUIcs = aDOMWindow.document.querySelector('#PanelUI-contents-scroller');
+			var PUIf = PanelUI.querySelector('#PanelUI-footer');
+			var PUIcs = PanelUI.querySelector('#PanelUI-contents-scroller');
+			
 			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
-			['xul:vbox', {id: 'profilist_hbox'},
+			['xul:vbox', {id: 'profilist_box'},
 				['xul:stack', {key:'profilist_stack',style:'width:100%'}]
 			];
 			var referenceNodes = {};
@@ -81,6 +145,24 @@ var windowListener = {
 			
 			/*must insert the "Default: profile" into stack last*/
 			
+			console.log('CREATING MENU JSON');
+			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');			
+			if (stackDOMJson.length == 0) {
+				stackDOMJson = [
+					{nodeToClone:PUIsync, identifier:'[label="Clean"]', label:'Clean', class:'PanelUI-profilist', id:null, status:'inactive', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIfi},
+					{nodeToClone:PUIfi},
+					{nodeToClone:PUIsync, identifier:'.advanced', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIsync, identifier:'.advanced', label:'Advanced Options', class:'PanelUI-profilist advanced', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIsync, identifier:'[label="Default"]', label:'Default', class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}
+				];
+			}
+			console.log('now running updateMenuDOM');
+			updateMenuDOM(aDOMWindow, stackDOMJson);
+			console.log('COMPLETED running updateMenuDOM');
+			referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
+			
+			/*
 			var dupeNode1 = PUIsync.cloneNode(true);
 			dupeNode1.classList.add('PanelUI-profilist');
 			dupeNode1.setAttribute('label', 'Clean');
@@ -110,12 +192,14 @@ var windowListener = {
 			referenceNodes.profilist_stack.appendChild(dupeNode1);
 			referenceNodes.profilist_stack.appendChild(dupeNode3);
 			referenceNodes.profilist_stack.appendChild(dupeNode2);
+			*/
+			
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
 				PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
-				referenceNodes.profilist_stack.style.height = PUIsync_height*3 + 'px';
+				referenceNodes.profilist_stack.style.height = expandedheight + 'px';
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
@@ -125,7 +209,7 @@ var windowListener = {
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
 					PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
 				}, false);
-				referenceNodes.profilist_stack.style.height = PUIsync_height + 'px';
+				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
 			}, false);
 			PanelUI.addEventListener('popuphiding', prevHide, false)
 		}
@@ -139,7 +223,7 @@ var windowListener = {
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
 			PanelUI.removeEventListener('popuphiding', prevHide, false)
-			var profilistHBox = aDOMWindow.document.querySelector('#profilist_hbox');
+			var profilistHBox = aDOMWindow.document.querySelector('#profilist_box');
 			profilistHBox.parentNode.removeChild(profilistHBox);
 		}
 	}

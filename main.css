@@ -50,6 +50,10 @@
   list-style-image: url(chrome://profilist/content/cog.png);
 }
 
+.PanelUI-profilist.create {
+  list-style-image: url(chrome://profilist/content/plus.png);
+}
+
 .PanelUI-profilist {
   -moz-image-region: rect(0, 16px, 16px, 0);
 }
@@ -70,7 +74,7 @@
   outline: none;
 }
 
-#profilist_hbox stack {
+#profilist_box stack {
 	transition: height 0.25s;
 	min-height: 2em;
 	overflow: hidden;
