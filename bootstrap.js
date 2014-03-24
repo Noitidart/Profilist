@@ -111,8 +111,8 @@ function updateStackDOMJson_basedOnToolkit() {
 			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
-					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(profToolkit.selectedProfile.name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
+					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,   status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
 				];
 				var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
 				var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
@@ -144,7 +144,7 @@ function updateStackDOMJson_basedOnToolkit() {
 					stackUpdated = true;
 					(function(pClosure) {
 						//stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[pClosure].name + '"]', label:profToolkit.profiles[pClosure].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[pClosure].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[pClosure].id, profname:profToolkit.profiles[pClosure].name}};
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[pClosure].name + '"]', label:profToolkit.profiles[pClosure].name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[pClosure].name) }, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[pClosure].id, profname:profToolkit.profiles[pClosure].name}};
 						
 						
 						if (profToolkit.profiles[pClosure].name == profToolkit.selectedProfile.name) {
@@ -152,6 +152,7 @@ function updateStackDOMJson_basedOnToolkit() {
 							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
 							//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
 							objToSplice.status = 'active';
+							delete objToSplice.addEventListener;
 						}
 						
 						stackDOMJson.splice(0, 0, objToSplice);
@@ -211,9 +212,31 @@ var observers = {
     }
 };
 
-function renameProfile() {
+function makeRename() {
 	//only allow certain chracters
 	//cannot rename profile to a name that already exists
+	
+	//makes the menu button editable field and keeps popup open till blur from field
+	var el = this;
+	el.style.fontWeight = 'bold';
+	
+	var doc = this.ownerDocument;
+	//var PanelUI = doc.querySelector('#PanelUI-popup');
+	//PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
+	
+	//make the el button an editable field
+	//add event listener on blur it should cancel and restore menu look (as in not editable)
+	//add event listener on enter submitRename
+	
+	if (this.getAttribute('status') == 'active') {
+		//make editable right away
+	} else {
+		//make editable in 300ms if user doesnt mouseup
+	}
+}
+
+function submitRename() {
+	//when user presses enter in field
 }
 
 function launchProfile(profName) {
@@ -306,8 +329,8 @@ function createProfile() {
 }
 
 function prevHide(e) {
-	//e.preventDefault();
-	//e.stopPropagation();
+	e.preventDefault();
+	e.stopPropagation();
 }
 
 function updateMenuDOM(aDOMWindow, json) {
@@ -353,11 +376,11 @@ function updateMenuDOM(aDOMWindow, json) {
 		
 		for (var p in json[i]) {
 			if (p == 'nodeToClone' || p == 'identifier' || p == 'props') { continue }
-			if (p == 'addEventListener') {
-				(function(elClosure, jsonIClosure) {
+			if (p.indexOf('addEventListener') == 0) {
+				(function(elClosure, jsonIClosure, pClosure) {
 					console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
-					elClosure.addEventListener(jsonIClosure.addEventListener[0], jsonIClosure.addEventListener[1], jsonIClosure.addEventListener[2]);
-				})(el, json[i]);
+					elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+				})(el, json[i], p);
 				continue;
 			}
 			if (json[i][p] === null) {
@@ -476,8 +499,8 @@ var windowListener = {
 				stackDOMJson = [
 					//{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					//{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
-					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, oncommand:null, status:'active', addEventListener:['command', function(){ launchProfile(cProfName) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
+					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 				];
 			}
 			
@@ -485,7 +508,7 @@ var windowListener = {
 			
 			referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
 
-			
+			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
@@ -500,12 +523,16 @@ var windowListener = {
 				}
 				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
-					PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
+					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
+						PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
+						console.info('overflow RESET');
+					} else {
+						console.info('overflow not reset as height is not collapsed height (' + collapsedheight + ') but it is right now = ', referenceNodes.profilist_stack.style.height);
+					}
 				}, false);
 				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
 				referenceNodes.profilist_stack.lastChild.classList.remove('perm-hover');
 			}, false);
-			PanelUI.addEventListener('popuphiding', prevHide, false)
 		}
 		
 	},
