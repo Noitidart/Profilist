@@ -13,14 +13,17 @@ var stackDOMJson = []; //array holding menu structure in stack
 var exeInited = false;
 var unloaders = {};
 
+const { TextEncoder, TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
+Cu.import('resource://gre/modules/Promise.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'proc', function(){ return Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
+XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
 
 var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 var ini = {};
@@ -39,18 +42,18 @@ function readIni() {
 	console.log('in read');
 	if (!decoder) {
 		console.log('decoder not inited');
-		decoder = new Services.appShell.hiddenDOMWindow.TextDecoder(); // This decoder can be reused for several reads
+		decoder = new TextDecoder(); // This decoder can be reused for several reads
 	}
 	console.log('decoder got');
 	console.log('starting read');
 	let promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
 	console.log('read promise started');
 	promise = promise.then(
-		function onSuccess(ArrayBuffer) {
+		function(ArrayBuffer) {
 			var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
 			console.log(readStr);
 			ini = {};
-			var patt = /\[(.*?)(\d*?)\](?:\s+?([\S]+)=([\S]+))(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?/mg;
+			var patt = /\[(.*?)(\d*?)\](?:\s+?(.+)=(.+))(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?/mg;
 			var blocks = [];
 
 			var match;
@@ -82,10 +85,9 @@ function readIni() {
 				}
 			}
 			console.log('successfully read ini = ', ini);
-			updateProfToolkit();
 			return ini;
 		},
-		function onReject() {
+		function() {
 			console.error('Read ini failed');
 		}
 	);
@@ -122,7 +124,7 @@ function writeIni() {
 	writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
 
 	if (!encoder) {
-		encoder = new Services.appShell.hiddenDOMWindow.TextEncoder(); // This encoder can be reused for several writes
+		encoder = new TextEncoder(); // This encoder can be reused for several writes
 	}
 	
 	let BufferArray = encoder.encode(writeStr.join('\n')); // Convert the text to an array
@@ -160,6 +162,7 @@ function createProfile(refreshIni, profName) {
 		var promise = readIni();
 		promise.then(
 			function() {
+				console.log('now that ini read it will now createProfile with name = ' + profName);
 				createProfile(2, profName);
 			},
 			function() {
@@ -167,9 +170,10 @@ function createProfile(refreshIni, profName) {
 			}
 		);
 	} else {
+		console.log('in createProfile create part');
 		if (profName in ini) {
 			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
-			return;		
+			return new Error('Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
 		}
 		//create folder in root dir (in it, one file "times.json" with contents:
 		/*
@@ -182,7 +186,7 @@ function createProfile(refreshIni, profName) {
 		//create folder in local dir if root dir is different (this one is empty)
 		//add to profiles ini
 		//check if profile exists first
-		var numProfiles = Object.keys(ini) - 1;
+		var numProfiles = profToolkit.profileCount; //Object.keys(ini) - 1;
 		var dirName = saltName(profName);
 		ini[profName] = {
 			num: numProfiles,
@@ -192,14 +196,43 @@ function createProfile(refreshIni, profName) {
 				Path: 'Profiles/' + dirName
 			}
 		}
+		console.log('created ini entry for profName', ini[profName]);
+
+		var rootPathDefaultDirName = OS.Path.join(profToolkit.rootPathDefault, dirName);
+		var localPathDefaultDirName = OS.Path.join(profToolkit.localPathDefault, dirName);
+		console.log('rootPathDefaultDirName=',rootPathDefaultDirName);
+		console.log('localPathDefaultDirName=',localPathDefaultDirName);
 		
-		var rootPathDefaultDirName = OS.File.join(profToolkit.rootPathDefault, dirName);
-		var localPathDefaultDirName = OS.File.join(profToolkit.localPathDefault, dirName);
+		var profilesIniUpdateDone;
+		var rootDirMakeDirDone;
+		var localDirMakeDirDone;
+		var checkReadyAndLaunch = function() {
+			if (!profilesIniUpdateDone) {
+				console.warn('profiles ini update not yet done');
+			}
+			if (!rootDirMakeDirDone) {
+				console.warn('root dir not yet made');
+			}
+			if (profToolkit.rootPathDefault == profToolkit.localPathDefault) {
+				localDirMakeDirDone = true; //i dont have to check if rootDirMakeDirDone to set this to true, because when both paths are same we dont make a local dir
+			}
+			if (!localDirMakeDirDone) {
+				console.warn('local dir not yet made');
+			}
+			if (profilesIniUpdateDone && rootDirMakeDirDone && localDirMakeDirDone) {
+				launchProfile(profName, 1, self.aData.installPath.path);
+				console.log('profile launched and now updating prof toolkit with refreshIni 1');
+				return updateProfToolkit(1, 1);
+			}
+		}
+		console.log('starting promise for make root dir');
 		var promise = OS.File.makeDir(rootPathDefaultDirName);
 		promise.then(
-			function onSuc() {
+			function() {
 				console.log('successfully created root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
-					let encoder = new TextEncoder();
+				if (!encoder) {
+					encoder = new TextEncoder(); // This encoder can be reused for several writes
+				}
 					let BufferArray = encoder.encode('{\n"created": ' + new Date().getTime() + '}\n');
 					let promise3 = OS.File.writeAtomic(OS.Path.join(rootPathDefaultDirName, 'times.json'), BufferArray,
 						{
@@ -209,6 +242,8 @@ function createProfile(refreshIni, profName) {
 					promise3.then(
 						function() {
 							console.log('succesfully created times.json for profName of ' + profName + ' path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
+							rootDirMakeDirDone = true;
+							checkReadyAndLaunch();
 						},
 						function() {
 							console.error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
@@ -216,21 +251,34 @@ function createProfile(refreshIni, profName) {
 					);
 					return promise3;
 			},
-			function onRej() {
+			function() {
 				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
 			}
 		);
 		if (profToolkit.rootPathDefault != profToolkit.localPathDefault) {
 			var promise2 = OS.File.makeDir(localPathDefaultDirName);
 			promise2.then(
-				function onSuc() {
+				function() {
 					console.log('successfully created local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
+					localDirMakeDirDone = true;
+					checkReadyAndLaunch();
 				},
-				function onRej() {
+				function() {
 					console.error('FAILED to create local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
 				}
 			);
 		}
+		var promise4 = writeIni();
+		promise4.then(
+			function() {
+				console.log('SUCCESS on updating ini with new profile');
+				profilesIniUpdateDone = true;
+				checkReadyAndLaunch();
+			},
+			function() {
+				console.log('updating ini with new created profile failed');
+			}
+		);
 		
 		//see here: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js
 		
@@ -273,10 +321,11 @@ function renameProfile(refreshIni, profName, newName) {
 		ini[profName].props.Name = newName;
 		var promise = writeIni();
 		promise.then(
-			function onSuc() {
-				console.log('successfully edited name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+			function() {
+				console.log('successfully edited name of ' + profName + ' to ' + newName + ' in Profiles.ini now refrehsing it');
+				return updateProfToolkit(1, 1);
 			},
-			function onRej() {
+			function() {
 				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
 			}
 		);
@@ -287,6 +336,11 @@ function renameProfile(refreshIni, profName, newName) {
 
 function deleteProfile(refreshIni, profName) {
 	//refreshIni is 0,1 or programmatically 2
+	if (profName == profToolkit.selectedProfile.name) {
+		//cannot delete profile that is in use
+		Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+		return Promise.reject(new Error('The profile "' + profName + '" is currently in use, cannot delete.'));
+	}
 	if (refreshIni == 1) {
 		var promise = readIni();
 		promise.then(
@@ -299,6 +353,7 @@ function deleteProfile(refreshIni, profName) {
 		);
 	} else {
 		//before deleting check if its default profile
+		//check if its in use
 		if (profName in ini == false) {
 			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
 			return;		
@@ -308,6 +363,33 @@ function deleteProfile(refreshIni, profName) {
 			//return;
 		//}
 		//todo: figure out how to check if the profile is running, if it is dont delete but msg its open		
+		
+		var done = {
+			ini: false,
+			root: false,
+			local: false
+		}
+		var checkReadyAndUpdateStack = function () {
+			if (!done.ini) {
+				console.log('ini not yet updated');
+			}
+			if (!done.ini) {
+				console.log('root dir not yet deleted');
+			}
+			if (PathRootDir == PathLocalDir) {
+				done.local = true;
+			}
+			if (!done.local) {
+				console.log('local dir not yet deleted');
+			}
+			
+			for (var p in done) {
+				if (!done[p]) {
+					return;
+				}
+				updateProfToolkit(1, 1);
+			}
+		}
 		if (ini[profName].props.IsRelative == '1') {
 			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, profToolkit.profiles[profName].rootDirName);
 			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, profToolkit.profiles[profName].localDirName);
@@ -316,26 +398,34 @@ function deleteProfile(refreshIni, profName) {
 			promise.then(
 				function() {
 					console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+					done.root = true;
+					checkReadyAndUpdateStack();
 				},
 				function() {
 					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
 				}
 			);
-			var promise2 = OS.File.remove(PathLocalDir);
-			promise2.then(
-				function() {
-					console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
-				},
-				function() {
-					console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
-				}
-			);
+			if (PathRootDir != PathLocalDir) {
+				var promise2 = OS.File.remove(PathLocalDir);
+				promise2.then(
+					function() {
+						console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+						done.local = true;
+						checkReadyAndUpdateStack();
+					},
+					function() {
+						console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+					}
+				);
+			}
 		} else {
 			var Path = ini[profName].props.Path;
 			var promise = OS.File.remove(Path);
 			promise.then(
 				function() {
 					console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
+					done.root = true;
+					checkReadyAndUpdateStack();
 				},
 				function() {
 					console.warn('FAILED to remove Path for profName of ' + profName, 'Path=', Path);
@@ -347,6 +437,8 @@ function deleteProfile(refreshIni, profName) {
 		promise0.then(
 			function() {
 				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
+				done.ini = true;
+				checkReadyAndUpdateStack();
 			},
 			function() {
 				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
@@ -365,26 +457,40 @@ function initProfToolkit() {
 	profToolkit.selectedProfile.name = myServices.tps.selectedProfile.name;
 	console.log('initProfToolkit 3');
 	console.log('tps.selectedProfile.name = ', myServices.tps.selectedProfile.name);
-	updateStackDOMJson_basedOnToolkit();
 	console.log('initProfToolkit DONE');
 }
 
-function updateProfToolkit() {
-	if (!profToolkit.selectedProfile) {
-		console.log('initing prof toolkit');
-		initProfToolkit();
-	}
-	var profileCount = 0;
-	profToolkit.profiles = {};
-	for (var p in ini) {
-		if ('num' in p) {
-			profileCount++;
+function updateProfToolkit(refreshIni, refreshStack) {
+	if (refreshIni == 1) {
+		var promise = readIni();
+		promise.then(
+			function() {
+				updateProfToolkit(0, refreshStack);
+			},
+			function() {
+				console.error('Failed to refresh ini object from file on deleteProfile');
+			}
+		);
+	} else {
+		if (!profToolkit.selectedProfile) {
+			console.log('initing prof toolkit');
+			refreshStack = true;
+			initProfToolkit();
+		}
+		var profileCount = 0;
+		profToolkit.profiles = {};
+		for (var p in ini) {
+			if ('num' in ini[p]) {
+				profileCount++;
+			}
+		}
+		profToolkit.profileCount = profileCount;
+		
+		if (refreshStack) {
+			updateStackDOMJson_basedOnToolkit();
 		}
 	}
-	profToolkit.profileCount = profileCount;
 }
-
-readIni();
 
 function updateStackDOMJson_basedOnToolkit() {
 			//update stackDOMJson based on profToolkit
@@ -498,8 +604,7 @@ function makeRename() {
 	
 	//makes the menu button editable field and keeps popup open till blur from field
 	var el = this;
-	
-	
+		
 	var doc = el.ownerDocument;
 	var win = doc.defaultView;
 	
@@ -533,6 +638,44 @@ function makeRename() {
 }
 
 function actuallyMakeRename(el) {
+	var oldProfName = el.getAttribute('value');
+	var promptInput = {value:oldProfName}
+	var promptCheck = {value:false}
+	var promptResult = Services.prompt.prompt(null, self.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
+	if (promptResult) {
+		if (promptInput.value == '') {
+			var confirmResult = Services.prompt.confirm(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"?');
+			if (confirmResult) {
+				var promise = deleteProfile(1, oldProfName);
+				promise.then(
+					function() {
+						Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
+					},
+					function() {
+						console.warn('Delete failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ');
+						Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Rename failed. An exception occured when trying to delete the profile, see Browser Console for details.');
+					}
+				);
+			}
+		} else {
+			var newProfName = promptInput.value;
+			if (newProfName != oldProfName) {
+				var promise = renameProfile(1, oldProfName, newProfName);
+				promise.then(
+					function() {
+						Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
+						updateProfToolkit(1, 1);
+					},
+					function() {
+						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ');
+						Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Rename failed. An exception occured when trying to rename the profile, see Browser Console for details.');
+					}
+				);
+			}
+		}
+	}
+
+	return;
 	el.style.fontWeight = 'bold';
 	
 	var doc = el.ownerDocument;
@@ -557,14 +700,17 @@ function submitRename() {
 	//renameProfile(1, oldProfName, newProfName);
 }
 
-function launchProfile(profName) {
+function launchProfile(profName, suppressAlert, url) {
 	var win = Services.wm.getMostRecentWindow('navigator:browser');
 	if (win.ProfilistInRenameMode) {
 		//in rename mode;
 		console.log('window is in rename mode so dont launch profile');
 		return;
 	}
-	Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
+	//Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
+	if (!suppressAlert) {
+		myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"');
+	}
 
 	var found = false;
 	for (var p in ini) {
@@ -591,6 +737,10 @@ function launchProfile(profName) {
 		}
 	}
 	var args = ['-P', profName, '-no-remote'];
+	if (url) {
+		args.push('about:home');
+		args.push(url);
+	}
 	myServices.proc.run(false, args, args.length);
 }
 
@@ -599,21 +749,22 @@ function createUnnamedProfile() {
 	var promise = readIni();
 	promise.then(
 		function() {
+			console.log('now that readIni success it will do stuff');
 			for (var p in ini) {
 				if (!('num' in ini[p])) { continue } //as its not a profile
-				profNamesCurrentlyInMenu.push(p);
 			}
 			
 			var digit = 1;
-			var profName = 'Unnamed Profile'; //creates with default name
+			var profName = 'Unnamed Profile 1'; //creates with default name
 			while (profName in ini) {
 				digit++;
+				profName = 'Unnamed Profile ' + digit
 			}
-			profName = profName + ' ' + digit;
 
+			console.log('will now createProfile with name = ', profName);
 			createProfile(0, profName);
 		},
-		function () {
+		function() {
 			console.error('createProfile readIni promise rejected');
 		}
 	);
@@ -918,6 +1069,10 @@ function jsonToDOM(xml, doc, nodes) {
 /*end - dom insertion library function from MDN*/
 
 function startup(aData, aReason) {
+	console.log('in startup');
+	console.log('knows promise? = ', Promise);
+
+	updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
 	console.log('aData', aData);
 	//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
