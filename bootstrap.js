@@ -20,134 +20,412 @@ Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'proc', function(){ return Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess) });
+XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 
-var cProfDirPath = OS.Constants.Path.profileDir;
-var cProfDirName = OS.Path.basename(cProfDirPath);
-var cProfId = cProfDirName.substr(0, cProfDirName.indexOf('.')); //used to create initial menu if promise does not complete before PanelUI is shown
-var cProfName = cProfDirName.substr(cProfId.length + 1); //used to create initial menu if promise does not complete before PanelUI is shown
-
-var profDirPath = cProfDirPath.replace(cProfDirName, ''); //contains ending slash
+var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
+var ini = {};
 var profToolkit = {
-	dirPath: profDirPath, //path to default profile folder that holds all the profiles
-	profileDirs: [], //file entries
+	rootPathDefault: 0,
+	localPathDefault: 0,
 	profileCount: 0,
-	profileNames: [], //array of all profile names
-	profileIds: [], //array holding all profileIds
-	profileNameKey_IdVal: {}, //object with keys being the profile name, and its value being the profile id, a quick way to get the id of a profile name
-	profiles: {},
+	/*profiles: {},*/
 	selectedProfile: 0, //reference to the profiles object but to the current profile in the profiles object
 };
 
-function refreshProfToolkit() {
-	//goes through default profile dir and updates toolkit with all profiles that are not found already in it
-	
-	let iterator = new OS.File.DirectoryIterator(profToolkit.dirPath);
-	let promise = iterator.forEach(
-		function onEntry(entry) {
-			/*entry structure
-			Object
-			isDir: true
-			isSymLink: false
-			name: "ncc90nnv.default"
-			path: "C:\Users\ali57233\AppData\Roaming\Mozilla\Firefox\Profiles\ncc90nnv.default"
-			winCreationDate:Date 2012-11-05T21:42:51.447Z
-			winLastAccessDate:Date 2014-03-19T01:59:46.290Z
-			winLastWriteDate:Date 2014-03-19T01:59:46.290Z
-			*/
-			if (entry.isDir) {
-				var entryId = entry.name.substr(0, entry.name.indexOf('.'));
-				var entryName = entry.name.substr(entry.name.indexOf('.') + 1);
-				
-				if (profToolkit.profileNames.indexOf(entryName) == -1) {
-					if (profToolkit.profileIds.indexOf(entryId) > -1) {
-						//so since last refresh, it's been renamed. as id is already in toolkit but name is not.
-						var oldName = profToolkit.profiles[entryId].name;
-						profToolkit.profileNames.splice(profToolkit.profileNames.indexOf(oldName),1,entryName);
-						delete profToolkit.profiles[entryId];
-						delete profToolkit.profileNameKey_IdVal[oldName];
-					} else {
-						profToolkit.profileIds.push(entryId);
+var decoder = 0;
+var encoder = 0;
+
+function readIni() {
+	console.log('in read');
+	if (!decoder) {
+		console.log('decoder not inited');
+		decoder = new Services.appShell.hiddenDOMWindow.TextDecoder(); // This decoder can be reused for several reads
+	}
+	console.log('decoder got');
+	console.log('starting read');
+	let promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
+	console.log('read promise started');
+	promise = promise.then(
+		function onSuccess(ArrayBuffer) {
+			var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
+			console.log(readStr);
+			ini = {};
+			var patt = /\[(.*?)(\d*?)\](?:\s+?([\S]+)=([\S]+))(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?(?:\s+?([\S]+)=([\S]+))?/mg;
+			var blocks = [];
+
+			var match;
+			while (match = patt.exec(readStr)) {
+				console.log('MAAAAAAAAAAATCH', match);
+
+				var group = match[1];
+				ini[group] = {};
+
+				if (group == 'Profile') {
+					ini[group]['num'] = match[2];
+				}
+
+				ini[group].props = {};
+
+				for (var i = 3; i < match.length; i = i + 2) {
+					var prop = match[i];
+					if (prop === undefined) {
+						break;
 					}
-					profToolkit.profileNames.push(entryName);
-					profToolkit.profileCount = profToolkit.profileNames.length;
-					
-					profToolkit.profileNameKey_IdVal[entryName] = entryId;
-					
-					profToolkit.profiles[entryId] = {
-						dirFileEntry: entry,
-						dirName: entry.name,
-						id: entryId,
-						name: entryName
-					}
+					var propVal = match[i + 1]
+					ini[group].props[prop] = propVal;
+				}
+
+				if (group == 'Profile') {
+					//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
+					ini[ini[group].props.Name] = ini[group];
+					delete ini[group];
 				}
 			}
-		}
-	);
-	promise.then(
-		function onSuccess() {
-			//set selectedProfile to reference of current profile object
-			profToolkit.selectedProfile = profToolkit.profiles[cProfId];
-			
-			return updateStackDOMJson_basedOnToolkit();
-			
-			iterator.close();
+			console.log('successfully read ini = ', ini);
+			updateProfToolkit();
+			return ini;
 		},
-		function onFailure(reason) {
-			// Close the iterator, propagate any error
-			iterator.close();
-			Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while reading contenst of Default Profile folder. See Browser Console for details.');
-			console.warn('An error occured while reading contenst of Default Profile folder. Reason = ', reason)
-			throw reason;
+		function onReject() {
+			console.error('Read ini failed');
 		}
 	);
-	
+
 	return promise;
 }
 
-refreshProfToolkit();
+function writeIni() {
+	var writeStr = [];
+	var profileI = -1;
+	for (var p in ini) {
+
+
+		if ('num' in ini[p]) {
+			//is profile
+			profileI++; //because we init profileI at -1
+			var group = 'Profile' + profileI;
+			if (ini[p].num != profileI) {
+				console.log('profile I of profile changed from ' + ini[p].num + ' to ' + profileI + ' the object from ini read is =', ini[p]);
+			}
+		} else {
+			var group = p;
+		}
+
+		writeStr.push('[' + group + ']');
+
+		for (var p2 in ini[p].props) {
+			writeStr.push(p2 + '=' + ini[p].props[p2]);
+		}
+
+		writeStr.push('');
+	}
+
+	writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
+
+	if (!encoder) {
+		encoder = new Services.appShell.hiddenDOMWindow.TextEncoder(); // This encoder can be reused for several writes
+	}
+	
+	let BufferArray = encoder.encode(writeStr.join('\n')); // Convert the text to an array
+	let promise = OS.File.writeAtomic(pathProfilesIni, BufferArray, // Write the array atomically to "file.txt", using as temporary
+		{
+			tmpPath: pathProfilesIni + '.profilist.tmp'
+		}); // buffer "file.txt.tmp".
+	promise.then(
+		function() {},
+		function() {
+			console.error('writeIni failed');
+		}
+	);
+	return promise;
+}
+/*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
+var kSaltTable = [
+	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+	'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'
+];
+
+var kSaltString = '';
+for (var i = 0; i < 8; ++i) {
+	kSaltString += kSaltTable[Math.floor(Math.random() * kSaltTable.length)];
+}
+
+function saltName(aName) {
+	return kSaltString + '.' + aName;
+}
+/*end - salt generator*/
+function createProfile(refreshIni, profName) {
+	//refreshIni is 0,1 or programmatically 2
+	if (refreshIni == 1) {
+		var promise = readIni();
+		promise.then(
+			function() {
+				createProfile(2, profName);
+			},
+			function() {
+				console.error('Failed to refresh ini object from file during renameProfile');
+			}
+		);
+	} else {
+		if (profName in ini) {
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
+			return;		
+		}
+		//create folder in root dir (in it, one file "times.json" with contents:
+		/*
+		{
+		"created": 1395861287491
+		}
+
+		*/
+		//todo: im curious i should ask at ask.m.o how come when profile is custom driectory, a folder in local path is not created, of course the one to the custom path will be root. b ut why not make a local folder? like is done for IsRelative createds?
+		//create folder in local dir if root dir is different (this one is empty)
+		//add to profiles ini
+		//check if profile exists first
+		var numProfiles = Object.keys(ini) - 1;
+		var dirName = saltName(profName);
+		ini[profName] = {
+			num: numProfiles,
+			props: {
+				Name: profName,
+				IsRelative: 1,
+				Path: 'Profiles/' + dirName
+			}
+		}
+		
+		var rootPathDefaultDirName = OS.File.join(profToolkit.rootPathDefault, dirName);
+		var localPathDefaultDirName = OS.File.join(profToolkit.localPathDefault, dirName);
+		var promise = OS.File.makeDir(rootPathDefaultDirName);
+		promise.then(
+			function onSuc() {
+				console.log('successfully created root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
+					let encoder = new TextEncoder();
+					let BufferArray = encoder.encode('{\n"created": ' + new Date().getTime() + '}\n');
+					let promise3 = OS.File.writeAtomic(OS.Path.join(rootPathDefaultDirName, 'times.json'), BufferArray,
+						{
+							tmpPath: OS.Path.join(rootPathDefaultDirName, 'times.json') + '.profilist.tmp'
+						}
+					);
+					promise3.then(
+						function() {
+							console.log('succesfully created times.json for profName of ' + profName + ' path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
+						},
+						function() {
+							console.error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
+						}
+					);
+					return promise3;
+			},
+			function onRej() {
+				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
+			}
+		);
+		if (profToolkit.rootPathDefault != profToolkit.localPathDefault) {
+			var promise2 = OS.File.makeDir(localPathDefaultDirName);
+			promise2.then(
+				function onSuc() {
+					console.log('successfully created local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
+				},
+				function onRej() {
+					console.error('FAILED to create local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
+				}
+			);
+		}
+		
+		//see here: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js
+		
+/*
+29     var dirService = C["@mozilla.org/file/directory_service;1"].getService(I.nsIProperties);
+30     gDefaultProfileParent = dirService.get("DefProfRt", I.nsIFile);
+73   var defaultProfileDir = gDefaultProfileParent.clone();
+74   defaultProfileDir.append(saltName(document.getElementById("profileName").value));
+75   gProfileRoot = defaultProfileDir;
+*/
+
+		//see here for internal: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/profileSelection.js#139
+		//actually see here for internal: http://mxr.mozilla.org/mozilla-central/source/toolkit/profile/nsToolkitProfileService.cpp#699
+		
+	}
+}
+
+function renameProfile(refreshIni, profName, newName) {
+	//refreshIni is 0,1 or programmatically 2
+	if (refreshIni == 1) {
+		var promise = readIni();
+		promise.then(
+			function() {
+				renameProfile(2, profName, newName);
+			},
+			function() {
+				console.error('Failed to refresh ini object from file during renameProfile');
+			}
+		);
+	} else {
+		//check if name is taken
+		if (profName in ini == false) {
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
+			return;		
+		}
+		if (newName in ini) {
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			return;		
+		}
+		ini[profName].props.Name = newName;
+		var promise = writeIni();
+		promise.then(
+			function onSuc() {
+				console.log('successfully edited name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+			},
+			function onRej() {
+				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+			}
+		);
+	}
+	
+	
+}
+
+function deleteProfile(refreshIni, profName) {
+	//refreshIni is 0,1 or programmatically 2
+	if (refreshIni == 1) {
+		var promise = readIni();
+		promise.then(
+			function() {
+				deleteProfile(2, profName);
+			},
+			function() {
+				console.error('Failed to refresh ini object from file on deleteProfile');
+			}
+		);
+	} else {
+		//before deleting check if its default profile
+		if (profName in ini == false) {
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
+			return;		
+		}
+		//if (Object.keys(ini).length == 2) {
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot delete this profile as it is the last profile remaining.');
+			//return;
+		//}
+		//todo: figure out how to check if the profile is running, if it is dont delete but msg its open		
+		if (ini[profName].props.IsRelative == '1') {
+			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, profToolkit.profiles[profName].rootDirName);
+			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, profToolkit.profiles[profName].localDirName);
+			
+			var promise = OS.File.remove(PathRootDir);
+			promise.then(
+				function() {
+					console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+				},
+				function() {
+					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+				}
+			);
+			var promise2 = OS.File.remove(PathLocalDir);
+			promise2.then(
+				function() {
+					console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+				},
+				function() {
+					console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+				}
+			);
+		} else {
+			var Path = ini[profName].props.Path;
+			var promise = OS.File.remove(Path);
+			promise.then(
+				function() {
+					console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
+				},
+				function() {
+					console.warn('FAILED to remove Path for profName of ' + profName, 'Path=', Path);
+				}
+			);
+		}
+		delete ini[profName];
+		var promise0 = writeIni();
+		promise0.then(
+			function() {
+				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
+			},
+			function() {
+				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+			}
+		);
+	}
+}
+function initProfToolkit() {
+	console.log('in initProfToolkit');
+	profToolkit = {};
+	profToolkit.localPathDefault = OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
+	console.log('initProfToolkit 1');
+	profToolkit.rootPathDefault = OS.Path.dirname(OS.Constants.Path.profileDir);
+	console.log('initProfToolkit 2');
+	profToolkit.selectedProfile = {};
+	profToolkit.selectedProfile.name = myServices.tps.selectedProfile.name;
+	console.log('initProfToolkit 3');
+	console.log('tps.selectedProfile.name = ', myServices.tps.selectedProfile.name);
+	updateStackDOMJson_basedOnToolkit();
+	console.log('initProfToolkit DONE');
+}
+
+function updateProfToolkit() {
+	if (!profToolkit.selectedProfile) {
+		console.log('initing prof toolkit');
+		initProfToolkit();
+	}
+	var profileCount = 0;
+	profToolkit.profiles = {};
+	for (var p in ini) {
+		if ('num' in p) {
+			profileCount++;
+		}
+	}
+	profToolkit.profileCount = profileCount;
+}
+
+readIni();
 
 function updateStackDOMJson_basedOnToolkit() {
 			//update stackDOMJson based on profToolkit
 			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
 			if (stackDOMJson.length == 0) {
 				stackDOMJson = [
-					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,   status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.selectedProfile.id, profname:profToolkit.selectedProfile.name}}
+					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,   status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:profToolkit.selectedProfile.name}}
 				];
 				var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
-				var profIdsCurrentlyInMenu = [profToolkit.selectedProfile.id];
 				stackUpdated = true;
 			} else {
 				var profNamesCurrentlyInMenu = [];
-				var profIdsCurrentlyInMenu = [];
 				for (var i=0; i<stackDOMJson.length; i++) {
 					var m = stackDOMJson[i];
-					if ('props' in m && 'profid' in m.props) {
-						if (profToolkit.profileNames.indexOf(m.props.profname) == -1) {
+					if ('props' in m && 'profname' in m.props) {
+						if (!(m.props.profname in ini)) {
 							//this is in the stack/menu but no longer exists so need to remove
 							stackUpdated = true;
 							stackDOMJson.splice(i, 1);
 							i--;
 						} else {
 							profNamesCurrentlyInMenu.push(m.props.profname);
-							profNamesCurrentlyInMenu.push(m.props.profid);
 						}
 					}
 				}
 			}			
 			
-			for (var p in profToolkit.profiles) {
-				if (profNamesCurrentlyInMenu.indexOf(profToolkit.profiles[p].name) > -1) { continue }
+			for (var p in ini) {
+				if (!('num' in ini[p])) { continue } //as its not a profile
+				if (profNamesCurrentlyInMenu.indexOf(p) > -1) { continue }
 				
 
-					console.log('splicing p = ', profToolkit.profiles[p]);
+					console.log('splicing p = ', ini[p]);
 					stackUpdated = true;
 					(function(pClosure) {
 						//stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[pClosure].name + '"]', label:profToolkit.profiles[pClosure].name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[pClosure].name) }, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[pClosure].id, profname:profToolkit.profiles[pClosure].name}};
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + p + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', function(){ launchProfile(p) }, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:p}};
 						
 						
-						if (profToolkit.profiles[pClosure].name == profToolkit.selectedProfile.name) {
+						if (p == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
 							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
 							//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
@@ -244,15 +522,17 @@ function launchProfile(profName) {
 	Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
 
 	var found = false;
-	for (var p in profToolkit.profiles) {
-		if (profName == profToolkit.profiles[p].name) {
+	for (var p in ini) {
+		if (!('num' in ini[p])) { continue } //as its not a profile
+		if (profName == p) {
 			found = true;
+			break;
 		}
 	}
 			
 	if (!found) {
 		Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while trying to launch profile named "' + profName + '": Proflie name not found in memory.');
-		console.info('dump of profiles = ', profToolkit.profiles);
+		console.info('dump of profiles = ', ini);
 		return false;
 	}
 
@@ -269,63 +549,29 @@ function launchProfile(profName) {
 	myServices.proc.run(false, args, args.length);
 }
 
-function createProfile() {
-	//creating profile with name that already exists does nothing
-	
-	if (!exeInited) {
-		var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
-		try {
-			myServices.proc.init(exe);
-			exeInited = true;
-		} catch (ex) {
-			console.warn('exception thrown on nsiProc.init of exe, probably already initalized: ex = ', ex);
-		}
-	}
-	
-	var profNamesCurrentlyInMenu = [];
-	for (var p in profToolkit.profiles) {
-		profNamesCurrentlyInMenu.push(profToolkit.profiles[p].name);
-	}
-	
-	var digit = 1;
-	var profName = 'Nameless Profile'; //creates with default name
-	while (profNamesCurrentlyInMenu.indexOf(profName + ' ' + digit) > -1) {
-		digit++;
-	}
-	profName = profName + ' ' + digit;
-
-		var obsToLaunchProfAfterCreate = {
-			observe: function(aSubject, aTopic, aData) {
-				//update profToolkit then check if 
-				console.info('incoming obsToLaunchProfAfterCreate: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData, {aSubject: aSubject, aTopic: aTopic, aData: aData});
-				
-				let promise = refreshProfToolkit();
-				promise.then(
-					function onSuccess() {
-						//set selectedProfile to reference of current profile object
-						console.log('obsToLaunch promise success');
-						if (profToolkit.profileNames.indexOf(profName) > -1) {
-							console.info('profName was succesfully made named = ' + profName + ' so launch it now');
-							var args = ['-P', profName, '-no-remote'];
-							myServices.proc.run(false, args, args.length);
-						} else {
-							console.warn('profName was FAILED to make named = ' + profName + ' so ya');
-							Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'New profile failed to be created due to an unknown excpetion.');
-						}
-					},
-					function onFailure(reason) {
-						// Close the iterator, propagate any error
-						console.log('obsToLaunch promise fail');
-						
-					}
-				);
-				
-				//path to self xpi to install to this profile == self.aData.installPath.path
+function createUnnamedProfile() {
+	//creating profile with name that already exists does nothing	
+	var promise = readIni();
+	promise.then(
+		function() {
+			for (var p in ini) {
+				if (!('num' in ini[p])) { continue } //as its not a profile
+				profNamesCurrentlyInMenu.push(p);
 			}
-		};
+			
+			var digit = 1;
+			var profName = 'Unnamed Profile'; //creates with default name
+			while (profName in ini) {
+				digit++;
+			}
+			profName = profName + ' ' + digit;
 
-	var args = ['-CreateProfile', profName, '-no-remote'];
-	myServices.proc.runAsync(args, args.length, obsToLaunchProfAfterCreate);
+			createProfile(0, profName);
+		},
+		function () {
+			console.error('createProfile readIni promise rejected');
+		}
+	);
 }
 
 function prevHide(e) {
@@ -500,7 +746,7 @@ var windowListener = {
 					//{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					//{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
+					{nodeToClone:PUIsync, identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:profToolkit.selectedProfile.name}}
 				];
 			}
 			
