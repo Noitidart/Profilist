@@ -490,35 +490,80 @@ var observers = {
     }
 };
 
+var renameTimeouts = [];
+
 function makeRename() {
 	//only allow certain chracters
 	//cannot rename profile to a name that already exists
 	
 	//makes the menu button editable field and keeps popup open till blur from field
 	var el = this;
-	el.style.fontWeight = 'bold';
 	
-	var doc = this.ownerDocument;
-	//var PanelUI = doc.querySelector('#PanelUI-popup');
-	//PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
+	
+	var doc = el.ownerDocument;
+	var win = doc.defaultView;
 	
 	//make the el button an editable field
 	//add event listener on blur it should cancel and restore menu look (as in not editable)
 	//add event listener on enter submitRename
 	
-	if (this.getAttribute('status') == 'active') {
+	if (el.getAttribute('status') == 'active') {
 		//make editable right away
+		actuallyMakeRename(el);
 	} else {
 		//make editable in 300ms if user doesnt mouseup
+		var util = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+		var winID = util.currentInnerWindowID;
+		renameTimeouts[winID] = {DOMWindow: win, timeout: 0};
+		
+		renameTimeouts[winID].timeout = win.setTimeout(function(){ actuallyMakeRename(el) }, 500);
+		el.addEventListener('mouseleave', function() {
+			el.removeEventListener('mouseleave', arguments.callee, false);
+			if (win.ProfilistInRenameMode) {
+				//already in edit mode so just remove event listener and nothing else
+				console.log('timeout fired BUT already in edit mode so just remove event listener and nothing else');
+				return;
+			}
+			win.clearTimeout(renameTimeouts[winID].timeout);
+			delete renameTimeouts[winID];
+			console.log('canceled actuallyMakeRename timeout');
+		}, false);
+		
 	}
+}
+
+function actuallyMakeRename(el) {
+	el.style.fontWeight = 'bold';
+	
+	var doc = el.ownerDocument;
+	var win = doc.defaultView;
+	
+	win.ProfilistInRenameMode = true;
+	
+	var PanelUI = doc.querySelector('#PanelUI-popup');
+	PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
 }
 
 function submitRename() {
 	//when user presses enter in field
+	var el = this;
+	var doc = this.ownerDocument;
+	var win = doc.defaultView;
+	
+	var PanelUI = doc.querySelector('#PanelUI-popup');
+	PanelUI.removeEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
+	
+	delete win.ProfilistInRenameMode;
+	//renameProfile(1, oldProfName, newProfName);
 }
 
 function launchProfile(profName) {
-
+	var win = Services.wm.getMostRecentWindow('navigator:browser');
+	if (win.ProfilistInRenameMode) {
+		//in rename mode;
+		console.log('window is in rename mode so dont launch profile');
+		return;
+	}
 	Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
 
 	var found = false;
@@ -764,6 +809,10 @@ var windowListener = {
 				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
+				if (aDOMWindow.ProfilistInRenameMode) {
+					console.log('in rename mdoe so dont close');
+					return;
+				}
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
@@ -789,6 +838,11 @@ var windowListener = {
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
+			try {
+				delete aDOMWindow.ProfilistInRenameMode;
+			} catch (ex) {
+				console.warn('ex when delete ProfilistInRenameMode ex = ', ex);
+			}
 			PanelUI.removeEventListener('popuphiding', prevHide, false)
 			var profilistHBox = aDOMWindow.document.querySelector('#profilist_box');
 			if (profilistHBox) {
