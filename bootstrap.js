@@ -19,7 +19,6 @@ Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
-Cu.import('resource://gre/modules/Promise.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'proc', function(){ return Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
@@ -339,7 +338,7 @@ function deleteProfile(refreshIni, profName) {
 	if (profName == profToolkit.selectedProfile.name) {
 		//cannot delete profile that is in use
 		Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-		return Promise.reject(new Error('The profile "' + profName + '" is currently in use, cannot delete.'));
+		return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
 	}
 	if (refreshIni == 1) {
 		var promise = readIni();
@@ -387,34 +386,40 @@ function deleteProfile(refreshIni, profName) {
 				if (!done[p]) {
 					return;
 				}
-				updateProfToolkit(1, 1);
 			}
+			console.log('ALLLL done so updateProfToolkit');
+			updateProfToolkit(1, 1);
 		}
 		if (ini[profName].props.IsRelative == '1') {
-			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, profToolkit.profiles[profName].rootDirName);
-			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, profToolkit.profiles[profName].localDirName);
+					
+			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
+			console.info('dirname of this profile is = ', dirName);
+			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
+			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
 			
-			var promise = OS.File.remove(PathRootDir);
+			console.log('now removing PathRootDir', PathRootDir);
+			var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
 			promise.then(
 				function() {
 					console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
 					done.root = true;
 					checkReadyAndUpdateStack();
 				},
-				function() {
-					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+				function(aRejectReason) {
+					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
 				}
 			);
 			if (PathRootDir != PathLocalDir) {
-				var promise2 = OS.File.remove(PathLocalDir);
+				console.log('now removing PathLocalDir', PathLocalDir);
+				var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
 				promise2.then(
 					function() {
 						console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
 						done.local = true;
 						checkReadyAndUpdateStack();
 					},
-					function() {
-						console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+					function(aRejectReason) {
+						console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
 					}
 				);
 			}
@@ -472,7 +477,7 @@ function updateProfToolkit(refreshIni, refreshStack) {
 			}
 		);
 	} else {
-		if (!profToolkit.selectedProfile) {
+		if (profToolkit.rootPathDefault === 0) {
 			console.log('initing prof toolkit');
 			refreshStack = true;
 			initProfToolkit();
@@ -508,7 +513,7 @@ function updateStackDOMJson_basedOnToolkit() {
 					var m = stackDOMJson[i];
 					if ('props' in m && 'profname' in m.props) {
 						if (!(m.props.profname in ini)) {
-							//this is in the stack/menu but no longer exists so need to remove
+							//this is in the stack object but no longer exists so need to remove
 							stackUpdated = true;
 							stackDOMJson.splice(i, 1);
 							i--;
@@ -528,10 +533,9 @@ function updateStackDOMJson_basedOnToolkit() {
 					stackUpdated = true;
 					(function(pClosure) {
 						//stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + p + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', function(){ launchProfile(p) }, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:p}};
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + pClosure + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', function(){ launchProfile(pClosure) }, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:pClosure}};
 						
-						
-						if (p == profToolkit.selectedProfile.name) {
+						if (pClosure == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
 							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
 							//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
@@ -598,7 +602,12 @@ var observers = {
 
 var renameTimeouts = [];
 
-function makeRename() {
+function makeRename(e) {
+	if (e.button != 0) {
+		//ensure it must be primary click
+		console.warn('not primary click so returning');
+		return;
+	}
 	//only allow certain chracters
 	//cannot rename profile to a name that already exists
 	
@@ -607,6 +616,7 @@ function makeRename() {
 		
 	var doc = el.ownerDocument;
 	var win = doc.defaultView;
+	delete win.ProfilistInRenameMode;
 	
 	//make the el button an editable field
 	//add event listener on blur it should cancel and restore menu look (as in not editable)
@@ -638,7 +648,13 @@ function makeRename() {
 }
 
 function actuallyMakeRename(el) {
-	var oldProfName = el.getAttribute('value');
+	console.info('el on actuallyMakeRename = ', el);
+	var doc = el.ownerDocument;
+	var win = doc.defaultView;
+	
+	win.ProfilistInRenameMode = true;
+	
+	var oldProfName = el.getAttribute('label');
 	var promptInput = {value:oldProfName}
 	var promptCheck = {value:false}
 	var promptResult = Services.prompt.prompt(null, self.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
@@ -674,14 +690,10 @@ function actuallyMakeRename(el) {
 			}
 		}
 	}
-
+	delete win.ProfilistInRenameMode;
+	
 	return;
 	el.style.fontWeight = 'bold';
-	
-	var doc = el.ownerDocument;
-	var win = doc.defaultView;
-	
-	win.ProfilistInRenameMode = true;
 	
 	var PanelUI = doc.querySelector('#PanelUI-popup');
 	PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
@@ -784,13 +796,15 @@ function updateMenuDOM(aDOMWindow, json) {
 	}
 	var stack = profilist_box.childNodes[0];
 	var stackChilds = stack.childNodes;
+	/*
 	[].forEach.call(stackChilds, function(sc) {
 		stack.removeChild(sc);
 	});
+	*/
+	
+	var elsInMenu = [];
 	
 	var cumHeight = 0;
-	var elRefs = [];
-	var setTops = [];
 	var PUIsync;
 	for (var i=0; i<json.length; i++) {
 		console.log('in json arr = ', i);
@@ -798,8 +812,8 @@ function updateMenuDOM(aDOMWindow, json) {
 		var appendChild = false;
 		if (json[i].identifier) {
 			el = stack.querySelector(json[i].identifier);
-			console.log('identifier  string = "' + json[i].identifier + '"');
-			console.log('el = ' + el);
+			console.log('identifier  string =', json[i].identifier);
+			console.log('post ident el = ', el);
 		}
 		if (!el) {
 			if (json[i].nodeToClone == 'PUIsync') {
@@ -814,13 +828,16 @@ function updateMenuDOM(aDOMWindow, json) {
 		} else {
 			console.log('el idented');
 		}
-		elRefs.push(el);
+		if (!el.hasAttribute('top')) {
+			el.setAttribute('top', '0');
+		}
 		
 		for (var p in json[i]) {
 			if (p == 'nodeToClone' || p == 'identifier' || p == 'props') { continue }
 			if (p.indexOf('addEventListener') == 0) {
 				(function(elClosure, jsonIClosure, pClosure) {
-					console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+					//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+					console.log('elClosure label',elClosure.getAttribute('label'));
 					elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 				})(el, json[i], p);
 				continue;
@@ -832,27 +849,46 @@ function updateMenuDOM(aDOMWindow, json) {
 			}
 		}
 		if (appendChild) {
-			stack.appendChild(el);
+			if (json[i].status != 'active') { //this if makes sure the selected profile one gets added last note: again this is important because the last most element is top most on stack when collapsed, but in my case its more important because it gets the perm-hover class
+				stack.insertBefore(el, stack.firstChild);
+			} else {
+				stack.appendChild(el);
+			}
 			console.log('appended', el);
 		}
-		console.log('el.boxObject.height = ', el.boxObject);
-		cumHeight += el.boxObject.height;
+		var elHeight = el.boxObject.height;
+		if (elHeight == 0) {
+			if (appendChild) {
+				elHeight = json[i].nodeToClone.boxObject.height;
+				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
+			} else {
+				console.error('ERROR deal with this, elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
+			}
+		}
+		console.log('el.boxObject.height = ', elHeight);
+		cumHeight += elHeight;
 		console.log('cumHeight after adding = ' + cumHeight);
 		if (i < json.length - 1) {
-			//el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is 
-			setTops.push(cumHeight);
+			el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i learned that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
+			console.log('set el top to ', cumHeight);
 		} else {
-			setTops.push(0);
+			el.setAttribute('top', '0');
+			console.log('set el top to 0');
 		}
+		elsInMenu.push(el);
 	}
 	collapsedheight = el.boxObject.height;
 	expandedheight = cumHeight;
 	console.log('collapsedheight', collapsedheight);
 	console.log('expandedheight', expandedheight);
-	
-	[].forEach.call(elRefs, function(elRef, i) {
-		elRef.setAttribute('top', setTops[i]);
+
+	[].forEach.call(stackChilds, function(sc) {
+		if (elsInMenu.indexOf(sc) == -1) {
+			console.log('sc is not in elsInMenu so removing this child = ', sc);
+			stack.removeChild(sc);
+		}
 	});
+	
 }
 
 /*start - windowlistener*/
@@ -942,7 +978,7 @@ var windowListener = {
 					//{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					//{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:profToolkit.selectedProfile.name}}
+					{nodeToClone:PUIsync, identifier:'[label="' + myServices.tps.selectedProfile.name + '"]', label:myServices.tps.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:myServices.tps.selectedProfile.name}}
 				];
 			}
 			
@@ -960,10 +996,12 @@ var windowListener = {
 				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
+				/*//commenting out this block as using services prompt for renaming right now
 				if (aDOMWindow.ProfilistInRenameMode) {
 					console.log('in rename mdoe so dont close');
 					return;
 				}
+				*/
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
@@ -979,6 +1017,7 @@ var windowListener = {
 				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
 				referenceNodes.profilist_stack.lastChild.classList.remove('perm-hover');
 			}, false);
+			//PanelUI.addEventListener('popuphiding', prevHide, false);
 		}
 		
 	},
@@ -1070,7 +1109,6 @@ function jsonToDOM(xml, doc, nodes) {
 
 function startup(aData, aReason) {
 	console.log('in startup');
-	console.log('knows promise? = ', Promise);
 
 	updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
