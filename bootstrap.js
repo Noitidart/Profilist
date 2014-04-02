@@ -9,8 +9,7 @@ const myServices = {};
 var cssUri;
 var collapsedheight = 0; //holds height stack should be when collapsed
 var expandedheight = 0; //holds height stack should be when expanded
-var stackDOMJson = []; //array holding menu structure in stack
-var exeInited = false;
+var stackDOMJson = []; //array holding menu structure in stack /*:note: :important:must insert the "Default: profile" into stackDOMJson last as last element in stack is top most*/
 var unloaders = {};
 
 const { TextEncoder, TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
@@ -19,8 +18,8 @@ Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
+Cu.import('resource://gre/modules/Promise.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
-XPCOMUtils.defineLazyGetter(myServices, 'proc', function(){ return Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
 
@@ -56,14 +55,14 @@ function readIni() {
 	promise = promise.then(
 		function(ArrayBuffer) {
 			var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
-			console.log(readStr);
+			//console.log(readStr);
 			ini = {};
 			var patt = /\[(.*?)(\d*?)\](?:\s+?(.+)=(.+))(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?/mg;
 			var blocks = [];
 
 			var match;
 			while (match = patt.exec(readStr)) {
-				console.log('MAAAAAAAAAAATCH', match);
+				//console.log('MAAAAAAAAAAATCH', match);
 
 				var group = match[1];
 				ini[group] = {};
@@ -168,12 +167,13 @@ function createProfile(refreshIni, profName) {
 		promise.then(
 			function() {
 				console.log('now that ini read it will now createProfile with name = ' + profName);
-				createProfile(2, profName);
+				return createProfile(2, profName);
 			},
 			function() {
 				console.error('Failed to refresh ini object from file during renameProfile');
 			}
 		);
+		return promise;
 	} else {
 		console.log('in createProfile create part');
 		if (profName in ini) {
@@ -231,6 +231,7 @@ function createProfile(refreshIni, profName) {
 			}
 		}
 		console.log('starting promise for make root dir');
+		var PromiseAllArr = [];
 		var promise = OS.File.makeDir(rootPathDefaultDirName);
 		promise.then(
 			function() {
@@ -260,6 +261,7 @@ function createProfile(refreshIni, profName) {
 				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
 			}
 		);
+		PromiseAllArr.push(promise);
 		if (profToolkit.rootPathDefault != profToolkit.localPathDefault) {
 			var promise2 = OS.File.makeDir(localPathDefaultDirName);
 			promise2.then(
@@ -272,6 +274,7 @@ function createProfile(refreshIni, profName) {
 					console.error('FAILED to create local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
 				}
 			);
+			PromiseAllArr.push(promise2);
 		}
 		var promise4 = writeIni();
 		promise4.then(
@@ -284,7 +287,9 @@ function createProfile(refreshIni, profName) {
 				console.log('updating ini with new created profile failed');
 			}
 		);
+		PromiseAllArr.push(promise4);
 		
+		return Promise.all(PromiseAllArr);
 		//see here: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js
 		
 /*
@@ -307,31 +312,30 @@ function renameProfile(refreshIni, profName, newName) {
 		var promise = readIni();
 		promise.then(
 			function() {
-				renameProfile(2, profName, newName);
+				return renameProfile(2, profName, newName);
 			},
 			function() {
 				console.error('Failed to refresh ini object from file during renameProfile');
 			}
 		);
+		return promise;
 	} else {
 		//check if name is taken
 		if (profName in ini == false) {
 			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
-			return;		
+			return new Error('Cannot find this profile name, "' + profName + '" so cannot rename it.');
 		}
 		if (newName in ini) {
 			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
-			return;		
+			return new Error('Cannot rename to "' + newName + '" because this name is already taken by another profile.');
 		}
 		ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
-		for (var i=0; i<stackDOMJson.length; i++) {
-			if (stackDOMJson[i].label == profName) {
-				stackDOMJson[i].justRenamed = true;
-				stackDOMJson[i].props.profname = newName;
+		/* for (var i=0; i<stackDOMJson.length; i++) { // no longer do this block because what if renamed from another profile, it wont catch it then
+			if (stackDOMJson[i].props.profpath == ini[profName].props.Path) {
 				stackDOMJson[i].label = newName;
 				break;
 			}
-		}
+		} */
 		var promise = writeIni();
 		promise.then(
 			function() {
@@ -342,6 +346,8 @@ function renameProfile(refreshIni, profName, newName) {
 				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
 			}
 		);
+		
+		return promise;
 	}
 	
 	
@@ -355,24 +361,37 @@ function deleteProfile(refreshIni, profName) {
 		Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
 		return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
 	} else {
-		var profileList = myServices.tps.profiles;
-		while (profileList.hasMoreElements()) {
-			var profile = profileList.getNext().QueryInterface(Ci.nsIToolkitProfile);
-			if (profile.name == profName) {
-				break;
-			}
+		if (!(profName in ini)) {
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" could not be found so could not delete.');
+			return new Error('The profile "' + profName + '" could not be found so could not delete.');		
+		}
+
+		 console.log('found profile name in ini it is == ', ini[profName]);
+		 if (ini[profName].props.IsRelative == '1') {
+			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
+			console.info('dirname of this profile is = ', dirName);
+			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
+			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
+			
+			var aDirect = new FileUtils.File(PathRootDir);
+			var aTemp = new FileUtils.File(PathLocalDir);
+		 } else {
+			var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
+			var aTemp = aDirect;
 		 }
-		 console.log('found profile name it is == ', profile.name, profile);
-		 var unlocker = {}; //:learned:if not in use running the lock function will ADD to this object key 'value' and set it to 'null'
 		 try {
-			 var locker = profile.lock(unlocker);
+			 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
 			 //if it gets to this line then the profile was not in use as it was succesfully locked
 			 locker.unlock(); //its not in use so lets unlock the profile
 			 console.log('continue as profile is not in use');
 		 } catch (ex) {
-			console.warn('PROFILE IS IN USE');
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-			return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
+			if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
+				console.warn('PROFILE IS IN USE');
+				Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+				return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
+			} else {
+				throw ex;
+			}
 		 }
 	 }
 //end check if profile in use	 
@@ -380,18 +399,19 @@ function deleteProfile(refreshIni, profName) {
 		var promise = readIni();
 		promise.then(
 			function() {
-				deleteProfile(2, profName);
+				return deleteProfile(2, profName);
 			},
 			function() {
 				console.error('Failed to refresh ini object from file on deleteProfile');
 			}
 		);
+		return promise;
 	} else {
 		//before deleting check if its default profile
 		//check if its in use
 		if (profName in ini == false) {
 			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
-			return;		
+			return new Error('Cannot find this profile name, "' + profName + '" so cannot delete it.');
 		}
 		//if (Object.keys(ini).length == 2) {
 			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot delete this profile as it is the last profile remaining.');
@@ -426,6 +446,7 @@ function deleteProfile(refreshIni, profName) {
 			console.log('ALLLL done so updateProfToolkit');
 			updateProfToolkit(1, 1);
 		}
+		var PromiseAllArr = [];
 		if (ini[profName].props.IsRelative == '1') {
 			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
 			console.info('dirname of this profile is = ', dirName);
@@ -442,8 +463,10 @@ function deleteProfile(refreshIni, profName) {
 				},
 				function(aRejectReason) {
 					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
+					return new Error('FAILED to remove PathRootDir for profName of ' + profName);
 				}
 			);
+			PromiseAllArr.push(promise);
 			if (PathRootDir != PathLocalDir) {
 				console.log('now removing PathLocalDir', PathLocalDir);
 				var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
@@ -455,12 +478,14 @@ function deleteProfile(refreshIni, profName) {
 					},
 					function(aRejectReason) {
 						console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
+						return new Error('FAILED to remove PathLocalDir for profName of ' + profName);
 					}
 				);
+				PromiseAllArr.push(promise2);
 			}
 		} else {
 			var Path = ini[profName].props.Path;
-			var promise = OS.File.remove(Path);
+			var promise = OS.File.removeDir(Path);
 			promise.then(
 				function() {
 					console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
@@ -468,9 +493,11 @@ function deleteProfile(refreshIni, profName) {
 					checkReadyAndUpdateStack();
 				},
 				function() {
-					console.warn('FAILED to remove Path for profName of ' + profName, 'Path=', Path);
+					console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+					return new Error('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
 				}
 			);
+			PromiseAllArr.push(promise);
 		}
 		delete ini[profName];
 		var promise0 = writeIni();
@@ -482,8 +509,12 @@ function deleteProfile(refreshIni, profName) {
 			},
 			function() {
 				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+				return new Error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
 			}
 		);
+		PromiseAllArr.push(promise0);
+		
+		return Promise.all(PromiseAllArr);
 	}
 }
 function initProfToolkit() {
@@ -503,9 +534,9 @@ function initProfToolkit() {
 		} //reference to the profiles object but to the current profile in the profiles object
 	};
 	
-	profToolkit.localPathDefault = FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
+	profToolkit.rootPathDefault = FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
 	console.log('initProfToolkit 1');
-	profToolkit.rootPathDefault = FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
+	profToolkit.localPathDefault = FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
 	console.log('initProfToolkit 2');
 
 	profToolkit.selectedProfile.rootDirName = OS.Path.basename(OS.Constants.Path.profileDir);
@@ -551,8 +582,13 @@ function initProfToolkit() {
 	*/
 }
 
-function updateOnPanelShowing() {
-	updateProfToolkit(1, 1);
+function updateOnPanelShowing(e) {
+	console.error('e on panel showing = ', e);
+	if (e.target.id == 'PanelUI-popup') {
+		updateProfToolkit(1, 1);
+	} else {
+		console.log('not main panel showing so dont updateProfToolkit');
+	}
 }
 
 function updateProfToolkit(refreshIni, refreshStack) {
@@ -566,50 +602,63 @@ function updateProfToolkit(refreshIni, refreshStack) {
 				console.error('Failed to refresh ini object from file on deleteProfile');
 			}
 		);
+		return promise;
 	} else {
 		if (profToolkit.rootPathDefault === 0) {
 			console.log('initing prof toolkit');
 			refreshStack = true;
+			console.log('initing prof toolkit');
 			initProfToolkit();
+			console.log('init done');
 		}
 		var profileCount = 0;
 		profToolkit.profiles = {};
 		var selectedProfileNameFound = false;
+		var pathsInIni = [];
 		for (var p in ini) {
 			if ('num' in ini[p]) {
 				profileCount++;
+				pathsInIni.push(ini[p].props.Path);
 			}
 			if (!selectedProfileNameFound && profToolkit.selectedProfile.name !== 0 && ini[p].Name == profToolkit.selectedProfile.name) {
 				selectedProfileNameFound = true;
 			}
 		}
 		profToolkit.profileCount = profileCount;
-		
+		profToolkit.pathsInIni = pathsInIni;
 		
 		if (!selectedProfileNameFound) {
 			console.log('looking for selectedProfile name');
 			for (var p in ini) {
-				if (ini[p].IsRelative == '1') {
-					var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].Path));
+				if (ini[p].props.IsRelative == '1') {
+					console.log('ini[p] is relative',ini[p]);
+					var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].props.Path));
 					if (iniDirName == profToolkit.selectedProfile.rootDirName) {
 						console.log('iniDirName matches profToolkit.selectedProfile.rootDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].Name;
+						profToolkit.selectedProfile.name = ini[p].props.Name;
+						break;
 					}
 					if (iniDirName == profToolkit.selectedProfile.localDirName) {
 						console.log('iniDirName matches profToolkit.selectedProfile.localDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].Name;
+						profToolkit.selectedProfile.name = ini[p].props.Name;
+						break;
 					}
 				} else {
+					console.log('ini[p] is absolute',ini[p]);
 					if (ini[p].Path == profToolkit.selectedProfile.rootDirPath) {
 						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].Name;
+						profToolkit.selectedProfile.name = ini[p].props.Name;
+						break;
 					}
 					if (ini[p].Path == profToolkit.selectedProfile.localDirPath) {
 						console.log('ini[p].Path matches profToolkit.selectedProfile.localDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].Name;
+						profToolkit.selectedProfile.name = ini[p].props.Name;
+						break;
 					}
 				}
 			}
+			//profToolkit.selectedProfile.name = 1;
+			console.log('selectedProfile searching proc done');
 		}
 		
 		
@@ -619,64 +668,116 @@ function updateProfToolkit(refreshIni, refreshStack) {
 	}
 }
 
-function updateStackDOMJson_basedOnToolkit() {
-			//update stackDOMJson based on profToolkit
+function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
+			console.log('updating stackDOMJson based on profToolkit AND ini');
 			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
 			if (stackDOMJson.length == 0) {
+				console.log('stackDOMJson is 0 length', stackDOMJson);
+				console.log('profToolkit=',profToolkit);
 				stackDOMJson = [
 					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,   status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:profToolkit.selectedProfile.name}}
+					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
 				];
-				var profNamesCurrentlyInMenu = [profToolkit.selectedProfile.name];
+				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
 				stackUpdated = true;
 			} else {
+				console.log('stackDOMJson has more than 0 length so:', stackDOMJson);
 				var profNamesCurrentlyInMenu = [];
 				for (var i=0; i<stackDOMJson.length; i++) {
 					var m = stackDOMJson[i];
-					if ('props' in m && 'profname' in m.props) {
-						if (!(m.props.profname in ini)) {
+					if ('props' in m && 'profpath' in m.props) {
+						if (!(m.props.pathname in profToolkit.pathsInIni)) {
 							//this is in the stack object but no longer exists so need to remove
-							console.log('m.props.profname is not in ini = ', m.props.profname)
+							console.log('m.props.profpath is not in ini = ', m.props.profpath)
 							stackUpdated = true;
-							stackDOMJson.splice(i, 1);
+							stackDOMJson.splice(i, 1); //this takes care of deletes
 							i--;
 						} else {
-							profNamesCurrentlyInMenu.push(m.props.profname);
+							console.log('this stack value is in profToolkit', 'stack val = ', m.props.pathname, 'pathsInIni', profToolkit.pathsInIni);
+							profNamesCurrentlyInMenu.push(m.props.profpath);
 						}
 					}
 				}
-			}			
+			}
 			
+			console.info('after updating that profNamesCurrentlyInMenu is = ', profNamesCurrentlyInMenu);
+			
+			var stackPositionsAccountedFor = []; //use this to see if should delete a stack entry from array
 			for (var p in ini) {
 				if (!('num' in ini[p])) { continue } //as its not a profile
-				if (profNamesCurrentlyInMenu.indexOf(p) > -1) { continue; }
+				var posOfProfInStack = -1; //actually cannot do this because have create profile button::::var posOfProfInStack = profNamesCurrentlyInMenu.indexOf(ini[p].props.Path); //identifies prop by path and gives location of it in stackDOMJson, this works because i do a for loop through stackDOMJson and create profNamesCurrentlyInMenu in that order
+				console.log('looking for position in stack of profpath = ', ini[p].props.Path);
+				for (var i=0; i<stackDOMJson.length; i++) {
+					if ('props' in stackDOMJson[i]) {
+						if (stackDOMJson[i].props.profpath == ini[p].props.Path) {
+							posOfProfInStack = i;
+							break;
+						} else {
+							console.log('stackDOMJson[i].props.profpath != ini[p].props.Path', stackDOMJson[i].props.profpath, ini[p].props.Path);
+							continue; //dont really need continue as there is no code below in this for but ya
+						}
+					} else {
+						continue; //dont really need continue as there is no code below in this for but ya
+					}
+				}
+				console.log('index of ini[p].props.Path in stack object is', ini[p].props.Path, posOfProfInStack);
+				
+				if (posOfProfInStack > -1) {
+					stackPositionsAccountedFor.push(posOfProfInStack);
+					//check if any properties changed else continue
+					var justRenamed = false; //i had this as propsChanged but realized the only prop that can change is name and this happens on a rename so changed this to justRenamed. :todo: maybe im not sure but consider justDeleted
+					if (stackDOMJson[posOfProfInStack].label != ini[p].props.Name) {
+						stackDOMJson[posOfProfInStack].justRenamed = true;
+						stackDOMJson[posOfProfInStack].label = ini[p].props.Name;
+						justRenamed = true;
+						if (!stackUpdated) {
+							stackUpdated = true; //now stack is not really updated (stack is stackDOMJson but we set this to true becuase if stackUpdated==true then it physically updates all PanelUi
+							console.log('forcing stackUpdated as something was justRenamed');
+						} else {
+							console.log('was just renamed but no need to force stackUpdated as its already stackUpdated == true');
+						}
+					}
+					continue; //contin as it even if it was renamed its not new so nothing to splice, and this profpath for ini[p] was found in stackDOMJson
+				}
 				
 
-					console.log('splicing p = ', ini[p]);
+					console.log('splicing p = ', ini[p], 'stackDOMjson=', stackDOMJson);
 					stackUpdated = true;
 					(function(pClosure) {
-						//stackDOMJson.splice(0, 0, {nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.profiles[p].name + '"]', label:profToolkit.profiles[p].name, class:'PanelUI-profilist', id:null, oncommand:null, status:'inactive', addEventListener:['command', function(){ launchProfile(profToolkit.profiles[p].name) }, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:profToolkit.profiles[p].id, profname:profToolkit.profiles[p].name}});
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + pClosure + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:pClosure}};
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + pClosure + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[pClosure].props.Path}};
 						
 						if (pClosure == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
 							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
-							//stackDOMJson.push({nodeToClone:'PUIsync', identifier:'[label="' + p.name + '"]', label:p.name, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:p.id, profname:p.name}});
 							objToSplice.status = 'active';
 							delete objToSplice.addEventListener;
+							objToSplice.addEventListener2[0] = 'command';
+							stackDOMJson.push(objToSplice);
+						} else {
+							stackDOMJson.splice(0, 0, objToSplice);
 						}
-						
-						stackDOMJson.splice(0, 0, objToSplice);
 					})(p);
 			}
-			console.info('stackDOMJson after promise fin = ', stackDOMJson);
-			for (var i=0; i<stackDOMJson.length; i++) {
-				if (stackDOMJson[i].justRenamed) {
-					stackUpdated = true;
-					console.log('forcing stackUpdated as something was justRenamed');
-					break;
+			
+			/* if (!stackUpdated) {
+				for (var i=0; i<stackDOMJson.length; i++) {
+					if (stackDOMJson[i].justRenamed) {
+						stackUpdated = true;
+						console.log('forcing stackUpdated as something was justRenamed');
+						break;
+					}
 				}
-			}
+			} */
+			
+			/* //check if anything deleted
+			if (stackPositionsAccountedFor.length < stackDOMJson.length) {
+				for (var i=0; i<stackDOMJson.length; i++) {
+					if (stackPositionsAccountedFor.indexOf(i) == -1) {
+						console.warn('need to (i dont do it yet im just testing) delete stackDOMJson at position i =', i, 'stackDOMJson at this pos =', stackDOMJson[i], 'stackPositionsAccountedFor=', stackPositionsAccountedFor, 'stackDOMJson=', stackDOMJson);
+					}
+				}
+			} */
+			console.info('stackDOMJson before checking if stackUpdated==true',stackDOMJson);
 			if (stackUpdated) {
 				console.info('something was changed in stack so will update all menus now');
 				let DOMWindows = Services.wm.getEnumerator(null);
@@ -733,9 +834,9 @@ var observers = {
 var renameTimeouts = [];
 
 function makeRename(e) {
-	if (e.button != 0) {
+	if (e.type == 'mousedown' && e.button != 0) {
 		//ensure it must be primary click
-		console.warn('not primary click so returning');
+		console.warn('not primary click so returning e=', e);
 		return;
 	}
 	//only allow certain chracters
@@ -790,18 +891,23 @@ function actuallyMakeRename(el) {
 	var promptResult = Services.prompt.prompt(null, self.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
 	if (promptResult) {
 		if (promptInput.value == '') {
-			var confirmResult = Services.prompt.confirm(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"?');
-			if (confirmResult) {
-				var promise = deleteProfile(1, oldProfName);
-				promise.then(
-					function() {
-						Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
-					},
-					function() {
-						console.warn('Delete failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ');
-						Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Rename failed. An exception occured when trying to delete the profile, see Browser Console for details.');
-					}
-				);
+			var confirmCheck = {value:false};
+			var confirmResult = Services.prompt.confirmCheck(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All profile files will be deleted.', 'Confirm Deletion', confirmCheck);
+			if (confirmResult) {				
+				if (confirmCheck.value) {
+					var promise = deleteProfile(1, oldProfName);
+					promise.then(
+						function() {
+							Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
+						},
+						function() {
+							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ');
+							Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Delete failed. An exception occured when trying to delete the profile, see Browser Console for details.');
+						}
+					);
+				} else {
+					Services.prompt.alert(null, self.name + ' - ' + 'Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
+				}
 			}
 		} else {
 			var newProfName = promptInput.value;
@@ -821,7 +927,7 @@ function actuallyMakeRename(el) {
 		}
 	}
 	delete win.ProfilistInRenameMode;
-	
+	//Services.prompt.alert(null, self.name + ' - ' + 'debug', 'deleted ProfilistInRenameMode');
 	return;
 	el.style.fontWeight = 'bold';
 	
@@ -873,21 +979,16 @@ function launchProfile(e, profName, suppressAlert, url) {
 		return false;
 	}
 
-	if (!exeInited) {
-		var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
-		try {
-			myServices.proc.init(exe);
-			exeInited = true;
-		} catch (ex) {
-			console.warn('exception thrown on nsiProc.init of exe, probably already initalized: ex = ', ex);
-		}
-	}
-	var args = ['-P', profName, '-no-remote'];
+	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+	var process = Cc['@mozilla.org/process/util;1'].createInstance(Ci.nsIProcess);
+	process.init(exe);
+	
+	var args = ['-P', profName, '-no-remote']; //-new-instance
 	if (url) {
 		args.push('about:home');
 		args.push(url);
 	}
-	myServices.proc.run(false, args, args.length);
+	process.run(false, args, args.length);
 }
 
 function createUnnamedProfile() {
@@ -929,13 +1030,6 @@ function updateMenuDOM(aDOMWindow, json) {
 		return;
 	}
 	var stack = profilist_box.childNodes[0];
-	var stackChilds = stack.childNodes;
-	/*
-	[].forEach.call(stackChilds, function(sc) {
-		stack.removeChild(sc);
-	});
-	*/
-	
 	var elsInMenu = [];
 	
 	var cumHeight = 0;
@@ -1027,13 +1121,16 @@ function updateMenuDOM(aDOMWindow, json) {
 	console.log('collapsedheight', collapsedheight);
 	console.log('expandedheight', expandedheight);
 
+	var stackChilds = stack.childNodes;
 	[].forEach.call(stackChilds, function(sc) {
-		if (elsInMenu.indexOf(sc) == -1) {
-			console.log('sc is not in elsInMenu so removing this child = ', sc);
+		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini');
+		if (sc.hasAttribute('status') && !(sc.getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+			console.log('this profile is not in ini so remove it', 'ini=', ini);
 			stack.removeChild(sc);
 		}
 	});
 	
+	console.info('json=',json);
 }
 
 /*start - windowlistener*/
@@ -1112,18 +1209,15 @@ var windowListener = {
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
 			
-			/*must insert the "Default: profile" into stack last*/
-			
 			console.log('CREATING MENU JSON');
 			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');
 			console.log('PUIsync height', PUIsync.boxObject);
 			console.log('PUIfi height', PUIfi.boxObject);
 			if (stackDOMJson.length == 0) {
+				console.log('stockDOMJson.length == 0');
 				stackDOMJson = [
-					//{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, status:null, style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					//{nodeToClone:PUIsync, identifier:'[label="' + cProfName + '"]', label:cProfName, class:'PanelUI-profilist', id:null, status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profid:cProfId, profname:cProfName}}
 					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profname:profToolkit.selectedProfile.name}}
+					{nodeToClone:PUIsync, identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:activeProfpath}}
 				];
 			}
 			
@@ -1256,7 +1350,9 @@ function jsonToDOM(xml, doc, nodes) {
 
 function startup(aData, aReason) {
 	console.log('in startup');
-
+	console.log('initing prof toolkit');
+	initProfToolkit();
+	console.log('init done');
 	updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
 	console.log('aData', aData);
