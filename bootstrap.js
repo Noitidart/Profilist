@@ -1094,26 +1094,27 @@ function updateMenuDOM(aDOMWindow, json) {
 			}
 			console.log('appended', el);
 		}
-		//var elHeight = el.boxObject.height;
-		var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
-		elHeight = parseFloat(elHeight);
+		var elHeight = el.boxObject.height;
+		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
+		//elHeight = parseFloat(elHeight);
 		if (elHeight == 0) {
 			if (appendChild) {
-				//elHeight = json[i].nodeToClone.boxObject.height;
-				elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
-				elHeight = parseFloat(elHeight);
+				elHeight = json[i].nodeToClone.boxObject.height;
+				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
+				//elHeight = parseFloat(elHeight);
 				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
 			} else {
 				console.error('ERROR deal with this, elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
 			}
 		}
+		el.style.height = elHeight + 'px';
 		console.log('el.boxObject.height = ', elHeight);
 		cumHeight += elHeight;
 		console.log('cumHeight after adding = ' + cumHeight);
 		if (i < json.length - 1) {
-			el.setAttribute('top', Math.round(cumHeight)); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i :learned: that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
+			el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i :learned: that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
 			//el.setAttribute('bottom', cumHeight + elHeight);
-			console.log('set el top to ', Math.round(cumHeight));
+			console.log('set el top to ', cumHeight);
 		} else {
 			el.setAttribute('top', '0');
 			console.log('set el top to 0');
