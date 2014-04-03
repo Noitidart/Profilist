@@ -91,8 +91,9 @@ function readIni() {
 			console.log('successfully read ini = ', ini);
 			return ini;
 		},
-		function() {
+		function(aRejectReason) {
 			console.error('Read ini failed');
+			return new Error('Profiles.ini could not be read to memoery. ' + aRejectReason.message);
 		}
 	);
 
@@ -138,8 +139,9 @@ function writeIni() {
 		}); // buffer "file.txt.tmp".
 	promise.then(
 		function() {},
-		function() {
+		function(aRejectReason) {
 			console.error('writeIni failed');
+			return new Error('Profiles.ini could not be be written to disk. ' + aRejectReason.message);
 		}
 	);
 	return promise;
@@ -169,16 +171,17 @@ function createProfile(refreshIni, profName) {
 				console.log('now that ini read it will now createProfile with name = ' + profName);
 				return createProfile(2, profName);
 			},
-			function() {
+			function(aRejectReason) {
 				console.error('Failed to refresh ini object from file during renameProfile');
+				return new Error(aRejectReason.message);
 			}
 		);
 		return promise;
 	} else {
 		console.log('in createProfile create part');
 		if (profName in ini) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
-			return new Error('Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
+			return Promise.reject(new Error('Cannot create profile with name "' + newName + '" because this name is already taken by another profile.'));
 		}
 		//create folder in root dir (in it, one file "times.json" with contents:
 		/*
@@ -253,12 +256,14 @@ function createProfile(refreshIni, profName) {
 						},
 						function() {
 							console.error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
+							return new Error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
 						}
 					);
 					return promise3;
 			},
 			function() {
 				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
+				return new Error('FAILED to create root dir for profile ' + profName + ' the path is = ' + rootPathDefaultDirName);
 			}
 		);
 		PromiseAllArr.push(promise);
@@ -271,7 +276,8 @@ function createProfile(refreshIni, profName) {
 					checkReadyAndLaunch();
 				},
 				function() {
-					console.error('FAILED to create local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
+					console.error('FAILED to create local dir for profile "' + profName + '" the path is = ', localPathDefaultDirName);
+					return new Error('FAILED to create local dir for profile "' + profName + '" the path is = ' + localPathDefaultDirName);
 				}
 			);
 			PromiseAllArr.push(promise2);
@@ -284,7 +290,8 @@ function createProfile(refreshIni, profName) {
 				checkReadyAndLaunch();
 			},
 			function() {
-				console.log('updating ini with new created profile failed');
+				console.log('updating ini with newly created profile failed');
+				return new Error('updating ini with newly created profile failed');
 			}
 		);
 		PromiseAllArr.push(promise4);
@@ -314,20 +321,21 @@ function renameProfile(refreshIni, profName, newName) {
 			function() {
 				return renameProfile(2, profName, newName);
 			},
-			function() {
+			function(aRejectReason) {
 				console.error('Failed to refresh ini object from file during renameProfile');
+				return new Error(aRejectReason.message);
 			}
 		);
 		return promise;
 	} else {
 		//check if name is taken
 		if (profName in ini == false) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
-			return new Error('Cannot find this profile name, "' + profName + '" so cannot rename it.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
+			return Promise.reject(new Error('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.'));
 		}
 		if (newName in ini) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
-			return new Error('Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			return Promise.reject(new Error('Profile name of "' + newName + '" is already taken.'));
 		}
 		ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
 		/* for (var i=0; i<stackDOMJson.length; i++) { // no longer do this block because what if renamed from another profile, it wont catch it then
@@ -344,6 +352,7 @@ function renameProfile(refreshIni, profName, newName) {
 			},
 			function() {
 				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+				return new Error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
 			}
 		);
 		
@@ -358,12 +367,12 @@ function deleteProfile(refreshIni, profName) {
 //start check if profile in use
 	if (profName == profToolkit.selectedProfile.name) {
 		//cannot delete profile that is in use
-		Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-		return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
+		//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+		return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
 	} else {
 		if (!(profName in ini)) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" could not be found so could not delete.');
-			return new Error('The profile "' + profName + '" could not be found so could not delete.');		
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" could not be found in Profiles.ini in memory so could not delete.');
+			return Promise.reject(new Error('The profile "' + profName + '" could not be found in Profiles.ini in memory.'));
 		}
 
 		 console.log('found profile name in ini it is == ', ini[profName]);
@@ -374,9 +383,18 @@ function deleteProfile(refreshIni, profName) {
 			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
 			
 			var aDirect = new FileUtils.File(PathRootDir);
+			if (!aDirect.exists()){
+				return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
+			}			
 			var aTemp = new FileUtils.File(PathLocalDir);
+			if (!aTemp.exists()){
+				return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
+			}
 		 } else {
 			var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
+			if (!aDirect.exists()){
+				return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
+			}
 			var aTemp = aDirect;
 		 }
 		 try {
@@ -387,10 +405,13 @@ function deleteProfile(refreshIni, profName) {
 		 } catch (ex) {
 			if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
 				console.warn('PROFILE IS IN USE');
-				Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-				return new Error('The profile "' + profName + '" is currently in use, cannot delete.');
+				//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+				return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
 			} else {
-				throw ex;
+				//throw ex;
+				console.log('ex happend = ', ex);
+				console.log('ex.result = ', ex.result);
+				return Promise.reject(new Error('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message));
 			}
 		 }
 	 }
@@ -401,8 +422,9 @@ function deleteProfile(refreshIni, profName) {
 			function() {
 				return deleteProfile(2, profName);
 			},
-			function() {
+			function(aRejectReason) {
 				console.error('Failed to refresh ini object from file on deleteProfile');
+				return new Error(aRejectReason.message);
 			}
 		);
 		return promise;
@@ -410,11 +432,11 @@ function deleteProfile(refreshIni, profName) {
 		//before deleting check if its default profile
 		//check if its in use
 		if (profName in ini == false) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
-			return new Error('Cannot find this profile name, "' + profName + '" so cannot delete it.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
+			return Promise.reject(new Error('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.'));
 		}
 		//if (Object.keys(ini).length == 2) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot delete this profile as it is the last profile remaining.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot delete this profile as it is the last profile remaining.'); //dont need this anymore as if its the last profile its currently in use
 			//return;
 		//}
 		//todo: figure out how to check if the profile is running, if it is dont delete but msg its open		
@@ -598,8 +620,9 @@ function updateProfToolkit(refreshIni, refreshStack) {
 			function() {
 				updateProfToolkit(0, refreshStack);
 			},
-			function() {
+			function(aRejectReason) {
 				console.error('Failed to refresh ini object from file on deleteProfile');
+				return new Error(aRejectReason.message);
 			}
 		);
 		return promise;
@@ -898,15 +921,16 @@ function actuallyMakeRename(el) {
 					var promise = deleteProfile(1, oldProfName);
 					promise.then(
 						function() {
-							Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
+							//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
+							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.');
 						},
-						function() {
-							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ');
-							Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Delete failed. An exception occured when trying to delete the profile, see Browser Console for details.');
+						function(aRejectReason) {
+							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
+							Services.prompt.alert(null, self.name + ' - ' + 'Delete Failed', aRejectReason.message);
 						}
 					);
 				} else {
-					Services.prompt.alert(null, self.name + ' - ' + 'Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
+					Services.prompt.alert(null, self.name + ' - ' + 'Delete Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
 				}
 			}
 		} else {
@@ -915,12 +939,13 @@ function actuallyMakeRename(el) {
 				var promise = renameProfile(1, oldProfName, newProfName);
 				promise.then(
 					function() {
-						Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
+						//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
+						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"');
 						updateProfToolkit(1, 1);
 					},
-					function() {
-						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ');
-						Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Rename failed. An exception occured when trying to rename the profile, see Browser Console for details.');
+					function(aRejectReason) {
+						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ', aRejectReason);
+						Services.prompt.alert(null, self.name + ' - ' + 'Renamed Failed', aRejectReason.message);
 					}
 				);
 			}
@@ -974,7 +999,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 	}
 			
 	if (!found) {
-		Services.prompt.alert(null, self.name + ' - ' + 'ERROR', 'An error occured while trying to launch profile named "' + profName + '": Proflie name not found in memory.');
+		Services.prompt.alert(null, self.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Proflie name not found in Profiles.ini in memory.');
 		console.info('dump of profiles = ', ini);
 		return false;
 	}
@@ -1009,12 +1034,27 @@ function createUnnamedProfile() {
 			}
 
 			console.log('will now createProfile with name = ', profName);
-			createProfile(0, profName);
+			var promise1 = createProfile(0, profName);
+			promise1.then(
+				function() {
+					console.log('createProfile promise succesfully completed');
+				},
+				function(aRejectReason) {
+					console.warn('Create profile failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
+					Services.prompt.alert(null, self.name + ' - ' + 'Create Failed', aRejectReason.message);
+					return new Error('Create Failed. ' + aRejectReason.message);
+				}
+			);
+			return promise1;
 		},
-		function() {
+		function(aRejectReason) {
 			console.error('createProfile readIni promise rejected');
+			Services.prompt.alert(null, self.name + ' - ' + 'Read Failed', aRejectReason.message);
+			return new Error('Read Failed. ' + aRejectReason.message);
 		}
 	);
+	
+	return promise;
 }
 
 function prevHide(e) {
@@ -1038,8 +1078,8 @@ function updateMenuDOM(aDOMWindow, json) {
 		var el = null;
 		var appendChild = false;
 		if (json[i].identifier) {
-			el = stack.querySelector(json[i].identifier);
 			console.log('identifier  string =', json[i].identifier);
+			el = stack.querySelector(json[i].identifier);
 			console.log('post ident el = ', el);
 		}
 		if (!el) {
@@ -1094,6 +1134,7 @@ function updateMenuDOM(aDOMWindow, json) {
 			}
 			console.log('appended', el);
 		}
+		el.style.height = '';
 		var elHeight = el.boxObject.height;
 		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
 		//elHeight = parseFloat(elHeight);
@@ -1126,15 +1167,40 @@ function updateMenuDOM(aDOMWindow, json) {
 	console.log('expandedheight', expandedheight);
 
 	var stackChilds = stack.childNodes;
-	[].forEach.call(stackChilds, function(sc) {
-		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini');
+	for (var i=0; i<stackChilds.length; i++) {
+		console.log('checking if label of ' + stackChilds[i].getAttribute('label') + ' is in ini', 'ini=', ini);
+		if (stackChilds[i].hasAttribute('status') && !(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+			console.log('this profile is not in ini so remove it', 'ini=', ini);
+			stack.removeChild(stackChilds[i]);
+			i--;
+		}	
+	}
+	
+	/* [].forEach.call(stackChilds, function(sc) {
+		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini', 'ini=', ini);
 		if (sc.hasAttribute('status') && !(sc.getAttribute('label') in ini)) { //:assume: only profiles have status attribute
 			console.log('this profile is not in ini so remove it', 'ini=', ini);
 			stack.removeChild(sc);
 		}
-	});
+	}); */
 	
 	console.info('json=',json);
+}
+
+function beforecustomization(e) {
+	console.info('beforecustomization e = ', e);
+	var doc = e.target.ownerDocument;
+	var stack = doc.querySelector('#profilist_box');
+	var active = stack.querySelector('[status=active]');
+	active.setAttribute('disabled', true);
+}
+
+function customizationending(e) {
+	console.info('customizationending e = ', e);
+	var doc = e.target.ownerDocument;
+	var stack = doc.querySelector('#profilist_box');
+	var active = stack.querySelector('[status=active]');
+	active.removeAttribute('disabled');
 }
 
 /*start - windowlistener*/
@@ -1182,7 +1248,7 @@ var windowListener = {
 		}
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
-		if (PanelUI) {
+		if (PanelUI) {			
 			var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
 			console.info('PUIsync on start up = ', PUIsync);
 			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
@@ -1245,9 +1311,6 @@ var windowListener = {
 					return;
 				}
 				*/
-				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
-					return;
-				}
 				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
 					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
@@ -1262,6 +1325,9 @@ var windowListener = {
 			}, false);
 			//PanelUI.addEventListener('popuphiding', prevHide, false);
 			PanelUI.addEventListener('popupshowing', updateOnPanelShowing, false);
+			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
+			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
+			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
 		}
 		
 	},
@@ -1272,13 +1338,11 @@ var windowListener = {
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
-			try {
-				delete aDOMWindow.ProfilistInRenameMode;
-			} catch (ex) {
-				console.warn('ex when delete ProfilistInRenameMode ex = ', ex);
-			}
+			delete aDOMWindow.ProfilistInRenameMode;
 			PanelUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
-			PanelUI.removeEventListener('popuphiding', prevHide, false)
+			PanelUI.removeEventListener('popuphiding', prevHide, false);
+			aDOMWindow.gNavToolbox.removeEventListener('beforecustomization', beforecustomization, false);
+			aDOMWindow.gNavToolbox.removeEventListener('customizationending', customizationending, false);
 			var profilistHBox = aDOMWindow.document.querySelector('#profilist_box');
 			if (profilistHBox) {
 				profilistHBox.parentNode.removeChild(profilistHBox);
