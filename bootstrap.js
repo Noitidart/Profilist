@@ -803,6 +803,8 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 			console.info('stackDOMJson before checking if stackUpdated==true',stackDOMJson);
 			if (stackUpdated) {
 				console.info('something was changed in stack so will update all menus now');
+				updateMenuDOM(Services.wm.getMostRecentWindow('navigator:browser'), stackDOMJson);
+				/*
 				let DOMWindows = Services.wm.getEnumerator(null);
 				while (DOMWindows.hasMoreElements()) {
 					let aDOMWindow = DOMWindows.getNext();
@@ -810,6 +812,7 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 						updateMenuDOM(aDOMWindow, stackDOMJson);
 					}
 				}
+				*/
 			}
 }
 
@@ -830,7 +833,7 @@ var observers = {
             }
     }
     */
-    'profile-do-change': {
+    /* 'profile-do-change': {
         observe: function(aSubject, aTopic, aData) {
 			console.info('incoming profile-do-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
         },
@@ -851,7 +854,7 @@ var observers = {
         unreg: function() {
 			Services.obs.removeObserver(observers['profile-before-change'], 'profile-before-change');
         }
-    }
+    } */
 };
 
 var renameTimeouts = [];
@@ -915,7 +918,7 @@ function actuallyMakeRename(el) {
 	if (promptResult) {
 		if (promptInput.value == '') {
 			var confirmCheck = {value:false};
-			var confirmResult = Services.prompt.confirmCheck(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All profile files will be deleted.', 'Confirm Deletion', confirmCheck);
+			var confirmResult = Services.prompt.confirmCheck(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All of its files will be deleted.', 'Confirm Deletion', confirmCheck);
 			if (confirmResult) {				
 				if (confirmCheck.value) {
 					var promise = deleteProfile(1, oldProfName);
@@ -1079,7 +1082,29 @@ function updateMenuDOM(aDOMWindow, json) {
 		var appendChild = false;
 		if (json[i].identifier) {
 			console.log('identifier  string =', json[i].identifier);
-			el = stack.querySelector(json[i].identifier);
+			try {
+				el = stack.querySelector(json[i].identifier);
+			} catch (ex) {
+				console.log('ex when querySelectoring = ', ex);
+				if (ex.result = 2152923148) {
+					var forceRename = 'Force-Renamed-' + new Date().getTime();
+					Services.prompt.alert(null, self.name + ' - ' + 'Illegal Characters in Profile Name', 'Profile "' + json[i].label + '" contains illegal characters and has led to failure of Profilist addon. Profilist will now force rename it to "' + forceRename + '" to prevent Profilist addon from crashing, please rename when you get a chance to a safe profile name, one that does not use special characters.');
+					var forceRenamePromise = renameProfile(0, json[i].label, forceRename);
+					forceRenamePromise.then(
+						function() {
+							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"');
+							updateProfToolkit(1, 1);
+						},
+						function(aRejectReason) {
+							Services.prompt.alert(null, self.name + ' - ' + 'Catastrophic Failure', 'Profile "' + json[i].label + '" failed to be forcefully renamed, open up Profiles.ini and edit the name then restart your browser. Profilist will not function properly. Profiles.ini is located here: ' + pathProfilesIni);
+							//catastrophicFailure = true;
+						}
+					);
+					return forceRenamePromise;
+				} else {
+					throw ex;
+				}
+			}
 			console.log('post ident el = ', el);
 		}
 		if (!el) {
