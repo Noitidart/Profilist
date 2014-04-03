@@ -153,12 +153,11 @@ var kSaltTable = [
 	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'
 ];
 
-var kSaltString = '';
-for (var i = 0; i < 8; ++i) {
-	kSaltString += kSaltTable[Math.floor(Math.random() * kSaltTable.length)];
-}
-
 function saltName(aName) {
+	var kSaltString = '';
+	for (var i = 0; i < 8; ++i) {
+		kSaltString += kSaltTable[Math.floor(Math.random() * kSaltTable.length)];
+	}
 	return kSaltString + '.' + aName;
 }
 /*end - salt generator*/
