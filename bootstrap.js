@@ -57,7 +57,7 @@ function readIni() {
 			var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
 			//console.log(readStr);
 			ini = {};
-			var patt = /\[(.*?)(\d*?)\](?:\s+?(.+)=(.+))(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?(?:\s+?(.+)=(.+))?/mg;
+			var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.+))(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?/mg;
 			var blocks = [];
 
 			var match;
@@ -697,7 +697,7 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 				console.log('stackDOMJson is 0 length', stackDOMJson);
 				console.log('profToolkit=',profToolkit);
 				stackDOMJson = [
-					{nodeToClone:'PUIsync', identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
+					{nodeToClone:'PUIsync', identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
 					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
 				];
 				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
@@ -802,8 +802,6 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 			console.info('stackDOMJson before checking if stackUpdated==true',stackDOMJson);
 			if (stackUpdated) {
 				console.info('something was changed in stack so will update all menus now');
-				updateMenuDOM(Services.wm.getMostRecentWindow('navigator:browser'), stackDOMJson);
-				/*
 				let DOMWindows = Services.wm.getEnumerator(null);
 				while (DOMWindows.hasMoreElements()) {
 					let aDOMWindow = DOMWindows.getNext();
@@ -811,7 +809,6 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 						updateMenuDOM(aDOMWindow, stackDOMJson);
 					}
 				}
-				*/
 			}
 }
 
@@ -1073,6 +1070,13 @@ function updateMenuDOM(aDOMWindow, json) {
 	}
 	var stack = profilist_box.childNodes[0];
 	
+	var stackChilds = stack.childNodes;
+	var identObj = {};
+	for (var i=0; i<stackChilds.length; i++) {
+		var lbl = stackChilds[i].getAttribute('label');
+		identObj['[label="' + lbl + '"]'] = stackChilds[i];
+	}
+	
 	var cumHeight = 0;
 	var PUIsync;
 	for (var i=0; i<json.length; i++) {
@@ -1081,29 +1085,7 @@ function updateMenuDOM(aDOMWindow, json) {
 		var appendChild = false;
 		if (json[i].identifier) {
 			console.log('identifier  string =', json[i].identifier);
-			try {
-				el = stack.querySelector(json[i].identifier);
-			} catch (ex) {
-				console.log('ex when querySelectoring = ', ex);
-				if (ex.result = 2152923148) {
-					var forceRename = 'Force-Renamed-' + new Date().getTime();
-					Services.prompt.alert(null, self.name + ' - ' + 'Illegal Characters in Profile Name', 'Profile "' + json[i].label + '" contains illegal characters and has led to failure of Profilist addon. Profilist will now force rename it to "' + forceRename + '" to prevent Profilist addon from crashing, please rename when you get a chance to a safe profile name, one that does not use special characters.');
-					var forceRenamePromise = renameProfile(0, json[i].label, forceRename);
-					forceRenamePromise.then(
-						function() {
-							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"');
-							updateProfToolkit(1, 1);
-						},
-						function(aRejectReason) {
-							Services.prompt.alert(null, self.name + ' - ' + 'Catastrophic Failure', 'Profile "' + json[i].label + '" failed to be forcefully renamed, open up Profiles.ini and edit the name then restart your browser. Profilist will not function properly. Profiles.ini is located here: ' + pathProfilesIni);
-							//catastrophicFailure = true;
-						}
-					);
-					return forceRenamePromise;
-				} else {
-					throw ex;
-				}
-			}
+			el = identObj[json[i].identifier]; //stack.querySelector(json[i].identifier);
 			console.log('post ident el = ', el);
 		}
 		if (!el) {
