@@ -5,7 +5,7 @@
 	<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:em="http://www.mozilla.org/2004/em-rdf#">
 	  <Description about="urn:mozilla:install-manifest">
 		<em:id>Profilist@jetpack</em:id>
-		<em:version>initial</em:version>
+		<em:version>1.0</em:version>
 		<em:type>2</em:type>
 		<em:bootstrap>true</em:bootstrap>
 		<em:unpack>false</em:unpack>
@@ -15,14 +15,14 @@
 		  <Description>
 			<em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
 			<em:minVersion>29.0a1</em:minVersion>
-			<em:maxVersion>29.0a2</em:maxVersion>
+			<em:maxVersion>30.0a2</em:maxVersion>
 		  </Description>
 		</em:targetApplication>
 
 		<!-- Front End MetaData -->
 		<em:name>Profilist</em:name>
-		<em:description>Inlays a profile manager into the new panel-based menu on the far side of the navigation bar.</em:description>
+		<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox.</em:description>
 		<em:creator>Noitidart</em:creator>
-		<em:contributor>Stephen Hutchings for Icon</em:contributor>
+		<em:contributor>Stephen Hutchings for Icons</em:contributor>
 	  </Description>
 	</RDF>
