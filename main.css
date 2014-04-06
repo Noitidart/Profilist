@@ -31,6 +31,10 @@
   -moz-margin-end: 0;
 }
 
+#profilistLoading {
+	list-style-image: url(chrome://profilist/content/icon16.png);
+}
+
 .PanelUI-profilist[status="active"] {
   list-style-image: url(chrome://profilist/content/active-user.png);
 }

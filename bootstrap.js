@@ -11,6 +11,8 @@ var collapsedheight = 0; //holds height stack should be when collapsed
 var expandedheight = 0; //holds height stack should be when expanded
 var stackDOMJson = []; //array holding menu structure in stack /*:note: :important:must insert the "Default: profile" into stackDOMJson last as last element in stack is top most*/
 var unloaders = {};
+var PUIsync_height = 0;
+var PUIsync;
 
 const { TextEncoder, TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
@@ -603,16 +605,51 @@ function initProfToolkit() {
 	*/
 }
 
-function updateOnPanelShowing(e) {
-	console.error('e on panel showing = ', e);
-	if (e.target.id == 'PanelUI-popup') {
-		updateProfToolkit(1, 1);
+function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
+	if (!e) {
+		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
+		var win = aDOMWindow;
 	} else {
-		console.log('not main panel showing so dont updateProfToolkit');
+		console.log('e on panel showing = ', e);
+		console.log('e.view == e.target.ownerDocument.defaultView == ', e.view == e.target.ownerDocument.defaultView); //is true!! at least when popup id is PanelUI-popup
+		if (e.target.id != 'PanelUI-popup') {
+			console.log('not main panel showing so dont updateProfToolkit');
+			return;
+		} else {
+			var PanelUI = e.target;
+			var win = e.view;
+		}
 	}
+		/*if edit anything here make sure to copy updateOnPanelShowing*/
+		PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
+		var puisynch = PUIsync.boxObject.height;
+		if (puisynch != 0 && PUIsync_height != puisynch) {
+			console.log('PUIsync_height updated == ' + puisynch);
+			PUIsync_height = puisynch;
+		}
+		
+		var stack = PanelUI.querySelector('#profilist_box').childNodes[0];
+		//assume its supposed to be in collapsed state right now
+		if (collapsedheight != puisynch || stack.style.height == '') {
+			var oldCollapsedheight = collapsedheight;
+			//if collapsedheight != puisynch then obviously we have to set stack.style.height because we are assuming on popupshowing it should already be in collapsed style.height, (this is why i dont bother checking style.height) so if it is in this collapsed style.height then the last one used was the oldCollapsedheight obviously, so we want to set style.height as we are updating collapsedheight now to puisynch so set style.height to puisync too
+			collapsedheight = puisynch;
+			console.warn('setting stack height to collapsedheight which = ' + collapsedheight);
+			stack.style.height = collapsedheight + 'px';
+		}
+		/*end if edit anything here make sure to copy updateOnPanelShowing*/
+		
+		var updateIni = 1;
+		if (dontUpdateIni) {
+			updateIni = 0;
+		}
+
+		//win.setTimeout(function() { updateProfToolkit(updateIni, 1, win); }, 5000); //was testing to see how it handles when os.file takes long time to read
+		updateProfToolkit(updateIni, 1, win)
+
 }
 
-function updateProfToolkit(refreshIni, refreshStack) {
+function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 	if (refreshIni == 1) {
 		var promise = readIni();
 		promise.then(
@@ -628,7 +665,9 @@ function updateProfToolkit(refreshIni, refreshStack) {
 	} else {
 		if (profToolkit.rootPathDefault === 0) {
 			console.log('initing prof toolkit');
-			refreshStack = true;
+			if (refreshStack !== 0) {
+				refreshStack = true;
+			}
 			console.log('initing prof toolkit');
 			initProfToolkit();
 			console.log('init done');
@@ -685,12 +724,12 @@ function updateProfToolkit(refreshIni, refreshStack) {
 		
 		
 		if (refreshStack) {
-			updateStackDOMJson_basedOnToolkit();
+			return updateStackDOMJson_basedOnToolkit(false, iDOMWindow);
 		}
 	}
 }
 
-function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
+function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and based on ini as well
 			console.log('updating stackDOMJson based on profToolkit AND ini');
 			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
 			if (stackDOMJson.length == 0) {
@@ -698,7 +737,7 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 				console.log('profToolkit=',profToolkit);
 				stackDOMJson = [
 					{nodeToClone:'PUIsync', identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:'PUIsync', identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
+					{nodeToClone:'PUIsync', identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
 				];
 				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
 				stackUpdated = true;
@@ -708,14 +747,14 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 				for (var i=0; i<stackDOMJson.length; i++) {
 					var m = stackDOMJson[i];
 					if ('props' in m && 'profpath' in m.props) {
-						if (!(m.props.pathname in profToolkit.pathsInIni)) {
+						if (profToolkit.pathsInIni.indexOf(m.props.profpath) == -1) {
 							//this is in the stack object but no longer exists so need to remove
-							console.log('m.props.profpath is not in ini = ', m.props.profpath)
+							console.log('m.props.profpath is not in pathsInIni = ', 'm.props.profpath=', m.props.profpath, 'pathsInIni=', profToolkit.pathsInIni, 'ini=', ini)
 							stackUpdated = true;
 							stackDOMJson.splice(i, 1); //this takes care of deletes
 							i--;
 						} else {
-							console.log('this stack value is in profToolkit', 'stack val = ', m.props.pathname, 'pathsInIni', profToolkit.pathsInIni);
+							console.log('this stack value is in profToolkit', 'stack val = ', m.props.profpath, 'pathsInIni', profToolkit.pathsInIni);
 							profNamesCurrentlyInMenu.push(m.props.profpath);
 						}
 					}
@@ -724,18 +763,17 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 			
 			console.info('after updating that profNamesCurrentlyInMenu is = ', profNamesCurrentlyInMenu);
 			
-			var stackPositionsAccountedFor = []; //use this to see if should delete a stack entry from array
 			for (var p in ini) {
 				if (!('num' in ini[p])) { continue } //as its not a profile
 				var posOfProfInStack = -1; //actually cannot do this because have create profile button::::var posOfProfInStack = profNamesCurrentlyInMenu.indexOf(ini[p].props.Path); //identifies prop by path and gives location of it in stackDOMJson, this works because i do a for loop through stackDOMJson and create profNamesCurrentlyInMenu in that order
-				console.log('looking for position in stack of profpath = ', ini[p].props.Path);
+				console.log('looking for position in stack of profpath ', 'profpath = ', ini[p].props.Path);
 				for (var i=0; i<stackDOMJson.length; i++) {
 					if ('props' in stackDOMJson[i]) {
 						if (stackDOMJson[i].props.profpath == ini[p].props.Path) {
 							posOfProfInStack = i;
 							break;
 						} else {
-							console.log('stackDOMJson[i].props.profpath != ini[p].props.Path', stackDOMJson[i].props.profpath, ini[p].props.Path);
+							//console.log('stackDOMJson[i].props.profpath != ini[p].props.Path', stackDOMJson[i].props.profpath, ini[p].props.Path);
 							continue; //dont really need continue as there is no code below in this for but ya
 						}
 					} else {
@@ -745,13 +783,13 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 				console.log('index of ini[p].props.Path in stack object is', ini[p].props.Path, posOfProfInStack);
 				
 				if (posOfProfInStack > -1) {
-					stackPositionsAccountedFor.push(posOfProfInStack);
 					//check if any properties changed else continue
-					var justRenamed = false; //i had this as propsChanged but realized the only prop that can change is name and this happens on a rename so changed this to justRenamed. :todo: maybe im not sure but consider justDeleted
+					//var justRenamed = false; //i had this as propsChanged but realized the only prop that can change is name and this happens on a rename so changed this to justRenamed. :todo: maybe im not sure but consider justDeleted
 					if (stackDOMJson[posOfProfInStack].label != ini[p].props.Name) {
+						console.log('currently in menu the item "' + stackDOMJson[posOfProfInStack].label + '" was renamed to "' + ini[p].props.Name + '"');
 						stackDOMJson[posOfProfInStack].justRenamed = true;
 						stackDOMJson[posOfProfInStack].label = ini[p].props.Name;
-						justRenamed = true;
+						//justRenamed = true;
 						if (!stackUpdated) {
 							stackUpdated = true; //now stack is not really updated (stack is stackDOMJson but we set this to true becuase if stackUpdated==true then it physically updates all PanelUi
 							console.log('forcing stackUpdated as something was justRenamed');
@@ -760,13 +798,11 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 						}
 					}
 					continue; //contin as it even if it was renamed its not new so nothing to splice, and this profpath for ini[p] was found in stackDOMJson
-				}
-				
-
+				} else {
 					console.log('splicing p = ', ini[p], 'stackDOMjson=', stackDOMJson);
 					stackUpdated = true;
 					(function(pClosure) {
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[label="' + pClosure + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[pClosure].props.Path}};
+						var objToSplice = {nodeToClone:'PUIsync', identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:ini[pClosure].props.Path}};
 						
 						if (pClosure == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
@@ -779,79 +815,292 @@ function updateStackDOMJson_basedOnToolkit() { //and based on ini as well
 							stackDOMJson.splice(0, 0, objToSplice);
 						}
 					})(p);
+				}
 			}
-			
-			/* if (!stackUpdated) {
-				for (var i=0; i<stackDOMJson.length; i++) {
-					if (stackDOMJson[i].justRenamed) {
-						stackUpdated = true;
-						console.log('forcing stackUpdated as something was justRenamed');
-						break;
-					}
-				}
-			} */
-			
-			/* //check if anything deleted
-			if (stackPositionsAccountedFor.length < stackDOMJson.length) {
-				for (var i=0; i<stackDOMJson.length; i++) {
-					if (stackPositionsAccountedFor.indexOf(i) == -1) {
-						console.warn('need to (i dont do it yet im just testing) delete stackDOMJson at position i =', i, 'stackDOMJson at this pos =', stackDOMJson[i], 'stackPositionsAccountedFor=', stackPositionsAccountedFor, 'stackDOMJson=', stackDOMJson);
-					}
-				}
-			} */
+
 			console.info('stackDOMJson before checking if stackUpdated==true',stackDOMJson);
-			if (stackUpdated) {
-				console.info('something was changed in stack so will update all menus now');
+			if (iDOMWindow) {
+				console.log('will just run updateMenuDOM on iDOMWindow');
+				updateMenuDOM(iDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
+			} else {
+				console.log('will now run updateMenuDOM on all windows');
 				let DOMWindows = Services.wm.getEnumerator(null);
 				while (DOMWindows.hasMoreElements()) {
 					let aDOMWindow = DOMWindows.getNext();
 					if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
-						updateMenuDOM(aDOMWindow, stackDOMJson);
+						console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
+						updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
 					}
 				}
 			}
+			for (var i=0; i<stackDOMJson.length; i++) {
+				if (stackDOMJson[i].justRenamed) {
+					delete stackDOMJson[i].justRenamed;
+				}
+			}
+			/* if (stackUpdated) { //also should check to see if dom matches stack, if it doesnt then should update stack
+				console.info('something was changed in stack so will update all menus now');
+				if (dontUpdateStack) {
+					console.warn('dontUpdateStack is set to true so ABORTING update all menus');
+				} else {
+					if (iDOMWindow) {
+						console.log('just updating iDOMWindow');
+						updateMenuDOM(iDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
+					} else {
+						let DOMWindows = Services.wm.getEnumerator(null);
+						while (DOMWindows.hasMoreElements()) {
+							let aDOMWindow = DOMWindows.getNext();
+							if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
+								console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
+								updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
+							}
+						}
+					}
+					//now delete the justRenamed property, we have to delete the property after all windows are updated, otherwise only first window gets its toolbarbutton renmaed
+					//consider putting a if (somethingRenamed) { on this block :todo:
+					for (var i=0; i<stackDOMJson.length; i++) {
+						if (stackDOMJson[i].justRenamed) {
+							delete stackDOMJson[i].justRenamed;
+						}
+					}
+					//end now delete teh justRenamed property
+				}
+			} */
 }
 
-var observers = {
-    /*
-    inlineOptsHid: {
-        observe:    function(aSubject, aTopic, aData) {
-                        //##Cu.reportError('incoming inlineOptsHid: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
-                        if (aTopic == 'addon-options-hidden' && aData == selfId + '@jetpack') {
-                            addonMgrXulWin = null; //trial as of 112713
-                        }
-                    },
-        reg:    function() {
-                obs.addObserver(observers.inlineOptsHid, 'addon-options-hidden', false);
-            },
-        unreg:    function() {
-                obs.removeObserver(observers.inlineOptsHid, 'addon-options-hidden');
-            }
-    }
-    */
-    /* 'profile-do-change': {
-        observe: function(aSubject, aTopic, aData) {
-			console.info('incoming profile-do-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
-        },
-        reg: function() {
-			Services.obs.addObserver(observers['profile-do-change'], 'profile-do-change', false);
-        },
-        unreg: function() {
-			Services.obs.removeObserver(observers['profile-do-change'], 'profile-do-change');
-        }
-    },
-    'profile-before-change': {
-        observe: function(aSubject, aTopic, aData) {
-			console.info('incoming profile-before-change: aSubject = ' + aSubject + ' | aTopic = ' + aTopic + ' | aData = ' + aData);
-        },
-        reg: function() {
-			Services.obs.addObserver(observers['profile-before-change'], 'profile-before-change', false);
-        },
-        unreg: function() {
-			Services.obs.removeObserver(observers['profile-before-change'], 'profile-before-change');
-        }
-    } */
-};
+function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
+	//if jsonStackChanged is true then it will update for sure
+	
+	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
+	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
+	if (!profilist_box) {
+		console.warn('no profilist_box to add to');
+		return new Error('no profilist_box to update to');
+	}
+	var stack = profilist_box.childNodes[0];
+	
+	var stackChilds = stack.childNodes;
+	var identObj = {};
+	for (var i=0; i<stackChilds.length; i++) {
+		var identifierRead = stackChilds[i].getAttribute('identifier');
+		identObj[identifierRead] = stackChilds[i];
+	}
+	//start - test if dom matches json
+	if (!jsonStackChanged) {
+		console.info('jsonStack was not just changed so will now test if dom matches json because jsonStack was not just changed');
+		var domMatchesJson = true; //start by assuming its true
+		var calcedTops = {}; //index matches order of json
+		var cumHeight = 0;
+		for (var i=0; i<json.length; i++) {
+			if (json[i].identifier in identObj) {
+				//start - check to see if all properties match
+				var el = identObj[json[i].identifier];
+				for (var p in json[i]) {
+					if (p == 'nodeToClone' || p == 'props' || p == 'style' || p.indexOf('addEventListener') == 0) { continue }
+					//continue if style because i do a style.height = which adds to the style tag
+						if (json[i][p] === null) {
+							if (el.hasAttribute(p)) {
+								console.log('el hasAtribute when it shouldnt', 'attr=', p, 'el=', el);
+								domMatchesJson = false;
+								break;
+							}
+						} else {
+							if (el.getAttribute(p) != json[i][p]) {
+								console.log('el attr is not right', 'attr=', p, 'attr shud be=', json[i][p], 'el=', el);
+								domMatchesJson = false;
+								break;
+							}
+						}
+				}
+				//end - check to see if all properties match
+			} else {
+				domMatchesJson = false;
+				break;
+			}
+		}
+		
+		console.log('elHeight will use PUIsync_height', 'PUIsync_height=', PUIsync_height);
+		if (elHeight == 0) {
+			console.error('elHeight == 0 this is an ERROR');
+		}
+					
+		if (domMatchesJson) { //else no need to test as its going to get updated anyways
+			//test if dom tops match calced tops
+			var domTopsMatchesCalcedTops = true; //start out assuming it does
+			for (var i=0; i<json.length; i++) {
+					var elHeight = PUIsync_height;
+					cumHeight += elHeight;
+					if (json[i].status == 'active') {
+						calcedTops[json[i].identifier] = 0;
+					} else {
+						calcedTops[json[i].identifier] = cumHeight;
+					}
+			}
+			for (var p in identObj) {
+				if (identObj[p].getAttribute('top') != calcedTops[p]) {
+					domTopsMatchesCalcedTops = false;
+					break;
+				}
+			}
+			//end - test if dom matches json
+		}
+
+		if (domMatchesJson) {
+			if (!domTopsMatchesCalcedTops) {
+				console.info('just needs top fixing');
+			} else {
+				console.info('domMatchesJson && domTopsMatchesCalcedTops SO DO NOTHING');
+				return false; //return false indiciating nothing was done but not returning error so indicating no error happend
+			}
+		} else if (!domMatchesJson) {
+			console.info('needs full dom update');
+		}
+	} else {
+		console.info('jsonStack was just changed so have to do full dom update');
+	}
+	
+	if (dontUpdateDom) {
+		console.info('need to update dom but dontUpdateDom was set to true so will not update it');
+		return false;
+	}
+	
+	var cumHeight = 0;
+	
+	//cant set stack height here because popup state is now open. well can change it, but have to resize panel with the panelFit function i cant find here. because if i make it any taller than it is, then the scrollbar will show as the panel wont be sized to fit properly
+	
+	for (var i=0; i<json.length; i++) {
+		console.log('in json arr = ', i);
+		var el = null;
+		var appendChild = false;
+		if (json[i].identifier) {
+			console.log('identifier  string =', json[i].identifier);
+			el = identObj[json[i].identifier]; //stack.querySelector(json[i].identifier);
+			console.log('post ident el = ', el);
+		}
+		if (!el) {
+			if (json[i].nodeToClone == 'PUIsync') {
+				json[i].nodeToClone = PUIsync;
+			}
+			el = json[i].nodeToClone.cloneNode(true);
+			appendChild = true;
+			console.log('el created');
+		} else {
+			console.log('el idented');
+		}
+		if (!el.hasAttribute('top')) {
+			el.setAttribute('top', '0'); //this is important, it prevents toolbaritems from taking 100% height of the stacks its in
+		}
+		
+		if (appendChild) {
+			for (var p in json[i]) {
+				if (p == 'nodeToClone' || p == 'props') { continue }
+				if (p.indexOf('addEventListener') == 0) {
+					(function(elClosure, jsonIClosure, pClosure) {
+						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+						console.log('elClosure label',elClosure.getAttribute('label'));
+						elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+					})(el, json[i], p);
+					continue;
+				}
+				if (json[i][p] === null) {
+					el.removeAttribute(p);
+				} else {
+					el.setAttribute(p, json[i][p]);
+				}
+			}
+		} else {
+			//if appendChild false then obviously idented
+			if ('justRenamed' in json[i]) {
+				console.log('it was justRenamed');
+				//delete json[i].justRenamed; //cant delete this here, as if we are updating multiple windows, only the first window gets renamed properly
+				el.setAttribute('label', json[i].label);
+				console.log('label set');
+				//dont need this anymore as i am now using path for idnetifier //json[i].identifier = '[path="' + json[i].label + '"]'; //have to do this here as needed the identifier to ident this el
+			}
+		}
+		
+		//el.style.height = '';
+		var elHeight = PUIsync_height; //el.boxObject.height;
+		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
+		//elHeight = parseFloat(elHeight);
+		if (elHeight == 0) {
+			if (appendChild) {
+				elHeight = json[i].nodeToClone.boxObject.height;
+				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
+				//elHeight = parseFloat(elHeight);
+				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
+			} else {
+				console.log('elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
+			}
+		}
+		el.style.height = elHeight + 'px';
+		console.log('PUIsync_height = ', PUIsync_height);
+		console.log('el.boxObject.height = ', el.boxObject.height);
+		cumHeight += elHeight;
+		console.log('cumHeight after adding = ' + cumHeight);
+		if (i < json.length - 1) {
+			el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i :learned: that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
+			//el.setAttribute('bottom', cumHeight + elHeight);
+			console.log('set el top to ', cumHeight);
+		} else {
+			el.setAttribute('top', '0');
+			console.log('set el top to 0');
+		}
+		
+		if (appendChild) {
+			if (json[i].status != 'active') { //this if makes sure the selected profile one gets added last note: again this is important because the last most element is top most on stack when collapsed, but in my case its more important because it gets the perm-hover class
+				stack.insertBefore(el, stack.firstChild);
+			} else {
+				stack.appendChild(el);
+			}
+			console.log('appended', el);
+		}
+
+	}
+	if (expandedheight != cumHeight) {
+		console.log('glboal var of expandedheight does not equal new calced cumheight so update it now', 'expandedheight pre update = ', expandedheight, 'cumHeight=', cumHeight);
+		var oldExpandedheight = expandedheight;
+		expandedheight = cumHeight;
+		console.log('oldExpandedheight = ' + oldExpandedheight);
+	}
+	//console.log('stack.boxObject.height = ' + stack.boxObject.height);
+	//console.log('stack.style.height = ' + stack.style.height);
+	//console.log('aDOMWindow.getComputedStyle(stack).getPropertyValue(\'height\') = ' + aDOMWindow.getComputedStyle(stack).getPropertyValue('height'));
+	
+	var cStackHeight = parseInt(stack.style.height);
+	if (isNaN(cStackHeight)) {
+		console.log('the panel containing this stack, in this window has never been opened so set it to collapsed');
+		stack.style.height = collapsedheight + 'px';
+		cStackHeight = collapsedheight;
+	}
+	if (cStackHeight != collapsedheight && cStackHeight != expandedheight) {
+		console.warn('stack style height is not collapsed so assuming that its in expanded mode AND it is not at the correct expandedheight so update its height now', 'cStackHeight = ', cStackHeight, 'expandedheight=', expandedheight);
+		stack.style.height = expandedheight + 'px';
+		//console.warn('stack.boxObject.height EQUALS oldExpandedheight', 'oldExpandedheight', oldExpandedheight, 'stack.boxObject.height', stack.boxObject.height)
+	}
+	console.log('collapsedheight', collapsedheight);
+	console.log('expandedheight', expandedheight);
+
+	var stackChilds = stack.childNodes;
+	for (var i=0; i<stackChilds.length; i++) {
+		console.log('checking if label of ' + stackChilds[i].getAttribute('label') + ' is in ini', 'ini=', ini);
+		if (stackChilds[i].hasAttribute('status') && !(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+			console.log('this profile is not in ini so remove it', 'ini=', ini);
+			stack.removeChild(stackChilds[i]);
+			i--;
+		}	
+	}
+	
+	/* [].forEach.call(stackChilds, function(sc) {
+		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini', 'ini=', ini);
+		if (sc.hasAttribute('status') && !(sc.getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+			console.log('this profile is not in ini so remove it', 'ini=', ini);
+			stack.removeChild(sc);
+		}
+	}); */
+	
+	console.info('json=',json);
+}
 
 var renameTimeouts = [];
 
@@ -1016,7 +1265,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 }
 
 function createUnnamedProfile() {
-	//creating profile with name that already exists does nothing	
+	//creating profile with name that already exists does nothing
 	var promise = readIni();
 	promise.then(
 		function() {
@@ -1061,138 +1310,6 @@ function prevHide(e) {
 	e.stopPropagation();
 }
 
-function updateMenuDOM(aDOMWindow, json) {
-	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
-	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
-	if (!profilist_box) {
-		console.warn('no profilist_box to add to');
-		return;
-	}
-	var stack = profilist_box.childNodes[0];
-	
-	var stackChilds = stack.childNodes;
-	var identObj = {};
-	for (var i=0; i<stackChilds.length; i++) {
-		var lbl = stackChilds[i].getAttribute('label');
-		identObj['[label="' + lbl + '"]'] = stackChilds[i];
-	}
-	
-	var cumHeight = 0;
-	var PUIsync;
-	for (var i=0; i<json.length; i++) {
-		console.log('in json arr = ', i);
-		var el = null;
-		var appendChild = false;
-		if (json[i].identifier) {
-			console.log('identifier  string =', json[i].identifier);
-			el = identObj[json[i].identifier]; //stack.querySelector(json[i].identifier);
-			console.log('post ident el = ', el);
-		}
-		if (!el) {
-			if (json[i].nodeToClone == 'PUIsync') {
-				if (!PUIsync) {
-					PUIsync = aDOMWindow.document.querySelector('#PanelUI-popup').querySelector('#PanelUI-fxa-status');
-				}
-				json[i].nodeToClone = PUIsync;
-			}
-			el = json[i].nodeToClone.cloneNode(true);
-			appendChild = true;
-			console.log('el created');
-		} else {
-			console.log('el idented');
-		}
-		if (!el.hasAttribute('top')) {
-			el.setAttribute('top', '0');
-		}
-		
-		if (appendChild) {
-			for (var p in json[i]) {
-				if (p == 'nodeToClone' || p == 'identifier' || p == 'props') { continue }
-				if (p.indexOf('addEventListener') == 0) {
-					(function(elClosure, jsonIClosure, pClosure) {
-						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
-						console.log('elClosure label',elClosure.getAttribute('label'));
-						elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-					})(el, json[i], p);
-					continue;
-				}
-				if (json[i][p] === null) {
-					el.removeAttribute(p);
-				} else {
-					el.setAttribute(p, json[i][p]);
-				}
-			}
-		} else {
-			//if appendChild false then obviously idented
-			if ('justRenamed' in json[i]) {
-				console.log('it was justRenamed');
-				delete json[i].justRenamed;
-				el.setAttribute('label', json[i].label);
-				console.log('label set');
-				json[i].identifer = '[label="' + json[i].label + '"]'; //have to do this here as needed the identifier to ident this el
-			}
-		}
-		if (appendChild) {
-			if (json[i].status != 'active') { //this if makes sure the selected profile one gets added last note: again this is important because the last most element is top most on stack when collapsed, but in my case its more important because it gets the perm-hover class
-				stack.insertBefore(el, stack.firstChild);
-			} else {
-				stack.appendChild(el);
-			}
-			console.log('appended', el);
-		}
-		el.style.height = '';
-		var elHeight = el.boxObject.height;
-		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
-		//elHeight = parseFloat(elHeight);
-		if (elHeight == 0) {
-			if (appendChild) {
-				elHeight = json[i].nodeToClone.boxObject.height;
-				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
-				//elHeight = parseFloat(elHeight);
-				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
-			} else {
-				console.error('ERROR deal with this, elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
-			}
-		}
-		el.style.height = elHeight + 'px';
-		console.log('el.boxObject.height = ', elHeight);
-		cumHeight += elHeight;
-		console.log('cumHeight after adding = ' + cumHeight);
-		if (i < json.length - 1) {
-			el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i :learned: that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
-			//el.setAttribute('bottom', cumHeight + elHeight);
-			console.log('set el top to ', cumHeight);
-		} else {
-			el.setAttribute('top', '0');
-			console.log('set el top to 0');
-		}
-	}
-	collapsedheight = elHeight;
-	expandedheight = cumHeight;
-	console.log('collapsedheight', collapsedheight);
-	console.log('expandedheight', expandedheight);
-
-	var stackChilds = stack.childNodes;
-	for (var i=0; i<stackChilds.length; i++) {
-		console.log('checking if label of ' + stackChilds[i].getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (stackChilds[i].hasAttribute('status') && !(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
-			console.log('this profile is not in ini so remove it', 'ini=', ini);
-			stack.removeChild(stackChilds[i]);
-			i--;
-		}	
-	}
-	
-	/* [].forEach.call(stackChilds, function(sc) {
-		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (sc.hasAttribute('status') && !(sc.getAttribute('label') in ini)) { //:assume: only profiles have status attribute
-			console.log('this profile is not in ini so remove it', 'ini=', ini);
-			stack.removeChild(sc);
-		}
-	}); */
-	
-	console.info('json=',json);
-}
-
 function beforecustomization(e) {
 	console.info('beforecustomization e = ', e);
 	var doc = e.target.ownerDocument;
@@ -1210,19 +1327,21 @@ function customizationending(e) {
 }
 
 /*start - windowlistener*/
+var registered = false;
 var windowListener = {
 	//DO NOT EDIT HERE
 	onOpenWindow: function (aXULWindow) {
 		// Wait for the window to finish loading
 		let aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
-		aDOMWindow.addEventListener("load", function () {
-			aDOMWindow.removeEventListener("load", arguments.callee, false);
+		aDOMWindow.addEventListener('load', function () {
+			aDOMWindow.removeEventListener('load', arguments.callee, false);
 			windowListener.loadIntoWindow(aDOMWindow);
 		}, false);
 	},
 	onCloseWindow: function (aXULWindow) {},
 	onWindowTitleChange: function (aXULWindow, aNewTitle) {},
 	register: function () {
+		
 		// Load into any existing windows
 		let DOMWindows = Services.wm.getEnumerator(null);
 		while (DOMWindows.hasMoreElements()) {
@@ -1231,6 +1350,8 @@ var windowListener = {
 		}
 		// Listen to new windows
 		Services.wm.addListener(windowListener);
+		
+		registered = true;
 	},
 	unregister: function () {
 		// Unload from any existing windows
@@ -1255,78 +1376,57 @@ var windowListener = {
 		
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {			
-			var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
-			console.info('PUIsync on start up = ', PUIsync);
-			var PUIsync_height = PUIsync.boxObject.height; //parseInt(aDOMWindow.getComputedStyle(PUIsync, null).getPropertyValue('height'));
-			if (PanelUI.state != 'open' && PanelUI.state != 'showing') { //USED TO BE "if (PUIsync_height == 0)"
-				console.warn('PanelUI not open', PanelUI);
-				var unloaderId = new Date().getTime();
-				var createMenuOnPopup = function() {
-					PanelUI.removeEventListener('popupshowing', createMenuOnPopup, false);
-					delete unloaders[unloaderId];
-					console.warn('running loading into window to create menuuuuuuuuuu....');
-					windowListener.loadIntoWindow(aDOMWindow);
-				}
-				unloaders[unloaderId] = function() {
-					console.log('RUNNING UNLOADER');
-					PanelUI.removeEventListener('popupshowing', createMenuOnPopup, false);
-				}
-				PanelUI.addEventListener('popupshowing', createMenuOnPopup, false);
-				return;
-			}
+			//var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
+			//console.info('PUIsync on start up = ', PUIsync);
+
 			var PUIf = PanelUI.querySelector('#PanelUI-footer');
 			var PUIcs = PanelUI.querySelector('#PanelUI-contents-scroller');
 			
 			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
-			['xul:vbox', {id: 'profilist_box'},
-				['xul:stack', {key:'profilist_stack',style:'width:100%'}]
+			['xul:vbox', {id:'profilist_box'},
+				['xul:stack', {key:'profilist_stack', style:'width:100%;'},
+					['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'PanelUI-profilist', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}]
+				]
 			];
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
-			
-			console.log('CREATING MENU JSON');
-			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');
-			console.log('PUIsync height', PUIsync.boxObject);
-			console.log('PUIfi height', PUIfi.boxObject);
-			if (stackDOMJson.length == 0) {
-				console.log('stockDOMJson.length == 0');
-				stackDOMJson = [
-					{nodeToClone:PUIsync, identifier:'.create', label:'Create New Profile', class:'PanelUI-profilist create', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:null, addEventListener:['command',createProfile,false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'},
-					{nodeToClone:PUIsync, identifier:'[label="' + profToolkit.selectedProfile.name + '"]', label:profToolkit.selectedProfile.name, class:'PanelUI-profilist', id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', props:{profpath:activeProfpath}}
-				];
-			}
-			
-			updateMenuDOM(aDOMWindow, stackDOMJson);
-			
-			referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
 
 			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
-				PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
+				var PUIcs_scrollsVis = PUIcs.scrollHeight - PUIcs.clientHeight > 0 ? true : false;
+				console.log('PUIcs_scrollsVis = ', PUIcs_scrollsVis);
+				if (!PUIcs_scrollsVis) {
+					PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
+				}
+				console.log('expandedheight on expand = ' + expandedheight);
+				console.warn('setting stack height to expandedheight which = ' + expandedheight);
 				referenceNodes.profilist_stack.style.height = expandedheight + 'px';
 				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
-				/*//commenting out this block as using services prompt for renaming right now
-				if (aDOMWindow.ProfilistInRenameMode) {
-					console.log('in rename mdoe so dont close');
-					return;
-				}
-				*/
+				//commenting out this block as using services prompt for renaming right now
+				// if (aDOMWindow.ProfilistInRenameMode) {
+					// console.log('in rename mdoe so dont close');
+					// return;
+				// }
 				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
 					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
-						PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
-						console.info('overflow RESET');
+						if (PUIcs.style.overflow == 'hidden') {
+							PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
+							console.log('overflow RESET');
+						}
 					} else {
 						console.info('overflow not reset as height is not collapsed height (' + collapsedheight + ') but it is right now = ', referenceNodes.profilist_stack.style.height);
 					}
 				}, false);
+				console.warn('setting stack height to collapsedheight which = ' + collapsedheight);
 				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
+				console.log('collapsed height on collapse == ', 'stack.boxObject.height = ', referenceNodes.profilist_stack.boxObject.height, 'stack.style.height = ', referenceNodes.profilist_stack.style.height);
 				referenceNodes.profilist_stack.lastChild.classList.remove('perm-hover');
 			}, false);
 			//PanelUI.addEventListener('popuphiding', prevHide, false);
@@ -1334,6 +1434,21 @@ var windowListener = {
 			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
 			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
+			
+			if (PanelUI.state == 'open') { //USED TO BE "if (PUIsync_height == 0)"
+			
+				if (!registered) {
+					if (Object.keys(ini).length == 0) {
+						updateOnPanelShowing(null, aDOMWindow);
+					} else {
+						updateOnPanelShowing(null, aDOMWindow, 1); //for dont read ini //we also dont want it to updateStack but i dont think its an expensive operation so i didnt program the skip in
+						//updateMenuDOM(aDOMWindow, stackDOMJson);
+					}
+				} else {
+					//will get here on new window open AND of course panel.state  is open (i removed the .state==showing from the if)
+					updateOnPanelShowing(null, aDOMWindow);
+				}
+			}
 		}
 		
 	},
@@ -1424,12 +1539,12 @@ function jsonToDOM(xml, doc, nodes) {
 
 function startup(aData, aReason) {
 	console.log('in startup');
-	console.log('initing prof toolkit');
-	initProfToolkit();
-	console.log('init done');
-	updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
 	console.log('aData', aData);
+	//console.log('initing prof toolkit');
+	//initProfToolkit();
+	//console.log('init done');
+	//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
 	//var cssEnc = encodeURIComponent(css);
 	var newURIParam = {
@@ -1442,20 +1557,11 @@ function startup(aData, aReason) {
 	
 	windowListener.register();
 	
-	//register all observers
-	for (var o in observers) {
-		observers[o].reg();
-	}
 }
 
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
-	
-	//unregister all observers
-	for (var o in observers) {
-		observers[o].unreg();
-	}
-	
+		
 	myServices.sss.unregisterSheet(cssUri, myServices.sss.USER_SHEET);
 	
 	windowListener.unregister();
