@@ -229,6 +229,7 @@ function createProfile(refreshIni, profName) {
 				console.warn('local dir not yet made');
 			}
 			if (profilesIniUpdateDone && rootDirMakeDirDone && localDirMakeDirDone) {
+				myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Creating Profile', 'Default Name: "' + profName + '"', false, null, null, 'Profilist');
 				launchProfile(null, profName, 1, self.aData.installPath.path);
 				console.log('profile launched and now updating prof toolkit with refreshIni 1');
 				return updateProfToolkit(1, 1);
@@ -1170,7 +1171,7 @@ function actuallyMakeRename(el) {
 					promise.then(
 						function() {
 							//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
-							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.');
+							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.', false, null, null, 'Profilist');
 						},
 						function(aRejectReason) {
 							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
@@ -1188,7 +1189,7 @@ function actuallyMakeRename(el) {
 				promise.then(
 					function() {
 						//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
-						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"');
+						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
 						updateProfToolkit(1, 1);
 					},
 					function(aRejectReason) {
@@ -1234,7 +1235,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 	}
 	//Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
 	if (!suppressAlert) {
-		myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"');
+		myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"', false, null, null, 'Profilist');
 	}
 
 	var found = false;
