@@ -706,12 +706,12 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 					}
 				} else {
 					console.log('ini[p] is absolute',ini[p]);
-					if (ini[p].Path == profToolkit.selectedProfile.rootDirPath) {
+					if (ini[p].props.Path == profToolkit.selectedProfile.rootDirPath) {
 						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
 						profToolkit.selectedProfile.name = ini[p].props.Name;
 						break;
 					}
-					if (ini[p].Path == profToolkit.selectedProfile.localDirPath) {
+					if (ini[p].props.Path == profToolkit.selectedProfile.localDirPath) {
 						console.log('ini[p].Path matches profToolkit.selectedProfile.localDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
 						profToolkit.selectedProfile.name = ini[p].props.Name;
 						break;
