@@ -1393,6 +1393,7 @@ var windowListener = {
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
 
+			var THIS = PanelUI.querySelector('#PanelUI-multiView');
 			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
@@ -1403,6 +1404,41 @@ var windowListener = {
 				if (!PUIcs_scrollsVis) {
 					PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
 				}
+				
+				var cPopHeight = THIS._viewStack.clientHeight;
+				var heightChildren = PUIf.childNodes;
+				var expandedFooterHeight = 0;
+				var profilistBoxFound = false;
+				for (var i=0; i<heightChildren.length; i++) {
+				    if (!profilistBoxFound && heightChildren[i].getAttribute('id') == 'profilist_box') {
+				        expandedFooterHeight += expandedheight;
+				        profilistBoxFound = true;
+				    } else {
+				       //expandedFooterHeight += heightChildren[i].boxObject.height;
+				       expandedFooterHeight += Math.floor(parseFloat(aDOMWindow.getComputedStyle(heightChildren[i],null).getPropertyValue('height')));
+				    }
+				}
+				
+				console.info('panel height no expanded = ' + cPopHeight + '\nfooter height with profilist box expanded = ' + expandedFooterHeight);
+				//me.alert(scopeProfilist.expandedheight)
+				if (cPopHeight < expandedFooterHeight) {
+				    console.info('NEEDS adjust')
+					THIS._ignoreMutations = true;
+					THIS._mainViewHeight = THIS._viewStack.clientHeight;
+					THIS._transitioning = true;
+					THIS._viewContainer.style.transition = 'height 300ms'; //need to make this take longer than the 0.25s of the profilist_box expand anim so it doesnt show any white space
+					THIS._viewContainer.addEventListener('transitionend', function trans() {
+						THIS._viewContainer.removeEventListener('transitionend', trans);
+						//THIS._ignoreMutations = false; //important to set this to false before setting THIS._transitioning to false, because when set ignoreMut to false it runs `syncContainerWithMainView` and if it finds ignoreMut is false AND showingSubView is false AND transitioning is false then it will set the panel height to regular without anim
+						THIS._transitioning = false;
+					});
+					
+					THIS._viewContainer.style.height = Math.round(expandedFooterHeight) + 'px';
+				} else {
+				    console.info('no need for adjust')
+				}
+
+				
 				console.log('expandedheight on expand = ' + expandedheight);
 				console.warn('setting stack height to expandedheight which = ' + expandedheight);
 				referenceNodes.profilist_stack.style.height = expandedheight + 'px';
@@ -1414,6 +1450,19 @@ var windowListener = {
 					// console.log('in rename mdoe so dont close');
 					// return;
 				// }
+				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
+					console.info('YES need to reflow panel back to orig height');
+					THIS._transitioning = true;
+					THIS._viewContainer.style.transition = 'height 150ms'; //need to make this take quicker than the 0.25s of the profilist_box expand anim so it doesnt show any white space
+					THIS._viewContainer.addEventListener('transitionend', function trans() {
+						THIS._viewContainer.removeEventListener('transitionend', trans);
+						THIS._viewContainer.style.transition = '';
+						THIS._ignoreMutations = false; //important to set this to false before setting THIS._transitioning to false, because when set ignoreMut to false it runs `syncContainerWithMainView` and if it finds ignoreMut is false AND showingSubView is false AND transitioning is false then it will set the panel height to regular without anim
+						THIS._transitioning = false;
+					});
+					
+					THIS._viewContainer.style.height = THIS._mainViewHeight + 'px';
+				}
 				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
 					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
