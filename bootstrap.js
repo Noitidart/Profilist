@@ -689,12 +689,24 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 		profToolkit.profileCount = profileCount;
 		profToolkit.pathsInIni = pathsInIni;
 		
+		console.info('profToolkit.selectedProfile.name = ', profToolkit.selectedProfile.name);
+		console.info('selectedProfileNameFound = ', selectedProfileNameFound);
+
 		if (!selectedProfileNameFound) {
 			console.log('looking for selectedProfile name');
 			for (var p in ini) {
+				if (!('IsRelative' in ini[p].props)) {
+					console.warn('skipping ini[p] because no IsRelative prop', 'ini[p]=', ini[p], 'p=', p)
+					continue;
+				}
 				if (ini[p].props.IsRelative == '1') {
 					console.log('ini[p] is relative',ini[p]);
 					var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].props.Path));
+					
+					console.info('rel iniDirName=', iniDirName);
+					console.info('rel profToolkit.selectedProfile.rootDirName=', profToolkit.selectedProfile.rootDirName);
+					console.info('rel profToolkit.selectedProfile.localDirName=', profToolkit.selectedProfile.localDirName);
+
 					if (iniDirName == profToolkit.selectedProfile.rootDirName) {
 						console.log('iniDirName matches profToolkit.selectedProfile.rootDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
 						profToolkit.selectedProfile.name = ini[p].props.Name;
@@ -707,6 +719,10 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 					}
 				} else {
 					console.log('ini[p] is absolute',ini[p]);
+					console.info('abs ini[p].props.Path=', ini[p].props.Path);
+					console.info('abs profToolkit.selectedProfile.rootDirPath=', profToolkit.selectedProfile.rootDirPath);
+					console.info('abs profToolkit.selectedProfile.localDirPath=', profToolkit.selectedProfile.localDirPath);
+					
 					if (ini[p].props.Path == profToolkit.selectedProfile.rootDirPath) {
 						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
 						profToolkit.selectedProfile.name = ini[p].props.Name;
@@ -1450,6 +1466,10 @@ var windowListener = {
 					// console.log('in rename mdoe so dont close');
 					// return;
 				// }
+				if (!collapsedheight) {
+					console.log('collapsedheight is unknown so not doing mouseleave', 'collapsedheight=', collapsedheight)
+					return;
+				}
 				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
 					console.info('YES need to reflow panel back to orig height');
 					THIS._transitioning = true;
