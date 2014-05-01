@@ -1470,6 +1470,13 @@ var windowListener = {
 					console.log('collapsedheight is unknown so not doing mouseleave', 'collapsedheight=', collapsedheight)
 					return;
 				}
+				var cStackHeight = parseInt(referenceNodes.profilist_stack.style.height);
+				console.log('cStackHeight = ', cStackHeight);
+				console.log('collapsedheight = ', collapsedheight);
+				if (cStackHeight == collapsedheight) {
+					console.log('cStackheight is already collapsedheight so return');
+					return;
+				}
 				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
 					console.info('YES need to reflow panel back to orig height');
 					THIS._transitioning = true;
@@ -1484,7 +1491,9 @@ var windowListener = {
 					THIS._viewContainer.style.height = THIS._mainViewHeight + 'px';
 				}
 				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
+					console.log('running transitionend func')
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
+					console.log('running transitionend func step 2')
 					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
 						if (PUIcs.style.overflow == 'hidden') {
 							PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
