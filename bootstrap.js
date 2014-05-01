@@ -736,6 +736,17 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 				}
 			}
 			//profToolkit.selectedProfile.name = 1;
+			if (!profToolkit.selectedProfile.name) {
+				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
+				console.log('trying to change label')
+				var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilistLoading');
+				if (profilistLoadingT) {
+					console.log('profilistLoadingT found')
+					profilistLoadingT.setAttribute('label', 'Temporary Profile');
+					profilistLoadingT.setAttribute('id', 'profilistTempProfile');
+					return new Error('Using Temporary Profile - Profilist will not work');
+				}
+			}
 			console.log('selectedProfile searching proc done');
 		}
 		
