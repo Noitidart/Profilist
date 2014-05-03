@@ -199,7 +199,6 @@ function createProfile(refreshIni, profName) {
 		var dirName = saltName(profName);
 		
 		//get relative path
-		var DefProfRt = FileUtils.getFile('DefProfRt', []);
 		var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
 		var IniPathStr = FileUtils.getFile('DefProfRt', [dirName]);
 		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
@@ -329,6 +328,7 @@ function renameProfile(refreshIni, profName, newName) {
 		var promise = readIni();
 		promise.then(
 			function() {
+				console.log('starting programattic rename');
 				return renameProfile(2, profName, newName);
 			},
 			function(aRejectReason) {
@@ -340,11 +340,13 @@ function renameProfile(refreshIni, profName, newName) {
 	} else {
 		//check if name is taken
 		if (profName in ini == false) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
+			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
 			return Promise.reject(new Error('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.'));
 		}
 		if (newName in ini) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			console.error('Profile name of "' + newName + '" is already taken.');
+			Services.prompt.alert(null, self.name + ' - ' + 'Rename Error', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			console.error('Profile name of "' + newName + '" is already taken.');
 			return Promise.reject(new Error('Profile name of "' + newName + '" is already taken.'));
 		}
 		ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
@@ -1224,6 +1226,7 @@ function actuallyMakeRename(el) {
 				promise.then(
 					function() {
 						//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
+						console.warn('Rename promise completed succesfully');
 						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
 						updateProfToolkit(1, 1);
 					},
