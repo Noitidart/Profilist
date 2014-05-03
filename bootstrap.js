@@ -197,12 +197,20 @@ function createProfile(refreshIni, profName) {
 		//check if profile exists first
 		var numProfiles = profToolkit.profileCount; //Object.keys(ini) - 1;
 		var dirName = saltName(profName);
+		
+		//get relative path
+		var DefProfRt = FileUtils.getFile('DefProfRt', []);
+		var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
+		var IniPathStr = FileUtils.getFile('DefProfRt', [dirName]);
+		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
+		//end get relative path
+		
 		ini[profName] = {
 			num: numProfiles,
 			props: {
 				Name: profName,
 				IsRelative: 1,
-				Path: 'Profiles/' + dirName
+				Path: PathToWriteToIni
 			}
 		}
 		console.log('created ini entry for profName', ini[profName]);
