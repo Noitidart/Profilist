@@ -326,7 +326,7 @@ function renameProfile(refreshIni, profName, newName) {
 	//refreshIni is 0,1 or programmatically 2
 	if (refreshIni == 1) {
 		var promise = readIni();
-		promise.then(
+		return promise.then(
 			function() {
 				console.log('starting programattic rename');
 				return renameProfile(2, profName, newName);
@@ -336,7 +336,6 @@ function renameProfile(refreshIni, profName, newName) {
 				return new Error(aRejectReason.message);
 			}
 		);
-		return promise;
 	} else {
 		//check if name is taken
 		if (profName in ini == false) {
@@ -345,9 +344,11 @@ function renameProfile(refreshIni, profName, newName) {
 		}
 		if (newName in ini) {
 			console.error('Profile name of "' + newName + '" is already taken.');
-			Services.prompt.alert(null, self.name + ' - ' + 'Rename Error', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+			//Services.prompt.alert(null, self.name + ' - ' + 'Rename Error', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
 			console.error('Profile name of "' + newName + '" is already taken.');
-			return Promise.reject(new Error('Profile name of "' + newName + '" is already taken.'));
+			console.log('got to this pre line');
+			throw new Error('Cannot rename this profile to "' + newName + '" because this name is already taken by another profile.');
+			console.log('got to this post line');
 		}
 		ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
 		/* for (var i=0; i<stackDOMJson.length; i++) { // no longer do this block because what if renamed from another profile, it wont catch it then
@@ -1249,7 +1250,7 @@ function actuallyMakeRename(el) {
 					},
 					function(aRejectReason) {
 						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ', aRejectReason);
-						Services.prompt.alert(null, self.name + ' - ' + 'Renamed Failed', aRejectReason.message);
+						Services.prompt.alert(null, self.name + ' - ' + 'Rename Failed', aRejectReason.message);
 					}
 				);
 			}
