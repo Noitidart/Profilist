@@ -11,7 +11,7 @@ var collapsedheight = 0; //holds height stack should be when collapsed
 var expandedheight = 0; //holds height stack should be when expanded
 var stackDOMJson = []; //array holding menu structure in stack /*:note: :important:must insert the "Default: profile" into stackDOMJson last as last element in stack is top most*/
 var unloaders = {};
-var PUIsync_height = 0;
+var PUIsync_height;
 var PUIsync;
 
 const { TextEncoder, TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
@@ -633,36 +633,21 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		}
 	}
 		/*if edit anything here make sure to copy updateOnPanelShowing*/
-		PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
-		if (!PUIsync) {
-			Services.prompt.alert(null, self.name + ' - ' + 'Menu Creation Failed', 'Profilist will not work properly because the "Sync" button was not found. Profilist creates its menu by cloning this element.');
-			return new Error('Profilist will not work properly because the "Sync" button was not found. Profilist creates its menu by cloning this element.');
-		}
-		var puisynch = PUIsync.boxObject.height;
-		if (puisynch == 0) {
-			//try to get height from 'PanelUI-footer-inner'
-			console.warn('cannot figure out puisynch height from PUIsync so trying PUIfi');
-			var PUIfi = PanelUI.querySelector('#PanelUI-footer-inner');
-			if (PUIfi) {
-				puisynch = PUIfi.boxObject.height;
-				console.log('puifi gave height of ' + puisynch);
+		if (!PUIsync_height) {
+			PUIsync_height = PanelUI.querySelector('#profilistLoading');
+			if (!PUIsync_height) {
+				Services.wm.getMostRecentWindow(null).alert('errrror PUIsync_height is undefined and profilistLoading is not there so cannot obtain height so assuming height of 38');
+				PUIsync_height = 38;
+			} else {
+				PUIsync_height = PUIsync_height.boxObject.height;
 			}
 		}
-		if (puisynch == 0) {
-			console.warn('cannot figure out puisynch height from PUIsync OR PUIfi so just going with 38');
-			puisynch = 38;
-		}
-		if (puisynch != 0 && PUIsync_height != puisynch) {
-			console.log('PUIsync_height updated == ' + puisynch);
-			PUIsync_height = puisynch;
-		}
-		
 		var stack = PanelUI.querySelector('#profilist_box').childNodes[0];
 		//assume its supposed to be in collapsed state right now
-		if (collapsedheight != puisynch || stack.style.height == '') {
+		if (collapsedheight != PUIsync_height || stack.style.height == '') {
 			var oldCollapsedheight = collapsedheight;
-			//if collapsedheight != puisynch then obviously we have to set stack.style.height because we are assuming on popupshowing it should already be in collapsed style.height, (this is why i dont bother checking style.height) so if it is in this collapsed style.height then the last one used was the oldCollapsedheight obviously, so we want to set style.height as we are updating collapsedheight now to puisynch so set style.height to puisync too
-			collapsedheight = puisynch;
+			//if collapsedheight != PUIsync_height then obviously we have to set stack.style.height because we are assuming on popupshowing it should already be in collapsed style.height, (this is why i dont bother checking style.height) so if it is in this collapsed style.height then the last one used was the oldCollapsedheight obviously, so we want to set style.height as we are updating collapsedheight now to puisynch so set style.height to puisync too
+			collapsedheight = PUIsync_height;
 			console.warn('setting stack height to collapsedheight which = ' + collapsedheight);
 			stack.style.height = collapsedheight + 'px';
 		}
@@ -1034,10 +1019,12 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			console.log('post ident el = ', el);
 		}
 		if (!el) {
-			if (json[i].nodeToClone == 'PUIsync') {
+			/* if (json[i].nodeToClone == 'PUIsync') {
 				json[i].nodeToClone = PUIsync;
 			}
-			el = json[i].nodeToClone.cloneNode(true);
+			el = json[i].nodeToClone.cloneNode(true); */
+			var toolbarbuttonJSON = ['xul:toolbarbutton', {'id':'newlyCreated', label:'newly created', class:'PanelUI-profilist', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}];
+			el = jsonToDOM(toolbarbuttonJSON, aDOMWindow.document, {});
 			appendChild = true;
 			console.log('el created');
 		} else {
@@ -1080,8 +1067,9 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
 		//elHeight = parseFloat(elHeight);
 		if (elHeight == 0) {
+			myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'DEBUG', 'elHeight = 0', false, null, null, 'Profilist');
 			if (appendChild) {
-				elHeight = json[i].nodeToClone.boxObject.height;
+				elHeight = PUIsync_height; //json[i].nodeToClone.boxObject.height;
 				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
 				//elHeight = parseFloat(elHeight);
 				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
@@ -1443,12 +1431,15 @@ var windowListener = {
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box'},
 				['xul:stack', {key:'profilist_stack', style:'width:100%;'},
-					['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'PanelUI-profilist', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);'}]
+					['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'PanelUI-profilist', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', key:'profilistLoading'}]
 				]
 			];
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
-
+			
+			//PUIsync_height = referenceNodes.profilistLoading.boxObject.height;
+			//myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'DEBUG', 'PUIsync_height set to = ' + PUIsync_height, false, null, null, 'Profilist');
+			
 			var THIS = PanelUI.querySelector('#PanelUI-multiView');
 			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
