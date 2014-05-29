@@ -389,49 +389,12 @@ function deleteProfile(refreshIni, profName) {
 		}
 
 		 console.log('found profile name in ini it is == ', ini[profName]);
-		 if (ini[profName].props.IsRelative == '1') {
-			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
-			console.info('dirname of this profile is = ', dirName);
-			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
-			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
-			
-			var aDirect = new FileUtils.File(PathRootDir);
-			if (!aDirect.exists()){
-				return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
-			}			
-			var aTemp = new FileUtils.File(PathLocalDir);
-			if (!aTemp.exists()){
-				return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
-			}
-		 } else {
-			var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
-			if (!aDirect.exists()){
-				return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
-			}
-			var aTemp = aDirect;
-		 }
-		 try {
-			 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
-			 //if it gets to this line then the profile was not in use as it was succesfully locked
-			 locker.unlock(); //its not in use so lets unlock the profile
-			 console.log('continue as profile is not in use');
-		 } catch (ex) {
-			if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
-				console.warn('PROFILE IS IN USE');
-				//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-				return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
-			} else {
-				//throw ex;
-				console.log('ex happend = ', ex);
-				console.log('ex.result = ', ex.result);
-				return Promise.reject(new Error('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message));
-			}
-		 }
+
 	 }
 //end check if profile in use	 
 	if (refreshIni == 1) {
 		var promise = readIni();
-		promise.then(
+		return promise.then(
 			function() {
 				return deleteProfile(2, profName);
 			},
@@ -440,20 +403,58 @@ function deleteProfile(refreshIni, profName) {
 				return new Error(aRejectReason.message);
 			}
 		);
-		return promise;
 	} else {
-		//before deleting check if its default profile
-		//check if its in use
-		if (profName in ini == false) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot delete it.');
-			return Promise.reject(new Error('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.'));
-		}
-		//if (Object.keys(ini).length == 2) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot delete this profile as it is the last profile remaining.'); //dont need this anymore as if its the last profile its currently in use
-			//return;
-		//}
-		//todo: figure out how to check if the profile is running, if it is dont delete but msg its open		
-		
+		//check if profile is in use and get the PathRootDir and PathLocalDir
+		 if (ini[profName].props.IsRelative == '1') {
+			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
+			console.info('dirname of this profile is = ', dirName);
+			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
+			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
+			
+			var aDirect = new FileUtils.File(PathRootDir);
+			if (!aDirect.exists()){
+				aDirect = null;
+				console.warn('Could not find the root profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathRootDir);
+				//return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
+			}			
+			var aTemp = new FileUtils.File(PathLocalDir);
+			if (!aTemp.exists()){
+				aTemp = null;
+				console.warn('Could not find the local profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathLocalDir);
+				//return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
+			}
+		 } else {
+			var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
+			if (!aDirect.exists()){
+				aDirect = null;
+				console.warn('Could not find the profile directory at path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + ini[profName].props.Path);
+				//return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
+			} else {
+				var aTemp = aDirect;
+			}
+		 }
+		 if (aDirect !== null) {
+			 try {
+				 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
+				 //if it gets to this line then the profile was not in use as it was succesfully locked
+				 locker.unlock(); //its not in use so lets unlock the profile
+				 console.log('continue as profile is not in use');
+			 } catch (ex) {
+				if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
+					console.warn('PROFILE IS IN USE');
+					//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+					return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
+				} else {
+					//throw ex;
+					console.log('ex happend = ', ex);
+					console.log('ex.result = ', ex.result);
+					return Promise.reject(new Error('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message));
+				}
+			 }
+		 } else {
+		 	console.warn('aDirect doesnt exist so assuming profile is not in use, its gotta be impossible to be in use if aDirect doesnt exist')
+		 }
+		 //end - check if profile is in use and get the PathRootDir and PathLocalDir
 		var done = {
 			ini: false,
 			root: false,
@@ -483,56 +484,72 @@ function deleteProfile(refreshIni, profName) {
 		}
 		var PromiseAllArr = [];
 		if (ini[profName].props.IsRelative == '1') {
-			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
-			console.info('dirname of this profile is = ', dirName);
-			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
-			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
 			
-			console.log('now removing PathRootDir', PathRootDir);
-			var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
-			promise.then(
-				function() {
-					console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
-					done.root = true;
-					checkReadyAndUpdateStack();
-				},
-				function(aRejectReason) {
-					console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
-					return new Error('FAILED to remove PathRootDir for profName of ' + profName);
-				}
-			);
-			PromiseAllArr.push(promise);
-			if (PathRootDir != PathLocalDir) {
-				console.log('now removing PathLocalDir', PathLocalDir);
-				var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
-				promise2.then(
+			if (aDirect !== null) {
+				console.log('now removing PathRootDir', PathRootDir);
+				var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
+				promise.then(
 					function() {
-						console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
-						done.local = true;
+						console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+						done.root = true;
 						checkReadyAndUpdateStack();
 					},
 					function(aRejectReason) {
-						console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
-						return new Error('FAILED to remove PathLocalDir for profName of ' + profName);
+						console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
+						return new Error('FAILED to remove PathRootDir for profName of ' + profName);
 					}
 				);
-				PromiseAllArr.push(promise2);
+				PromiseAllArr.push(promise);
+			} else {
+				console.warn('no need to try to delete PathRootDir as it doesnt exist');
+				done.root = true;
+			}
+			if (PathRootDir != PathLocalDir) {
+				if (aTemp !== null) {
+					console.log('now removing PathLocalDir', PathLocalDir);
+					var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
+					promise2.then(
+						function() {
+							console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+							done.local = true;
+							checkReadyAndUpdateStack();
+						},
+						function(aRejectReason) {
+							console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
+							return new Error('FAILED to remove PathLocalDir for profName of ' + profName);
+						}
+					);
+					PromiseAllArr.push(promise2);
+				} else {
+					console.warn('no need to try to delete PathLocalDir as it doesnt exist');
+					done.local = true;
+				}
+			} else {
+				console.warn('PathRootDir == PathLocalDir so just assume its been deleted')
+				done.local = true;
 			}
 		} else {
-			var Path = ini[profName].props.Path;
-			var promise = OS.File.removeDir(Path);
-			promise.then(
-				function() {
-					console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
-					done.root = true;
-					checkReadyAndUpdateStack();
-				},
-				function() {
-					console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
-					return new Error('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
-				}
-			);
-			PromiseAllArr.push(promise);
+			if (aDirect !== null) {
+				var Path = ini[profName].props.Path;
+				var promise = OS.File.removeDir(Path);
+				promise.then(
+					function() {
+						console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
+						done.root = true;
+						done.local = true;
+						checkReadyAndUpdateStack();
+					},
+					function() {
+						console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+						return new Error('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+					}
+				);
+				PromiseAllArr.push(promise);
+			} else {
+				console.warn('no need to try to delete as it doesnt exist, is not relative so local == root');
+				done.root = true;
+				done.local = true;
+			}
 		}
 		delete ini[profName];
 		var promise0 = writeIni();
