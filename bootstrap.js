@@ -1450,7 +1450,7 @@ var windowListener = {
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box'},
 				['xul:stack', {key:'profilist_stack', style:'width:100%;'},
-					['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'PanelUI-profilist', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', key:'profilistLoading'}]
+					['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'PanelUI-profilist profilistLoading', status:'active', style:'-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);', key:'profilistLoading'}]
 				]
 			];
 			var referenceNodes = {};

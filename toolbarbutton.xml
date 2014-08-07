@@ -16,13 +16,14 @@
     
     <content>
       <children includes="observes|template|menupopup|panel|tooltip"/>
-	  <xul:stack>
-		<xul:image class="toolbarbutton-icon" xbl:inherits="validate,src=image,label"/>
-		<xul:image class="profilist-badge" xbl:inherits="validate,src=badge,label"/>
-	  </xul:stack>
+
+		<xul:image class="toolbarbutton-icon" xbl:inherits="validate,src=image,label" flex="0"/>
+
+		<xul:image class="profilist-badge" xbl:inherits="validate,src=badge,label" width="1" flex="0"/>
+
       <xul:label class="toolbarbutton-text" crop="right" flex="1" xbl:inherits="value=label,accesskey,crop,wrap"/>
       <xul:label class="toolbarbutton-multiline-text" flex="1" xbl:inherits="xbl:text=label,accesskey,wrap"/>
-	  <xul:stack class="profilist-submenu"/>
+	  <xul:stack class="profilist-submenu">
 		<xul:image class="profilist-closed"/>
 		<xul:image class="profilist-build"/>
 		<xul:image class="profilist-safe"/>
