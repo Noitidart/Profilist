@@ -28,40 +28,39 @@
   text-align: start !important;
 }
 
-.PanelUI-profilist .toolbarbutton-icon {
+.PanelUI-profilist .toolbarbutton-icon  {
 	cursor: pointer;
 	opacity: 1;
-	/*max-width: 16px;
-	max-height: 16px;
-	min-width: 16px;
-	min-height: 16px;
-	width: 16px;
-	height: 16px;*/
+	transition: opacity 0.5s; /*reverse of ZED*/
+	-moz-margin-end: 5px;
 }
 
-.PanelUI-profilist .toolbarbutton-icon  {
-  -moz-margin-end: 5px;
+.PanelUI-profilist .toolbarbutton-icon:hover {
+  opacity: 0;
+  transition: opacity 0.5s ease 0.5s; /*reverse of ZED but more delay here than delay on opacity in complement*/
+}
+
+.PanelUI-profilist:not([badge]) .profilist-badge {
+	opacity: 0;
 }
 
 .PanelUI-profilist .profilist-badge {
 	list-style-image: url(chrome://mozapps/skin/places/defaultFavicon.png);
-	/*max-width: 1px;
-	max-height: 1px;
-	min-width: 1px;
-	min-height: 1px;
-	width: 1px;
-	height: 1px;*/
+	pointer-events: none;
 	transform:translate(-7px, 7px) scale(10);
-	transition: transform 1s;
+	/*transition: transform 1s ease 2s opacity 1s;*/
+	transition: opacity 0.5s ease 1s, transform 0.5s; /*reverse of ABC*/
+}
+
+.PanelUI-profilist .toolbarbutton-icon:hover + image {
+	transform: translate(-14px, -1px) scale(16); /*this transforms to be exactly over the toolbarbutton-icon*/
+	opacity: 1;
+	transition: opacity 0.5s, transform 0.5s ease 0.5s; /*reverse of ABC*/
 }
 
 .PanelUI-profilist.create .profilist-badge,
 #profilistLoading.PanelUI-profilist .profilist-badge {
 	display: none;
-}
-
-.PanelUI-profilist .toolbarbutton-icon:hover {
-  opacity: 0.5;
 }
 
 .PanelUI-profilist .profilist-submenu image {

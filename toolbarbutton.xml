@@ -8,7 +8,7 @@
    xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
    xmlns:xbl="http://www.mozilla.org/xbl">
 
-  <binding id="toolbarbutton" display="xul:button" role="xul:toolbarbutton"
+  <binding id="toolbarbutton" role="xul:toolbarbutton"
            extends="chrome://global/content/bindings/button.xml#button-base">
     <resources>
       <stylesheet src="chrome://global/skin/toolbarbutton.css"/>
@@ -16,7 +16,7 @@
     
     <content>
       <children includes="observes|template|menupopup|panel|tooltip"/>
-
+	
 		<xul:image class="toolbarbutton-icon" xbl:inherits="validate,src=image,label" flex="0"/>
 
 		<xul:image class="profilist-badge" xbl:inherits="validate,src=badge,label" width="1" flex="0"/>
