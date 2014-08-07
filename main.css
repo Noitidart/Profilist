@@ -9,6 +9,7 @@
   border-radius: 0;
   transition: background-color;
   -moz-box-orient: horizontal;
+  -moz-binding: url(chrome://profilist/content/toolbarbutton.xml#toolbarbutton);
 }
 
 .PanelUI-profilist {
@@ -27,8 +28,44 @@
   text-align: start !important;
 }
 
-.PanelUI-profilist > .toolbarbutton-icon {
+.PanelUI-profilist .toolbarbutton-icon {
   -moz-margin-end: 0;
+  cursor: pointer !important;
+}
+
+.PanelUI-profilist .toolbarbutton-icon:hover {
+  opacity: 0.5;
+}
+
+.PanelUI-profilist .profilist-submenu image {
+  cursor: pointer;
+  filter: url('filters.svg#grayscale');
+  opacity: .5;
+  transition: opacity .5s;
+}
+
+.PanelUI-profilist .profilist-submenu image:hover {
+  filter: none;
+  opacity: 1;
+}
+
+.profilist-closed {
+	list-style-image: url(chrome://profilist/content/3dots.png);
+}
+.profilist-del {
+	list-style-image: url(chrome://profilist/content/bullet_delete.png);
+}
+.profilist-rename {
+	list-style-image: url(chrome://profilist/content/bullet_edit.png);
+}
+.profilist-default {
+	list-style-image: url(chrome://profilist/content/bullet_blue.png);
+}
+.profilist-safe {
+	list-style-image: url(chrome://profilist/content/bullet_wrench.png);
+}
+.profilist-build {
+	list-style-image: url(chrome://profilist/content/bullet_aurora.png);
 }
 
 #profilistLoading {
@@ -39,7 +76,7 @@
   list-style-image: url(chrome://profilist/content/active-user.png);
 }
 
-.PanelUI-profilist[disabled] > .toolbarbutton-icon {
+.PanelUI-profilist[disabled] .toolbarbutton-icon {
   opacity: 0.4;
 }
 
@@ -98,7 +135,7 @@
 }
 
 
-#profilist_box stack {
+#profilist_box > stack {
 	transition: height 0.25s;
 	min-height: 2em;
 	overflow: hidden;

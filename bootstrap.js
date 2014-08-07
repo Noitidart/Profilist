@@ -1166,6 +1166,8 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 var renameTimeouts = [];
 
 function makeRename(e) {
+	console.error('e', e);
+	return;
 	if (e.type == 'mousedown' && e.button != 0) {
 		//ensure it must be primary click
 		console.warn('not primary click so returning e=', e);

@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<bindings
+   xmlns="http://www.mozilla.org/xbl"
+   xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+   xmlns:xbl="http://www.mozilla.org/xbl">
+
+  <binding id="toolbarbutton" display="xul:button" role="xul:toolbarbutton"
+           extends="chrome://global/content/bindings/button.xml#button-base">
+    <resources>
+      <stylesheet src="chrome://global/skin/toolbarbutton.css"/>
+    </resources>
+    
+    <content>
+      <children includes="observes|template|menupopup|panel|tooltip"/>
+	  <xul:stack>
+		<xul:image class="toolbarbutton-icon" xbl:inherits="validate,src=image,label"/>
+		<xul:image class="profilist-badge" xbl:inherits="validate,src=badge,label"/>
+	  </xul:stack>
+      <xul:label class="toolbarbutton-text" crop="right" flex="1" xbl:inherits="value=label,accesskey,crop,wrap"/>
+      <xul:label class="toolbarbutton-multiline-text" flex="1" xbl:inherits="xbl:text=label,accesskey,wrap"/>
+	  <xul:stack class="profilist-submenu"/>
+		<xul:image class="profilist-closed"/>
+		<xul:image class="profilist-build"/>
+		<xul:image class="profilist-safe"/>
+		<xul:image class="profilist-default"/>
+		<xul:image class="profilist-rename"/>
+		<xul:image class="profilist-del"/>
+	  </xul:stack>
+    </content>
+  </binding>
+</bindings>
