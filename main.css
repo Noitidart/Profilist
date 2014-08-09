@@ -1,111 +1,59 @@
-.PanelUI-profilist {
-  margin: 0;
-  padding: 10px 0;
-  min-height: 2em;
+.profilist-tbb-box:not(.profilist-nosubmenu) {
+  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
+}
+.profilist-tbb {
+  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb');
   -moz-appearance: none;
-  box-shadow: none;
-  background-image: none;
-  border: none;  
-  border-radius: 0;
-  transition: background-color;
-  -moz-box-orient: horizontal;
-  -moz-binding: url(chrome://profilist/content/toolbarbutton.xml#toolbarbutton);
+}
+.profilist-tbb-box:first-of-type:not(.profilist-nosubmenu) { /*active profile*/
+  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box-create');
+}
+.profilist-tbb-box[top='0'] { /*active profile*/
+  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box-active');
 }
 
-.PanelUI-profilist {
-  border-top: 1px solid hsla(210,4%,10%,.14);
-  border-bottom: 1px solid transparent;
-  margin-bottom: -1px;
+/*start - badge*/
+.profilist-tbb {
+  list-style-image: url('chrome://profilist/content/inactive-user.png');
+}
+.profilist-tbb[status='active'] {
+  list-style-image: url('chrome://profilist/content/active-user.png');
 }
 
-.PanelUI-profilist > .toolbarbutton-text {
-  width: 0; /* Fancy cropping solution for flexbox. */
+.profilist-tbb:not([badge]) .profilist-badge {
+  list-style-image: none;
 }
+/*end - badge*/
 
-.PanelUI-profilist > .toolbarbutton-text {
-  margin: 0;
-  padding: 0; /*xp*/ /*0 6px; this is on win7*/
-  text-align: start !important;
-}
-/*start badge*/
-.PanelUI-profilist .toolbarbutton-icon  {
-	cursor: pointer;
-	opacity: 1;
-	transition: opacity 0.5s; /*reverse of ZED*/
-	-moz-margin-end: 5px;
-}
-
-.PanelUI-profilist .toolbarbutton-icon:hover {
-  opacity: 0;
-  transition: opacity 0.5s ease 0.5s; /*reverse of ZED but more delay here than delay on opacity in complement*/
-}
-
-.PanelUI-profilist:not([badge]) .profilist-badge {
-	opacity: 0;
-}
-
-.PanelUI-profilist .profilist-badge {
-	list-style-image: url(chrome://mozapps/skin/places/defaultFavicon.png);
-	pointer-events: none;
-	transform:translate(-7px, 7px) scale(10);
-	/*transition: transform 1s ease 2s opacity 1s;*/
-	transition: opacity 0.5s ease 1s, transform 0.5s; /*reverse of ABC*/
-}
-
-.PanelUI-profilist .toolbarbutton-icon:hover + image {
-	transform: translate(-14px, -1px) scale(16); /*this transforms to be exactly over the toolbarbutton-icon*/
-	opacity: 1;
-	transition: opacity 0.5s, transform 0.5s ease 0.5s; /*reverse of ABC*/
-}
-
-.PanelUI-profilist.create .profilist-badge,
-#profilistLoading.PanelUI-profilist .profilist-badge {
-	display: none;
-}
-/*end badge*/
 /* start submenu*/
-.PanelUI-profilist .profilist-submenu {
-	opacity: 0;
-	pointer-events: none;
-	width: 10px;
-	overflow: hidden;
-	transition: width .5s ease 1.5s, opacity .25s;
+/* dots */
+.profilist-tbb-box .profilist-submenu image.profilist-closed {
+	padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
+}
+.profilist-tbb-box .profilist-submenu image:hover {
 	background-color: steelblue;
-	-moz-pack: end;
+}
+/* dots */
+.profilist-tbb-box .profilist-submenu image:not(.profilist-closed) {
+	padding: 10px 1px;
 }
 
-.PanelUI-profilist:hover .profilist-submenu {
-	opacity: 1;
-	pointer-events: auto;
-}
-
-.PanelUI-profilist:hover .profilist-submenu:hover .profilist-closed {
-	opacity: 0;
-	clip: rect(1px, 1px, 1px, 1px);
-	display: none;
-}
 
 .profilist-closed {
 	list-style-image: url(chrome://profilist/content/3dots.png);
-	transition: opacity .25s, display 0s ease 1.5s;
 }
 
 
-.PanelUI-profilist:hover .profilist-submenu:hover {
-	width: 80px;
-	transition: width .5s, opacity .25s;
+.profilist-tbb-box:hover .profilist-submenu:hover {
+
 }
 
-.PanelUI-profilist .profilist-submenu:not(.profilist-closed) image {
-  cursor: pointer;
-  /*filter: url('filters.svg#grayscale');*/
-  opacity: .5;
-  transition: opacity .25s;
+.profilist-tbb-box .profilist-submenu:not(.profilist-closed) image {
+
 }
 
-.PanelUI-profilist .profilist-submenu image:hover {
-  filter: none;
-  opacity: 1;
+.profilist-tbb-box .profilist-submenu image:hover {
+
 }
 
 .profilist-del {
@@ -123,76 +71,11 @@
 .profilist-build {
 	list-style-image: url(chrome://profilist/content/bullet_aurora.png);
 }
+.profilist-clone {
+	list-style-image: url(chrome://profilist/content/bullet_release.png);
+}
 /* end submenu*/
-#profilistLoading {
+
+#profilistLoading .profilist-tbb {
 	list-style-image: url(chrome://profilist/content/icon16.png);
-}
-
-.PanelUI-profilist[status="active"] {
-  list-style-image: url(chrome://profilist/content/active-user.png);
-}
-
-.PanelUI-profilist[disabled] image {
-  opacity: 0.4;
-}
-
-.PanelUI-profilist:not([status="active"]) {
-  /*box-shadow: inset 0 0 40px 1px hsla(210,4%,5%,.05) !important;*/
-  /*background-color: hsla(210,4%,50%,.05) !important;*/
-  border-top: 1px solid transparent !important;
-  /*border-bottom: 0 !important;*/
-}
-
-
-.PanelUI-profilist {
-  flex: 1;
-  -moz-padding-start: 15px;
-  -moz-border-start-style: none;
-}
-
-.PanelUI-profilist {
-  list-style-image: url(chrome://profilist/content/inactive-user.png);
-}
-
-.PanelUI-profilist.advanced {
-  list-style-image: url(chrome://profilist/content/cog.png);
-}
-
-.PanelUI-profilist.create {
-  list-style-image: url(chrome://profilist/content/plus.png);
-}
-
-.PanelUI-profilist {
-  -moz-image-region: rect(0, 16px, 16px, 0);
-}
-
-.PanelUI-profilist:not([disabled]):hover {
-  /*outline: 1px solid hsla(210,4%,10%,.07);*/
-  background-color: hsla(210,4%,10%,.07) !important;
-}
-
-.PanelUI-profilist:not([disabled]):hover:active,
-.PanelUI-profilist.perm-hover:not([disabled]):active {
-  /*outline: 1px solid hsla(210,4%,10%,.12);*/
-  background-color: hsla(210,4%,10%,.12) !important;
-  /*box-shadow: 0 1px 0 hsla(210,4%,10%,.05) inset;*/
-}
-
-.PanelUI-profilist:not([disabled]):hover,
-.PanelUI-profilist:not([disabled]):hover:active,
-.PanelUI-profilist.perm-hover:not([disabled]):active, {
-  outline: none;
-}
-
-
-.PanelUI-profilist.perm-hover:not([disabled]) {
-	background-color: hsla(210,4%,10%,.07) !important;
-	box-shadow: inset 0 6px 4px 2px hsla(210,4%,10%,.05) !important;
-}
-
-
-#profilist_box > stack {
-	transition: height 0.25s;
-	min-height: 2em;
-	overflow: hidden;
 }
