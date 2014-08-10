@@ -17,33 +17,14 @@
     </binding>
     <binding id="tbb-box">
         <content>
-            <children/>
-            <xul:box class="profilist-submenu">
-                <xul:image class="profilist-closed" />
-                <xul:image class="profilist-build" />
-                <xul:image class="profilist-safe" />
-                <xul:image class="profilist-default" />
-                <xul:image class="profilist-rename" />
-                <xul:image class="profilist-del" />
-            </xul:box>
-        </content>
-    </binding>
-    <binding id="tbb-box-create">
-        <content>
-            <children/>
-            <xul:box class="profilist-submenu">
-                <xul:image class="profilist-closed" />
-                <xul:image class="profilist-clone" />
-            </xul:box>
-        </content>
-    </binding>
-    <binding id="tbb-box-active">
-        <content>
-            <children/>
-            <xul:box class="profilist-submenu">
-                <xul:image class="profilist-closed" />
-				<xul:image class="profilist-default" />
-                <xul:image class="profilist-rename" />
+            <toolbarbutton class="profilist-tbb" xbl:inherits="label,disabled"/>
+            <xul:box class="profilist-submenu" style="background-color:springgreen;" xbl:inherits="disabled">
+                <xul:image class="profilist-closed" style="background-color:red;" xbl:inherits="disabled"/>
+                <xul:image class="profilist-dev-build"  xbl:inherits="disabled"/>
+                <xul:image class="profilist-dev-safe"  xbl:inherits="disabled"/>
+                <xul:image class="profilist-default"  xbl:inherits="disabled"/>
+                <xul:image class="profilist-rename"  xbl:inherits="disabled"/>
+                <xul:image class="profilist-inactive-del"  xbl:inherits="disabled"/>
             </xul:box>
         </content>
     </binding>

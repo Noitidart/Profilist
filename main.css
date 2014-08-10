@@ -1,31 +1,50 @@
-.profilist-tbb-box:not(.profilist-nosubmenu) {
-  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
+#profilist_box {
+	display: flex;
+}
+
+#profilist_box > stack {
+	width:100%;
+	overflow:hidden;
+	transition:height 250ms;
+}
+
+.profilist-tbb-box {
+	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
+	display:flex;
+	border-style: solid;
+	border-width: 1px 0;
+	border-color: rgba(24, 25, 26, 0.14) transparent transparent;
 }
 .profilist-tbb {
-  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb');
-  -moz-appearance: none;
+	-moz-appearance: none;
+	padding: 10px 0px 10px 15px;
+	flex-grow:1;
+	border:0;
+	display:flex;
+	background-color: pink;
+	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb');
 }
-.profilist-tbb-box:first-of-type:not(.profilist-nosubmenu) { /*active profile*/
-  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box-create');
-}
-.profilist-tbb-box[top='0'] { /*active profile*/
-  -moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box-active');
+.profilist-create {
+	
 }
 
 /*start - badge*/
-.profilist-tbb {
-  list-style-image: url('chrome://profilist/content/inactive-user.png');
+.profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
+	list-style-image: url('chrome://profilist/content/inactive-user.png');
 }
-.profilist-tbb[status='active'] {
-  list-style-image: url('chrome://profilist/content/active-user.png');
+.profilist-tbb-box[status='active']	.toolbarbutton-icon {
+	list-style-image: url('chrome://profilist/content/active-user.png');
 }
 
 .profilist-tbb:not([badge]) .profilist-badge {
-  list-style-image: none;
+	list-style-image: none;
 }
 /*end - badge*/
 
 /* start submenu*/
+.profilist-submenu {
+	display: flex;
+}
 /* dots */
 .profilist-tbb-box .profilist-submenu image.profilist-closed {
 	padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
@@ -56,19 +75,19 @@
 
 }
 
-.profilist-del {
+.profilist-inactive-del {
 	list-style-image: url(chrome://profilist/content/bullet_delete.png);
 }
 .profilist-rename {
 	list-style-image: url(chrome://profilist/content/bullet_edit.png);
 }
 .profilist-default {
-	list-style-image: url(chrome://profilist/content/bullet_blue.png);
+	list-style-image: url(chrome://profilist/content/bullet_gray.png);
 }
-.profilist-safe {
+.profilist-dev-safe {
 	list-style-image: url(chrome://profilist/content/bullet_wrench.png);
 }
-.profilist-build {
+.profilist-dev-build {
 	list-style-image: url(chrome://profilist/content/bullet_aurora.png);
 }
 .profilist-clone {

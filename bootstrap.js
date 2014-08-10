@@ -5,8 +5,8 @@ const self = {
 	aData: 0,
 };
 
-const tbb_box_style = 'display:flex; border-top-width: 1px; border-top-style: solid; border-top-color: rgba(24, 25, 26, 0.14);';
-const tbb_style = '-moz-appearance: none; padding: 10px 0px 10px 15px; height: 100%; flex-grow:1; border:0;display:flex;'; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
+const tbb_box_style = '';
+const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
 
 const myServices = {};
 var cssUri;
@@ -654,12 +654,13 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 	}
 		/*if edit anything here make sure to copy updateOnPanelShowing*/
 		if (!PUIsync_height) {
-			PUIsync_height = PanelUI.querySelector('#profilistLoading');
+			PUIsync_height = PanelUI.querySelector('#profilist-loading');
 			if (!PUIsync_height) {
 				Services.wm.getMostRecentWindow(null).alert('errrror PUIsync_height is undefined and profilistLoading is not there so cannot obtain height so assuming height of 38');
 				PUIsync_height = 38;
 			} else {
 				PUIsync_height = PUIsync_height.boxObject.height;
+				console.log('PUIsync_height determined to be = ', PUIsync_height);
 			}
 		}
 		var stack = PanelUI.querySelector('#profilist_box').childNodes[0];
@@ -772,7 +773,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 			if (!profToolkit.selectedProfile.name) {
 //				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
 //				console.log('trying to change label')
-				var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilistLoading');
+				var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilist-loading');
 				if (profilistLoadingT) {
 //					console.log('profilistLoadingT found')
 					profilistLoadingT.setAttribute('label', 'Temporary Profile');
@@ -797,8 +798,8 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 //				console.log('stackDOMJson is 0 length', stackDOMJson);
 //				console.log('profToolkit=',profToolkit);
 				stackDOMJson = [
-					{nodeToClone:'PUIsync', identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb profilist-create', hidden:null, id:null, oncommand:null, status:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  addEventListener:['command',createUnnamedProfile,false], style:tbb_style},
-					{nodeToClone:'PUIsync', identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'profilist-tbb', hidden:null, id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null, status:'active', addEventListener:['command', makeRename, false], style:tbb_style, props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
+					{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create', addEventListener:['command',createUnnamedProfile,false], style:tbb_style},
+					{identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'profilist-tbb-box', status:'active', addEventListener:['command', makeRename, false], style:tbb_style, props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
 				];
 				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
 				stackUpdated = true;
@@ -812,6 +813,7 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 							//this is in the stack object but no longer exists so need to remove
 //							console.log('m.props.profpath is not in pathsInIni = ', 'm.props.profpath=', m.props.profpath, 'pathsInIni=', profToolkit.pathsInIni, 'ini=', ini)
 							stackUpdated = true;
+							console.log('deleted:', stackDOMJson[i]);
 							stackDOMJson.splice(i, 1); //this takes care of deletes
 							i--;	
 						} else {
@@ -863,7 +865,7 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 //					console.log('splicing p = ', ini[p], 'stackDOMjson=', stackDOMJson);
 					stackUpdated = true;
 					(function(pClosure) {
-						var objToSplice = {nodeToClone:'PUIsync', identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'profilist-tbb', hidden:null, id:null, oncommand:null, tooltiptext:null, signedin:null, defaultlabel:null, errorlabel:null,  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:tbb_style, props:{profpath:ini[pClosure].props.Path}};
+						var objToSplice = {identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'profilist-tbb-box',  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:tbb_style, props:{profpath:ini[pClosure].props.Path}};
 						
 						if (pClosure == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
@@ -943,7 +945,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	var stackChilds = stack.childNodes;
 	var identObj = {};
 	for (var i=0; i<stackChilds.length; i++) {
-		var identifierRead = stackChilds[i].childNodes[0].getAttribute('identifier');
+		var identifierRead = stackChilds[i].getAttribute('identifier');
 		identObj[identifierRead] = stackChilds[i];
 	}
 	//start - test if dom matches json
@@ -1043,7 +1045,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 				json[i].nodeToClone = PUIsync;
 			}
 			el = json[i].nodeToClone.cloneNode(true); */
-			var toolbarbuttonJSON = ['xul:box', {style:tbb_box_style, class:'profilist-tbb-box'}, ['xul:toolbarbutton', {label:'newly created', class:'profilist-tbb newly-created', status:'active', style:tbb_style}]];
+			var toolbarbuttonJSON = ['xul:box', {style:tbb_box_style, class:'profilist-tbb-box newly-created', label:'newly created'}];
 			el = jsonToDOM(toolbarbuttonJSON, aDOMWindow.document, {});
 			appendChild = true;
 //			console.log('el created');
@@ -1061,14 +1063,16 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 					(function(elClosure, jsonIClosure, pClosure) {
 //						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
 //						console.log('elClosure label',elClosure.getAttribute('label'));
-						elClosure.childNodes[0].addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+						console.info('elClosure:', elClosure);
+						elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+						//elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 					})(el, json[i], p);
 					continue;
 				}
 				if (json[i][p] === null) {
-					el.childNodes[0].removeAttribute(p);
+					el.removeAttribute(p);
 				} else {
-					el.childNodes[0].setAttribute(p, json[i][p]);
+					el.setAttribute(p, json[i][p]);
 				}
 			}
 		} else {
@@ -1076,7 +1080,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			if ('justRenamed' in json[i]) {
 //				console.log('it was justRenamed');
 				//delete json[i].justRenamed; //cant delete this here, as if we are updating multiple windows, only the first window gets renamed properly
-				el.childNodes[0].setAttribute('label', json[i].label);
+				el.setAttribute('label', json[i].label);
 //				console.log('label set');
 				//dont need this anymore as i am now using path for idnetifier //json[i].identifier = '[path="' + json[i].label + '"]'; //have to do this here as needed the identifier to ident this el
 			}
@@ -1148,7 +1152,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	var stackChilds = stack.childNodes;
 	for (var i=0; i<stackChilds.length; i++) {
 //		console.log('checking if label of ' + stackChilds[i].childNodes[0].getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (stackChilds[i].childNodes[0].hasAttribute('status') && !(stackChilds[i].childNodes[0].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+		if (stackChilds[i].hasAttribute('status') && !(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
 //			console.log('this profile is not in ini so remove it', 'ini=', ini);
 			stack.removeChild(stackChilds[i]);
 			i--;
@@ -1452,13 +1456,14 @@ var windowListener = {
 //			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box'},
-				['xul:stack', {key:'profilist_stack', style:'width:100%; overflow:hidden; transition:height 250ms;'},
-					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-nosubmenu'}, ['xul:toolbarbutton', {'id':'profilistLoading', label:'Loading Profiles...', disabled:'true', class:'profilist-tbb', status:'active', style:tbb_style, key:'profilistLoading'}]]
+				['xul:stack', {key:'profilist_stack'},
+					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
+					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
 				]
 			];
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
-			
+
 			//PUIsync_height = referenceNodes.profilistLoading.boxObject.height;
 			//myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'DEBUG', 'PUIsync_height set to = ' + PUIsync_height, false, null, null, 'Profilist');
 			
@@ -1691,7 +1696,7 @@ function startup(aData, aReason) {
 		aBaseURI: null
 	}
 	cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
-	myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.USER_SHEET);
+	myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.register();
 	
@@ -1700,7 +1705,7 @@ function startup(aData, aReason) {
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
 		
-	myServices.sss.unregisterSheet(cssUri, myServices.sss.USER_SHEET);
+	myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
 }
