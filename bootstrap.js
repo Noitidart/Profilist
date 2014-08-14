@@ -48,108 +48,119 @@ var decoder = 0;
 var encoder = 0;
 
 function readIni() {
-//	console.log('in read');
-	if (!decoder) {
-//		console.log('decoder not inited');
-		decoder = new TextDecoder(); // This decoder can be reused for several reads
-	}
-//	console.log('decoder got');
-//	console.log('starting read');
-	let promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
-//	console.log('read promise started');
-	promise = promise.then(
-		function(ArrayBuffer) {
-			var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
-//			//console.log(readStr);
-			ini = {};
-			var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.+))(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?/mg;
-			var blocks = [];
-
-			var match;
-			while (match = patt.exec(readStr)) {
-//				//console.log('MAAAAAAAAAAATCH', match);
-
-				var group = match[1];
-				ini[group] = {};
-
-				if (group == 'Profile') {
-					ini[group]['num'] = match[2];
-				}
-
-				ini[group].props = {};
-
-				for (var i = 3; i < match.length; i = i + 2) {
-					var prop = match[i];
-					if (prop === undefined) {
-						break;
-					}
-					var propVal = match[i + 1]
-					ini[group].props[prop] = propVal;
-				}
-
-				if (group == 'Profile') {
-					//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
-					ini[ini[group].props.Name] = ini[group];
-					delete ini[group];
-				}
-			}
-//			console.log('successfully read ini = ', ini);
-			return ini;
-		},
-		function(aRejectReason) {
-//			console.error('Read ini failed');
-			return new Error('Profiles.ini could not be read to memoery. ' + aRejectReason.message);
+//is promise
+	try {
+	//	console.log('in read');
+		if (!decoder) {
+	//		console.log('decoder not inited');
+			decoder = new TextDecoder(); // This decoder can be reused for several reads
 		}
-	);
+	//	console.log('decoder got');
+	//	console.log('starting read');
+		let promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
+	//	console.log('read promise started');
+		return promise.then(
+			function(ArrayBuffer) {
+				var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
+	//			//console.log(readStr);
+				ini = {};
+				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.+))(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?/mg;
+				var blocks = [];
 
-	return promise;
+				var match;
+				while (match = patt.exec(readStr)) {
+	//				//console.log('MAAAAAAAAAAATCH', match);
+
+					var group = match[1];
+					ini[group] = {};
+
+					if (group == 'Profile') {
+						ini[group]['num'] = match[2];
+					}
+
+					ini[group].props = {};
+
+					for (var i = 3; i < match.length; i = i + 2) {
+						var prop = match[i];
+						if (prop === undefined) {
+							break;
+						}
+						var propVal = match[i + 1]
+						ini[group].props[prop] = propVal;
+					}
+
+					if (group == 'Profile') {
+						//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
+						ini[ini[group].props.Name] = ini[group];
+						delete ini[group];
+					}
+				}
+	//			console.log('successfully read ini = ', ini);
+				return Promise.resolve(ini);
+			},
+			function(aRejectReason) {
+	//			console.error('Read ini failed');
+				return Promise.reject('Profiles.ini could not be read to memoery. ' + aRejectReason.message);
+			}
+		);
+	} catch (ex) {
+		console.error('Promise Rejected `readIni` - ', ex);
+		return Promise.reject('Promise Rejected `readIni` - ' + ex);
+	}
 }
 
 function writeIni() {
-	var writeStr = [];
-	var profileI = -1;
-	for (var p in ini) {
+//is promise
+	try {
+		var writeStr = [];
+		var profileI = -1;
+		for (var p in ini) {
 
 
-		if ('num' in ini[p]) {
-			//is profile
-			profileI++; //because we init profileI at -1
-			var group = 'Profile' + profileI;
-			if (ini[p].num != profileI) {
-//				console.log('profile I of profile changed from ' + ini[p].num + ' to ' + profileI + ' the object from ini read is =', ini[p]);
+			if ('num' in ini[p]) {
+				//is profile
+				profileI++; //because we init profileI at -1
+				var group = 'Profile' + profileI;
+				if (ini[p].num != profileI) {
+	//				console.log('profile I of profile changed from ' + ini[p].num + ' to ' + profileI + ' the object from ini read is =', ini[p]);
+				}
+			} else {
+				var group = p;
 			}
-		} else {
-			var group = p;
+
+			writeStr.push('[' + group + ']');
+
+			for (var p2 in ini[p].props) {
+				writeStr.push(p2 + '=' + ini[p].props[p2]);
+			}
+
+			writeStr.push('');
 		}
 
-		writeStr.push('[' + group + ']');
+		writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
 
-		for (var p2 in ini[p].props) {
-			writeStr.push(p2 + '=' + ini[p].props[p2]);
+		if (!encoder) {
+			encoder = new TextEncoder(); // This encoder can be reused for several writes
 		}
-
-		writeStr.push('');
+		
+		let BufferArray = encoder.encode(writeStr.join('\n')); // Convert the text to an array
+		let promise = OS.File.writeAtomic(pathProfilesIni, BufferArray, // Write the array atomically to "file.txt", using as temporary
+			{
+				tmpPath: pathProfilesIni + '.profilist.tmp'
+			}); // buffer "file.txt.tmp".
+		return promise.then(
+			function() {
+				return Promise.resolve('writeAtomic complete');
+			},
+			function(aRejectReason) {
+	//			console.error('writeIni failed');
+				return Promise.reject('Profiles.ini could not be be written to disk. ' + aRejectReason.message);
+			}
+		);
+	} catch(ex) {
+		console.error('Promise Rejected `writeIni` - ', ex);
+		return Promise.reject('Promise Rejected `writeIni` - ' + ex);
 	}
-
-	writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
-
-	if (!encoder) {
-		encoder = new TextEncoder(); // This encoder can be reused for several writes
-	}
-	
-	let BufferArray = encoder.encode(writeStr.join('\n')); // Convert the text to an array
-	let promise = OS.File.writeAtomic(pathProfilesIni, BufferArray, // Write the array atomically to "file.txt", using as temporary
-		{
-			tmpPath: pathProfilesIni + '.profilist.tmp'
-		}); // buffer "file.txt.tmp".
-	promise.then(
-		function() {},
-		function(aRejectReason) {
-//			console.error('writeIni failed');
-			return new Error('Profiles.ini could not be be written to disk. ' + aRejectReason.message);
-		}
-	);
-	return promise;
 }
 /*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
 var kSaltTable = [
@@ -167,409 +178,473 @@ function saltName(aName) {
 }
 /*end - salt generator*/
 function createProfile(refreshIni, profName) {
-	//refreshIni is 0,1 or programmatically 2
-	if (refreshIni == 1) {
-		var promise = readIni();
-		promise.then(
-			function() {
-//				console.log('now that ini read it will now createProfile with name = ' + profName);
-				return createProfile(2, profName);
-			},
-			function(aRejectReason) {
-//				console.error('Failed to refresh ini object from file during renameProfile');
-				return new Error(aRejectReason.message);
-			}
-		);
-		return promise;
-	} else {
-//		console.log('in createProfile create part');
-		if (profName in ini) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
-			return Promise.reject(new Error('Cannot create profile with name "' + newName + '" because this name is already taken by another profile.'));
-		}
-		//create folder in root dir (in it, one file "times.json" with contents:
-		/*
-		{
-		"created": 1395861287491
-		}
-
-		*/
-		//todo: im curious i should ask at ask.m.o how come when profile is custom driectory, a folder in local path is not created, of course the one to the custom path will be root. b ut why not make a local folder? like is done for IsRelative createds?
-		//create folder in local dir if root dir is different (this one is empty)
-		//add to profiles ini
-		//check if profile exists first
-		var numProfiles = profToolkit.profileCount; //Object.keys(ini) - 1;
-		var dirName = saltName(profName);
-		
-		//get relative path
-		var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
-		var IniPathStr = FileUtils.getFile('DefProfRt', [dirName]);
-		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
-		//end get relative path
-		
-		ini[profName] = {
-			num: numProfiles,
-			props: {
-				Name: profName,
-				IsRelative: 1,
-				Path: PathToWriteToIni
-			}
-		}
-//		console.log('created ini entry for profName', ini[profName]);
-
-		var rootPathDefaultDirName = OS.Path.join(profToolkit.rootPathDefault, dirName);
-		var localPathDefaultDirName = OS.Path.join(profToolkit.localPathDefault, dirName);
-//		console.log('rootPathDefaultDirName=',rootPathDefaultDirName);
-//		console.log('localPathDefaultDirName=',localPathDefaultDirName);
-		
-		var profilesIniUpdateDone;
-		var rootDirMakeDirDone;
-		var localDirMakeDirDone;
-		var checkReadyAndLaunch = function() {
-			if (!profilesIniUpdateDone) {
-//				console.warn('profiles ini update not yet done');
-			}
-			if (!rootDirMakeDirDone) {
-//				console.warn('root dir not yet made');
-			}
-			if (profToolkit.rootPathDefault == profToolkit.localPathDefault) {
-				localDirMakeDirDone = true; //i dont have to check if rootDirMakeDirDone to set this to true, because when both paths are same we dont make a local dir
-			}
-			if (!localDirMakeDirDone) {
-//				console.warn('local dir not yet made');
-			}
-			if (profilesIniUpdateDone && rootDirMakeDirDone && localDirMakeDirDone) {
-				myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Creating Profile', 'Default Name: "' + profName + '"', false, null, null, 'Profilist');
-				launchProfile(null, profName, 1, self.aData.installPath.path);
-//				console.log('profile launched and now updating prof toolkit with refreshIni 1');
-				return updateProfToolkit(1, 1);
-			}
-		}
-//		console.log('starting promise for make root dir');
-		var PromiseAllArr = [];
-		var promise = OS.File.makeDir(rootPathDefaultDirName);
-		promise.then(
-			function() {
-//				console.log('successfully created root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
-				if (!encoder) {
-					encoder = new TextEncoder(); // This encoder can be reused for several writes
+//is promise
+	try {
+		//refreshIni is 0,1 or programmatically 2
+		if (refreshIni == 1) {
+			var promise = readIni();
+			return promise.then(
+				function() {
+	//				console.log('now that ini read it will now createProfile with name = ' + profName);
+					return createProfile(2, profName);
+				},
+				function(aRejectReason) {
+	//				console.error('Failed to refresh ini object from file during renameProfile');
+					return Promise.reject(aRejectReason.message);
 				}
+			);
+		} else {
+	//		console.log('in createProfile create part');
+			if (profName in ini) {
+				//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
+				return Promise.reject('Cannot create profile with name "' + newName + '" because this name is already taken by another profile.');
+			}
+			//create folder in root dir (in it, one file "times.json" with contents:
+			/*
+			{
+			"created": 1395861287491
+			}
+
+			*/
+			//todo: im curious i should ask at ask.m.o how come when profile is custom driectory, a folder in local path is not created, of course the one to the custom path will be root. b ut why not make a local folder? like is done for IsRelative createds?
+			//create folder in local dir if root dir is different (this one is empty)
+			//add to profiles ini
+			//check if profile exists first
+			var numProfiles = profToolkit.profileCount; //Object.keys(ini) - 1;
+			var dirName = saltName(profName);
+			
+			//get relative path
+			var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
+			var IniPathStr = FileUtils.getFile('DefProfRt', [dirName]);
+			var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
+			//end get relative path
+			
+			ini[profName] = {
+				num: numProfiles,
+				props: {
+					Name: profName,
+					IsRelative: 1,
+					Path: PathToWriteToIni
+				}
+			}
+	//		console.log('created ini entry for profName', ini[profName]);
+
+			var rootPathDefaultDirName = OS.Path.join(profToolkit.rootPathDefault, dirName);
+			var localPathDefaultDirName = OS.Path.join(profToolkit.localPathDefault, dirName);
+	//		console.log('rootPathDefaultDirName=',rootPathDefaultDirName);
+	//		console.log('localPathDefaultDirName=',localPathDefaultDirName);
+			/*
+			var profilesIniUpdateDone;
+			var rootDirMakeDirDone;
+			var localDirMakeDirDone;
+			var checkReadyAndLaunch = function() {
+				if (!profilesIniUpdateDone) {
+	//				console.warn('profiles ini update not yet done');
+				}
+				if (!rootDirMakeDirDone) {
+	//				console.warn('root dir not yet made');
+				}
+				if (profToolkit.rootPathDefault == profToolkit.localPathDefault) {
+					localDirMakeDirDone = true; //i dont have to check if rootDirMakeDirDone to set this to true, because when both paths are same we dont make a local dir
+				}
+				if (!localDirMakeDirDone) {
+	//				console.warn('local dir not yet made');
+				}
+				if (profilesIniUpdateDone && rootDirMakeDirDone && localDirMakeDirDone) {
+					myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Creating Profile', 'Default Name: "' + profName + '"', false, null, null, 'Profilist');
+					launchProfile(null, profName, 1, self.aData.installPath.path);
+	//				console.log('profile launched and now updating prof toolkit with refreshIni 1');
+					return updateProfToolkit(1, 1);
+				}
+			}
+			*/
+	//		console.log('starting promise for make root dir');
+			var PromiseAllArr = [];
+			var promise = OS.File.makeDir(rootPathDefaultDirName);
+			promise.then(
+				function() {
+	//				console.log('successfully created root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
+					if (!encoder) {
+						encoder = new TextEncoder(); // This encoder can be reused for several writes
+					}
 					let BufferArray = encoder.encode('{\n"created": ' + new Date().getTime() + '}\n');
 					let promise3 = OS.File.writeAtomic(OS.Path.join(rootPathDefaultDirName, 'times.json'), BufferArray,
 						{
 							tmpPath: OS.Path.join(rootPathDefaultDirName, 'times.json') + '.profilist.tmp'
 						}
 					);
-					promise3.then(
+					return promise3.then(
 						function() {
 //							console.log('succesfully created times.json for profName of ' + profName + ' path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
-							rootDirMakeDirDone = true;
-							checkReadyAndLaunch();
+							//rootDirMakeDirDone = true;
+							//checkReadyAndLaunch();
+							return Promise.resolve('succesfully created rootPathDefaultDirName and times.json');
 						},
 						function() {
 //							console.error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
-							return new Error('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
+							return Promise.reject('FAILED creating times.json for profName of ' + profName + ' failed times.json path is = ' + OS.Path.join(rootPathDefaultDirName, 'times.json'));
 						}
 					);
-					return promise3;
-			},
-			function() {
-//				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
-				return new Error('FAILED to create root dir for profile ' + profName + ' the path is = ' + rootPathDefaultDirName);
-			}
-		);
-		PromiseAllArr.push(promise);
-		if (profToolkit.rootPathDefault != profToolkit.localPathDefault) {
-			var promise2 = OS.File.makeDir(localPathDefaultDirName);
-			promise2.then(
-				function() {
-//					console.log('successfully created local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
-					localDirMakeDirDone = true;
-					checkReadyAndLaunch();
 				},
 				function() {
-//					console.error('FAILED to create local dir for profile "' + profName + '" the path is = ', localPathDefaultDirName);
-					return new Error('FAILED to create local dir for profile "' + profName + '" the path is = ' + localPathDefaultDirName);
+	//				console.error('FAILED to create root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
+					return Promise.reject('FAILED to create root dir for profile ' + profName + ' the path is = ' + rootPathDefaultDirName);
 				}
 			);
-			PromiseAllArr.push(promise2);
-		}
-		var promise4 = writeIni();
-		promise4.then(
-			function() {
-//				console.log('SUCCESS on updating ini with new profile');
-				profilesIniUpdateDone = true;
-				checkReadyAndLaunch();
-			},
-			function() {
-//				console.log('updating ini with newly created profile failed');
-				return new Error('updating ini with newly created profile failed');
+			PromiseAllArr.push(promise);
+			if (profToolkit.rootPathDefault != profToolkit.localPathDefault) {
+				var promise2 = OS.File.makeDir(localPathDefaultDirName);
+				promise2.then(
+					function() {
+	//					console.log('successfully created local dir for profile ' + profName + ' the path is = ', localPathDefaultDirName);
+						//localDirMakeDirDone = true;
+						//checkReadyAndLaunch();
+						return Promise.resolve('localPathDefaultDirName made');
+					},
+					function() {
+	//					console.error('FAILED to create local dir for profile "' + profName + '" the path is = ', localPathDefaultDirName);
+						return Promise.reject('FAILED to create local dir for profile "' + profName + '" the path is = ' + localPathDefaultDirName);
+					}
+				);
+				PromiseAllArr.push(promise2);
 			}
-		);
-		PromiseAllArr.push(promise4);
-		
-		return Promise.all(PromiseAllArr);
-		//see here: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js
-		
-/*
-29     var dirService = C["@mozilla.org/file/directory_service;1"].getService(I.nsIProperties);
-30     gDefaultProfileParent = dirService.get("DefProfRt", I.nsIFile);
-73   var defaultProfileDir = gDefaultProfileParent.clone();
-74   defaultProfileDir.append(saltName(document.getElementById("profileName").value));
-75   gProfileRoot = defaultProfileDir;
-*/
+			var promise4 = writeIni();
+			promise4.then(
+				function() {
+	//				console.log('SUCCESS on updating ini with new profile');
+					//profilesIniUpdateDone = true;
+					//checkReadyAndLaunch();
+					return Promise.resolve('writeIni success');
+				},
+				function() {
+	//				console.log('updating ini with newly created profile failed');
+					return Promise.reject('updating ini with newly created profile failed');
+				}
+			);
+			PromiseAllArr.push(promise4);
+			
+			return Promise.all(PromiseAllArr).then(
+				function onSuc(aDat) {
+					//checkReadyAndLaunch();
+					myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Creating Profile', 'Default Name: "' + profName + '"', false, null, null, 'Profilist');
+					launchProfile(null, profName, 1, self.aData.installPath.path);
+	//				console.log('profile launched and now updating prof toolkit with refreshIni 1');
+					return updateProfToolkit(1, 1).then(
+						function() {
+							return Promise.resolve('updateProfToolkit success');
+						},
+						function() {
+							return Promise.reject('updateProfToolkit failed');
+						}
+					);
+				},
+				function onRej(aReas) {
+					console.error('PromiseAllArr of failed:', aReas);
+					return Promise.reject('PromiseAllArr of failed:' + aReas);
+				}
+			);
+			//see here: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js
+			
+	/*
+	29     var dirService = C["@mozilla.org/file/directory_service;1"].getService(I.nsIProperties);
+	30     gDefaultProfileParent = dirService.get("DefProfRt", I.nsIFile);
+	73   var defaultProfileDir = gDefaultProfileParent.clone();
+	74   defaultProfileDir.append(saltName(document.getElementById("profileName").value));
+	75   gProfileRoot = defaultProfileDir;
+	*/
 
-		//see here for internal: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/profileSelection.js#139
-		//actually see here for internal: http://mxr.mozilla.org/mozilla-central/source/toolkit/profile/nsToolkitProfileService.cpp#699
-		
+			//see here for internal: http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/profileSelection.js#139
+			//actually see here for internal: http://mxr.mozilla.org/mozilla-central/source/toolkit/profile/nsToolkitProfileService.cpp#699
+			
+		}
+	} catch(ex) {
+		console.error('Promise Rejected `createProfile` - ', ex);
+		return Promise.reject('Promise Rejected `createProfile` - ' + ex);
 	}
 }
 
 function renameProfile(refreshIni, profName, newName) {
-	//refreshIni is 0,1 or programmatically 2
-	if (refreshIni == 1) {
-		var promise = readIni();
-		return promise.then(
-			function() {
-//				console.log('starting programattic rename');
-				return renameProfile(2, profName, newName);
-			},
-			function(aRejectReason) {
-//				console.error('Failed to refresh ini object from file during renameProfile');
-				return new Error(aRejectReason.message);
+	try {
+		//refreshIni is 0,1 or programmatically 2
+		if (refreshIni == 1) {
+			var promise = readIni();
+			return promise.then(
+				function() {
+	//				console.log('starting programattic rename');
+					return renameProfile(2, profName, newName);
+				},
+				function(aRejectReason) {
+	//				console.error('Failed to refresh ini object from file during renameProfile');
+					return Promise.reject(aRejectReason.message);
+				}
+			);
+		} else {
+			//check if name is taken
+			if (profName in ini == false) {
+				Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
+				return Promise.reject('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.');
 			}
-		);
-	} else {
-		//check if name is taken
-		if (profName in ini == false) {
-			Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'Cannot find this profile name, "' + profName + '" so cannot rename it.');
-			return Promise.reject(new Error('Cannot find profile name, "' + profName + '", in Profiles.ini in memory.'));
+			if (newName in ini) {
+	//			console.error('Profile name of "' + newName + '" is already taken.');
+				//Services.prompt.alert(null, self.name + ' - ' + 'Rename Error', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
+	//			console.error('Profile name of "' + newName + '" is already taken.');
+	//			console.log('got to this pre line');
+				throw new Error('Cannot rename this profile to "' + newName + '" because this name is already taken by another profile.');
+	//			console.log('got to this post line');
+			}
+			ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
+			/* for (var i=0; i<stackDOMJson.length; i++) { // no longer do this block because what if renamed from another profile, it wont catch it then
+				if (stackDOMJson[i].props.profpath == ini[profName].props.Path) {
+					stackDOMJson[i].label = newName;
+					break;
+				}
+			} */
+			var promise = writeIni();
+			return promise.then(
+				function() {
+	//				console.log('successfully edited name of ' + profName + ' to ' + newName + ' in Profiles.ini now refrehsing it');
+					return updateProfToolkit(1, 1).then(
+						function() {
+							return Promise.resolve('updateProfToolkit success');
+						},
+						function() {
+							return Promise.reject('updateProfToolkit failed');
+						}
+					);
+				},
+				function() {
+	//				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+					return Promise.reject('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
+				}
+			);
 		}
-		if (newName in ini) {
-//			console.error('Profile name of "' + newName + '" is already taken.');
-			//Services.prompt.alert(null, self.name + ' - ' + 'Rename Error', 'Cannot rename to "' + newName + '" because this name is already taken by another profile.');
-//			console.error('Profile name of "' + newName + '" is already taken.');
-//			console.log('got to this pre line');
-			throw new Error('Cannot rename this profile to "' + newName + '" because this name is already taken by another profile.');
-//			console.log('got to this post line');
-		}
-		ini[profName].props.Name = newName; //NOTE: LEARNED: learned something about self programming, no need to delete ini[profName] and create ini[newName] because when writeIni it doesn't use the key, the key is just for my convenience use in programming
-		/* for (var i=0; i<stackDOMJson.length; i++) { // no longer do this block because what if renamed from another profile, it wont catch it then
-			if (stackDOMJson[i].props.profpath == ini[profName].props.Path) {
-				stackDOMJson[i].label = newName;
-				break;
-			}
-		} */
-		var promise = writeIni();
-		promise.then(
-			function() {
-//				console.log('successfully edited name of ' + profName + ' to ' + newName + ' in Profiles.ini now refrehsing it');
-				return updateProfToolkit(1, 1);
-			},
-			function() {
-//				console.error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
-				return new Error('FAILED to edit name of ' + profName + ' to ' + newName + ' in Profiles.ini');
-			}
-		);
-		
-		return promise;
+	} catch(ex) {
+		console.error('Promise Rejected `renameProfile` - ', ex);
+		return Promise.reject('Promise Rejected `renameProfile` - ' + ex);
 	}
-	
 	
 }
 
 function deleteProfile(refreshIni, profName) {
-	//refreshIni is 0,1 or programmatically 2
-//start check if profile in use
-	if (profName == profToolkit.selectedProfile.name) {
-		//cannot delete profile that is in use
-		//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-		return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
-	} else {
-		if (!(profName in ini)) {
-			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" could not be found in Profiles.ini in memory so could not delete.');
-			return Promise.reject(new Error('The profile "' + profName + '" could not be found in Profiles.ini in memory.'));
-		}
+	try {
+		//refreshIni is 0,1 or programmatically 2
+	//start check if profile in use
+		if (profName == profToolkit.selectedProfile.name) {
+			//cannot delete profile that is in use
+			//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+			return Promise.reject('The profile, "' + profName + '", is currently in use.');
+		} else {
+			if (!(profName in ini)) {
+				//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" could not be found in Profiles.ini in memory so could not delete.');
+				return Promise.reject('The profile "' + profName + '" could not be found in Profiles.ini in memory.');
+			}
 
-//		 console.log('found profile name in ini it is == ', ini[profName]);
+	//		 console.log('found profile name in ini it is == ', ini[profName]);
 
-	 }
-//end check if profile in use	 
-	if (refreshIni == 1) {
-		var promise = readIni();
-		return promise.then(
-			function() {
-				return deleteProfile(2, profName);
-			},
-			function(aRejectReason) {
-//				console.error('Failed to refresh ini object from file on deleteProfile');
-				return new Error(aRejectReason.message);
-			}
-		);
-	} else {
-		//check if profile is in use and get the PathRootDir and PathLocalDir
-		 if (ini[profName].props.IsRelative == '1') {
-			var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
-//			console.info('dirname of this profile is = ', dirName);
-			var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
-			var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
-			
-			var aDirect = new FileUtils.File(PathRootDir);
-			if (!aDirect.exists()){
-				aDirect = null;
-//				console.warn('Could not find the root profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathRootDir);
-				//return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
-			}			
-			var aTemp = new FileUtils.File(PathLocalDir);
-			if (!aTemp.exists()){
-				aTemp = null;
-//				console.warn('Could not find the local profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathLocalDir);
-				//return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
-			}
-		 } else {
-			var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
-			if (!aDirect.exists()){
-				aDirect = null;
-//				console.warn('Could not find the profile directory at path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + ini[profName].props.Path);
-				//return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
-			} else {
-				var aTemp = aDirect;
-			}
 		 }
-		 if (aDirect !== null) {
-			 try {
-				 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
-				 //if it gets to this line then the profile was not in use as it was succesfully locked
-				 locker.unlock(); //its not in use so lets unlock the profile
-//				 console.log('continue as profile is not in use');
-			 } catch (ex) {
-				if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
-//					console.warn('PROFILE IS IN USE');
-					//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-					return Promise.reject(new Error('The profile, "' + profName + '", is currently in use.'));
+	//end check if profile in use	 
+		if (refreshIni == 1) {
+			var promise = readIni();
+			return promise.then(
+				function() {
+					return deleteProfile(2, profName);
+				},
+				function(aRejectReason) {
+	//				console.error('Failed to refresh ini object from file on deleteProfile');
+					return Promise.reject(aRejectReason.message);
+				}
+			);
+		} else {
+			//check if profile is in use and get the PathRootDir and PathLocalDir
+			 if (ini[profName].props.IsRelative == '1') {
+				var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
+	//			console.info('dirname of this profile is = ', dirName);
+				var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
+				var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
+				
+				var aDirect = new FileUtils.File(PathRootDir);
+				if (!aDirect.exists()){
+					aDirect = null;
+	//				console.warn('Could not find the root profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathRootDir);
+					//return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
+				}			
+				var aTemp = new FileUtils.File(PathLocalDir);
+				if (!aTemp.exists()){
+					aTemp = null;
+	//				console.warn('Could not find the local profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathLocalDir);
+					//return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
+				}
+			 } else {
+				var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
+				if (!aDirect.exists()){
+					aDirect = null;
+	//				console.warn('Could not find the profile directory at path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + ini[profName].props.Path);
+					//return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
 				} else {
-					//throw ex;
-//					console.log('ex happend = ', ex);
-//					console.log('ex.result = ', ex.result);
-					return Promise.reject(new Error('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message));
+					var aTemp = aDirect;
 				}
 			 }
-		 } else {
-//		 	console.warn('aDirect doesnt exist so assuming profile is not in use, its gotta be impossible to be in use if aDirect doesnt exist')
-		 }
-		 //end - check if profile is in use and get the PathRootDir and PathLocalDir
-		var done = {
-			ini: false,
-			root: false,
-			local: false
-		}
-		var checkReadyAndUpdateStack = function () {
-			if (!done.ini) {
-//				console.log('ini not yet updated');
-			}
-			if (!done.ini) {
-//				console.log('root dir not yet deleted');
-			}
-			if (PathRootDir == PathLocalDir) {
-				done.local = true;
-			}
-			if (!done.local) {
-//				console.log('local dir not yet deleted');
-			}
-			
-			for (var p in done) {
-				if (!done[p]) {
-					return;
-				}
-			}
-//			console.log('ALLLL done so updateProfToolkit');
-			updateProfToolkit(1, 1);
-		}
-		var PromiseAllArr = [];
-		if (ini[profName].props.IsRelative == '1') {
-			
-			if (aDirect !== null) {
-//				console.log('now removing PathRootDir', PathRootDir);
-				var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
-				promise.then(
-					function() {
-//						console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
-						done.root = true;
-						checkReadyAndUpdateStack();
-					},
-					function(aRejectReason) {
-//						console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
-						return new Error('FAILED to remove PathRootDir for profName of ' + profName);
+			 if (aDirect !== null) {
+				 try {
+					 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
+					 //if it gets to this line then the profile was not in use as it was succesfully locked
+					 locker.unlock(); //its not in use so lets unlock the profile
+	//				 console.log('continue as profile is not in use');
+				 } catch (ex) {
+					if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
+	//					console.warn('PROFILE IS IN USE');
+						//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
+						return Promise.reject('The profile, "' + profName + '", is currently in use.');
+					} else {
+						//throw ex;
+	//					console.log('ex happend = ', ex);
+	//					console.log('ex.result = ', ex.result);
+						return Promise.reject('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message);
 					}
-				);
-				PromiseAllArr.push(promise);
-			} else {
-//				console.warn('no need to try to delete PathRootDir as it doesnt exist');
-				done.root = true;
+				 }
+			 } else {
+	//		 	console.warn('aDirect doesnt exist so assuming profile is not in use, its gotta be impossible to be in use if aDirect doesnt exist')
+			 }
+			 //end - check if profile is in use and get the PathRootDir and PathLocalDir
+			/*
+			var done = {
+				ini: false,
+				root: false,
+				local: false
 			}
-			if (PathRootDir != PathLocalDir) {
-				if (aTemp !== null) {
-//					console.log('now removing PathLocalDir', PathLocalDir);
-					var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
-					promise2.then(
-						function() {
-//							console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
-							done.local = true;
-							checkReadyAndUpdateStack();
-						},
-						function(aRejectReason) {
-//							console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
-							return new Error('FAILED to remove PathLocalDir for profName of ' + profName);
-						}
-					);
-					PromiseAllArr.push(promise2);
-				} else {
-//					console.warn('no need to try to delete PathLocalDir as it doesnt exist');
+			var checkReadyAndUpdateStack = function () {
+				if (!done.ini) {
+	//				console.log('ini not yet updated');
+				}
+				if (!done.ini) {
+	//				console.log('root dir not yet deleted');
+				}
+				if (PathRootDir == PathLocalDir) {
 					done.local = true;
 				}
-			} else {
-//				console.warn('PathRootDir == PathLocalDir so just assume its been deleted')
-				done.local = true;
-			}
-		} else {
-			if (aDirect !== null) {
-				var Path = ini[profName].props.Path;
-				var promise = OS.File.removeDir(Path);
-				promise.then(
-					function() {
-//						console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
-						done.root = true;
-						done.local = true;
-						checkReadyAndUpdateStack();
-					},
-					function() {
-//						console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
-						return new Error('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+				if (!done.local) {
+	//				console.log('local dir not yet deleted');
+				}
+				
+				for (var p in done) {
+					if (!done[p]) {
+						return;
 					}
-				);
-				PromiseAllArr.push(promise);
+				}
+	//			console.log('ALLLL done so updateProfToolkit');
+				updateProfToolkit(1, 1);
+			}
+			*/
+			var PromiseAllArr = [];
+			if (ini[profName].props.IsRelative == '1') {
+				
+				if (aDirect !== null) {
+	//				console.log('now removing PathRootDir', PathRootDir);
+					var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
+					promise.then(
+						function() {
+	//						console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+							//done.root = true;
+							//checkReadyAndUpdateStack();
+							return Promise.resolve('PathRootDir deleted');
+						},
+						function(aRejectReason) {
+	//						console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
+							return Promise.reject('FAILED to remove PathRootDir for profName of ' + profName);
+						}
+					);
+					PromiseAllArr.push(promise);
+				}// else {
+	//				console.warn('no need to try to delete PathRootDir as it doesnt exist');
+				//	done.root = true;
+				//}
+				if (PathRootDir != PathLocalDir) {
+					if (aTemp !== null) {
+	//					console.log('now removing PathLocalDir', PathLocalDir);
+						var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
+						promise2.then(
+							function() {
+	//							console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+								//done.local = true;
+								//checkReadyAndUpdateStack();
+								return Promise.resolve('PathLocalDir deleted');
+							},
+							function(aRejectReason) {
+	//							console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
+								return Promise.reject('FAILED to remove PathLocalDir for profName of ' + profName);
+							}
+						);
+						PromiseAllArr.push(promise2);
+					}// else {
+	//					console.warn('no need to try to delete PathLocalDir as it doesnt exist');
+						//done.local = true;
+					//}
+				}// else {
+	//				console.warn('PathRootDir == PathLocalDir so just assume its been deleted')
+				//	done.local = true;
+				//}
 			} else {
-//				console.warn('no need to try to delete as it doesnt exist, is not relative so local == root');
-				done.root = true;
-				done.local = true;
+				if (aDirect !== null) {
+					var Path = ini[profName].props.Path;
+					var promise = OS.File.removeDir(Path);
+					promise.then(
+						function() {
+	//						console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
+							//done.root = true;
+							//done.local = true;
+							//checkReadyAndUpdateStack();
+							return Promise.resolve('removeDir success');
+						},
+						function() {
+	//						console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+							return Promise.reject('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+						}
+					);
+					PromiseAllArr.push(promise);
+				}// else {
+	//				console.warn('no need to try to delete as it doesnt exist, is not relative so local == root');
+					//done.root = true;
+					//done.local = true;
+				//}
 			}
+			
+			delete ini[profName];
+			var promise0 = writeIni();
+			promise0.then(
+				function() {
+	//				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
+					//done.ini = true;
+					//checkReadyAndUpdateStack();
+					return Promise.resolve('promise0=suc');
+				},
+				function() {
+	//				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+					return Promise.reject('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+				}
+			);
+			PromiseAllArr.push(promise0);
+			
+			return Promise.all(PromiseAllArr).then(
+				function(aDat) {
+					console.log('ALLLL done so updateProfToolkit');
+					return updateProfToolkit(1, 1).then(
+						function() {
+							return Promise.resolve('updateProfToolkit success');
+						},
+						function() {
+							return Promise.reject('updateProfToolkit failed');
+						}
+					);
+				},
+				function onRej(aReas) {
+					console.error('Promise Rejected - `PromiseAllArr`:', aReas);
+					return Promise.reject('Promise Rejected - `PromiseAllArr`:' + aReas);
+				}
+			);
 		}
-		delete ini[profName];
-		var promise0 = writeIni();
-		promise0.then(
-			function() {
-//				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
-				done.ini = true;
-				checkReadyAndUpdateStack();
-			},
-			function() {
-//				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
-				return new Error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
-			}
-		);
-		PromiseAllArr.push(promise0);
-		
-		return Promise.all(PromiseAllArr);
+	} catch(ex) {
+		console.error('Promise Rejected `renameProfile` - ', ex);
+		return Promise.reject('Promise Rejected `renameProfile` - ' + ex);
 	}
 }
 function initProfToolkit() {
@@ -680,114 +755,135 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		}
 
 		//win.setTimeout(function() { updateProfToolkit(updateIni, 1, win); }, 5000); //was testing to see how it handles when os.file takes long time to read
-		updateProfToolkit(updateIni, 1, win)
+		updateProfToolkit(updateIni, 1, win).then(
+			function() {
+				return Promise.resolve('updateProfToolkit success');
+			},
+			function() {
+				return Promise.reject('updateProfToolkit failed');
+			}
+		);
 
 }
 
 function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
-	if (refreshIni == 1) {
-		var promise = readIni();
-		promise.then(
-			function() {
-				updateProfToolkit(0, refreshStack);
-			},
-			function(aRejectReason) {
-//				console.error('Failed to refresh ini object from file on deleteProfile');
-				return new Error(aRejectReason.message);
+//is promise
+	try {
+		if (refreshIni == 1) {
+			var promise = readIni();
+			return promise.then(
+				function() {
+					return updateProfToolkit(0, refreshStack).then(
+						function() {
+							return Promise.resolve('updateProfToolkit success');
+						},
+						function() {
+							return Promise.reject('updateProfToolkit failed');
+						}
+					);
+				},
+				function(aRejectReason) {
+	//				console.error('Failed to refresh ini object from file on deleteProfile');
+					return Promise.reject(aRejectReason.message);
+				}
+			);
+		} else {
+			if (profToolkit.rootPathDefault === 0) {
+	//			console.log('initing prof toolkit');
+				if (refreshStack !== 0) {
+					refreshStack = true;
+				}
+	//			console.log('initing prof toolkit');
+				initProfToolkit();
+	//			console.log('init done');
 			}
-		);
-		return promise;
-	} else {
-		if (profToolkit.rootPathDefault === 0) {
-//			console.log('initing prof toolkit');
-			if (refreshStack !== 0) {
-				refreshStack = true;
-			}
-//			console.log('initing prof toolkit');
-			initProfToolkit();
-//			console.log('init done');
-		}
-		var profileCount = 0;
-		profToolkit.profiles = {};
-		var selectedProfileNameFound = false;
-		var pathsInIni = [];
-		for (var p in ini) {
-			if ('num' in ini[p]) {
-				profileCount++;
-				pathsInIni.push(ini[p].props.Path);
-			}
-			if (!selectedProfileNameFound && profToolkit.selectedProfile.name !== 0 && ini[p].Name == profToolkit.selectedProfile.name) {
-				selectedProfileNameFound = true;
-			}
-		}
-		profToolkit.profileCount = profileCount;
-		profToolkit.pathsInIni = pathsInIni;
-		
-//		console.info('profToolkit.selectedProfile.name = ', profToolkit.selectedProfile.name);
-//		console.info('selectedProfileNameFound = ', selectedProfileNameFound);
-
-		if (!selectedProfileNameFound) {
-//			console.log('looking for selectedProfile name');
+			var profileCount = 0;
+			profToolkit.profiles = {};
+			var selectedProfileNameFound = false;
+			var pathsInIni = [];
 			for (var p in ini) {
-				if (!('IsRelative' in ini[p].props)) {
-//					console.warn('skipping ini[p] because no IsRelative prop', 'ini[p]=', ini[p], 'p=', p)
-					continue;
+				if ('num' in ini[p]) {
+					profileCount++;
+					pathsInIni.push(ini[p].props.Path);
 				}
-				if (ini[p].props.IsRelative == '1') {
-//					console.log('ini[p] is relative',ini[p]);
-					var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].props.Path));
-					
-//					console.info('rel iniDirName=', iniDirName);
-//					console.info('rel profToolkit.selectedProfile.rootDirName=', profToolkit.selectedProfile.rootDirName);
-//					console.info('rel profToolkit.selectedProfile.localDirName=', profToolkit.selectedProfile.localDirName);
+				if (!selectedProfileNameFound && profToolkit.selectedProfile.name !== 0 && ini[p].Name == profToolkit.selectedProfile.name) {
+					selectedProfileNameFound = true;
+				}
+			}
+			profToolkit.profileCount = profileCount;
+			profToolkit.pathsInIni = pathsInIni;
+			
+	//		console.info('profToolkit.selectedProfile.name = ', profToolkit.selectedProfile.name);
+	//		console.info('selectedProfileNameFound = ', selectedProfileNameFound);
 
-					if (iniDirName == profToolkit.selectedProfile.rootDirName) {
-//						console.log('iniDirName matches profToolkit.selectedProfile.rootDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].props.Name;
-						break;
+			if (!selectedProfileNameFound) {
+	//			console.log('looking for selectedProfile name');
+				for (var p in ini) {
+					if (!('IsRelative' in ini[p].props)) {
+	//					console.warn('skipping ini[p] because no IsRelative prop', 'ini[p]=', ini[p], 'p=', p)
+						continue;
 					}
-					if (iniDirName == profToolkit.selectedProfile.localDirName) {
-//						console.log('iniDirName matches profToolkit.selectedProfile.localDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].props.Name;
-						break;
-					}
-				} else {
-//					console.log('ini[p] is absolute',ini[p]);
-//					console.info('abs ini[p].props.Path=', ini[p].props.Path);
-//					console.info('abs profToolkit.selectedProfile.rootDirPath=', profToolkit.selectedProfile.rootDirPath);
-//					console.info('abs profToolkit.selectedProfile.localDirPath=', profToolkit.selectedProfile.localDirPath);
-					
-					if (ini[p].props.Path == profToolkit.selectedProfile.rootDirPath) {
-//						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].props.Name;
-						break;
-					}
-					if (ini[p].props.Path == profToolkit.selectedProfile.localDirPath) {
-//						console.log('ini[p].Path matches profToolkit.selectedProfile.localDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-						profToolkit.selectedProfile.name = ini[p].props.Name;
-						break;
+					if (ini[p].props.IsRelative == '1') {
+	//					console.log('ini[p] is relative',ini[p]);
+						var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].props.Path));
+						
+	//					console.info('rel iniDirName=', iniDirName);
+	//					console.info('rel profToolkit.selectedProfile.rootDirName=', profToolkit.selectedProfile.rootDirName);
+	//					console.info('rel profToolkit.selectedProfile.localDirName=', profToolkit.selectedProfile.localDirName);
+
+						if (iniDirName == profToolkit.selectedProfile.rootDirName) {
+	//						console.log('iniDirName matches profToolkit.selectedProfile.rootDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
+							profToolkit.selectedProfile.name = ini[p].props.Name;
+							break;
+						}
+						if (iniDirName == profToolkit.selectedProfile.localDirName) {
+	//						console.log('iniDirName matches profToolkit.selectedProfile.localDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
+							profToolkit.selectedProfile.name = ini[p].props.Name;
+							break;
+						}
+					} else {
+	//					console.log('ini[p] is absolute',ini[p]);
+	//					console.info('abs ini[p].props.Path=', ini[p].props.Path);
+	//					console.info('abs profToolkit.selectedProfile.rootDirPath=', profToolkit.selectedProfile.rootDirPath);
+	//					console.info('abs profToolkit.selectedProfile.localDirPath=', profToolkit.selectedProfile.localDirPath);
+						
+						if (ini[p].props.Path == profToolkit.selectedProfile.rootDirPath) {
+	//						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
+							profToolkit.selectedProfile.name = ini[p].props.Name;
+							break;
+						}
+						if (ini[p].props.Path == profToolkit.selectedProfile.localDirPath) {
+	//						console.log('ini[p].Path matches profToolkit.selectedProfile.localDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
+							profToolkit.selectedProfile.name = ini[p].props.Name;
+							break;
+						}
 					}
 				}
-			}
-			//profToolkit.selectedProfile.name = 1;
-			if (!profToolkit.selectedProfile.name) {
-//				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
-//				console.log('trying to change label')
-				var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilist-loading');
-				if (profilistLoadingT) {
-//					console.log('profilistLoadingT found')
-					profilistLoadingT.setAttribute('label', 'Temporary Profile');
-					profilistLoadingT.setAttribute('id', 'profilistTempProfile');
-					return new Error('Using Temporary Profile - Profilist will not work');
+				//profToolkit.selectedProfile.name = 1;
+				if (!profToolkit.selectedProfile.name) {
+	//				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
+	//				console.log('trying to change label')
+					var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilist-loading');
+					if (profilistLoadingT) {
+	//					console.log('profilistLoadingT found')
+						profilistLoadingT.setAttribute('label', 'Temporary Profile');
+						profilistLoadingT.setAttribute('id', 'profilistTempProfile');
+						return Promise.reject('Using Temporary Profile - Profilist will not work');
+					}
 				}
+	//			console.log('selectedProfile searching proc done');
 			}
-//			console.log('selectedProfile searching proc done');
+			
+			
+			if (refreshStack) {
+				updateStackDOMJson_basedOnToolkit(false, iDOMWindow);
+			}
+			
+			return Promise.resolve('success');
 		}
-		
-		
-		if (refreshStack) {
-			return updateStackDOMJson_basedOnToolkit(false, iDOMWindow);
-		}
+	} catch(ex) {
+		console.error('Promise Rejected `updateProfToolkit` - ', ex);
+		return Promise.reject('Promise Rejected `updateProfToolkit` - ' + ex);
 	}
 }
 
@@ -1061,8 +1157,8 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 				if (p == 'nodeToClone' || p == 'props') { continue }
 				if (p.indexOf('addEventListener') == 0) {
 					(function(elClosure, jsonIClosure, pClosure) {
-//						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
-//						console.log('elClosure label',elClosure.getAttribute('label'));
+						console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+						console.log('elClosure label',elClosure.getAttribute('label'));
 						console.info('elClosure:', elClosure);
 						elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 						//elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
@@ -1260,7 +1356,14 @@ function actuallyMakeRename(el) {
 						//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
 //						console.warn('Rename promise completed succesfully');
 						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
-						updateProfToolkit(1, 1);
+						updateProfToolkit(1, 1).then(
+							function() {
+								return Promise.resolve('updateProfToolkit success');
+							},
+							function() {
+								return Promise.reject('updateProfToolkit failed');
+							}
+						);
 					},
 					function(aRejectReason) {
 //						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ', aRejectReason);
@@ -1318,7 +1421,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 	}
 			
 	if (!found) {
-		Services.prompt.alert(null, self.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Proflie name not found in Profiles.ini in memory.');
+		Services.prompt.alert(null, self.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Profile name not found in Profiles.ini in memory.');
 //		console.info('dump of profiles = ', ini);
 		return false;
 	}
@@ -1338,7 +1441,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 function createUnnamedProfile() {
 	//creating profile with name that already exists does nothing
 	var promise = readIni();
-	promise.then(
+	return promise.then(
 		function() {
 //			console.log('now that readIni success it will do stuff');
 			for (var p in ini) {
@@ -1354,26 +1457,24 @@ function createUnnamedProfile() {
 
 //			console.log('will now createProfile with name = ', profName);
 			var promise1 = createProfile(0, profName);
-			promise1.then(
+			return promise1.then(
 				function() {
 //					console.log('createProfile promise succesfully completed');
+					return Promise.resolve('createUnnamedProfile success');
 				},
 				function(aRejectReason) {
 //					console.warn('Create profile failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
 					Services.prompt.alert(null, self.name + ' - ' + 'Create Failed', aRejectReason.message);
-					return new Error('Create Failed. ' + aRejectReason.message);
+					return Promise.reject('Create Failed. ' + aRejectReason.message);
 				}
 			);
-			return promise1;
 		},
 		function(aRejectReason) {
 //			console.error('createProfile readIni promise rejected');
 			Services.prompt.alert(null, self.name + ' - ' + 'Read Failed', aRejectReason.message);
-			return new Error('Read Failed. ' + aRejectReason.message);
+			return Promise.reject('Read Failed. ' + aRejectReason.message);
 		}
 	);
-	
-	return promise;
 }
 
 function prevHide(e) {
@@ -1458,7 +1559,7 @@ var windowListener = {
 			['xul:vbox', {id:'profilist_box'},
 				['xul:stack', {key:'profilist_stack'},
 					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
-					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
+					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
 				]
 			];
 			var referenceNodes = {};
@@ -1470,6 +1571,7 @@ var windowListener = {
 			var THIS = PanelUI.querySelector('#PanelUI-multiView');
 			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
+				console.log('entered');
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
@@ -1525,6 +1627,7 @@ var windowListener = {
 				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
+				console.log('left');
 				//commenting out this block as using services prompt for renaming right now
 				// if (aDOMWindow.ProfilistInRenameMode) {
 //					// console.log('in rename mdoe so dont close');
