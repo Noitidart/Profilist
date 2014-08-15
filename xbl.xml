@@ -18,13 +18,14 @@
     <binding id="tbb-box">
         <content>
             <toolbarbutton class="profilist-tbb" xbl:inherits="label,disabled"/>
-            <xul:box class="profilist-submenu" style="background-color:springgreen;" xbl:inherits="disabled">
+            <xul:box class="profilist-submenu" xbl:inherits="disabled">
+				<xul:image class="profilist-clone" xbl:inherits="disabled"/>
                 <xul:image class="profilist-closed" style="background-color:red;" xbl:inherits="disabled"/>
-                <xul:image class="profilist-dev-build"  xbl:inherits="disabled"/>
-                <xul:image class="profilist-dev-safe"  xbl:inherits="disabled"/>
-                <xul:image class="profilist-default"  xbl:inherits="disabled"/>
-                <xul:image class="profilist-rename"  xbl:inherits="disabled"/>
-                <xul:image class="profilist-inactive-del"  xbl:inherits="disabled"/>
+                <xul:image class="profilist-dev-build" xbl:inherits="disabled"/>
+                <xul:image class="profilist-dev-safe" xbl:inherits="disabled"/>
+                <xul:image class="profilist-default" xbl:inherits="disabled"/>
+                <xul:image class="profilist-rename" xbl:inherits="disabled"/>
+                <xul:image class="profilist-inactive-del" xbl:inherits="disabled"/>
             </xul:box>
         </content>
     </binding>

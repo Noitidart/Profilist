@@ -20,6 +20,10 @@
 -moz-box-pack: center;
 transition-property: background-color;
 }
+.profilist-tbb-box:hover {
+	background-color: hsla(210,4%,10%,.07);
+}
+
 .profilist-tbb {
 	-moz-appearance: none;
 	padding: 10px 0px 10px 15px;
@@ -36,16 +40,18 @@ transition-property: background-color;
 	-moz-image-region: rect(0px, 16px, 16px, 0px);
 	-moz-user-select: none;
 }
-.profilist-create {
-	
-}
-
 /*start - badge*/
 .profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
 	list-style-image: url('chrome://profilist/content/inactive-user.png');
 }
 .profilist-tbb-box[status='active']	.toolbarbutton-icon {
 	list-style-image: url('chrome://profilist/content/active-user.png');
+}
+.profilist-tbb-box.profilist-create .toolbarbutton-icon {
+	list-style-image: url(chrome://profilist/content/plus.png);
+}
+.profilist-tbb-box.profilist-loading .toolbarbutton-icon {
+	list-style-image: url(chrome://profilist/content/icon16.png);
 }
 
 .profilist-tbb:not([badge]) .profilist-badge {
@@ -54,9 +60,10 @@ transition-property: background-color;
 /*end - badge*/
 
 /* start submenu*/
-.profilist-tbb-box:not([status]) .profilist-submenu {
+.profilist-tbb-box:not([status]):not(.profilist-create) .profilist-submenu {
 	display:none;
 }
+
 .profilist-submenu {
 	display: flex;
 }
@@ -106,7 +113,19 @@ transition-property: background-color;
 	list-style-image: url(chrome://profilist/content/bullet_aurora.png);
 }
 .profilist-clone {
-	list-style-image: url(chrome://profilist/content/bullet_release.png);
+	display: none;
+	list-style-image: url(chrome://profilist/content/clone.png);
+}
+.profilist-create .profilist-submenu  {
+	margin-right: 10px;
+	border-radius: 50%;
+}
+.profilist-create .profilist-submenu image.profilist-clone {
+	display: block;
+	padding: 10px;
+}
+.profilist-create .profilist-submenu image:not(.profilist-clone) {
+	display: none;
 }
 /* end submenu*/
 

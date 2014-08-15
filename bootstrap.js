@@ -1167,6 +1167,8 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 		}
 		
 		if (appendChild) {
+			console.log('added tbb_box_click');
+			el.addEventListener('click', tbb_box_click, false);
 			for (var p in json[i]) {
 				if (p == 'nodeToClone' || p == 'props' || p.indexOf('addEventListener') == 0) { continue }
 				//dont add anything here that needs to be added onto the tbb, like addEventListener, because its now in xbl, the tbb gets created only after box inserted into dom
@@ -1237,7 +1239,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 						//var cTbb = profilist_box.querySelector('[identifier="' + jsonIClosure.identifier.replace(/["\\]/g, '\\$&') + '"]');
 						//console.log('cTbb', cTbb);
 						console.error(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-						cTbb.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+						//cTbb.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 					})(el, json[i], p);
 				}
 			}
@@ -1426,6 +1428,10 @@ function submitRename() {
 	
 	delete win.ProfilistInRenameMode;
 	//renameProfile(1, oldProfName, newProfName);
+}
+
+function tbb_box_click(e) {
+	console.log('tbb_box_click e.origTarg:', e.originalTarget);
 }
 
 function launchProfile(e, profName, suppressAlert, url) {
