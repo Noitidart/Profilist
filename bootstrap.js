@@ -731,13 +731,18 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		if (!PUIsync_height) {
 			PUIsync_height = PanelUI.querySelector('#profilist-loading');
 			if (!PUIsync_height) {
-				Services.wm.getMostRecentWindow(null).alert('errrror PUIsync_height is undefined and profilistLoading is not there so cannot obtain height so assuming height of 38');
+				console.error('errrror PUIsync_height is undefined and profilistLoading is not there so cannot obtain height so assuming height of 38');
 				PUIsync_height = 38;
 			} else {
+				//start debug				
+				//var computedHeight = win.getComputedStyle(el, '').height;
+				//console.log('computed PUIsync_height:', computedHeight);
+				//end debug
 				PUIsync_height = PUIsync_height.boxObject.height;
 				console.log('PUIsync_height determined to be = ', PUIsync_height);
 			}
 		}
+
 		var stack = PanelUI.querySelector('#profilist_box').childNodes[0];
 		//assume its supposed to be in collapsed state right now
 		if (collapsedheight != PUIsync_height || stack.style.height == '') {
@@ -757,10 +762,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		//win.setTimeout(function() { updateProfToolkit(updateIni, 1, win); }, 5000); //was testing to see how it handles when os.file takes long time to read
 		updateProfToolkit(updateIni, 1, win).then(
 			function() {
-				return Promise.resolve('updateProfToolkit success');
+				//return Promise.resolve('updateProfToolkit success');
 			},
 			function() {
-				return Promise.reject('updateProfToolkit failed');
+				throw new Error('updateProfToolkit failed');
 			}
 		);
 
@@ -868,6 +873,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 	//					console.log('profilistLoadingT found')
 						profilistLoadingT.setAttribute('label', 'Temporary Profile');
 						profilistLoadingT.setAttribute('id', 'profilistTempProfile');
+						profilistLoadingT.classList.add('profilist-do_not_auto_remove');
 						return Promise.reject('Using Temporary Profile - Profilist will not work');
 					}
 				}
@@ -894,8 +900,8 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 //				console.log('stackDOMJson is 0 length', stackDOMJson);
 //				console.log('profToolkit=',profToolkit);
 				stackDOMJson = [
-					{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create', addEventListener:['command',createUnnamedProfile,false], style:tbb_style},
-					{identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'profilist-tbb-box', status:'active', addEventListener:['command', makeRename, false], style:tbb_style, props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
+					{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create profilist-do_not_auto_remove', addEventListener:['click',createUnnamedProfile,false], style:tbb_style},
+					{identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'profilist-tbb-box', status:'active', addEventListener:['click', makeRename, false], style:tbb_style, props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
 				];
 				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
 				stackUpdated = true;
@@ -961,7 +967,7 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 //					console.log('splicing p = ', ini[p], 'stackDOMjson=', stackDOMJson);
 					stackUpdated = true;
 					(function(pClosure) {
-						var objToSplice = {identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'profilist-tbb-box',  status:'inactive', addEventListener:['command', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:tbb_style, props:{profpath:ini[pClosure].props.Path}};
+						var objToSplice = {identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'profilist-tbb-box',  status:'inactive', addEventListener:['click', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:tbb_style, props:{profpath:ini[pClosure].props.Path}};
 						
 						if (pClosure == profToolkit.selectedProfile.name) {
 							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
@@ -1040,7 +1046,15 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	
 	var stackChilds = stack.childNodes;
 	var identObj = {};
-	for (var i=0; i<stackChilds.length; i++) {
+	/*
+	Array.prototype.forEach.call(stackChilds, function(elC) {
+		var identifierRead = elC.getAttribute('identifier');
+		identObj[identifierRead] = elC;
+		//console.log('in forEach:', identifierRead, elC);
+		//console.log('them anons', aDOMWindow.document.getAnonymousNodes(elC));
+	});
+	*/
+ 	for (var i=0; i<stackChilds.length; i++) {
 		var identifierRead = stackChilds[i].getAttribute('identifier');
 		identObj[identifierRead] = stackChilds[i];
 	}
@@ -1154,17 +1168,8 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 		
 		if (appendChild) {
 			for (var p in json[i]) {
-				if (p == 'nodeToClone' || p == 'props') { continue }
-				if (p.indexOf('addEventListener') == 0) {
-					(function(elClosure, jsonIClosure, pClosure) {
-						console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
-						console.log('elClosure label',elClosure.getAttribute('label'));
-						console.info('elClosure:', elClosure);
-						elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-						//elClosure.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-					})(el, json[i], p);
-					continue;
-				}
+				if (p == 'nodeToClone' || p == 'props' || p.indexOf('addEventListener') == 0) { continue }
+				//dont add anything here that needs to be added onto the tbb, like addEventListener, because its now in xbl, the tbb gets created only after box inserted into dom
 				if (json[i][p] === null) {
 					el.removeAttribute(p);
 				} else {
@@ -1197,7 +1202,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 //				console.log('elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
 			}
 		}
-		el.style.height = elHeight + 'px';
+		//el.style.height = elHeight + 'px';
 //		console.log('PUIsync_height = ', PUIsync_height);
 //		console.log('el.boxObject.height = ', el.boxObject.height);
 		cumHeight += elHeight;
@@ -1216,6 +1221,25 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 				stack.insertBefore(el, stack.firstChild);
 			} else {
 				stack.appendChild(el);
+			}
+			for (var p in json[i]) {
+				if (p.indexOf('addEventListener') == 0) {
+					//console.log('found it needs addEventListener on tbb so doing that now');
+					(function(elClosure, jsonIClosure, pClosure) {
+						//this doesnt work anymore as xbl doesnt put in the toolbarbutton till after element is appended4444
+						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
+						//console.log('elClosure label',elClosure.getAttribute('label'));
+						//console.info('elClosure:', elClosure);
+						//elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+						//elCosure.ownerDocument.
+						var cTbb = elClosure.ownerDocument.getAnonymousElementByAttribute(elClosure, 'class', 'profilist-tbb');
+						//console.info(jsonIClosure.identifier.replace(/["\\]/g, '\\$&'));
+						//var cTbb = profilist_box.querySelector('[identifier="' + jsonIClosure.identifier.replace(/["\\]/g, '\\$&') + '"]');
+						//console.log('cTbb', cTbb);
+						console.error(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+						cTbb.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+					})(el, json[i], p);
+				}
 			}
 //			console.log('appended', el);
 		}
@@ -1247,12 +1271,21 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 
 	var stackChilds = stack.childNodes;
 	for (var i=0; i<stackChilds.length; i++) {
-//		console.log('checking if label of ' + stackChilds[i].childNodes[0].getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (stackChilds[i].hasAttribute('status') && !(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
-//			console.log('this profile is not in ini so remove it', 'ini=', ini);
-			stack.removeChild(stackChilds[i]);
-			i--;
-		}	
+		//console.log('checking if label of ' + stackChilds[i].getAttribute('label') + ' is in ini', 'ini=', ini);
+		if (stackChilds[i].hasAttribute('status')) {
+			if (!(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
+				console.log('this profile is not in ini so remove it', 'ini=', ini);
+				stack.removeChild(stackChilds[i]);
+				i--;
+			}
+		} else {
+			//its not a profile toolbarbutton, should we keep it?
+			if (!stackChilds[i].classList.contains('profilist-do_not_auto_remove')) {
+				console.log('this is not a profile button and it doesnot have the DO NOT REMOVE class so remove it');
+				stack.removeChild(stackChilds[i]);
+				i--;
+			}
+		}
 	}
 	
 	/* [].forEach.call(stackChilds, function(sc) {
@@ -1358,10 +1391,10 @@ function actuallyMakeRename(el) {
 						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
 						updateProfToolkit(1, 1).then(
 							function() {
-								return Promise.resolve('updateProfToolkit success');
+								//return Promise.resolve('updateProfToolkit success');
 							},
 							function() {
-								return Promise.reject('updateProfToolkit failed');
+								throw new Error('updateProfToolkit failed');
 							}
 						);
 					},
@@ -1396,6 +1429,7 @@ function submitRename() {
 }
 
 function launchProfile(e, profName, suppressAlert, url) {
+	console.info('in launchProfile');
 	if (!profName) {
 		var el = this;
 		profName = el.getAttribute('label');
@@ -1559,7 +1593,7 @@ var windowListener = {
 			['xul:vbox', {id:'profilist_box'},
 				['xul:stack', {key:'profilist_stack'},
 					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
-					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
+					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
 				]
 			];
 			var referenceNodes = {};
