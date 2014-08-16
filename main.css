@@ -30,7 +30,6 @@ transition-property: background-color;
 	flex-grow:1;
 	border:0;
 	display:flex;
-	background-color: pink;
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb');
 	
 	box-sizing: border-box;
@@ -66,37 +65,86 @@ transition-property: background-color;
 
 .profilist-submenu {
 	display: flex;
+	position: relative;
+	transition: left 300ms;
 }
-/* dots */
-.profilist-tbb-box .profilist-submenu image.profilist-closed {
-	padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
+
+/*start - submenu positions when dev disabled*/
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu {
+	left: calc(2*18px);
 }
-.profilist-tbb-box .profilist-submenu image:hover {
-	background-color: steelblue;
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu {
+	left: calc(3*18px);
 }
-/* dots */
-.profilist-tbb-box .profilist-submenu image:not(.profilist-closed) {
+/*end - submenu positions when dev disabled*/
+
+/*start - submenu positions when dev enabled*/
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=active] .profilist-submenu {
+	left: calc(4*18px);
+}
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=inactive] .profilist-submenu {
+	left: calc(5*18px);
+}
+/*end - submenu positions when dev enabled*/
+.profilist-submenu:hover {
+	left: 0 !important; /*need the important because i did all the specificity above when trying to detect dev eanbled or inactive/active*/
+}
+
+.profilist-submenu:hover .profilist-dots {
+	left: 0 !important;
+}
+/* end submenu*/
+.profilist-subnotif {
+	display: flex;
+}
+.profilist-tbb-box .profilist-subnotif image {
 	padding: 10px 1px;
 }
 
-
-.profilist-closed {
+/* dots */
+.profilist-submenu .profilist-dots {
+	padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
 	list-style-image: url(chrome://profilist/content/3dots.png);
+	filter: none;
+	opacity: 1;
+}
+/* dots */
+.profilist-tbb-box .profilist-submenu image:not(.profilist-dots) {
+	padding: 10px 1px;
+}
+
+#profilist_box:not(.profilist-dev-enabled) [class*="profilist-dev-"] {
+	display: none;
+}
+
+.profilist-submenu {
+	overflow: hidden;
+}
+
+#profilist_box:not(.profilist-show-is-default) .profilist-is-default {
+	display: none;
 }
 
 
-.profilist-tbb-box:hover .profilist-submenu:hover {
 
+.profilist-submenu image {
+	filter: url(filters.svg#grayscale);
+	opacity: .2;
+	transition: opacity 300ms;
+	cursor: pointer;
 }
 
-.profilist-tbb-box .profilist-submenu:not(.profilist-closed) image {
-
+.profilist-submenu image:hover {
+	opacity: 1;
+}
+.profilist-submenu image:not(.profilist-dev-build):hover {
+	filter: none;
+	opacity: 1;
 }
 
-.profilist-tbb-box .profilist-submenu image:hover {
-
+[status=active] .profilist-inactive-del {
+	display:none;
 }
-
 .profilist-inactive-del {
 	list-style-image: url(chrome://profilist/content/bullet_delete.png);
 }
@@ -106,11 +154,32 @@ transition-property: background-color;
 .profilist-default {
 	list-style-image: url(chrome://profilist/content/bullet_gray.png);
 }
+.profilist-is-default {
+	/*used to show which other profile is the current default one when user hovers over ".profilist-default"*/
+	list-style-image: url(chrome://profilist/content/bullet_blue.png);
+}
 .profilist-dev-safe {
 	list-style-image: url(chrome://profilist/content/bullet_wrench.png);
 }
 .profilist-dev-build {
-	list-style-image: url(chrome://profilist/content/bullet_aurora.png);
+	list-style-image: url(chrome://branding/content/icon16.png);
+	filter: url(filters.svg#grayscale);
+}
+	.profilist-tbb-box.profilist-tied-release .profilist-dev-build {
+		list-style-image: url(chrome://profilist/content/bullet_release.png);
+	}
+	.profilist-tbb-box.profilist-tied-beta .profilist-dev-build {
+		list-style-image: url(chrome://profilist/content/bullet_beta.png);
+	}
+	.profilist-tbb-box.profilist-tied-aurora .profilist-dev-build {
+		list-style-image: url(chrome://profilist/content/bullet_aurora.png);
+	}
+	.profilist-tbb-box.profilist-tied-nightly .profilist-dev-build {
+		list-style-image: url(chrome://profilist/content/bullet_nightly.png);
+	}
+.profilist-tbb-box[class*="profilist-tied-"] .profilist-dev-build {
+	opacity: 1;
+	filter: none;
 }
 .profilist-clone {
 	display: none;
@@ -119,10 +188,16 @@ transition-property: background-color;
 .profilist-create .profilist-submenu  {
 	margin-right: 10px;
 	border-radius: 50%;
+	margin-top: 2px;
+	margin-bottom: 2px;
+	transition: background-color 300ms;
+}
+.profilist-create .profilist-submenu:hover  {
+	background-color: hsla(210,4%,10%,.12);
 }
 .profilist-create .profilist-submenu image.profilist-clone {
 	display: block;
-	padding: 10px;
+	padding: 8px;
 }
 .profilist-create .profilist-submenu image:not(.profilist-clone) {
 	display: none;

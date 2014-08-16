@@ -1166,6 +1166,11 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			el.setAttribute('top', '0'); //this is important, it prevents toolbaritems from taking 100% height of the stacks its in
 		}
 		
+		//console.log('ini entry of this prof:', ini[json[i].label]);
+		if (ini[json[i].label] && ini[json[i].label].props.Default == '1') {
+			profilist_box.setAttribute('default_profile_name', json[i].label);
+		}
+		
 		if (appendChild) {
 			console.log('added tbb_box_click');
 			el.addEventListener('click', tbb_box_click, false);
@@ -1432,6 +1437,68 @@ function submitRename() {
 
 function tbb_box_click(e) {
 	console.log('tbb_box_click e.origTarg:', e.originalTarget);
+	var origTarg = e.originalTarget;
+	var className;
+	var classList = origTarg.classList;
+	
+	var classAction = {
+		'profilist-tbb-box': function() {
+			if (classList.contains('perm-hover')) {
+				console.log('do nothing as its the active profile - maybe rename?');
+			} else if (classList.contains('profilist-create')) {
+				console.log('create new profile');
+			} else {
+				console.log('launching profile');
+			}
+		},
+		'profilist-clone': function() {
+			console.log('wiggle for clone');
+		},
+		'profilist-default': function() {
+			console.log('set this profile as default');
+		},
+		'profilist-rename': function() {
+			console.log('rename this one');
+		},
+		'profilist-dev-build': function() {
+			console.log('change build');
+		},
+		'profilist-dev-safe': function() {
+			console.log('launch this profile in safe mode');
+		},
+		'toolbarbutton-icon': function() {
+			console.log('should prevent closing of menu - change badge');
+			//e.stopPropagation();  //just need preventDefault to stop panel from closing on click
+			e.preventDefault();
+		}
+	};
+	
+	var BreakException= {};
+	try {
+		var i = 0;
+		while (i < 4) {
+			i++;
+			//console.log('checking classes on origTarg of:', origTarg);
+			Object.keys(classList).forEach.call(classList, function(c) {
+				if (classAction[c]) {
+					className = c;
+					throw BreakException;
+				}
+			});
+			origTarg = origTarg.parentNode;
+			classList = origTarg.classList;
+		}
+		if (i == 4) {
+			console.warn('could not find suitable action 4 levels up so quitting');
+			return;
+		}
+	} catch (ex) {
+		if (ex !== BreakException) {
+			throw ex;
+		}
+	}
+	
+	classAction[className]();
 }
 
 function launchProfile(e, profName, suppressAlert, url) {
@@ -1596,7 +1663,7 @@ var windowListener = {
 			
 //			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
-			['xul:vbox', {id:'profilist_box'},
+			['xul:vbox', {id:'profilist_box', class:'profilist-dev-enabled'},
 				['xul:stack', {key:'profilist_stack'},
 					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
 					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]

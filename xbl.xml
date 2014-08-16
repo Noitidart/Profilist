@@ -19,8 +19,9 @@
         <content>
             <toolbarbutton class="profilist-tbb" xbl:inherits="label,disabled"/>
             <xul:box class="profilist-submenu" xbl:inherits="disabled">
+				<xul:image class="profilist-is-default" xbl:inherits="disabled"/>
 				<xul:image class="profilist-clone" xbl:inherits="disabled"/>
-                <xul:image class="profilist-closed" style="background-color:red;" xbl:inherits="disabled"/>
+                <xul:image class="profilist-dots" xbl:inherits="disabled"/>
                 <xul:image class="profilist-dev-build" xbl:inherits="disabled"/>
                 <xul:image class="profilist-dev-safe" xbl:inherits="disabled"/>
                 <xul:image class="profilist-default" xbl:inherits="disabled"/>
