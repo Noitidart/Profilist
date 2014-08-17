@@ -1467,6 +1467,15 @@ function tbb_box_click(e) {
 			console.log('launch this profile in safe mode');
 		},
 		'toolbarbutton-icon': function() {
+			var box = origTarg.parentNode.parentNode;
+			if (!box.hasAttribute('status')) {
+				console.warn('clicked on toolbarbutton-icon of non-profile tbb-box so redirect to profilist-tbb-box');
+				origTarg = box;
+				className = 'profilist-tbb-box';
+				classList = origTarg.classList;
+				classAction[className]();
+				return;
+			}
 			console.log('should prevent closing of menu - change badge');
 			//e.stopPropagation();  //just need preventDefault to stop panel from closing on click
 			e.preventDefault();

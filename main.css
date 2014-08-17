@@ -4,10 +4,6 @@
 	transition:height 250ms;
 }
 
-.profilist-tbb-cont {
-	display: flex;
-}
-
 .profilist-tbb-box {
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
 	display:flex;
@@ -19,6 +15,8 @@
 -moz-box-align: center;
 -moz-box-pack: center;
 transition-property: background-color;
+
+max-width: 0;
 }
 .profilist-tbb-box:hover {
 	background-color: hsla(210,4%,10%,.07);
@@ -27,7 +25,7 @@ transition-property: background-color;
 .profilist-tbb {
 	-moz-appearance: none;
 	padding: 10px 0px 10px 15px;
-	flex-grow:1;
+	flex-grow: 1;
 	border:0;
 	display:flex;
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb');
@@ -39,6 +37,15 @@ transition-property: background-color;
 	-moz-image-region: rect(0px, 16px, 16px, 0px);
 	-moz-user-select: none;
 }
+
+.profilist-tbb * {
+	flex-shrink: 0;
+}
+.profilist-tbb .toolbarbutton-text {
+	flex-shrink: 1;
+	text-align: left;
+}
+
 /*start - badge*/
 .profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
 	list-style-image: url('chrome://profilist/content/inactive-user.png');
@@ -65,51 +72,84 @@ transition-property: background-color;
 
 .profilist-submenu {
 	display: flex;
-	position: relative;
-	transition: left 300ms;
+	transition: width 300ms, opacity 150ms;
+	opacity: 0;
+	width: calc(1*18px); /* 18px is the width of the images */
 }
 
-/*start - submenu positions when dev disabled*/
-#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu {
-	left: calc(2*18px);
+.profilist-tbb-box:hover .profilist-submenu {
+	opacity: 1;
 }
-#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu {
-	left: calc(3*18px);
+
+/* start submenu for profilist-create*/
+.profilist-create .profilist-submenu  {
+	margin-right: 10px;
+	border-radius: 50%;
+	margin-top: 2px;
+	margin-bottom: 2px;
+	transition: background-color 150ms, opacity 150ms;
+	opacity: 0;
+	overflow: hidden;
+	width: 32px;
+}
+.profilist-create .profilist-submenu:hover  {
+	background-color: hsla(210,4%,10%,.06);
+	opacity: 1;
+}
+.profilist-create .profilist-submenu:active  {
+	background-color: hsla(210,4%,10%,.12);
+	opacity: 1;
+	transition: opacity 150ms;
+}
+/* end submenu for profilist-create*/
+
+
+/*start - submenu positions when dev disabled*/
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu:hover {
+	width: calc(3*18px);
+}
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
+	width: calc(3*18px);
 }
 /*end - submenu positions when dev disabled*/
 
 /*start - submenu positions when dev enabled*/
-#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=active] .profilist-submenu {
-	left: calc(4*18px);
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=active] .profilist-submenu:hover {
+	width: calc(4*18px);
 }
-#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=inactive] .profilist-submenu {
-	left: calc(5*18px);
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
+	width: calc(5*18px);
 }
 /*end - submenu positions when dev enabled*/
-.profilist-submenu:hover {
-	left: 0 !important; /*need the important because i did all the specificity above when trying to detect dev eanbled or inactive/active*/
-}
 
-.profilist-submenu:hover .profilist-dots {
-	left: 0 !important;
-}
 /* end submenu*/
-.profilist-subnotif {
-	display: flex;
-}
-.profilist-tbb-box .profilist-subnotif image {
-	padding: 10px 1px;
-}
+
 
 /* dots */
-.profilist-submenu .profilist-dots {
+.profilist-submenu image.profilist-dots {
 	padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
 	list-style-image: url(chrome://profilist/content/3dots.png);
 	filter: none;
 	opacity: 1;
+	flex-shrink: 0;
+	width: 18px;
+	/*transition: opacity 150ms ease 150ms, width 150ms, padding 150ms;*/
+	/*/*transition: opacity 300ms;*/
 }
+.profilist-submenu:hover .profilist-dots {
+	/*/*opacity: 0;*/
+	display: none;
+}
+/*
+.profilist-submenu:hover .profilist-dots {
+	opacity: 0;
+	width: 0;
+	padding: 0;
+	transition: opacity 150ms, width 150ms ease 200ms, padding 150ms ease 200ms;
+}
+*/
 /* dots */
-.profilist-tbb-box .profilist-submenu image:not(.profilist-dots) {
+.profilist-tbb-box .profilist-submenu image:not(.profilist-dots):not(.profilist-clone) {
 	padding: 10px 1px;
 }
 
@@ -127,22 +167,22 @@ transition-property: background-color;
 
 
 
-.profilist-submenu image {
+.profilist-submenu image:not(.profilist-dots) {
 	filter: url(filters.svg#grayscale);
 	opacity: .2;
 	transition: opacity 300ms;
 	cursor: pointer;
+	flex-shrink: 0;
 }
 
-.profilist-submenu image:hover {
+.profilist-submenu image:not(.profilist-dots):hover {
 	opacity: 1;
 }
-.profilist-submenu image:not(.profilist-dev-build):hover {
+.profilist-submenu image:not(.profilist-dots):not(.profilist-dev-build):hover { /*special for dev build no filter removal*/
 	filter: none;
-	opacity: 1;
 }
 
-[status=active] .profilist-inactive-del {
+.profilist-tbb-box[status=active] .profilist-inactive-del {
 	display:none;
 }
 .profilist-inactive-del {
@@ -181,22 +221,11 @@ transition-property: background-color;
 	opacity: 1;
 	filter: none;
 }
-.profilist-clone {
+.profilist-tbb-box:not(.profilist-create) .profilist-clone {
 	display: none;
-	list-style-image: url(chrome://profilist/content/clone.png);
-}
-.profilist-create .profilist-submenu  {
-	margin-right: 10px;
-	border-radius: 50%;
-	margin-top: 2px;
-	margin-bottom: 2px;
-	transition: background-color 300ms;
-}
-.profilist-create .profilist-submenu:hover  {
-	background-color: hsla(210,4%,10%,.12);
 }
 .profilist-create .profilist-submenu image.profilist-clone {
-	display: block;
+	list-style-image: url(chrome://profilist/content/clone.png);
 	padding: 8px;
 }
 .profilist-create .profilist-submenu image:not(.profilist-clone) {
