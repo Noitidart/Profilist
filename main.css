@@ -1,3 +1,20 @@
+.profilist-display-stack {
+	margin: 0;
+	padding: 0;
+	margin-right: 25px;
+}
+.profilist-display-stack * {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.profilist-display-stack input {
+	font-size: inherit;
+	font-family: inherit;
+	outline: 1px solid hsla(210,4%,10%,.12);
+}
+
 #profilist_box > stack {
 	width:100%;
 	overflow:hidden;
@@ -20,6 +37,9 @@ max-width: 0;
 }
 .profilist-tbb-box:hover {
 	background-color: hsla(210,4%,10%,.07);
+}
+.profilist-tbb-box:not(.profilist-tbb-box-inactivatable):active {
+	background-color: hsla(210,4%,10%,.12);
 }
 
 .profilist-tbb {
@@ -44,9 +64,13 @@ max-width: 0;
 .profilist-tbb .toolbarbutton-text {
 	flex-shrink: 1;
 	text-align: left;
+	padding-top: 1px;
 }
 
 /*start - badge*/
+.profilist-tbb .toolbarbutton-icon {
+	cursor: pointer;
+}
 .profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
 	list-style-image: url('chrome://profilist/content/inactive-user.png');
 }

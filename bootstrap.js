@@ -1229,6 +1229,26 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			} else {
 				stack.appendChild(el);
 			}
+			var boxAnons = el.ownerDocument.getAnonymousNodes(el);
+			//console.log('boxAnons:', boxAnons);
+			//var tbb = boxAnons[0];
+			var sm = boxAnons[1];
+			//console.log('tbb:', tbb);
+			//console.log('sm:', sm);
+			//var badge = tbb.ownerDocument.getAnonymousElementByAttribute(tbb, 'class', 'profilist-badge');
+			var setdefault = boxAnons[1].querySelector('.profilist-default');
+			//console.log('badge', badge);
+			//console.log('setdefault', setdefault);
+
+			//badge.addEventListener('mouseenter', subenter, false);
+			setdefault.addEventListener('mouseenter', subenter, false);
+			//badge.addEventListener('mouseleave', subleave, false);
+			setdefault.addEventListener('mouseleave', subleave, false);
+
+			//el.addEventListener('mouseenter', subenter, false);
+			el.addEventListener('mousedown', properactive, false);
+			//el.addEventListener('mouseleave', subleave, false);
+			
 			for (var p in json[i]) {
 				if (p.indexOf('addEventListener') == 0) {
 					//console.log('found it needs addEventListener on tbb so doing that now');
@@ -1239,11 +1259,11 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 						//console.info('elClosure:', elClosure);
 						//elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 						//elCosure.ownerDocument.
-						var cTbb = elClosure.ownerDocument.getAnonymousElementByAttribute(elClosure, 'class', 'profilist-tbb');
+				////var cTbb = elClosure.ownerDocument.getAnonymousElementByAttribute(elClosure, 'class', 'profilist-tbb');
 						//console.info(jsonIClosure.identifier.replace(/["\\]/g, '\\$&'));
 						//var cTbb = profilist_box.querySelector('[identifier="' + jsonIClosure.identifier.replace(/["\\]/g, '\\$&') + '"]');
 						//console.log('cTbb', cTbb);
-						console.error(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
+				////console.error(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 						//cTbb.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
 					})(el, json[i], p);
 				}
@@ -1435,9 +1455,82 @@ function submitRename() {
 	//renameProfile(1, oldProfName, newProfName);
 }
 
+function properactive(e) {
+	var origTarg = e.originalTarget;
+	var box = e.target;
+	//console.log('entered origTarg:', origTarg);
+	
+	/*
+	var obj = {
+		explicitOriginalTarget: e.explicitOriginalTarget.nodeName,
+		originalTarget: e.originalTarget.nodeName,
+		//relatedTarget: e.relatedTarget.className,
+		target: e.target.nodeName
+	};
+	console.log('obj on md:', obj);
+	*/
+	
+	if (origTarg.nodeName == 'xul:image') { //origTarg.classList.contains('toolbarbutton-icon') || origTarg.classList.contains('profilist-submenu')) {
+		//*NEVERMIND*: //check if they are clicking on the icon of create new profile, do this by seeing if this is the first toolbar element of the stack *NOTE**IMPORTANT* this is why it is important for create new profile button to be first child of stack
+		if (origTarg.className == 'toolbarbutton-icon' && origTarg.parentNode.parentNode.classList.contains('profilist-create')) {
+			return;
+		}
+		box.classList.add('profilist-tbb-box-inactivatable');
+		origTarg.addEventListener('mouseleave', function() {
+			origTarg.removeEventListener('mouseleave', arguments.callee, false);
+			console.log('doing remove on left');
+			box.classList.remove('profilist-tbb-box-inactivatable');
+		}, false);
+		console.log('added');
+	}
+}
+
+function subenter(e) {
+	console.log('set default enter');
+	/*
+	var origTarg = e.originalTarget;
+	var box = e.target;
+	//console.log('entered origTarg:', origTarg);
+	
+	var obj = {
+		explicitOriginalTarget: e.explicitOriginalTarget.className,
+		originalTarget: e.originalTarget.className,
+		relatedTarget: e.relatedTarget.className,
+		target: e.target.className
+	};
+	
+	if (origTarg.classList.contains('toolbarbutton-icon')) {
+		box.classList.add('profilist-tbb-box-inactivatable');
+		console.log('added', obj);
+	} else if (origTarg.classList.contains('profilist-submenu')) {
+		box.classList.add('profilist-tbb-box-inactivatable');
+		console.log('added', obj);
+	}
+	*/
+}
+
+function subleave(e) {
+	console.log('set default leave');
+	/*
+	var origTarg = e.originalTarget;
+	var box = e.target;
+	//console.log('left origTarg:', origTarg);
+	
+	if (origTarg.classList.contains('toolbarbutton-icon')) {
+		box.classList.remove('profilist-tbb-box-inactivatable');
+		console.log('removed, origTarg className:', origTarg.className);
+	} else if (origTarg.classList.contains('profilist-submenu')) {
+		box.classList.remove('profilist-tbb-box-inactivatable');
+		console.log('removed, origTarg className:', origTarg.className);
+	}
+	*/
+}
+
 function tbb_box_click(e) {
 	console.log('tbb_box_click e.origTarg:', e.originalTarget);
 	var origTarg = e.originalTarget;
+	var box = e.target;
+	console.log('clicked target == box it should:', box);
 	var className;
 	var classList = origTarg.classList;
 	
@@ -1467,12 +1560,11 @@ function tbb_box_click(e) {
 			console.log('launch this profile in safe mode');
 		},
 		'toolbarbutton-icon': function() {
-			var box = origTarg.parentNode.parentNode;
 			if (!box.hasAttribute('status')) {
 				console.warn('clicked on toolbarbutton-icon of non-profile tbb-box so redirect to profilist-tbb-box');
 				origTarg = box;
 				className = 'profilist-tbb-box';
-				classList = origTarg.classList;
+				classList = box.classList;
 				classAction[className]();
 				return;
 			}
@@ -1687,7 +1779,7 @@ var windowListener = {
 			var THIS = PanelUI.querySelector('#PanelUI-multiView');
 			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
 			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
-				console.log('entered');
+				//console.log('entered');
 				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
@@ -1743,7 +1835,7 @@ var windowListener = {
 				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
 			}, false);
 			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
-				console.log('left');
+				//console.log('left');
 				//commenting out this block as using services prompt for renaming right now
 				// if (aDOMWindow.ProfilistInRenameMode) {
 //					// console.log('in rename mdoe so dont close');

@@ -11,7 +11,11 @@
             <children includes="observes|template|menupopup|panel|tooltip" />
             <xul:image class="toolbarbutton-icon" xbl:inherits="validate,src=image,label" flex="0" />
             <xul:image class="profilist-badge" xbl:inherits="validate,src=badge,label" width="1" flex="0" />
-			<xul:label class="toolbarbutton-text" crop="right" flex="1" xbl:inherits="value=label,accesskey,crop,wrap" />
+			<xul:stack class="profilist-display-stack" flex="1">
+				<html:input class="profilist-input" xbl:inherits="value=label" />
+				<xul:label class="toolbarbutton-text" crop="right" flex="1" xbl:inherits="value=label,accesskey,crop,wrap" />
+			</xul:stack>
+			<!--<xul:label class="toolbarbutton-text" crop="right" flex="1" xbl:inherits="value=label,accesskey,crop,wrap" />-->
             <!--<xul:label class="toolbarbutton-multiline-text" flex="1" xbl:inherits="xbl:text=label,accesskey,wrap" />-->
         </content>
     </binding>
