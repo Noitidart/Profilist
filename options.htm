@@ -1,0 +1,187 @@
+<html class="js ff ffMozilla/5.0 (Windows NT 6.3; WOW64; rv:32.0) Gecko/20100101 Firefox/32.0" xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head>
+
+	<title>Profilist | Control Panel</title>
+
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+	<meta name="description" content="">
+	<meta name="keywords" content="My Energy">
+	<meta http-equiv="Pragma" content="no-cache">
+	
+	<link rel="shortcut icon" href="icon16.png" type="image/png">
+	<link rel="stylesheet" type="text/css" media="screen" href="options_resources/screen.css">
+	<link rel="stylesheet" type="text/css" media="print" href="options_resources/print.css">
+    <link rel="stylesheet" type="text/css" media="screen" href="options_resources/eum1.css">
+
+
+</head>
+
+<body class="login" onload="javascript:checkCookie();">
+
+	<p class="skipNav">[ <a href="#main-content">Skip to Main Content</a> ]</p>
+	
+
+	<!-- START GLOBAL WRAPPER -->
+	<div class="glb-wrapper">
+	<div class="glb-wrapper-inner">
+
+	<!-- START GLOBAL HEADER -->
+	<div class="glb-hdr-container">
+	<div class="glb-hdr">
+		<a href="http://www.pge.com"><!--<img id="logo" src="login-logo-pge.png" alt="PG&amp;E Logo">--></a>
+	</div>
+	</div>
+	<!-- END GLOBAL HEADER -->	<!-- START BODY -->
+	<div class="glb-bdy-container">
+	<div class="glb-bdy">
+
+		<h1 style="vertical-align: middle;" id="appname"><img src="icon.png" style="vertical-align: middle; margin-right: 10px; flex-shrink: 0;">Profilist<small style="text-align: right; display: inline-block; width: 320px;">Control Panel</small></h1>
+		<div id="login-dialog">
+            <div class="hd"></div>
+			<div class="bd" id="login-dialog-inner">
+				<div class="section log-in">
+					<h2>General</h2>
+											<form name="login" action="/eum/login" method="post">
+						<fieldset>
+							
+                            
+                            
+                            
+							
+							<div class="row">
+								
+								<label class="input-hint">Automatic Updates</label>
+								<select>
+  <option>Enabled</option>
+  <option>Disabled</option>
+</select>
+							</div>
+<!--next row-->
+<div class="row">
+								<label class="input-hint">Notifications </label>
+								<select>
+  <option>Enabled</option>
+  <option>Disabled</option>
+</select>
+							</div>
+<!--next row-->
+<div class="row">
+								<label class="input-hint">Developer Options </label>
+								<select>
+  <option>Enabled</option>
+  <option>Disabled</option>
+</select>
+							</div>
+<!--next row-->
+<div style="" class="row">
+								<label style="" class="input-hint">Create Desktop Shortcut </label>
+								<select style="" disabled="">
+  <option>Select Profile Name</option>
+  <option>Main</option>
+  <option>Dev</option>
+</select>
+								<label style="float: right; position: relative; width: auto; margin: 7px 3px 3px;" class="input-hint"><img src="options_resources/loading.gif"></label>
+							</div>
+<!--next row-->
+
+							
+							<!-- /juxtaposition intentional: enhances tab-order -->
+							
+							
+						</fieldset>
+					</form>
+				</div>
+<!--next section-->
+<div class="section log-in">
+					<h2>Developer</h2>
+											<form name="login" action="/eum/login" method="post">
+						<fieldset>
+							
+                            
+                            
+                            
+							
+							<div class="row">
+	<label class="input-hint">Firefox Builds</label>
+	<select style="pointer-events: none; visibility: hidden;" disabled="">
+  <option>dummy for height of row</option>
+</select>
+</div>
+
+
+<!--next row-->
+<div style="display: flex; flex-direction: column; text-align: center;">
+		<div style="display:flex; flex-direction:row;">
+			<span style="flex-grow: 1; display: flex; flex-direction: column; align-items: center;"><span style="margin-bottom:5px">Icon</span><img src="bullet_nightly.png"></span><span style="flex-grow: 1; display: flex; flex-direction: column; align-items: center;"><span style="margin-bottom:5px">Path to Executable</span><input style="align-self: stretch; margin: 0px 50px;" type="text"></span>
+<span style="flex-grow: 1; display: flex; flex-direction: column; align-items: center;"><span style="margin-bottom:5px">Delete</span><img src="bullet_nightly.png"></span>
+		</div>
+		
+</div>
+
+
+
+
+							
+
+							<!-- /juxtaposition intentional: enhances tab-order -->
+							
+							
+						</fieldset>
+					</form>
+				</div>
+<!--next section-->
+<div style="display: none;" class="section log-in">
+					<h2>DUMMY SECTION</h2>
+						<div class="version-info">
+							&nbsp;<!-- 
+							Version: EUM_4.4.2 Build: PROD 541 03/04/2014
+							 -->
+						</div>					<form name="login" action="/eum/login" method="post">
+						<fieldset>
+							<div class="inline-error">
+							
+                			</div>
+                            
+                            <div class="inline-error" id="errorMessageSection">
+                            </div>
+                            
+							<p>Please enter your user name and password to sign in.</p>
+							<div class="row">
+								<div id="username-note" class="tooltip-body">Username must be 6-24 characters.</div>
+								<label class="input-hint">User Name: </label>
+								<input class="text" id="username" name="USER" maxlength="128" type="text">
+							</div>
+							<div class="row">
+								<label class="input-hint">Password: </label>
+								<input class="text" id="password" name="PASSWORD" autocomplete="off" type="password">
+							</div>
+							<!-- /juxtaposition intentional: enhances tab-order -->
+							<div class="row ">
+								<p>Forgot <a href="/eum/forgotUserName">user name</a> or <a href="/eum/forgotPassword">password</a>?</p>
+						
+								
+                                <p><b>New user?</b> <a href="https://www.pge.com/myenergyweb/appmanager/pge/register">Register here.</a></p>
+							</div>
+							<div class="actions">
+								<label class="has-checkable" for="remember-me">
+								</label>
+								<input value="Submit" onclick="javascript:if (!inputValidate()) {return false;}" class="move-forward btn-login" type="submit">
+							</div>
+						</fieldset>
+					</form>
+				</div>
+			</div>
+            <div class="ft">
+            </div>
+		</div>
+
+	</div>
+	</div>
+	<!-- END BODY -->
+
+	</div>
+	</div>
+	<!-- END GLOBAL WRAPPER -->
+
+
+</body>
+</html>
