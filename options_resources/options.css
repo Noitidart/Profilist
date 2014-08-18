@@ -13,63 +13,89 @@
 }
 
 .builds-cont > div > span {
-	flex-grow: 1; display: flex; flex-direction: column; align-items: center;
+	flex-shrink:0; display: flex; flex-direction: row;
+	align-items: center;
 	justify-content: center;
 }
 
 .builds-cont > div > span:nth-of-type(1) {
-	flex-grow: 1;
-	width: 10%;
+	cursor: pointer;
+	width: 35px;
+	position: relative; /* for positioning of the change icon icon*/
 	/*background-color: springgreen;*/
 }
 
 .builds-cont > div > span:nth-of-type(2) {
 	flex-grow: 1;
-	width: 86%;
 	/*background-color: steelblue;*/
 	position: relative; /*for sizing input by %*/
 }
 
 .builds-cont > div > span:nth-of-type(3) {
-	flex-grow: 0;
 	/* outline: 1px solid red; */
-	width: 4%;
+	width: 60px; /*cuz im putting 3 icons in there who each have width 17 and padding 1 left 1 right*/
+}
+
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(3) {
+	/*display: none;*/
 }
 
 .builds-cont > div {
 	display:flex; flex-direction: row;
 }
 
-span[class*="builds-title-"] {
-	position: relative;
+/* start icons stuff */
+
+.cancel:before {
+	content: '\e800';
 }
 
-span[class*="builds-title-"] span {
-	position: absolute; left: 50%;
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {
+	opacity: 0.3 !important;
+	transition: opacity 300ms ease 500ms !important;
 }
 
-span[class*="builds-title-"] div {
-	/*visibility: hidden;*/
-	display: inline-block;
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {
+	/*change-icon icon*/
+	content: '\e806';
+	position: absolute;
+	top: calc(50% - 10px);
+	left: -10px;
+	font-size: 13px !important;
+	opacity: 0 !important;
+	transition: opacity 200ms !important;
+}
+
+.up:before {
+	content: '\e802';
+}
+.down:before {
+	content: '\e803';
+}
+.tools:before {
+	content: '\e801';
+	opacity: 1 !important;
+	color: inherit !important;
+	cursor: text !important;
+	font-size: inherit !important;
 }
 
 @font-face {
   font-family: 'fontello';
-  src: url('fontello/font/fontello.eot?63397855');
-  src: url('fontello/font/fontello.eot?63397855#iefix') format('embedded-opentype'),
-       url('fontello/font/fontello.woff?63397855') format('woff'),
-       url('fontello/font/fontello.ttf?63397855') format('truetype'),
-       url('fontello/font/fontello.svg?63397855#fontello') format('svg');
+  src: url('fontello.woff') format('woff');
   font-weight: normal;
   font-style: normal;
+  /* unicodes
+	<glyph glyph-name="cancel-circle" unicode="&#xe800;"
+	<glyph glyph-name="tools" unicode="&#xe801;"
+	<glyph glyph-name="up-circle" unicode="&#xe802;"
+	<glyph glyph-name="down-circle" unicode="&#xe803;"
+	<glyph glyph-name="loop" unicode="&#xe806;"
+  */
 }
 
-.builds-cont > div:hover span.cancel:before {
-	opacity: .3;
-}
-
-span.cancel:before {
-	content: '\e800';
+.icon:before,
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {
 	font-size: 16px;
 	color: #000;
 	cursor: pointer;
@@ -82,8 +108,8 @@ span.cancel:before {
   display: inline-block;
   text-decoration: inherit;
   
-  opacity: 0;
-  margin:0;
+  opacity: 0.1;
+  margin:0 1px;
   padding: 0;
  
   /* For safety - reset parent styles, that can break glyph codes*/
@@ -92,7 +118,19 @@ span.cancel:before {
   transition: opacity 200ms;
 }
 
-.builds-cont > div:hover span.cancel:hover:before {
+.builds-cont > div:hover span:nth-of-type(3):hover .icon:hover:before {
 	/*color: crimson;*/
 	opacity: 1;
+}
+
+.builds-cont > div:hover .icon:before {
+	opacity: .2;
+}
+
+.builds-cont > div:hover span:nth-of-type(3):hover .icon:before {
+	opacity: .4;
+}
+
+.builds-cont > div:hover > span:nth-of-type(3) {
+	display: inline-flex; /*for use if i decide to hide tools in the row and show only on hover*/
 }
