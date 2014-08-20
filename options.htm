@@ -11,31 +11,167 @@
   <meta name="keywords" content="My Energy" />
   <meta http-equiv="Pragma" content="no-cache" />
   <link rel="shortcut icon" href="icon16.png" type="image/png" />
-  <link rel="stylesheet" type="text/css" media="screen" href=
-  "options_resources/screen.css" />
-  <link rel="stylesheet" type="text/css" media="screen" href="options_resources/eum1.css" />
+
   <link rel="stylesheet" type="text/css" media="screen" href="options_resources/options.css" />
+  <style>
+	body {
+	    font-size: 13px;
+    width: 100%;
+    height: 100%;
+    background: none repeat scroll 0% 0% #FFF;
+    min-width: 810px;
+margin: 0px;
+padding: 0px;
+font: 74%/1.4em arial,helvetica,sans-serif;
+color: #666;
+
+}
+
+h1 {
+	vertical-align: middle;
+background: none repeat scroll 0% 0% transparent;
+text-indent: 0px;
+color: #000;
+margin-top: 10px;
+padding-bottom: 0.3em;
+font-size: 1.9em;
+font-weight: bold;
+line-height: 1em;
+margin: 0px;
+padding: 0px;
+width: 476px;
+display: flex;
+align-items: center;
+}
+
+h1 img {
+vertical-align: middle;
+margin-right: 10px;
+flex-shrink: 0;
+border: 0px none;
+}
+
+h1 small {
+text-align: right;
+flex-grow: 1;
+}
+
+.glb-bdy {
+position: relative;
+margin: 0px auto;
+padding: 0px;
+height: 100%;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+}
+
+#login-dialog {
+	width: 486px;
+	text-align: left;
+margin: 0px;
+padding: 0px;
+}
+
+.hd {
+background: url('options_resources/eum_box_top.png') no-repeat scroll left top transparent;
+height: 10px;
+width: 486px;
+margin: 0px;
+padding: 0px;
+}
+
+#login-dialog-inner {
+background: url('options_resources/eum_box_slice.png') repeat-y scroll left top transparent;
+width: 486px;
+float: left;
+padding: 0px 5px;
+position: relative;
+margin: 0px;
+}
+
+.section {
+background: url('options_resources/eum_box_slice_vertical.jpg') repeat-x scroll left top transparent;
+width: 396px;
+padding: 10px 40px;
+margin: 0px;
+}
+
+h2 {
+	padding-top: 8px;
+font-size: 20px;
+line-height: 130%;
+color: #333;
+font-weight: bold;
+padding: 8px 0px 10px;
+margin: 0px 0px 15px;
+border-bottom: 1px solid #CCC;
+}
+
+form {
+padding: 0px;
+margin: 0px;
+}
+
+fieldset {
+clear: both;
+border: 0px none;
+margin: 0px;
+padding: 0px;
+}
+
+.row:after {
+content: ".";
+display: block;
+height: 0px;
+clear: both;
+visibility: hidden;
+}
+
+.row {
+position: relative;
+margin: 0px;
+padding: 0px 0px 10px;
+clear: both;
+}
+
+.input-hint {
+color: #666 !important;
+margin: 3px 0px 0px -5px;
+cursor: text;
+padding-left: 0.2em;
+width: 165px;
+float: left;
+vertical-align: middle;
+}
+
+input[type=text], select, textarea {
+margin-left: 3px;
+padding: 3px;
+color: #333;
+vertical-align: middle;
+font: 99% verdana,geneva,sans-serif;
+float: right;
+}
+
+.ft {
+background: url('options_resources/eum_box_btm.png') no-repeat scroll left top transparent;
+color: #FFF;
+font-size: 0.93em;
+float: left;
+height: 10px;
+padding-top: 130px;
+width: 500px;
+}
+  </style>
 </head>
 
-<body class="login" onload="javascript:checkCookie();">
-  <p class="skipNav">[ <a href="#main-content">Skip to Main Content</a> ]</p>
-  <!-- START GLOBAL WRAPPER -->
+<body class="login">
 
-  <div class="glb-wrapper">
-    <div class="glb-wrapper-inner">
-      <!-- START GLOBAL HEADER -->
 
-      <div class="glb-hdr-container">
-        <div class="glb-hdr">
-          <a href="http://www.pge.com">
-          <!--<img id="logo" src="login-logo-pge.png" alt="PG&amp;E Logo">--></a>
-        </div>
-      </div><!-- END GLOBAL HEADER --><!-- START BODY -->
-
-      <div class="glb-bdy-container">
         <div class="glb-bdy">
-          <h1 style="vertical-align: middle;" id="appname"><img src="icon.png" style=
-          "vertical-align: middle; margin-right: 10px; flex-shrink: 0;" />Profilist<small style="text-align: right; display: inline-block; width: 320px;">Control
+          <h1><img src="icon.png">Profilist<small>Control
           Panel</small></h1>
 
           <div id="login-dialog">
@@ -47,7 +183,23 @@
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
                     <div class="row">
-                      <label class="input-hint">Automatic Updates</label> <select>
+                      <label class="input-hint">Automatic Updates</label>
+					  <select style="width:7em">
+                        <option>
+                          Default
+                        </option>
+                        <option>
+                          On
+                        </option>
+                        <option>
+                          Off
+                        </option>
+                      </select>
+                    </div><!--next row-->
+
+                    <div class="row">
+                      <label class="input-hint">Notifications</label>
+					  <select style="width:7em">
                         <option>
                           Enabled
                         </option>
@@ -58,18 +210,8 @@
                     </div><!--next row-->
 
                     <div class="row">
-                      <label class="input-hint">Notifications</label> <select>
-                        <option>
-                          Enabled
-                        </option>
-                        <option>
-                          Disabled
-                        </option>
-                      </select>
-                    </div><!--next row-->
-
-                    <div class="row">
-                      <label class="input-hint">Developer Options</label> <select>
+                      <label class="input-hint">Developer Options</label>
+					  <select style="width:7em">
                         <option>
                           Enabled
                         </option>
@@ -91,10 +233,10 @@
                         <option>
                           Dev
                         </option>
-                      </select> <label style=
-                      "float: right; position: relative; width: auto; margin: 7px 3px 3px;"
-                      class="input-hint"><img src=
-                      "options_resources/loading.gif" /></label>
+                      </select>
+					  <label style="float: right; position: relative; width: auto; margin: 6px 3px 3px;" class="input-hint">
+						<img src="options_resources/loading.gif" />
+					  </label>
                     </div><!--next row-->
                   </fieldset>
                 </form>
@@ -129,45 +271,6 @@
                       <div>
                         <span>
 							<img src="bullet_release.png"><span class="icon change-icon"></span>
-						</span>
-                        <span>
-							<input type="text">
-						</span>
-                        <span>
-							<span class="icon cancel"></span>
-							<span class="icon up"></span>
-							<span class="icon down"></span>
-						</span>
-                      </div>
-                      <div>
-                        <span>
-							<img src="bullet_beta.png">
-						</span>
-                        <span>
-							<input type="text">
-						</span>
-                        <span>
-							<span class="icon cancel"></span>
-							<span class="icon up"></span>
-							<span class="icon down"></span>
-						</span>
-                      </div>
-                      <div>
-                        <span>
-							<img src="bullet_aurora.png">
-						</span>
-                        <span>
-							<input type="text">
-						</span>
-                        <span>
-							<span class="icon cancel"></span>
-							<span class="icon up"></span>
-							<span class="icon down"></span>
-						</span>
-                      </div>
-                      <div>
-                        <span>
-							<img src="bullet_nightly.png">
 						</span>
                         <span>
 							<input type="text">
@@ -234,8 +337,6 @@
             <div class="ft"></div>
           </div>
         </div>
-      </div><!-- END BODY -->
-    </div>
-  </div><!-- END GLOBAL WRAPPER -->
+
 </body>
 </html>
