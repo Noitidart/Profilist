@@ -6,6 +6,7 @@
 
 .builds-cont {
 	display: flex; flex-direction: column; text-align: center;
+	margin-left: 5px;
 }
 
 .builds-cont > div {
