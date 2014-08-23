@@ -68,7 +68,7 @@ max-width: 0;
 }
 
 /*start - badge*/
-.profilist-tbb .toolbarbutton-icon {
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon {
 	cursor: pointer;
 }
 .profilist-tbb-box[status='inactive'] .toolbarbutton-icon {

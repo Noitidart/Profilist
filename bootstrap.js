@@ -1990,11 +1990,11 @@ function jsonToDOM(xml, doc, nodes) {
     return tag.apply(null, xml);
 }
 /*end - dom insertion library function from MDN*/
-
+var cssBuildIconsURI;
 function startup(aData, aReason) {
 //	console.log('in startup');
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
-//	console.log('aData', aData);
+	//console.log('aData', aData);
 //	//console.log('initing prof toolkit');
 	//initProfToolkit();
 //	//console.log('init done');
@@ -2009,6 +2009,21 @@ function startup(aData, aReason) {
 	cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
 	myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
+	//css for build icons
+	var cssBuildIcons = [];
+	for (var i=1; i<5; i++) {
+		cssBuildIcons.push('.profilist-icon-build-' + i + ' { background-image: url("' + OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'build' + i + '.png')) + '") !important; ');
+	}
+	console.log(cssBuildIcons.join(''));
+	var newURIParam = {
+		aURL: 'data:text/css,' + encodeURIComponent(cssBuildIcons.join('')),
+		aOriginCharset: null,
+		aBaseURI: null
+	}
+	cssBuildIconsURI = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
+	myServices.sss.loadAndRegisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
+	
+	
 	windowListener.register();
 	
 }
@@ -2017,6 +2032,7 @@ function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
 		
 	myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
+	myServices.sss.unregisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
 }

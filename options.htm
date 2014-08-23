@@ -144,6 +144,7 @@ color: #333;
 vertical-align: middle;
 font: 99% verdana,geneva,sans-serif;
 float: right;
+border: 1px solid #abadb3;
 }
 
 .ft {
@@ -156,6 +157,50 @@ padding-top: 130px;
 width: 500px;
 }
   </style>
+  <script>
+	function changeIcon(e) {
+		var target = e.target;
+		var oTarg = e.originalTarget;
+		if (oTarg.classList.contains('browse-icon')) {
+			//clicked browse icon
+			alert('open browse');
+			return;
+		}
+		if (oTarg.classList.contains('change-icon')) {
+			target = target.parentNode;
+		}
+		if (target.classList.contains('release')) {
+			target.classList.remove('release');
+			target.classList.add('beta');
+		} else if (target.classList.contains('beta')) {
+			target.classList.remove('beta');
+			target.classList.add('aurora');
+		} else if (target.classList.contains('aurora')) {
+			target.classList.remove('aurora');
+			target.classList.add('nightly');
+		} else if (target.classList.contains('nightly')) {
+			target.classList.remove('nightly');
+			target.classList.add('browse');
+		} else if (target.classList.contains('browse')) {
+			target.classList.remove('browse');
+			target.classList.add('release');
+		}
+	}
+	
+	function browseEnter(e) {
+		console.log('hide swithcer');
+		e.target.parentNode.classList.add('noswitch');
+		//var iconSwitcher = e.target.parentNode.querySelector('.change-icon');
+		//iconSwitcher.style.opacity = '0';
+	}
+	
+	function browseLeave(e) {
+		console.log('make icon in app dir');
+		e.target.parentNode.classList.remove('noswitch');
+		//var iconSwitcher = e.target.parentNode.querySelector('.change-icon');
+		//iconSwitcher.style.opacity = '';
+	}
+  </script>
 </head>
 
 <body class="login">
@@ -259,17 +304,17 @@ width: 500px;
 							<span class="icon tools"></span>
 						</span>
                       </div>
-                      <div>
-                        <span>
-							<img src="bullet_release.png"><span class="icon change-icon"></span>
+                      <div class="attn">
+                        <span onclick="changeIcon(event)" class="release">
+							<!--<img src="bullet_release.png">--><span class="icon change-icon"></span><span class="icon browse-icon"onmouseenter="browseEnter(event)" onmouseleave="browseLeave(event)"></span>
 						</span>
                         <span>
-							<input type="text">
+							<input type="text"><span class="icon"></span>
 						</span>
                         <span>
 							<span class="icon cancel"></span>
-							<span class="icon up"></span>
-							<span class="icon down"></span>
+							<span class="icon updown"></span>
+							<span class="icon current-build"></span>
 						</span>
                       </div>
                     </div>

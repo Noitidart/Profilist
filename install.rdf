@@ -22,6 +22,8 @@
 		<!-- Front End MetaData -->
 		<em:name>Profilist</em:name>
 		<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox.</em:description>
+		<em:optionsType>3</em:optionsType>
+		<em:optionsURL>chrome://profilist/content/options.htm</em:optionsURL>
 		<em:creator>Noitidart</em:creator>
 		<em:contributor>Stephen Hutchings for Icons</em:contributor>
 	  </Description>

@@ -20,10 +20,14 @@
 }
 
 .builds-cont > div > span:nth-of-type(1) {
-	cursor: pointer;
 	width: 35px;
 	position: relative; /* for positioning of the change icon icon*/
 	/*background-color: springgreen;*/
+}
+
+.builds-cont > div:not(:first-of-type)> span:nth-of-type(1) {
+	cursor: pointer;
+	padding-bottom: 2px;
 }
 
 .builds-cont > div > span:nth-of-type(2) {
@@ -45,18 +49,59 @@
 	display:flex; flex-direction: row;
 }
 
+/* start toggling build */
+
+div:not(:first-of-type) > span:nth-of-type(1).browse {
+	background-image: none;
+}
+
+div:not(:first-of-type) > span:nth-of-type(1):not(.browse) .browse-icon {
+	display: none;
+}
+
+div:not(:first-of-type) > span:nth-of-type(1).release {
+	background-image: url(../bullet_release.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).beta {
+	background-image: url(../bullet_beta.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).aurora {
+	background-image: url(../bullet_aurora.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).nightly {
+	background-image: url(../bullet_nightly.png);
+}
+
+div:not(:first-of-type) > span:nth-of-type(1) {
+	background-repeat: no-repeat;
+	background-attachment: scroll;
+	background-position: center calc(50% - 1px);
+	background-color: transparent;
+}
+/*
+resourceURI.asciiSpec: jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/
+installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1zjle.Unnamed Profile 1\extensions\Profilist@jetpack.xpi
+*/
+
 /* start icons stuff */
 
 .cancel:before {
 	content: '\e800';
 }
 
-.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1).noswitch span.change-icon:before {
+	opacity: 0 !important;
+	transition: opacity 200ms!important;
+}
+
+/*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {*/
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .change-icon:before {
 	opacity: 0.3 !important;
 	transition: opacity 300ms ease 500ms !important;
 }
 
-.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {
+/*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {*/
+.change-icon:before {
 	/*change-icon icon*/
 	content: '\e806';
 	position: absolute;
@@ -67,12 +112,68 @@
 	transition: opacity 200ms !important;
 }
 
-.up:before {
-	content: '\e802';
+.updown:before {
+	content: '\e805';
 }
-.down:before {
-	content: '\e803';
+.current-build:before {
+	content: '\e809';
 }
+
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:before {
+	opacity: .4 !important;
+}
+
+.browse-icon:before {
+	content: '\e80d';
+	position: absolute;
+	top: calc(50% - 9px);
+	left: calc(50% - 8px);
+	opacity: .2 !important;
+}
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:hover:before {
+	opacity: 1 !important;
+}
+
+div  > span:nth-of-type(2) > input[type=text] {
+	transition: width 300ms;
+}
+
+div  > span:nth-of-type(2) > .icon:before {
+	content: '\e804';
+	opacity: 1 !important;
+	color: crimson;
+	width: 0;
+	text-align:right;
+	overflow: hidden;
+	transition: width 150ms, border-color 300ms;
+}
+
+.builds-cont.single-build .updown {
+	display: none;
+}
+
+.builds-cont.single-build.current-build-used > div > span:nth-of-type(3) {
+	width: 20px;
+}
+.builds-cont.current-build-used > div > span:nth-of-type(3),
+.builds-cont.single-build > div > span:nth-of-type(3) {
+	width: 40px;
+}
+
+.builds-cont.current-build-used .current-build {
+	display: none;
+}
+
+div.attn  > span:nth-of-type(2) > .icon:before  {
+	width: 19px;
+}
+
+
+div.attn  > span:nth-of-type(2) > input[type=text] {
+	width: 80%;
+	border: 1px solid crimson;
+}
+
 .tools:before {
 	content: '\e801';
 	opacity: 1 !important;
@@ -110,13 +211,13 @@
   text-decoration: inherit;
   
   opacity: 0.1;
-  margin:0 1px;
+  margin: 0 1px 0 0;
   padding: 0;
  
   /* For safety - reset parent styles, that can break glyph codes*/
   font-variant: normal;
   text-transform: none;
-  transition: opacity 200ms;
+  transition: opacity 200ms, width 200ms;
 }
 
 .builds-cont > div:hover span:nth-of-type(3):hover .icon:hover:before {
