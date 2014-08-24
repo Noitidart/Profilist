@@ -834,7 +834,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
 						console.log('value_in_ini:', value_in_ini);
 						console.log('value_in_tree:', prefObj.value);
-						prefObj.setval(value_in_ini, true);
+						prefObj.setval(value_in_ini, false);
 						console.log('setval done');
 					} else {
 						console.log('ini and tree values match on pref_name:', pref_name_in_obj, prefObj.value, value_in_ini);
@@ -2180,7 +2180,12 @@ PrefListener.prototype.register = function(aReason, exec__on_PrefOnObj_Change__o
 					prefObj.value = prefObj.default;
 				} else {
 					console.log('not install so fetching value of owned pref, as it should exist, may need to catch error here and on error set to default');
-					prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
+					try {
+						prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
+					} catch(ex) {
+						console.warn('excpetion occured when trying to fetch value, startup is not install so it should exist, however it probably doesnt so weird, so setting it to default, ex:', ex); //this may happen if prefs were deleted somehow even though not uninstalled
+						prefObj.value = prefObj.default;
+					}
 				}
 				if ([ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE].indexOf(aReason)) {
 					branchObj._branchDefault['set' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj, prefObj.default);
@@ -2328,24 +2333,84 @@ PrefListener.prototype.on_PrefOnTree_Change = function (branch_name, pref_name_o
 var myPrefListener;
 function writePrefToIni(oldVal, newVal, refObj) {
 	console.info('on_PrefOnObj_Change', 'oldVal:', oldVal, 'newVal:', newVal, 'refObj:', refObj);
+/*
 	var promise0 = readIni();
 	promise0.then(
 		function() {
-			ini.General.props['Profilist.' + refObj.pref_name] = newVal;
-			var promise = writeIni();
-			promise.then(
-				function() {
-					console.log('succesfully updated ini with pref value of ' + refObj.pref_name);
-				},
-				function() {
-					console.error('failed to update ini with pref value of ' + refObj.pref_name);
+*/		
+			var meat = function() {
+				var value_in_ini = ini.General.props['Profilist.' + refObj.pref_name];
+				if (refObj.prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+					value_in_ini = value_in_ini == 'false' ? false : true;
 				}
-			);
+				if (value_in_ini == newVal) {
+					console.log('no need to writePrefToIni as the ini value is already what we are setting the pref to which is newVal');
+				} else {
+					ini.General.props['Profilist.' + refObj.pref_name] = newVal;
+					var promise = writeIni();
+					promise.then(
+						function() {
+							console.log('succesfully updated ini with pref value of ' + refObj.pref_name);
+						},
+						function() {
+							console.error('failed to update ini with pref value of ' + refObj.pref_name);
+						}
+					);
+				}
+				updateOptionTabsDOM(refObj.pref_name, newVal);
+			};
+			
+			if (!ini || !ini.General) {
+				var promise0 = readIni();
+				promise0.then(
+					function() {
+						meat();
+					},
+					function() {
+						console.error('failed readIni in writePrefToIni');
+					}
+				);
+			} else {
+				meat();
+			}
+/*			
 		},
 		function(aRejectReason) {
 			console.error('writePrefToIni failed to read ini', aRejectReason);
 		}
 	);
+*/	
+}
+
+function updateOptionTabsDOM(pref_name, value) {
+	if (value !== null && value !== undefined) {
+		var newVal = value;
+	} else {
+		var newVal = myPrefListener.watchBranches[self.id].prefNames[pref_name].value;
+	}
+	Services.obs.notifyObservers(null, 'profilist-update-cp-dom', pref_name + ' || ' + newVal);
+}
+
+var addonListener = {
+  onPropertyChanged: function(addon, properties) {
+	console.log('props changed on addon:', addon.id, 'properties:', properties);
+	if (addon.id == self.id) {
+	  if (properties.indexOf('applyBackgroundUpdates') > -1){
+		updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
+	  }
+	}
+  }
+};
+
+var openCPContWins = [];
+
+function startListenForAutoUpdateProp() {
+	Cu.import('resource://gre/modules/AddonManager.jsm');
+	AddonManager.addAddonListener(addonListener);
+}
+
+function stopListenForAutoUpdateProp() {
+	AddonManager.removeAddonListener(addonListener);
 }
 
 var cssBuildIconsURI;

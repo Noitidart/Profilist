@@ -159,32 +159,119 @@ width: 500px;
   </style>
   <script>
 	const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
+	const myPrefBranch = 'extensions.Profilist@jetpack.';
 	Cu.import('resource://gre/modules/Promise.jsm');
 	Cu.import('resource://gre/modules/osfile.jsm');
 	Cu.import('resource://gre/modules/devtools/Console.jsm');
+	Cu.import('resource://gre/modules/AddonManager.jsm');
+	Cu.import('resource://gre/modules/Services.jsm');
 	var XPIScope = Cu.import('resource://gre/modules/addons/XPIProvider.jsm');
 	var scope = XPIScope.XPIProvider.bootstrapScopes['Profilist@jetpack'];
 	console.log(scope.ini)
 	
 	document.addEventListener('DOMContentLoaded', init, false);
+	window.addEventListener('unload', uninit, false);
+	function uninit() {
+		console.log('uniniting');
+		console.info('length of openCPContWins:', scope.openCPContWins.length);
+		
+		var indexIn = scope.openCPContWins.indexOf(Cu.getWeakReference(window));
+		console.log('indexIn:', indexIn);
+		
+		for (var i=0; i<scope.openCPContWins.length; i++) {
+			if (scope.openCPContWins[i].get() == window) {
+				console.log('found me at pos:', i);
+				scope.openCPContWins.splice(i, 1);
+			}
+		}
+
+		if (scope.openCPContWins.length == 0) {
+			scope.stopListenForAutoUpdateProp();
+			console.log('stopped addon listener');
+		}
+		Services.obs.removeObserver(observer, 'profilist-update-cp-dom');
+		console.log('uniniting done');
+	}
 	function init() {
 		console.log('init js');
 		var promise = scope.readIni();
 		return promise.then(
 			function() {
+				//start - populate shortcut select
 				var profileNames = [];
-				for (var p in ini) {
-					if ('num' in ini[p]) {
-						profileNames.push(ini[p].props.Name);
+				for (var p in scope.ini) {
+					if ('num' in scope.ini[p]) {
+						profileNames.push(scope.ini[p].props.Name);
 					}
 				}
 				
 				profileNames.sort();
-				for (var i=0; i<profilesNames.length; i++) {
-					var select = document.querySelector('#profiles');
+				var shortcutSelect = document.querySelector('#profiles');
+				for (var i=0; i<profileNames.length; i++) {
 					var opt = document.createElement('option');
-					opt.text = profilesNames[i];
+					opt.text = profileNames[i];
+					shortcutSelect.appendChild(opt);
 				}
+				//end - populate shortcut select
+				//start - make sure prefs on tree are what is pref values in ini
+				var prefNames = scope.myPrefListener.watchBranches[myPrefBranch].prefNames;
+				var writeIniForNewPrefs = false;
+				for (var pref_name_in_obj in prefNames) {
+					var prefObj = scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj];
+					var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+					if (pref_name_in_ini in scope.ini.General.props) {
+						var value_in_ini = scope.ini.General.props[pref_name_in_ini];
+						if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+							value_in_ini = value_in_ini == 'false' ? false : true;
+						}
+						if (prefObj.value != value_in_ini) {
+							console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
+							console.log('value_in_ini:', value_in_ini);
+							console.log('value_in_tree:', prefObj.value);
+							prefObj.setval(value_in_ini, false);
+							console.log('setval done');
+						} else {
+							console.log('ini and tree values match on pref_name:', pref_name_in_obj, prefObj.value, value_in_ini);
+						}
+					} else {
+						scope.ini.General.props[pref_name_in_ini] = prefObj.value;
+						writeIniForNewPrefs = true;
+						console.log('pref_name_in_ini of ', pref_name_in_ini, ' is not in ini so using prefObj.value of ', prefObj.value, ' and set it in the ini obj but didnt write it', 'ini.General:', scope.ini.General);
+					}
+					var respectiveSelectBox = document.getElementById(pref_name_in_ini);
+					if (respectiveSelectBox) {
+						respectiveSelectBox.value = value_in_ini;
+					} else {
+						console.log('select box for', pref_name_in_ini, 'not found');
+					}
+				}
+				if (writeIniForNewPrefs) {
+					var promise89 = scope.writeIni();
+					promise89.then(
+						function() {
+							console.log('succesfully wrote ini for storing new prefs');
+						},
+						function() {
+							console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
+						}
+					);
+				}
+				//end - make sure prefs on tree are what is pref values in ini
+				
+				//get autoupdate
+				AddonManager.getAddonByID('Profilist@jetpack', function(addon) {
+					document.getElementById('Profilist.autoupdate').value = addon.applyBackgroundUpdates;
+					//console.info('addon:', addon);
+					//console.info('addon.applyBackgroundUpdates:', addon.applyBackgroundUpdates);
+					//addon.applyBackgroundUpdates = 0; //off
+					//addon.applyBackgroundUpdates = 1; //default
+					//addon.applyBackgroundUpdates = 2; //on
+				});
+				
+				scope.openCPContWins.push(Cu.getWeakReference(window));
+				scope.startListenForAutoUpdateProp();
+				
+				Services.obs.addObserver(observer, 'profilist-update-cp-dom', false);
 			},
 			function(aRejectReason) {
 				console.error('Failed to refresh ini object from file during renameProfile');
@@ -192,7 +279,20 @@ width: 500px;
 		);
 		console.log('init done');
 	}
-	funciton selectChange(e) {
+	
+var observer = {
+  observe: function(aSubject, aTopic, aData) {
+	console.info('incoming observer on cp tab', 's', aSubject, 't', aTopic, 'd', aData);
+    if (aTopic == 'profilist-update-cp-dom') {
+      var pref_name = aData.split(' || ')[0]; //aSubject;
+	  var pref_value = aData.split(' || ')[1]; //aData;
+      var control = document.getElementById('Profilist.' + pref_name);
+      control.value = pref_value;
+    }
+  }
+};
+
+	function selectChange(e) {
 		console.log('selected changed, new profile name =', this[this.selectedIndex].text);
 	}
 	function changeIcon(e) {
@@ -257,14 +357,14 @@ width: 500px;
                   <fieldset>
                     <div class="row">
                       <label class="input-hint">Automatic Updates</label>
-					  <select style="width:7em">
-                        <option>
+					  <select style="width:7em" id="Profilist.autoupdate">
+                        <option value="1">
                           Default
                         </option>
-                        <option>
+                        <option value="2">
                           On
                         </option>
-                        <option>
+                        <option value="0">
                           Off
                         </option>
                       </select>
@@ -272,11 +372,11 @@ width: 500px;
 
                     <div class="row">
                       <label class="input-hint">Notifications</label>
-					  <select style="width:7em">
-                        <option>
+					  <select style="width:7em" id="Profilist.notifications">
+                        <option value="true">
                           Enabled
                         </option>
-                        <option>
+                        <option value="false">
                           Disabled
                         </option>
                       </select>
@@ -284,11 +384,11 @@ width: 500px;
 
                     <div class="row">
                       <label class="input-hint">Developer Options</label>
-					  <select style="width:7em">
-                        <option>
+					  <select style="width:7em" id="Profilist.dev">
+                        <option value="true">
                           Enabled
                         </option>
-                        <option>
+                        <option value="false">
                           Disabled
                         </option>
                       </select>
@@ -296,15 +396,9 @@ width: 500px;
 
                     <div style="" class="row">
                       <label style="" class="input-hint">Create Desktop Shortcut</label>
-                      <select id="profiles" onchange="selectChange(event)">
+                      <select id="profiles" oncommand="selectChange(event)" style="width:17em; text-overflow:ellipsis;">
                         <option>
                           Select Profile Name
-                        </option>
-                        <option>
-                          Main
-                        </option>
-                        <option>
-                          Dev
                         </option>
                       </select>
 					  <label style="float: right; position: relative; width: auto; margin: 6px 3px 3px; display:none;" class="input-hint">
