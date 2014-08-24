@@ -165,6 +165,7 @@ width: 500px;
 	Cu.import('resource://gre/modules/devtools/Console.jsm');
 	Cu.import('resource://gre/modules/AddonManager.jsm');
 	Cu.import('resource://gre/modules/Services.jsm');
+	Cu.import('resource://gre/modules/FileUtils.jsm');
 	var XPIScope = Cu.import('resource://gre/modules/addons/XPIProvider.jsm');
 	var scope = XPIScope.XPIProvider.bootstrapScopes['Profilist@jetpack'];
 	console.log(scope.ini)
@@ -199,17 +200,23 @@ width: 500px;
 			function() {
 				//start - populate shortcut select
 				var profileNames = [];
+				var profileIdentifiers = [];
 				for (var p in scope.ini) {
 					if ('num' in scope.ini[p]) {
-						profileNames.push(scope.ini[p].props.Name);
+						profileNames.push([scope.ini[p].props.Name, scope.ini[p].props.Path]);
 					}
 				}
 				
-				profileNames.sort();
+				profileNames.sort(function(a, b) {
+					a = a[0];
+					b = b[0];
+					return a > b;
+				});
 				var shortcutSelect = document.querySelector('#profiles');
 				for (var i=0; i<profileNames.length; i++) {
 					var opt = document.createElement('option');
-					opt.text = profileNames[i];
+					opt.text = profileNames[i][0];
+					opt.value = profileNames[i][1];
 					shortcutSelect.appendChild(opt);
 				}
 				//end - populate shortcut select
@@ -292,9 +299,66 @@ var observer = {
   }
 };
 
+	var changeTracker = {};
 	function selectChange(e) {
-		console.log('selected changed, new profile name =', this[this.selectedIndex].text);
+		//start test if really changed
+		var targ = e.target;
+		if (targ.id in changeTracker) {
+			//if (this.text == this.changeTracker.text
+		}
+		//end test if really changed
+		console.log('targ', targ);
+		console.log('selected changed, new profile name =', targ[targ.selectedIndex].text, targ[targ.selectedIndex].value);
+		var profile_name = targ[targ.selectedIndex].text;
+		var identifier = targ[targ.selectedIndex].value;
+		createShortcut(identifier);
 	}
+	
+	function createShortcut(identifier) {
+		var loader = document.querySelector('#scLoader');
+		loader.style.opacity = 1;
+		
+		var prof_props;
+		for (var p in scope.ini) {
+			if ('num' in scope.ini[p]) {
+				//is profile
+				if (scope.ini[p].props.Path == identifier) {
+					prof_props = scope.ini[p].props;
+					break;
+				}
+			}
+		}
+		if (!prof_props) {
+			alert('ERROR - Could not find idnetifier of "' + identifier + '" in profiles list');
+			loader.style.opacity = 0;
+			return;
+		}
+		
+		if (prof_props.IsRelative == '1') {
+			var dirName = OS.Path.basename(OS.Path.normalize(prof_props.Path));
+			var fullPathToProfile = OS.Path.join(FileUtils.getFile('DefProfRt', []).path, dirName);
+		} else {
+			var fullPathToProfile = prof_props.Path;
+		}
+		
+		loader.style.display = 'flex-block';
+		if (OS.Constants.Sys.Name == 'WINNT') {
+			var exe = FileUtils.getFile('XREExeF', []);
+			var myShortcut = FileUtils.getFile('Desk', ['Mozilla Firefox - ' + prof_props.Name + '.lnk']);
+			var myShortcutWin = myShortcut.QueryInterface(Ci.nsILocalFileWin);
+
+			//var myScIcon = new FileUtils.File('moz-icon:' + Services.io.newFileURI(exe).spec);
+			//can use identifier as path because identifier is path. i thought but it didnt work out right so moving tgo full path to profile
+			myShortcutWin.setShortcut(exe, null, '-profile "' + fullPathToProfile + '" -no-remote', 'Launches Mozilla Firefox with "' + prof_props.Name + '" Profile', exe);
+		} else if (OS.Constants.Sys.Name == '') {
+		
+		} else {
+			alert('Unrecognized Operating System - Desktop shortcut creation failed');
+		}
+		
+		loader.style.opacity = 0;
+	}
+	
 	function changeIcon(e) {
 		var target = e.target;
 		var oTarg = e.originalTarget;
@@ -396,12 +460,12 @@ var observer = {
 
                     <div style="" class="row">
                       <label style="" class="input-hint">Create Desktop Shortcut</label>
-                      <select id="profiles" oncommand="selectChange(event)" style="width:17em; text-overflow:ellipsis;">
-                        <option>
+                      <select id="profiles" onchange="selectChange(event)" style="width:10em; text-overflow:ellipsis;">
+                        <option value="null">
                           Select Profile Name
                         </option>
                       </select>
-					  <label style="float: right; position: relative; width: auto; margin: 6px 3px 3px; display:none;" class="input-hint">
+					  <label id="scLoader" style="float: right; position: relative; width: auto; margin: 6px 3px 3px; pointer-events:none; opacity:0; transition:opacity 200ms;" class="input-hint">
 						<img src="options_resources/loading.gif" />
 					  </label>
                     </div><!--next row-->
