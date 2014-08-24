@@ -158,6 +158,43 @@ width: 500px;
 }
   </style>
   <script>
+	const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
+	Cu.import('resource://gre/modules/Promise.jsm');
+	Cu.import('resource://gre/modules/osfile.jsm');
+	Cu.import('resource://gre/modules/devtools/Console.jsm');
+	var XPIScope = Cu.import('resource://gre/modules/addons/XPIProvider.jsm');
+	var scope = XPIScope.XPIProvider.bootstrapScopes['Profilist@jetpack'];
+	console.log(scope.ini)
+	
+	document.addEventListener('DOMContentLoaded', init, false);
+	function init() {
+		console.log('init js');
+		var promise = scope.readIni();
+		return promise.then(
+			function() {
+				var profileNames = [];
+				for (var p in ini) {
+					if ('num' in ini[p]) {
+						profileNames.push(ini[p].props.Name);
+					}
+				}
+				
+				profileNames.sort();
+				for (var i=0; i<profilesNames.length; i++) {
+					var select = document.querySelector('#profiles');
+					var opt = document.createElement('option');
+					opt.text = profilesNames[i];
+				}
+			},
+			function(aRejectReason) {
+				console.error('Failed to refresh ini object from file during renameProfile');
+			}
+		);
+		console.log('init done');
+	}
+	funciton selectChange(e) {
+		console.log('selected changed, new profile name =', this[this.selectedIndex].text);
+	}
 	function changeIcon(e) {
 		var target = e.target;
 		var oTarg = e.originalTarget;
@@ -259,7 +296,7 @@ width: 500px;
 
                     <div style="" class="row">
                       <label style="" class="input-hint">Create Desktop Shortcut</label>
-                      <select style="" disabled="disabled">
+                      <select id="profiles" onchange="selectChange(event)">
                         <option>
                           Select Profile Name
                         </option>
@@ -270,7 +307,7 @@ width: 500px;
                           Dev
                         </option>
                       </select>
-					  <label style="float: right; position: relative; width: auto; margin: 6px 3px 3px;" class="input-hint">
+					  <label style="float: right; position: relative; width: auto; margin: 6px 3px 3px; display:none;" class="input-hint">
 						<img src="options_resources/loading.gif" />
 					  </label>
                     </div><!--next row-->

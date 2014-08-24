@@ -1,10 +1,12 @@
 const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
 const self = {
 	name: 'Profilist',
+	id: 'Profilist@jetpack',
 	chrome_path: 'chrome://profilist/content/',
 	aData: 0,
 };
 
+const myPrefBranch = 'extensions.' + self.name + '@jetpack.';
 const tbb_box_style = '';
 const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
 
@@ -64,7 +66,7 @@ function readIni() {
 				var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
 	//			//console.log(readStr);
 				ini = {};
-				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.+))(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?(?:\s+?(.+?)=(.+))?/mg;
+				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg;
 				var blocks = [];
 
 				var match;
@@ -818,6 +820,63 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 			profToolkit.profileCount = profileCount;
 			profToolkit.pathsInIni = pathsInIni;
 			
+			var prefNames = myPrefListener.watchBranches[myPrefBranch].prefNames;
+			var writeIniForNewPrefs = false;
+			for (var pref_name_in_obj in prefNames) {
+				var prefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj];
+				var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+				if (pref_name_in_ini in ini.General.props) {
+					var value_in_ini = ini.General.props[pref_name_in_ini];
+					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+						value_in_ini = value_in_ini == 'false' ? false : true;
+					}
+					if (prefObj.value != value_in_ini) {
+						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
+						console.log('value_in_ini:', value_in_ini);
+						console.log('value_in_tree:', prefObj.value);
+						prefObj.setval(value_in_ini, true);
+						console.log('setval done');
+					} else {
+						console.log('ini and tree values match on pref_name:', pref_name_in_obj, prefObj.value, value_in_ini);
+					}
+				} else {
+					ini.General.props[pref_name_in_ini] = prefObj.value;
+					writeIniForNewPrefs = true;
+					console.log('pref_name_in_ini of ', pref_name_in_ini, ' is not in ini so using prefObj.value of ', prefObj.value, ' and set it in the ini obj but didnt write it', 'ini.General:', ini.General);
+				}
+			}
+			if (writeIniForNewPrefs) {
+				var promise89 = writeIni();
+				promise89.then(
+					function() {
+						console.log('succesfully wrote ini for storing new prefs');
+					},
+					function() {
+						console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
+					}
+				);
+			}
+			/*
+			for (var g in ini.General.props) {
+				if (g.substr(0, 10) == 'Profilist.') {
+					var pref_name_in_ini = g.substr(10);
+					var prefObj = myPrefListener.watchBranches['extensions.Profilist@jetpack'].prefNames[pref_name_in_ini];
+					console.log('pref_name_in_ini:', pref_name_in_ini);
+					var value_in_ini = ini.General.props[g];
+					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+						value_in_ini = value_in_ini == 'false' ? false : true;
+					}
+					if (prefObj.value != ini.General.props[g]) {
+						console.log('value of prev_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
+						console.log('value_in_ini:', ini.General.props[g]);
+						console.log('value_in_tree:', prefObj.value);
+						
+						prefObj.setval(value_in_ini);
+						console.log('setval done');
+					}
+				}
+			}
+			*/
 	//		console.info('profToolkit.selectedProfile.name = ', profToolkit.selectedProfile.name);
 	//		console.info('selectedProfileNameFound = ', selectedProfileNameFound);
 
@@ -1990,6 +2049,305 @@ function jsonToDOM(xml, doc, nodes) {
     return tag.apply(null, xml);
 }
 /*end - dom insertion library function from MDN*/
+
+//start pref stuff
+//needs ES5, i dont know what min browser version of FF starts support for ES5
+/**
+ * if want to change value of preference dont do prefs.holdTime.value = blah, instead must do `prefs.holdTime.setval(500)`
+ * because this will then properly set the pref on the branch then it will do the onChange properly with oldVal being correct
+ * NOTE: this fucntion prefSetval is not to be used directly, its only here as a contructor
+ */
+PrefListener.prototype.prefSetval = function(pass_pref_name, pass_branch_name) {
+	console.log('this outside', this);
+	var passBranchObj = this.watchBranches[pass_branch_name];
+	var passPrefObj = passBranchObj.prefNames[pass_pref_name];
+	var func = function(updateTo, iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute) {
+		var pref_name = pass_pref_name;
+		var branch_name = pass_branch_name;
+		var branchObj = passBranchObj; //this.watchBranches[branch_name];
+		var prefObj = passPrefObj; //branchObj.prefNames[pref_name];
+		//console.info('in prefSetval', 'this:', this, 'branchObj', branchObj, 'prefObj', prefObj, 'pref_name', pass_pref_name);
+		if (iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute) {
+			var curValOnTree = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name);
+			if (curValOnTree == updateTo) {
+				console.warn('setval called said to mark it for skipOnChange, however updateTo and curValOnTree are same so on_PrefOnTree_Change will not call after running this updateTo so will not mark for skip');
+			} else {
+				prefObj.iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute = new Date().getTime();
+			}
+		}
+		branchObj._branchLive['set' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name, updateTo);
+	};
+	return func;
+}
+function typeStr_from_typeLong(typeLong) {
+	switch (typeLong) {
+		case Ci.nsIPrefBranch.PREF_STRING:
+			return 'Char';
+		case Ci.nsIPrefBranch.PREF_INT:
+			return 'Int';
+		case Ci.nsIPrefBranch.PREF_BOOL:
+			return 'Bool';
+		case Ci.nsIPrefBranch.PREF_INVALID:
+			//probably pref does not exist
+			throw new Error('typeLong is PREF_INVALID so probably pref DOES NOT EXIST');
+		default:
+			throw new Error('unrecognized typeLong:', typeLong);
+	}
+}
+///pref listener generic stuff NO NEED TO EDIT
+/**
+ * @constructor
+ *
+ * @param {string} branch_name
+ * @param {Function} callback must have the following arguments:
+ *   branch, pref_leaf_name
+ */
+ //note: a weakness with this api i made for prefs, is that, if upgrading/downgrading and in installing rev a pref is no longer in use, the old pref will stay in the about:config system. prefs are only deleted when addon is uninstalled note: as of 080314 though i think i have a solution for this, watch the info/warn dump and if it holds true than edit it in
+ //note: good thing about this overhaul of the pref skeleton is that i can have this skeleton pasted in, and if no prefs being watched it doesnt do anything funky
+function PrefListener() {
+	//is an array
+  // Keeping a reference to the observed preference branch or it will get garbage collected.
+	Object.keys(this.watchBranches).forEach(function(branch_name) {
+		this.watchBranches[branch_name]._branchLive = Services.prefs.getBranch(branch_name);
+		this.watchBranches[branch_name]._branchDefault = Services.prefs.getDefaultBranch(branch_name);
+		//this.watchBranches[branch_name]._branchLive.QueryInterface(Ci.nsIPrefBranch2); //do not need this anymore as i dont support FF3.x
+	}.bind(this));
+}
+
+PrefListener.prototype.watchBranches = {
+	'extensions.Profilist@jetpack.': {
+		ownType: 0, //0-full, 1-none, 2-partial
+		prefNames: {
+			'notifications': {
+				owned: true,
+				default: true,
+				value: undefined,
+				type: Ci.nsIPrefBranch.PREF_BOOL,
+				on_PrefOnObj_Change: writePrefToIni
+			},
+			'dev': {
+				owned: true,
+				default: false,
+				value: undefined,
+				type: Ci.nsIPrefBranch.PREF_BOOL,
+				on_PrefOnObj_Change: writePrefToIni
+			},
+			'dev-builds': {
+				owned: true,
+				default: '',
+				value: undefined,
+				type: Ci.nsIPrefBranch.PREF_STRING,
+				on_PrefOnObj_Change: writePrefToIni
+			}
+		},
+		on_UnknownPrefNameOnObj_Change: function(oldVal, newVal, refObj) {
+			console.warn('on_UnknownPrefNameOnObj_Change', 'oldVal:', oldVal, 'newVal:', newVal, 'refObj:', refObj);
+		}
+	}
+}
+
+PrefListener.prototype.observe = function(subject, topic, data) {
+	//console.log('incoming PrefListener observe :: ', 'topic:', topic, 'data:', data, 'subject:', subject);
+	//console.info('compare subject to this._branchLive[extensions.MailtoWebmails@jetpack.]', this.watchBranches[subject.root]._branchLive);
+	if (topic == 'nsPref:changed') {
+		var branch_name = subject.root;
+		var pref_name = data;
+		this.on_PrefOnTree_Change(branch_name, pref_name);
+	} else {
+		console.warn('topic is something totally unexpected it is:', topic);
+	}
+};
+
+/**
+ * @param {boolean=} trigger if true triggers the registered function
+ *   on registration, that is, when this method is called.
+ */
+PrefListener.prototype.register = function(aReason, exec__on_PrefOnObj_Change__onRegister) {
+	var branchesOnObj = Object.keys(this.watchBranches);
+	for (var i=0; i<branchesOnObj.length; i++) {
+		var branch_name = branchesOnObj[i];
+		var branchObj = this.watchBranches[branch_name];
+		if (branchObj.ownType == 0) {
+			var unusedPrefNamesOnTree = branchObj._branchLive.getChildList('', {});
+		}
+		var prefNamesOnObj = Object.keys(this.watchBranches[branch_name].prefNames);
+		for (var j=0; j<prefNamesOnObj.length; j++) {
+			var pref_name_on_obj = prefNamesOnObj[j];
+			var prefObj = branchObj.prefNames[pref_name_on_obj];
+			if (prefObj.owned) {
+				prefObj.setval = this.prefSetval(pref_name_on_obj, branch_name);
+				if (aReason == ADDON_INSTALL) {
+					prefObj.value = prefObj.default;
+				} else {
+					console.log('not install so fetching value of owned pref, as it should exist, may need to catch error here and on error set to default');
+					prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
+				}
+				if ([ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE].indexOf(aReason)) {
+					branchObj._branchDefault['set' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj, prefObj.default);
+				}
+				if (branchObj.ownType == 0) {
+					var indexOfPrefName_ON_unusedPrefNamesOnTree = unusedPrefNamesOnTree.indexOf(pref_name_on_obj);
+					if (indexOfPrefName_ON_unusedPrefNamesOnTree > -1) {
+						unusedPrefNamesOnTree.splice(indexOfPrefName_ON_unusedPrefNamesOnTree, 1);
+					}
+				}
+			} else {
+				prefObj.type = branchObj._branchLive.getPrefType(pref_name_on_obj); //use _branchLive in case it doesnt have default value //and its got to have _branchLive value as it is NOT owned UNLESS dev messed ownership up
+				prefObj.default = branchObj._branchDefault['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
+				prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
+				prefObj.setval = this.prefSetval(pref_name_on_obj, branch_name);
+			}
+		}
+		branchObj._branchLive.addObserver('', this, false);
+		
+		for (var j=0; j<unusedPrefNamesOnTree.length; j++) {
+			var pref_name_in_arr = unusedPrefNamesOnTree[j];
+			/*
+			if (!this._branchDefault) {
+				this._branchDefault = Services.prefs.getDefaultBranch(null);
+			}
+			this._branchDefault.deleteBranch(branch_name + pref_name); //delete default value
+			branchObj._branchLive.clearUserPref(pref_name_in_arr); //delete live value
+			*/
+			Services.prefs.deleteBranch(branch_name + pref_name_in_arr); //deletes the default and live value so pref_name is gone from tree
+		}
+	}
+	
+	if (exec__on_PrefOnObj_Change__onRegister) { //for robustness this must not be a per branch or a per pref property but on the whole watchBranches
+		for (var i=0; i<branchesOnObj.length; i++) {
+			var branch_name = branchesOnObj[i];
+			var branchObj = this.watchBranches[branch_name];
+			var prefNamesOnObj = Object.keys(this.watchBranches[branch_name].prefNames);
+			for (var j=0; j<prefNamesOnObj.length; j++) {
+				var pref_name_on_obj = prefNamesOnObj[j];
+				var prefObj = branchObj.prefNames[pref_name_on_obj];
+				if (prefObj.on_PrefOnObj_Change) {
+					var oldVal = undefined; //because this is what value on obj was before i set it to something
+					var newVal = prefObj.value;
+					var refObj = {
+						branch_name: branch_name,
+						pref_name: pref_name_on_obj,
+						prefObj: prefObj,
+						branchObj: branchObj
+					};
+					prefObj.on_PrefOnObj_Change(oldVal, newVal, refObj);
+				}
+			}
+		}
+	}
+};
+
+PrefListener.prototype.unregister = function() {
+	var branchesOnObj = Object.keys(this.watchBranches);
+	for (var i=0; i<branchesOnObj.length; i++) {
+		var branch_name = branchesOnObj[i];
+		var branchObj = this.watchBranches[branch_name];
+		branchObj._branchLive.removeObserver('', this);
+		console.log('removed observer from branch_name', branch_name);
+	}
+};
+
+PrefListener.prototype.uninstall = function(aReason) {
+	console.log('in PrefListener.uninstall proc');
+	if (aReason == ADDON_UNINSTALL) {
+		var branchesOnObj = Object.keys(this.watchBranches);
+		for (var i=0; i<branchesOnObj.length; i++) {
+			var branch_name = branchesOnObj[i];
+			var branchObj = this.watchBranches[branch_name];
+			if (branchObj.ownType == 0) {
+				Services.prefs.deleteBranch(branch_name);
+			} else {
+				var prefNamesOnObj = Object.keys(this.watchBranches[branch_name].prefNames);
+				for (var j=0; j<prefNamesOnObj.length; j++) {
+					var pref_name_on_obj = prefNamesOnObj[j];
+					var prefObj = branchObj.prefNames[pref_name_on_obj];
+					if (prefObj.owned) {
+						Services.prefs.deleteBranch(branch_name + pref_name_on_obj);
+					}
+				}
+			}
+		}
+	} else {
+		console.log('not real uninstall so quitting preflistener.uninstall proc');
+	}
+};
+
+PrefListener.prototype.on_PrefOnTree_Change = function (branch_name, pref_name_on_tree) {
+	console.log('on_PrefOnTree_Change', 'pref_name_on_tree:', pref_name_on_tree, 'branch_name:', branch_name);
+	var branchObj = this.watchBranches[branch_name];
+	var refObj = {
+		branch_name: branch_name,
+		pref_name: pref_name_on_tree,
+		branchObj: branchObj
+	};
+	if (pref_name_on_tree in branchObj.prefNames) {
+		var prefObj = branchObj.prefNames[pref_name_on_tree];
+		var oldVal = prefObj.value;
+		try {
+			var newVal = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_tree);
+		} catch (ex) {
+			console.info('probably deleted', 'newVal exception:', ex);
+		}
+		refObj.prefObj = prefObj;
+		if (prefObj.iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute) {
+			var msAgo_markedForSkip = new Date().getTime() - prefObj.iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute;
+			console.log('skipping this onChange as 2nd arg told to skip it, it was marked for skip this many ms ago:', msAgo_markedForSkip);
+			delete prefObj.iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute
+		} else {
+			if (prefObj.on_PrefOnObj_Change) {
+				prefObj.on_PrefOnObj_Change(oldVal, newVal, refObj);
+			} else {
+				//do nothing
+			}
+		}
+		prefObj.value = newVal;
+		console.log('prefObj value updated, prefObj:', prefObj);
+	} else {
+		if (branchObj.on_UnknownPrefNameOnObj_Change) {
+			var oldVal = null; //i actually dont know if it existed before
+			refObj.type = branchObj._branchLive.getPrefType(pref_name_on_tree);
+			console.info('refObj.type:', refObj.type);
+			if (refObj.type == 0) {
+				console.info('unknownNameOnObj pref probably deleted');
+				newVal = null;
+			}
+			var newVal = branchObj._branchLive['get' + typeStr_from_typeLong(refObj.type) + 'Pref'](pref_name_on_tree);
+			refObj.setval = function(updateTo) {
+				branchObj._branchLive['set' + typeStr_from_typeLong(refObj.type) + 'Pref'](pref_name_on_tree, updateTo);
+			}
+			branchObj.on_UnknownPrefNameOnObj_Change(oldVal, newVal, refObj);
+		} else {
+			//do nothing
+		}
+	}
+	console.log('DONE on_PrefOnTree_Change');
+};
+////end pref listener stuff
+//end pref stuff
+
+var myPrefListener;
+function writePrefToIni(oldVal, newVal, refObj) {
+	console.info('on_PrefOnObj_Change', 'oldVal:', oldVal, 'newVal:', newVal, 'refObj:', refObj);
+	var promise0 = readIni();
+	promise0.then(
+		function() {
+			ini.General.props['Profilist.' + refObj.pref_name] = newVal;
+			var promise = writeIni();
+			promise.then(
+				function() {
+					console.log('succesfully updated ini with pref value of ' + refObj.pref_name);
+				},
+				function() {
+					console.error('failed to update ini with pref value of ' + refObj.pref_name);
+				}
+			);
+		},
+		function(aRejectReason) {
+			console.error('writePrefToIni failed to read ini', aRejectReason);
+		}
+	);
+}
+
 var cssBuildIconsURI;
 function startup(aData, aReason) {
 //	console.log('in startup');
@@ -2023,6 +2381,11 @@ function startup(aData, aReason) {
 	cssBuildIconsURI = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
 	myServices.sss.loadAndRegisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
 	
+	//start pref stuff more
+	myPrefListener = new PrefListener(); //init
+	console.info('myPrefListener', myPrefListener);
+	myPrefListener.register(aReason, false);
+	//end pref stuff more
 	
 	windowListener.register();
 	
@@ -2035,8 +2398,21 @@ function shutdown(aData, aReason) {
 	myServices.sss.unregisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
+	
+	//start pref stuff more
+	myPrefListener.unregister();
+	//end pref stuff more
 }
 
 function install() {}
 
-function uninstall() {}
+function uninstall(aData, aReason) {
+	//start pref stuff more
+	if (!myPrefListener) {
+		//lets not register observer/listener lets just "install" it which populates branches
+		console.log('in uninstall had to init (soft install) myPrefListener')
+		myPrefListener = new PrefListener(); //this pouplates this.watchBranches[branch_name] so we can access .branchLive and .branchDefault IT WILL NOT register the perf observer/listener so no overhead there
+	}
+	myPrefListener.uninstall(aReason); //deletes owned branches AND owned prefs on UNowned branches, this is optional, you can choose to leave your preferences on the users computer	
+	//end pref stuff more
+}
