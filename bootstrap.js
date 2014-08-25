@@ -2456,6 +2456,7 @@ function stopListenForAutoUpdateProp() {
 }
 
 function activated(e) {
+	console.log('activated openCPContWins.length:', openCPContWins.length);
 	if (openCPContWins.length > 0) {
 		console.log('cp tabs are open somewhere, e:', e);
 		var found = false;
@@ -2521,6 +2522,8 @@ function startup(aData, aReason) {
 	
 	windowListener.register();
 	
+	//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
+	
 }
 
 function shutdown(aData, aReason) {
@@ -2530,6 +2533,21 @@ function shutdown(aData, aReason) {
 	myServices.sss.unregisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
+	if (openCPContWins.length > 0) {
+		console.info('openCPContWins.length>0 and aReason ==', aReason);
+		if ([ADDON_DISABLE, ADDON_UNINSTALL].indexOf(aReason) > -1) {
+			stopListenForAutoUpdateProp();
+			Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'profilist.shutdown');
+		}
+	}
+	
+	if (aReason == ADDON_UNINSTALL) {
+		/*
+		if (openCPContWins.length > 0) {
+			myPrefListener.watchBranches[myPrefBranch].prefNames['system-cp-tabs-open'].setval(true);
+		}
+		*/
+	}
 	
 	//start pref stuff more
 	myPrefListener.unregister();

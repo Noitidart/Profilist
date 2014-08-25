@@ -324,6 +324,30 @@ var observer = {
 		} else if (aData == 'updateDomFromIni.noref') {
 			console.log('incoming updateDomFromIni.noref');
 			updateDomFromIni(false);
+		} else if (aData == 'restart') {
+			console.log('incoming profilist.restart');
+			scope.openCPContWins.push(Cu.getWeakReference(window));
+			scope.startListenForAutoUpdateProp();
+		} else if (aData == 'profilist.shutdown') {
+			console.log('incoming profilist.shutdown');
+			var newloc = 'data:text/html,<img src="https://addons.cdn.mozilla.net/user-media/addon_icons/500/500406-64.png?modified=1401373229"> Profilist add-on was either disabled or uninstalled while the control panel was open in this tab, so it has been unloaded.';
+			var domWin = window.QueryInterface(Ci.nsIInterfaceRequestor)
+								.getInterface(Ci.nsIWebNavigation)
+								.QueryInterface(Ci.nsIDocShellTreeItem)
+								.rootTreeItem
+								.QueryInterface(Ci.nsIInterfaceRequestor)
+								.getInterface(Ci.nsIDOMWindow);
+			if (domWin.gBrowser) {
+				if (domWin.gBrowser.tabContainer) {
+					var tab = domWin.gBrowser._getTabForContentWindow(window);
+					console.log('did gettab');
+					tab.linkedBrowser.contentWindow.location = newloc;
+				} else {
+					gBrowser.contentWindow.location = newloc;
+				}
+			} else {
+				domWin.location = newloc;
+			}
 		} else if (aData.indexOf(' || ') > -1) {
 			var theSplit = aData.split(' || ');
 			var pref_name = theSplit[0]; //aSubject;
