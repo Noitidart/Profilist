@@ -172,32 +172,11 @@ width: 500px;
 	
 	document.addEventListener('DOMContentLoaded', init, false);
 	window.addEventListener('unload', uninit, false);
-	function uninit() {
-		console.log('uniniting');
-		console.info('length of openCPContWins:', scope.openCPContWins.length);
+	
+	function updateDomFromIni(readIni) {
+		console.log('FOCUSED');
 		
-		var indexIn = scope.openCPContWins.indexOf(Cu.getWeakReference(window));
-		console.log('indexIn:', indexIn);
-		
-		for (var i=0; i<scope.openCPContWins.length; i++) {
-			if (scope.openCPContWins[i].get() == window) {
-				console.log('found me at pos:', i);
-				scope.openCPContWins.splice(i, 1);
-			}
-		}
-
-		if (scope.openCPContWins.length == 0) {
-			scope.stopListenForAutoUpdateProp();
-			console.log('stopped addon listener');
-		}
-		Services.obs.removeObserver(observer, 'profilist-update-cp-dom');
-		console.log('uniniting done');
-	}
-	function init() {
-		console.log('init js');
-		var promise = scope.readIni();
-		return promise.then(
-			function() {
+		var updateDOM = function() {
 				//start - populate shortcut select
 				var profileNames = [];
 				var profileIdentifiers = [];
@@ -213,6 +192,10 @@ width: 500px;
 					return a > b;
 				});
 				var shortcutSelect = document.querySelector('#profiles');
+				var opts = shortcutSelect.querySelectorAll('option');
+				for (var i=opts.length-1; i>0; i--) {
+				  opts[i].parentNode.removeChild(opts[i])
+				}
 				for (var i=0; i<profileNames.length; i++) {
 					var opt = document.createElement('option');
 					opt.text = profileNames[i][0];
@@ -273,7 +256,46 @@ width: 500px;
 					);
 				}
 				//end - make sure prefs on tree are what is pref values in ini
-				
+		}
+		
+		if (readIni) {
+			var promise = scope.readIni();
+			return promise.then(
+				function() {
+					updateDOM();
+				},
+				function(aRejectReason) {
+					console.error('Failed to refresh ini object from file during renameProfile');
+				}
+			);
+		} else {
+			updateDOM();
+		}
+	}
+	
+	function uninit() {
+		console.log('uniniting');
+		console.info('length of openCPContWins:', scope.openCPContWins.length);
+		
+		var indexIn = scope.openCPContWins.indexOf(Cu.getWeakReference(window));
+		console.log('indexIn:', indexIn);
+		
+		for (var i=0; i<scope.openCPContWins.length; i++) {
+			if (scope.openCPContWins[i].get() == window) {
+				console.log('found me at pos:', i);
+				scope.openCPContWins.splice(i, 1);
+			}
+		}
+
+		if (scope.openCPContWins.length == 0) {
+			scope.stopListenForAutoUpdateProp();
+			console.log('stopped addon listener');
+		}
+		Services.obs.removeObserver(observer, 'profilist-update-cp-dom');
+		console.log('uniniting done');
+	}
+	
+	function init() {
 				//get autoupdate
 				AddonManager.getAddonByID('Profilist@jetpack', function(addon) {
 					document.getElementById('Profilist.autoupdate').value = addon.applyBackgroundUpdates;
@@ -288,22 +310,27 @@ width: 500px;
 				scope.startListenForAutoUpdateProp();
 				
 				Services.obs.addObserver(observer, 'profilist-update-cp-dom', false);
-			},
-			function(aRejectReason) {
-				console.error('Failed to refresh ini object from file during renameProfile');
-			}
-		);
-		console.log('init done');
+				
+				updateDomFromIni(true);
 	}
 	
 var observer = {
   observe: function(aSubject, aTopic, aData) {
 	console.info('incoming observer on cp tab', 's', aSubject, 't', aTopic, 'd', aData);
     if (aTopic == 'profilist-update-cp-dom') {
-      var pref_name = aData.split(' || ')[0]; //aSubject;
-	  var pref_value = aData.split(' || ')[1]; //aData;
-      var control = document.getElementById('Profilist.' + pref_name);
-      control.value = pref_value;
+		if (aData == 'updateDomFromIni.refresh') {
+			console.log('incoming updateDomFromIni.refresh');
+			updateDomFromIni(true);
+		} else if (aData == 'updateDomFromIni.noref') {
+			console.log('incoming updateDomFromIni.noref');
+			updateDomFromIni(false);
+		} else if (aData.indexOf(' || ') > -1) {
+			var theSplit = aData.split(' || ');
+			var pref_name = theSplit[0]; //aSubject;
+			var pref_value = theSplit[1]; //aData;
+			var control = document.getElementById('Profilist.' + pref_name);
+			control.value = pref_value;
+		}
     }
   }
 };

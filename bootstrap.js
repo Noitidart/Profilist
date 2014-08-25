@@ -1834,6 +1834,7 @@ var windowListener = {
 			return;
 		}
 		
+		aDOMWindow.addEventListener('activate', activated, false);
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {			
 			//var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
@@ -1991,6 +1992,7 @@ var windowListener = {
 			return;
 		}
 		
+		aDOMWindow.removeEventListener('activate', activated, false);
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
 		if (PanelUI) {
 			delete aDOMWindow.ProfilistInRenameMode;
@@ -2451,6 +2453,31 @@ function startListenForAutoUpdateProp() {
 
 function stopListenForAutoUpdateProp() {
 	AddonManager.removeAddonListener(addonListener);
+}
+
+function activated(e) {
+	if (openCPContWins.length > 0) {
+		console.log('cp tabs are open somewhere, e:', e);
+		var found = false;
+		for (var i=0; i<openCPContWins.length; i++) {
+			var contWin = openCPContWins[i].get();
+			var domWin = contWin.QueryInterface(Ci.nsIInterfaceRequestor)
+								.getInterface(Ci.nsIWebNavigation)
+								.QueryInterface(Ci.nsIDocShellTreeItem)
+								.rootTreeItem
+								.QueryInterface(Ci.nsIInterfaceRequestor)
+								.getInterface(Ci.nsIDOMWindow);
+			if (domWin == e.target) {
+				console.log('user just activated a window that has a cp contwin in it so send notify obs for updateDomFromIni.refresh');
+				found = true;
+				Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'updateDomFromIni.refresh');
+				break;
+			}
+		}
+		if (!found) {
+			console.warn('cp tabs are open, but the window the user just activated doesnt have the cp contwin so DO NOT notify obs');
+		}
+	}
 }
 
 var cssBuildIconsURI;
