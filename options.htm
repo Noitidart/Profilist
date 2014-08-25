@@ -229,7 +229,16 @@ width: 500px;
 					if (pref_name_in_ini in scope.ini.General.props) {
 						var value_in_ini = scope.ini.General.props[pref_name_in_ini];
 						if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-							value_in_ini = value_in_ini == 'false' ? false : true;
+							//value_in_ini = value_in_ini == 'false' ? false : true;
+							if (typeof(value_in_ini) != 'boolean') {
+							  if (value_in_ini == 'false') {
+								value_in_ini = false;
+							  } else if (value_in_ini == 'true') {
+								value_in_ini = true;
+							  } else {
+								throw new Error('not a boolean');
+							  }
+							}
 						}
 						if (prefObj.value != value_in_ini) {
 							console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
@@ -427,7 +436,16 @@ var observer = {
 				var branchObj = scope.myPrefListener.watchBranches[myPrefBranch];
 				var prefObj = scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name];
 				if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-					selectedValue = ['false', false, 0].indexOf(selectedValue) > -1 ? false : true;
+					//selectedValue = ['false', false, 0].indexOf(selectedValue) > -1 ? false : true;
+					if (typeof(selectedValue) != 'boolean') {
+					  if (selectedValue == 'false') {
+						selectedValue = false;
+					  } else if (selectedValue == 'true') {
+						selectedValue = true;
+					  } else {
+						throw new Error('not a boolean');
+					  }
+					}
 				}
 				//console.log(scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name])
 				//alert(branchObj._branchLive['set' + scope.typeStr_from_typeLong(prefObj.type) + 'Pref']);

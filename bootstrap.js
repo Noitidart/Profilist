@@ -828,7 +828,16 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 				if (pref_name_in_ini in ini.General.props) {
 					var value_in_ini = ini.General.props[pref_name_in_ini];
 					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
+						//value_in_ini = value_in_ini == 'false' ? false : value_in_ini == 'true' ? true : value_in_ini;
+						if (typeof(value_in_ini) != 'boolean') {
+						  if (value_in_ini == 'false') {
+							value_in_ini = false;
+						  } else if (value_in_ini == 'true') {
+							value_in_ini = true;
+						  } else {
+							throw new Error('not a boolean');
+						  }
+						}
 					}
 					if (prefObj.value != value_in_ini) {
 						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
@@ -846,6 +855,8 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 				}
 			}
 			if (writeIniForNewPrefs) {
+				//i decided against writing the ini when programatically determined they are missing, so will just use default prefs
+				/*
 				var promise89 = writeIni();
 				promise89.then(
 					function() {
@@ -855,6 +866,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 						console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
 					}
 				);
+				*/
 			}
 			/*
 			for (var g in ini.General.props) {
@@ -864,7 +876,16 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 					console.log('pref_name_in_ini:', pref_name_in_ini);
 					var value_in_ini = ini.General.props[g];
 					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
+						//value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
+						if (typeof(value_in_ini) != 'boolean') {
+						  if (value_in_ini == 'false') {
+							value_in_ini = false;
+						  } else if (value_in_ini == 'true') {
+							value_in_ini = true;
+						  } else {
+							throw new Error('not a boolean');
+						  }
+						}
 					}
 					if (prefObj.value != ini.General.props[g]) {
 						console.log('value of prev_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
@@ -2343,7 +2364,16 @@ function writePrefToIni(oldVal, newVal, refObj) {
 				var value_in_ini = ini.General.props['Profilist.' + refObj.pref_name];
 				if (refObj.prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
 					//value_in_ini = value_in_ini == 'false' ? false : true;
-					value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
+					//value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
+					if (typeof(value_in_ini) != 'boolean') {
+					  if (value_in_ini == 'false') {
+						value_in_ini = false;
+					  } else if (value_in_ini == 'true') {
+						value_in_ini = true;
+					  } else {
+						throw new Error('not a boolean');
+					  }
+					}
 				}
 				console.info('pre info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 				if (value_in_ini == newVal) {
