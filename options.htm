@@ -401,6 +401,45 @@ var observer = {
 		//var iconSwitcher = e.target.parentNode.querySelector('.change-icon');
 		//iconSwitcher.style.opacity = '';
 	}
+	
+	 function updatePrefFromSelectChange(e) {
+		var targ = e.target;
+		var selectedText = targ[targ.selectedIndex].text;
+		var selectedValue = targ[targ.selectedIndex].value;
+		
+		if (targ.id.substr(0, 10) != 'Profilist.') {
+			console.warn('not set up to listen to non-Profilist. selects');
+			return;
+		}
+		var pref_name = targ.id.substr(10);
+		console.log('pref_name of select:', pref_name);
+		console.log('newval:', selectedValue);
+		
+		if (pref_name == 'autoupdate') {
+			AddonManager.getAddonByID('Profilist@jetpack', function(addon) {
+				addon.applyBackgroundUpdates = selectedValue;
+			//addon.applyBackgroundUpdates = 0; //off
+			//addon.applyBackgroundUpdates = 1; //default
+			//addon.applyBackgroundUpdates = 2; //on
+			});
+		} else {
+			if (scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name]) {
+				var branchObj = scope.myPrefListener.watchBranches[myPrefBranch];
+				var prefObj = scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name];
+				if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+					selectedValue = ['false', false, 0].indexOf(selectedValue) > -1 ? false : true;
+				}
+				//console.log(scope.myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name])
+				//alert(branchObj._branchLive['set' + scope.typeStr_from_typeLong(prefObj.type) + 'Pref']);
+				//alert(prefObj.setval);
+				console.log('calling setFROMcp');
+				prefObj.setval(selectedValue);
+				console.log('setdoneFROMcp');
+			} else {
+				console.error('pref_name of', pref_name, 'not found in prefNames obj on branch:', scope.myPrefListener.watchBranches[myPrefBranch]);
+			}
+		}
+	 }
   </script>
 </head>
 
@@ -421,7 +460,7 @@ var observer = {
                   <fieldset>
                     <div class="row">
                       <label class="input-hint">Automatic Updates</label>
-					  <select style="width:7em" id="Profilist.autoupdate">
+					  <select style="width:7em" id="Profilist.autoupdate" onchange="updatePrefFromSelectChange(event)">
                         <option value="1">
                           Default
                         </option>
@@ -436,7 +475,7 @@ var observer = {
 
                     <div class="row">
                       <label class="input-hint">Notifications</label>
-					  <select style="width:7em" id="Profilist.notifications">
+					  <select style="width:7em" id="Profilist.notifications" onchange="updatePrefFromSelectChange(event)">
                         <option value="true">
                           Enabled
                         </option>
@@ -448,7 +487,7 @@ var observer = {
 
                     <div class="row">
                       <label class="input-hint">Developer Options</label>
-					  <select style="width:7em" id="Profilist.dev">
+					  <select style="width:7em" id="Profilist.dev" onchange="updatePrefFromSelectChange(event)">
                         <option value="true">
                           Enabled
                         </option>
@@ -460,7 +499,7 @@ var observer = {
 
                     <div style="" class="row">
                       <label style="" class="input-hint">Create Desktop Shortcut</label>
-                      <select id="profiles" onchange="selectChange(event)" style="width:10em; text-overflow:ellipsis;">
+                      <select id="profiles" onchange="selectChange(event)" style="width:14em; text-overflow:ellipsis;">
                         <option value="null">
                           Select Profile Name
                         </option>

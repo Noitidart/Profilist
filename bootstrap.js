@@ -828,7 +828,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 				if (pref_name_in_ini in ini.General.props) {
 					var value_in_ini = ini.General.props[pref_name_in_ini];
 					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						value_in_ini = value_in_ini == 'false' ? false : true;
+						value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
 					}
 					if (prefObj.value != value_in_ini) {
 						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
@@ -864,7 +864,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 					console.log('pref_name_in_ini:', pref_name_in_ini);
 					var value_in_ini = ini.General.props[g];
 					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						value_in_ini = value_in_ini == 'false' ? false : true;
+						value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
 					}
 					if (prefObj.value != ini.General.props[g]) {
 						console.log('value of prev_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
@@ -2076,6 +2076,7 @@ PrefListener.prototype.prefSetval = function(pass_pref_name, pass_branch_name) {
 			}
 		}
 		branchObj._branchLive['set' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name, updateTo);
+		console.log('set   doooone');
 	};
 	return func;
 }
@@ -2341,12 +2342,16 @@ function writePrefToIni(oldVal, newVal, refObj) {
 			var meat = function() {
 				var value_in_ini = ini.General.props['Profilist.' + refObj.pref_name];
 				if (refObj.prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-					value_in_ini = value_in_ini == 'false' ? false : true;
+					//value_in_ini = value_in_ini == 'false' ? false : true;
+					value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
 				}
+				console.info('pre info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 				if (value_in_ini == newVal) {
 					console.log('no need to writePrefToIni as the ini value is already what we are setting the pref to which is newVal');
 				} else {
+					console.log('updating ini right now');
 					ini.General.props['Profilist.' + refObj.pref_name] = newVal;
+					console.log('starting writeIni');
 					var promise = writeIni();
 					promise.then(
 						function() {
@@ -2357,7 +2362,10 @@ function writePrefToIni(oldVal, newVal, refObj) {
 						}
 					);
 				}
+				console.info('POST info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 				updateOptionTabsDOM(refObj.pref_name, newVal);
+				
+				console.info('destiny info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 			};
 			
 			if (!ini || !ini.General) {
@@ -2383,11 +2391,13 @@ function writePrefToIni(oldVal, newVal, refObj) {
 }
 
 function updateOptionTabsDOM(pref_name, value) {
+	console.log('calling updateOptionsTabsDom for pref_name', pref_name, 'for value:', value);
 	if (value !== null && value !== undefined) {
 		var newVal = value;
 	} else {
 		var newVal = myPrefListener.watchBranches[self.id].prefNames[pref_name].value;
 	}
+	console.log('calling updateOptionsTabsDom with newVal:', newVal);
 	Services.obs.notifyObservers(null, 'profilist-update-cp-dom', pref_name + ' || ' + newVal);
 }
 
