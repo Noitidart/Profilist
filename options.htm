@@ -534,7 +534,7 @@ var observer = {
                   <fieldset>
                     <div class="row">
                       <label class="input-hint">Automatic Updates</label>
-					  <select style="width:7em" id="Profilist.autoupdate" onchange="updatePrefFromSelectChange(event)">
+					  <select style="width:8em" id="Profilist.autoupdate" onchange="updatePrefFromSelectChange(event)">
                         <option value="1">
                           Default
                         </option>
@@ -549,7 +549,7 @@ var observer = {
 
                     <div class="row">
                       <label class="input-hint">Notifications</label>
-					  <select style="width:7em" id="Profilist.notifications" onchange="updatePrefFromSelectChange(event)">
+					  <select style="width:8em" id="Profilist.notifications" onchange="updatePrefFromSelectChange(event)">
                         <option value="true">
                           Enabled
                         </option>
@@ -561,7 +561,7 @@ var observer = {
 
                     <div class="row">
                       <label class="input-hint">Developer Options</label>
-					  <select style="width:7em" id="Profilist.dev" onchange="updatePrefFromSelectChange(event)">
+					  <select style="width:8em" id="Profilist.dev" onchange="updatePrefFromSelectChange(event)">
                         <option value="true">
                           Enabled
                         </option>
@@ -584,11 +584,10 @@ var observer = {
                     </div><!--next row-->
                   </fieldset>
                 </form>
-              </div><!--next section-->
-
-              <div class="section log-in">
+              </div>
+			  <!--next section-->
+              <div class="section log-in" style="padding-top:0;">
                 <h2>Developer</h2>
-
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
                     <div class="row" style="padding-bottom:3px;">
@@ -628,54 +627,8 @@ var observer = {
                     </div>
                   </fieldset>
                 </form>
-              </div><!--next section-->
-
-              <div style="display: none;" class="section log-in">
-                <h2>DUMMY SECTION</h2>
-
-                <div class="version-info">
-                  &nbsp;<!-- 
-                                                        Version: EUM_4.4.2 Build: PROD 541 03/04/2014
-                                                         -->
-                </div>
-
-                <form name="login" action="/eum/login" method="post">
-                  <fieldset>
-                    <div class="inline-error"></div>
-
-                    <div class="inline-error" id="errorMessageSection"></div>
-
-                    <p>Please enter your user name and password to sign in.</p>
-
-                    <div class="row">
-                      <div id="username-note" class="tooltip-body">
-                        Username must be 6-24 characters.
-                      </div><label class="input-hint">User Name:</label> <input class=
-                      "text" id="username" name="USER" maxlength="128" type="text" />
-                    </div>
-
-                    <div class="row">
-                      <label class="input-hint">Password:</label> <input class="text" id=
-                      "password" name="PASSWORD" autocomplete="off" type="password" />
-                    </div><!-- /juxtaposition intentional: enhances tab-order -->
-
-                    <div class="row">
-                      <p>Forgot <a href="/eum/forgotUserName">user name</a> or <a href=
-                      "/eum/forgotPassword">password</a>?</p>
-
-                      <p><b>New user?</b> <a href=
-                      "https://www.pge.com/myenergyweb/appmanager/pge/register">Register
-                      here.</a></p>
-                    </div>
-
-                    <div class="actions">
-                      <input value="Submit" onclick=
-                      "javascript:if (!inputValidate()) {return false;}" class=
-                      "move-forward btn-login" type="submit" />
-                    </div>
-                  </fieldset>
-                </form>
               </div>
+			  <!--next section-->
 			</div>
             </div>
 
