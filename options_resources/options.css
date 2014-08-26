@@ -97,7 +97,7 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 /*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {*/
 .builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .change-icon:before {
 	opacity: 0.3 !important;
-	transition: opacity 300ms ease 500ms !important;
+	transition: opacity 300ms !important;
 }
 
 /*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {*/
