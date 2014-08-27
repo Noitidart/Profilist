@@ -1867,6 +1867,7 @@ var windowListener = {
 				var PUIcs_scrollsVis = PUIcs.scrollHeight - PUIcs.clientHeight > 0 ? true : false;
 //				console.log('PUIcs_scrollsVis = ', PUIcs_scrollsVis);
 				if (!PUIcs_scrollsVis) {
+//					console.error('hidding overflow');
 					PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
 				}
 				
@@ -1946,14 +1947,17 @@ var windowListener = {
 					
 					THIS._viewContainer.style.height = THIS._mainViewHeight + 'px';
 				}
-				referenceNodes.profilist_stack.addEventListener('transitionend', function() {
-//					console.log('running transitionend func')
+				referenceNodes.profilist_stack.addEventListener('transitionend', function(e) {
+					if (e.propertyName != 'height') { //can further check to see if e.originalTarget == referenceNodes.profilist_stack but because thats the only one with height transition im just testing this property as i think comparing two dom nodes is much harder on perf than is comparing string value of propertyName. its opacity of the submenu thats triggering the first transitionend anyways.
+						console.warn('skipping. tranitionend happend but probably not for referenceNodes.profilist_stack as its propertyName is not height', 'e:', e);
+						return;
+					}
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
 //					console.log('running transitionend func step 2')
 					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
 						if (PUIcs.style.overflow == 'hidden') {
+//							console.error('showing overflow');
 							PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
-//							console.log('overflow RESET');
 						}
 					} else {
 //						console.info('overflow not reset as height is not collapsed height (' + collapsedheight + ') but it is right now = ', referenceNodes.profilist_stack.style.height);
