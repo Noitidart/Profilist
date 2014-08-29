@@ -26,6 +26,7 @@ Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/Promise.jsm');
+Cu.import('resource://gre/modules/AddonManager.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
@@ -1949,7 +1950,7 @@ var windowListener = {
 				}
 				referenceNodes.profilist_stack.addEventListener('transitionend', function(e) {
 					if (e.propertyName != 'height') { //can further check to see if e.originalTarget == referenceNodes.profilist_stack but because thats the only one with height transition im just testing this property as i think comparing two dom nodes is much harder on perf than is comparing string value of propertyName. its opacity of the submenu thats triggering the first transitionend anyways.
-						console.warn('skipping. tranitionend happend but probably not for referenceNodes.profilist_stack as its propertyName is not height', 'e:', e);
+//						console.warn('skipping. tranitionend happend but probably not for referenceNodes.profilist_stack as its propertyName is not height', 'e:', e);
 						return;
 					}
 					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
@@ -2426,41 +2427,10 @@ function writePrefToIni(oldVal, newVal, refObj) {
 */	
 }
 
-function updateOptionTabsDOM(pref_name, value) {
-	console.log('calling updateOptionsTabsDom for pref_name', pref_name, 'for value:', value);
-	if (value !== null && value !== undefined) {
-		var newVal = value;
-	} else {
-		var newVal = myPrefListener.watchBranches[self.id].prefNames[pref_name].value;
-	}
-	console.log('calling updateOptionsTabsDom with newVal:', newVal);
-	Services.obs.notifyObservers(null, 'profilist-update-cp-dom', pref_name + ' || ' + newVal);
-}
-
-var addonListener = {
-  onPropertyChanged: function(addon, properties) {
-	console.log('props changed on addon:', addon.id, 'properties:', properties);
-	if (addon.id == self.id) {
-	  if (properties.indexOf('applyBackgroundUpdates') > -1){
-		updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
-	  }
-	}
-  }
-};
-
-var openCPContWins = [];
-
-function startListenForAutoUpdateProp() {
-	Cu.import('resource://gre/modules/AddonManager.jsm');
-	AddonManager.addAddonListener(addonListener);
-}
-
-function stopListenForAutoUpdateProp() {
-	AddonManager.removeAddonListener(addonListener);
-}
-
 function activated(e) {
-	console.log('activated openCPContWins.length:', openCPContWins.length);
+	console.log('activated browser window so check if clients-alive and on  reponse readIni and updateDom:');
+	Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+	/*
 	if (openCPContWins.length > 0) {
 		console.log('cp tabs are open somewhere, e:', e);
 		var found = false;
@@ -2483,7 +2453,236 @@ function activated(e) {
 			console.warn('cp tabs are open, but the window the user just activated doesnt have the cp contwin so DO NOT notify obs');
 		}
 	}
+	*/
 }
+
+var observers = {
+	'profilist-cp-client': {
+		observe: function (aSubject, aTopic, aData) {
+			cpClientListener(aSubject, aTopic, aData);
+		},
+		reg: function () {
+			Services.obs.addObserver(observers.profilist-cp-client, 'profilist-cp-client', false);
+		},
+		unreg: function () {
+			Services.obs.removeObserver(observers.profilist-cp-client, 'profilist-cp-client');
+		}
+	}
+};
+
+/* start - control panel server/client communication */
+const subDataSplitter = '::'; //must match splitter const used in client //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
+
+var addonListener = {
+  onPropertyChanged: function(addon, properties) {
+	console.log('props changed on addon:', addon.id, 'properties:', properties);
+	if (addon.id == self.id) {
+	  if (properties.indexOf('applyBackgroundUpdates') > -1){
+		updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
+	  }
+	}
+  }
+};
+
+var listenersForClientsEnabled = false;
+
+function enableListenerForClients() {
+	if (listenersForClientsEnabled) {
+		listenersForClientsEnabled = true;
+		AddonManager.addAddonListener(addonListener);
+	} else {
+		console.log('enableListenerForClients was called but listeners are ALREADY ENABLED so do nothing');
+	}
+}
+
+function disableListenerForClients() {
+	if (listenersForClientsEnabled) {
+		listenersForClientsEnabled = false;
+		AddonManager.removeAddonListener(addonListener);
+	} else {
+		console.log('disableListenerForClients was called but listeners ALREADY DISABLED so do nothing');
+	}
+}
+
+var timer_killListeners = null;
+const suitableAmountOfTime = 1000; //1sec
+var timer_event_killListeners = {
+	notify: function(timer) {
+		console.warn('no response received from clients, "reponse-clients-alive" not received, so killing listener');
+		//if (listenersForClientsEnabled) { //dont need this line as this listener would not have been added if listeners were disabled
+			timer_killListeners = undefined;
+			disableListenerForClients();
+		//}
+	}
+};
+
+function ifClientsAliveEnsure_thenEnsureListenersAlive(disable_if_enabled_then_restart_on_response) {
+	if (disable_if_enabled_then_restart_on_response) { //i just coded so this is cookie cutter use for future i always go wit htimer method in profilist
+		if (listenersForClientsEnabled) {
+			disableListenerForClients();
+		}
+	} else {
+		//disable_if_enabled_then_restart_on_response == false SO dev wants listeners to keep listening if alive and if response not received in suitable amount of time then disable the listeners
+		if (listenersForClientsEnabled) {
+			if (timer_killListeners === null || timer_killListeners === undefined) {
+				timer_killListeners = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+				timer_killListeners.initWithCallback(timer_event_killListeners, suitableAmountOfTime, Ci.nsITimer.TYPE_ONE_SHOT);
+			} else {
+				console.warn('would need to start timer to wait and kill, but one was already started, so just wait for that to trigger, no need to reset the timer');
+			}
+		} else {
+			console.warn('clientListeners are DISABLED and dev wants to wait for LACK OF RESPONSE to disable listeners -- if a response is is recieved then listerns are enabled, and if no response is received then we run stopListeners, but it finds things are disabled so it wont do anything');
+		}
+	}
+	Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive');
+}
+
+function cpClientListener(aSubject, aTopic, aData) {
+	console.info('incoming message to server from "profilist-cp-client"', 's', aSubject, 't', aTopic, 'd', aData);
+	var aDataSplit = aData.split(subDataSplitter);
+	if (aDataSplit.length == 1) {
+		var subTopic = aTopic;
+		var subData = aData;
+	} else if (aDataSplit.length == 2) {
+		var subTopic = aDataSplit[0];
+		var subData = aDataSplit[1];
+	} else {
+		var subTopic = aDataSplit[0];
+		//var subData = subDataSplitter + 'ARRAY';
+		var subDataArr = aDataSplit.slice(1);
+	}
+	
+	switch (subTopic) {
+		case 'query-client-born':
+			var promise = readIni();
+			promise.then(
+				function() {
+					//console.log('now that ini read it will now send notification to clientid with name = ' + profName);
+					var clientId = subData;
+					var responseJson = {
+						ini: ini,
+						clientId: clientId
+					};
+					Services.obs.notifyObservers(null, 'profilist-cp-server', ['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
+				},
+				function(aRejectReason) {
+					throw new Error('Failed to read ini on query-client-born for reason: ' + aRejectReason);
+				}
+			);
+			break;
+		case 'response-clients-alive':
+			if (timer_killListeners !== undefined && timer_killListeners !== null) { //i set time to undefined after im done with it
+				//if got here, than listenersForClientsEnabled is obviously true, becuase only if listenersForClientsEnabled is true than the timer is started
+				//so cancel timer and do nothing as listeners are already enabled
+				console.log('repsonse-clients-alive received before timer triggered, so clients are alive SO DO NOT kill listeners');
+				timer_killListeners.cancel();
+				timer_killListeners = undefined;
+			}
+			if (listenersForClientsEnabled) {
+				//do nothing as things are already enabled
+				console.log('do nothing as things are already enabled');
+			} else {
+				console.log('clients are alive so enable listeners as they were not enabled');
+				enableListenerForClients();
+			}
+			
+			break;
+		case 'read-ini-to-tree':
+			//start - make sure prefs on tree are what is pref values in ini
+			//and if any pref-on-tree is not found in ini then write to ini and send message from server (to clients) to update dom value and their ini objects
+			Services.obs.notifyObservers(null, 'profilist-cp-client', 'read-ini-to-tree');
+			var prefNames = myPrefListener.watchBranches[myPrefBranch].prefNames;
+			var writeIniForNewPrefs = false;
+			for (var pref_name_in_obj in prefNames) {
+				var prefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj];
+				var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+				if (pref_name_in_ini in ini.General.props) {
+					var value_in_ini = ini.General.props[pref_name_in_ini];
+					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+						//value_in_ini = value_in_ini == 'false' ? false : true;
+						if (typeof(value_in_ini) != 'boolean') {
+						  if (value_in_ini == 'false') {
+							value_in_ini = false;
+						  } else if (value_in_ini == 'true') {
+							value_in_ini = true;
+						  } else {
+							throw new Error('not a boolean');
+						  }
+						}
+					}
+					if (prefObj.value != value_in_ini) {
+						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
+						console.log('value_in_ini:', value_in_ini);
+						console.log('value_in_tree:', prefObj.value);
+						prefObj.setval(value_in_ini, false);
+						console.log('setval done');
+					} else {
+						console.log('ini and tree values match on pref_name:', pref_name_in_obj, prefObj.value, value_in_ini);
+					}
+				} else {
+					ini.General.props[pref_name_in_ini] = prefObj.value;
+					writeIniForNewPrefs = true;
+					console.log('pref_name_in_ini of ', pref_name_in_ini, ' is not in ini so using prefObj.value of ', prefObj.value, ' and set it in the ini obj and bool marked for writing ini', 'ini.General:', ini.General);
+					Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, prefObj.value].join(subDataSplitter));
+				}
+			}
+			if (writeIniForNewPrefs) {
+				var promise89 = writeIni();
+				promise89.then(
+					function() {
+						console.log('succesfully wrote ini for storing new prefs');
+					},
+					function() {
+						console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
+					}
+				);
+			}
+			break;
+		case 'client-closing-if-i-no-other-clients-then-shutdown-listeners':
+			ifClientsAliveEnsure_thenEnsureListenersAlive();
+			break;
+		case 'reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update':
+			var promise = readIni();
+			promise.then(
+				function() {
+					Services.obs.notifyObservers(null, 'profilist-cp-server', ['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
+				},
+				function(aRejectReason) {
+					throw new Error('Failed to read ini on reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update for reason: ' + aRejectReason);
+				}
+			);
+			break;
+		case 'update-ini-with-selected-pref-value':
+			var pref_name = subDataArr[0];
+			var pref_val = subDataArr[1];
+			if (!(pref_name in myPrefListener.watchBranches[myPrefBranch].prefNames)) {
+				throw new Error('pref_name of ' + pref_name + ' not found in myPrefListener watchedBranches');
+				return;
+			}
+			if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name].type == Ci.nsIPrefBranch.PREF_BOOL) {
+				if (pref_val === 'true') {
+					pref_val = true;
+				} else if (pref_val === 'false') {
+					pref_val = false;
+				}
+			}
+			myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name].setval(pref_val);
+			ini.General.props['Profilist.' + pref_name] = pref_val;
+			var promise = writeIni();
+			promise.then(
+				function() {
+					Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, pref_val].join(subDataSplitter));
+				},
+				function(aRejectReason) {
+					throw new Error('Failed to write ini on update-ini-with-selected-pref-value for reason: ' + aRejectReason);
+				}
+			);
+			break;
+		default:
+			throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');
+	}
+}
+/* end - control panel server/client communication */
 
 var cssBuildIconsURI;
 function startup(aData, aReason) {

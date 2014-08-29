@@ -236,3 +236,161 @@ div.attn  > span:nth-of-type(2) > input[type=text] {
 .builds-cont > div:hover > span:nth-of-type(3) {
 	display: inline-flex; /*for use if i decide to hide tools in the row and show only on hover*/
 }
+
+
+/*start - pge stuff molded*/
+	body {
+	    font-size: 13px;
+    width: 100%;
+    height: 100%;
+    background: none repeat scroll 0% 0% #FFF;
+    min-width: 810px;
+margin: 0px;
+padding: 0px;
+font: 74%/1.4em arial,helvetica,sans-serif;
+color: #666;
+
+}
+
+h1 {
+	vertical-align: middle;
+background: none repeat scroll 0% 0% transparent;
+text-indent: 0px;
+color: #000;
+padding: 0;
+font-size: 1.9em;
+font-weight: bold;
+line-height: 1em;
+width: 476px;
+display: flex;
+align-items: center;
+margin: 0 0 7px 0;
+}
+
+h1 img {
+vertical-align: middle;
+margin-right: 10px;
+flex-shrink: 0;
+border: 0px none;
+}
+
+h1 small {
+text-align: right;
+flex-grow: 1;
+}
+
+.glb-bdy {
+position: relative;
+margin: 0px auto;
+padding: 0px;
+height: 100%;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+}
+
+#login-dialog {
+	width: 486px;
+	text-align: left;
+margin: 0px;
+padding: 0px;
+}
+
+.hd {
+background: url('options_resources/eum_box_top.png') no-repeat scroll left top transparent;
+height: 10px;
+width: 486px;
+margin: 0px;
+padding: 0px;
+}
+
+#login-dialog-inner {
+background: url('options_resources/eum_box_slice.png') repeat-y scroll left top transparent;
+width: 486px;
+float: left;
+padding: 0px 5px;
+position: relative;
+margin: 0px;
+}
+
+.section {
+width: 396px;
+padding: 10px 40px;
+margin: 0px;
+}
+
+h2 {
+	padding-top: 8px;
+font-size: 20px;
+line-height: 130%;
+color: #333;
+font-weight: bold;
+padding: 8px 0px 10px;
+margin: 0px 0px 15px;
+border-bottom: 1px solid #CCC;
+}
+
+form {
+padding: 0px;
+margin: 0px;
+}
+
+fieldset {
+clear: both;
+border: 0px none;
+margin: 0px;
+padding: 0px;
+}
+
+.row:after {
+content: ".";
+display: block;
+height: 0px;
+clear: both;
+visibility: hidden;
+}
+
+.row {
+position: relative;
+margin: 0px;
+padding: 0px 0px 10px;
+clear: both;
+}
+
+.input-hint {
+color: #666 !important;
+margin: 3px 0px 0px 0px;
+cursor: text;
+padding-left: 0.2em;
+width: 165px;
+float: left;
+vertical-align: middle;
+}
+
+input[type=text], select, textarea {
+margin-left: 3px;
+padding: 3px;
+color: #333;
+vertical-align: middle;
+font: 99% verdana,geneva,sans-serif;
+float: right;
+border: 1px solid #abadb3;
+}
+
+.ft {
+background: url('options_resources/eum_box_btm.png') no-repeat scroll left top transparent;
+color: #FFF;
+font-size: 0.93em;
+float: left;
+height: 10px;
+padding-top: 130px;
+width: 500px;
+}
+
+.inner-bg {
+	width: 476px;
+	background: linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top transparent;
+	border-radius: 0 0px 5px 5px;
+}
+/*end - pge stuff molded*/
