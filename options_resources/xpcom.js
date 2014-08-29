@@ -7,6 +7,7 @@ Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
+var ini;
 
 document.addEventListener('DOMContentLoaded', setup, false);
 window.addEventListener('unload', uninit, false);
@@ -16,28 +17,39 @@ function setup() {
 		observers[o].reg();
 	}
 	
-	Services.obs.notifyObservers(null, 'profilist-cp-server', ['query-client-born', clientId].join(subDataSplitter)); //i sent notification to server. server sends back data as string. i use that to do stuff here.
+	AddonManager.getAddonByID('Profilist@jetpack', function(addon) {
+		document.getElementById('Profilist.autoupdate').value = addon.applyBackgroundUpdates;
+		//addon.applyBackgroundUpdates = 0; //off
+		//addon.applyBackgroundUpdates = 1; //default
+		//addon.applyBackgroundUpdates = 2; //on
+	});
+	
+	//Services.obs.notifyObservers(null, 'profilist-cp-server', ['query-client-born', clientId].join(subDataSplitter)); //i sent notification to server. server sends back data as string. i use that to do stuff here.
+	cpCommPostMsg(['query-client-born', clientId].join(subDataSplitter));
 }
 
 function uninit() {
 	for (var o in observers) {
 		observers[o].unreg();
 	}
-	Services.obs.notifyObservers(null, 'profilist-cp-client', 'client-closing-if-i-no-other-clients-then-shutdown-listeners'); //must do this after unregistering observers here, otherwise this guys observers will send back a message saying its open but when its actually closing
+	//Services.obs.notifyObservers(null, 'profilist-cp-client', 'client-closing-if-i-no-other-clients-then-shutdown-listeners'); //must do this after unregistering observers here, otherwise this guys observers will send back a message saying its open but when its actually closing
+	cpCommPostMsg('client-closing-if-i-no-other-clients-then-shutdown-listeners');
 }
 
-var ini;
-
 function readIniToDom() {
+	console.log('start readIniToDom on client', clientId);
 	//start - populate shortcut select
 	var profileNames = [];
 	var profileIdentifiers = [];
+	
+	//console.log('INI IS:', ini);
+	
 	for (var p in ini) {
 		if ('num' in ini[p]) {
 			profileNames.push([ini[p].props.Name, ini[p].props.Path]);
 		}
 	}
-	
+	//console.log('profileNames arr populated:', profileNames);
 	profileNames.sort(function(a, b) {
 		a = a[0];
 		b = b[0];
@@ -55,17 +67,35 @@ function readIniToDom() {
 		shortcutSelect.appendChild(opt);
 	}
 	//end - populate shortcut select
-	Services.obs.notifyObservers(null, 'profilist-cp-client', 'read-ini-to-tree'); //this also handles updating pref-to-dom if it finds that ini is missing some pref values, it updates dome with deafult value
+	for (var p in ini.General.props) {
+		if (p.indexOf('Profilist.') > -1) {
+			var control = document.getElementById(p);
+			if (control) {
+				control.value = ini.General.props[p];
+			} else {
+				console.warn('no control found for', p);
+			}
+		}
+	}
+	//Services.obs.notifyObservers(null, 'profilist-cp-client', 'read-ini-to-tree'); //this also handles updating pref-to-dom if it finds that ini is missing some pref values, it updates dome with deafult value
+	//cpCommPostMsg('read-ini-to-tree');
 	//end - make sure prefs on tree are what is pref values in ini
+	
+	console.log('finished readIniToDom on client', clientId);
+}
+
+function cpCommPostMsg(msg) {
+	console.info('"profilist-cp-client" (id: ' + clientId + ') sending message to "profilist-cp-server"', 'msg:', msg);
+	Services.obs.notifyObservers(null, 'profilist-cp-client', msg);
 }
 
 var observers = {
 	'profilist-cp-server': {
 		observe: function (aSubject, aTopic, aData) {
-			console.info('incoming message to client from "profilist-cp-server"', 's', aSubject, 't', aTopic, 'd', aData);
+			console.info('incoming message to client (id:' + clientId +')  from "profilist-cp-server"', 's', aSubject, 't', aTopic, 'd', aData);
 			var aDataSplit = aData.split(subDataSplitter);
 			if (aDataSplit.length == 1) {
-				var subTopic = aTopic;
+				var subTopic = aData;
 				var subData = aData;
 			} else if (aDataSplit.length == 2) {
 				var subTopic = aDataSplit[0];
@@ -81,13 +111,15 @@ var observers = {
 					var responseJson = JSON.parse(subData);
 					if (responseJson.clientId == clientId) {
 						ini = responseJson.ini;
+						//ini = JSON.parse(JSON.stringify(responseJson.ini));
+						console.error('just read ini as =', ini);
 						readIniToDom();
 					} else {
 						//this isnt the client that was just born. in other words, this isnt the client that asked for birth data
 					}
 					break;
 				case 'read-ini-to-dom':
-					var ini = JSON.parse(subData);
+					ini = JSON.parse(subData);
 					readIniToDom();
 					break;
 				case 'pref-to-dom':
@@ -95,35 +127,32 @@ var observers = {
 					//note: server should handle writing the pref-to-ini
 					var pref_name = subDataArr[0];
 					var pref_val = subDataArr[1];
-					var control = document.getElementById(myPrefBranch + pref_name);
+					var control = document.getElementById('Profilist.' + pref_name);
 					if (control) {
-						control.value = pref_value;
+						control.value = pref_val;
 					} else {
 						console.warn('no control found for', pref_name);
 					}
-					if (pref_val == 'true') {
-						pref_val = true;
-					} else if (pref_val == 'false') {
-						pref_val = false;
-					} 
-					ini.General.props['Profilist.' + pref_name] = pref_val;
+					//ini.General.props['Profilist.' + pref_name] = pref_val; //i dont think this should be here 082914 12p
 					break;
 				case 'query-clients-alive': //should rename to `query-clients-alive-for-enabling-or-keeping-listeners-alive'
 					//server is wondering if any clients are alive so it can --> restart its processes/listeners to support clients alive
-					Services.obs.notifyObservers(null, 'profilist-cp-client', 'response-clients-alive');
+					//Services.obs.notifyObservers(null, 'profilist-cp-client', 'response-clients-alive');
+					cpCommPostMsg(['response-clients-alive', 'clientId = ' + clientId].join(subDataSplitter));
 					break;
 				case 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update':
-					Services.obs.notifyObservers(null, 'profilist-cp-client', 'reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+					//Services.obs.notifyObservers(null, 'profilist-cp-client', 'reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+					cpCommPostMsg('reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update');
 					break;
 				default:
-					throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');
+					throw new Error('"profilist-cp-server": subTopic of "' + subTopic + '" is unrecognized');
 			}
 		},
 		reg: function () {
-			Services.obs.addObserver(observers.profilist-cp-server, 'profilist-cp-server', false);
+			Services.obs.addObserver(observers['profilist-cp-server'], 'profilist-cp-server', false);
 		},
 		unreg: function () {
-			Services.obs.removeObserver(observers.profilist-cp-server, 'profilist-cp-server');
+			Services.obs.removeObserver(observers['profilist-cp-server'], 'profilist-cp-server');
 		}
 	}
 };
@@ -234,7 +263,7 @@ var observers = {
 	}
 	
 	//this contians some communication stuff
-	 function updatePrefFromSelectChange(e) {
+	 function updatePrefAndIni_to_UserSetting(e) {
 		var targ = e.target;
 		var selectedText = targ[targ.selectedIndex].text;
 		var selectedValue = targ[targ.selectedIndex].value;
@@ -255,7 +284,8 @@ var observers = {
 				//addon.applyBackgroundUpdates = 2; //on
 			});
 		} else {
-			Services.obs.notifyObservers(null, 'profilist-cp-client', ['update-ini-with-selected-pref-value', pref_name, selectedValue].join(subDataSplitter));
+			//Services.obs.notifyObservers(null, 'profilist-cp-client', ['update-ini-with-selected-pref-value', pref_name, selectedValue].join(subDataSplitter));
+			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
 		}
 	 }
 	 //end - this contains some communication stuff

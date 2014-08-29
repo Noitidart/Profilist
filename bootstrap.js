@@ -2086,7 +2086,7 @@ function jsonToDOM(xml, doc, nodes) {
  * NOTE: this fucntion prefSetval is not to be used directly, its only here as a contructor
  */
 PrefListener.prototype.prefSetval = function(pass_pref_name, pass_branch_name) {
-	console.log('this outside', this);
+	//console.log('this outside', this);
 	var passBranchObj = this.watchBranches[pass_branch_name];
 	var passPrefObj = passBranchObj.prefNames[pass_pref_name];
 	var func = function(updateTo, iHave__on_PrefOnObj_Change__butOnNextChangeSkipExecute) {
@@ -2212,7 +2212,7 @@ PrefListener.prototype.register = function(aReason, exec__on_PrefOnObj_Change__o
 					try {
 						prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
 					} catch(ex) {
-						console.warn('excpetion occured when trying to fetch value, startup is not install so it should exist, however it probably doesnt so weird, so setting it to default, ex:', ex); //this may happen if prefs were deleted somehow even though not uninstalled
+						console.warn('excpetion occured when trying to fetch value, startup is not install so it should exist, however it probably doesnt so weird, so setting it to default, CAN GET HERE IF say have v1.2 installed and prefs were introduced in v1.3, so on update it can get here. ex:', ex); //this may happen if prefs were deleted somehow even though not uninstalled
 						prefObj.value = prefObj.default;
 					}
 				}
@@ -2400,7 +2400,8 @@ function writePrefToIni(oldVal, newVal, refObj) {
 					);
 				}
 				console.info('POST info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
-				updateOptionTabsDOM(refObj.pref_name, newVal);
+				//updateOptionTabsDOM(refObj.pref_name, newVal);
+				cpCommPostMsg(['pref-to-dom', refObj.pref_name, newVal].join(subDataSplitter));
 				
 				console.info('destiny info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 			};
@@ -2428,8 +2429,9 @@ function writePrefToIni(oldVal, newVal, refObj) {
 }
 
 function activated(e) {
-	console.log('activated browser window so check if clients-alive and on  reponse readIni and updateDom:');
-	Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+	//console.log('activated browser window so check if clients-alive and on  reponse readIni and updateDom:');
+	//Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+	//cpCommPostMsg('query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
 	/*
 	if (openCPContWins.length > 0) {
 		console.log('cp tabs are open somewhere, e:', e);
@@ -2462,10 +2464,11 @@ var observers = {
 			cpClientListener(aSubject, aTopic, aData);
 		},
 		reg: function () {
-			Services.obs.addObserver(observers.profilist-cp-client, 'profilist-cp-client', false);
+			Services.obs.addObserver(observers['profilist-cp-client'], 'profilist-cp-client', false);
 		},
 		unreg: function () {
-			Services.obs.removeObserver(observers.profilist-cp-client, 'profilist-cp-client');
+			console.error('removing server side observer for messages from profilist-cp-client');
+			Services.obs.removeObserver(observers['profilist-cp-client'], 'profilist-cp-client');
 		}
 	}
 };
@@ -2475,10 +2478,11 @@ const subDataSplitter = '::'; //must match splitter const used in client //used 
 
 var addonListener = {
   onPropertyChanged: function(addon, properties) {
-	console.log('props changed on addon:', addon.id, 'properties:', properties);
+	//console.log('props changed on addon:', addon.id, 'properties:', properties);
 	if (addon.id == self.id) {
 	  if (properties.indexOf('applyBackgroundUpdates') > -1){
-		updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
+		//updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
+		cpCommPostMsg(['pref-to-dom', 'autoupdate', addon.applyBackgroundUpdates].join(subDataSplitter));
 	  }
 	}
   }
@@ -2487,7 +2491,7 @@ var addonListener = {
 var listenersForClientsEnabled = false;
 
 function enableListenerForClients() {
-	if (listenersForClientsEnabled) {
+	if (!listenersForClientsEnabled) {
 		listenersForClientsEnabled = true;
 		AddonManager.addAddonListener(addonListener);
 	} else {
@@ -2517,6 +2521,7 @@ var timer_event_killListeners = {
 };
 
 function ifClientsAliveEnsure_thenEnsureListenersAlive(disable_if_enabled_then_restart_on_response) {
+	disable_if_enabled_then_restart_on_response = true;
 	if (disable_if_enabled_then_restart_on_response) { //i just coded so this is cookie cutter use for future i always go wit htimer method in profilist
 		if (listenersForClientsEnabled) {
 			disableListenerForClients();
@@ -2531,17 +2536,23 @@ function ifClientsAliveEnsure_thenEnsureListenersAlive(disable_if_enabled_then_r
 				console.warn('would need to start timer to wait and kill, but one was already started, so just wait for that to trigger, no need to reset the timer');
 			}
 		} else {
-			console.warn('clientListeners are DISABLED and dev wants to wait for LACK OF RESPONSE to disable listeners -- if a response is is recieved then listerns are enabled, and if no response is received then we run stopListeners, but it finds things are disabled so it wont do anything');
+			console.warn('clientListeners are DISABLED and dev wants to wait for LACK OF RESPONSE to disable listeners -- if a response is is recieved then listerns are enabled, and if no response is received then we run stopListeners, but IF it finds things are disabled so it wont do anything');
 		}
 	}
-	Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive');
+	//Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive');
+	cpCommPostMsg('query-clients-alive');
+}
+
+function cpCommPostMsg(msg) {
+	console.info('"profilist-cp-server" broadcasting message to "profilist-cp-client\'s"', 'msg:', msg);
+	Services.obs.notifyObservers(null, 'profilist-cp-server', msg);
 }
 
 function cpClientListener(aSubject, aTopic, aData) {
 	console.info('incoming message to server from "profilist-cp-client"', 's', aSubject, 't', aTopic, 'd', aData);
 	var aDataSplit = aData.split(subDataSplitter);
 	if (aDataSplit.length == 1) {
-		var subTopic = aTopic;
+		var subTopic = aData;
 		var subData = aData;
 	} else if (aDataSplit.length == 2) {
 		var subTopic = aDataSplit[0];
@@ -2554,16 +2565,58 @@ function cpClientListener(aSubject, aTopic, aData) {
 	
 	switch (subTopic) {
 		case 'query-client-born':
+			enableListenerForClients();
 			var promise = readIni();
 			promise.then(
 				function() {
 					//console.log('now that ini read it will now send notification to clientid with name = ' + profName);
 					var clientId = subData;
+					var writeToIni = false;
+					for (var pref_name_in_obj in myPrefListener.watchBranches[myPrefBranch].prefNames) {
+						//make sure pref is in ini
+						//make sure pref in tree is that of ini
+						console.log('making sure pref of', pref_name_in_obj, 'is in ini and then IF IT IS IN INI then will make sure the tree val matches that of ini val');
+						var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+						var prefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj];
+						if (pref_name_in_ini in ini.General.props) {
+							var pref_val_in_ini = ini.General.props[pref_name_in_ini];
+							if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+								if (typeof(pref_val_in_ini) != 'boolean') {
+								  if (pref_val_in_ini == 'false') {
+									pref_val_in_ini = false;
+								  } else if (pref_val_in_ini == 'true') {
+									pref_val_in_ini = true;
+								  } else {
+									throw new Error('not a boolean pref_val_in_ini == "' + pref_val_in_ini + '"');
+								  }
+								}
+							}
+							if (prefObj.value != pref_val_in_ini) {
+								prefObj.setval(pref_val_in_ini, true); //skipping on change because we are reading ini to pref tree here, meaning we just read ini, even though the onprefchange will see that the ini val is same as newVal so it wont write anyways
+							}
+						} else {
+							//not in ini
+							ini.General.props[pref_name_in_ini] = prefObj.value;
+							writeToIni = true;
+						}
+					}
 					var responseJson = {
 						ini: ini,
 						clientId: clientId
 					};
-					Services.obs.notifyObservers(null, 'profilist-cp-server', ['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
+					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
+					cpCommPostMsg(['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
+					if (writeToIni) {
+						var promise2 = writeIni();
+						promise2.then(
+							function() {
+								console.log('succesfully wrote ini for storing new prefs');
+							},
+							function() {
+								console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
+							}
+						);
+					}
 				},
 				function(aRejectReason) {
 					throw new Error('Failed to read ini on query-client-born for reason: ' + aRejectReason);
@@ -2623,7 +2676,8 @@ function cpClientListener(aSubject, aTopic, aData) {
 					ini.General.props[pref_name_in_ini] = prefObj.value;
 					writeIniForNewPrefs = true;
 					console.log('pref_name_in_ini of ', pref_name_in_ini, ' is not in ini so using prefObj.value of ', prefObj.value, ' and set it in the ini obj and bool marked for writing ini', 'ini.General:', ini.General);
-					Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, prefObj.value].join(subDataSplitter));
+					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, prefObj.value].join(subDataSplitter));
+					cpCommPostMsg(['pref-to-dom', pref_name, prefObj.value].join(subDataSplitter));
 				}
 			}
 			if (writeIniForNewPrefs) {
@@ -2645,38 +2699,47 @@ function cpClientListener(aSubject, aTopic, aData) {
 			var promise = readIni();
 			promise.then(
 				function() {
-					Services.obs.notifyObservers(null, 'profilist-cp-server', ['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
+					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
+					cpCommPostMsg(['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
 				},
 				function(aRejectReason) {
 					throw new Error('Failed to read ini on reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update for reason: ' + aRejectReason);
 				}
 			);
 			break;
-		case 'update-ini-with-selected-pref-value':
+		case 'update-pref-so-ini-too-with-user-setting':
 			var pref_name = subDataArr[0];
-			var pref_val = subDataArr[1];
+			var user_set_val = subDataArr[1];
 			if (!(pref_name in myPrefListener.watchBranches[myPrefBranch].prefNames)) {
 				throw new Error('pref_name of ' + pref_name + ' not found in myPrefListener watchedBranches');
 				return;
 			}
-			if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name].type == Ci.nsIPrefBranch.PREF_BOOL) {
-				if (pref_val === 'true') {
-					pref_val = true;
-				} else if (pref_val === 'false') {
-					pref_val = false;
+			var prefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name];
+			if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
+				if (typeof(user_set_val) != 'boolean') {
+				  if (user_set_val == 'false') {
+					user_set_val = false;
+				  } else if (user_set_val == 'true') {
+					user_set_val = true;
+				  } else {
+					throw new Error('not a boolean');
+				  }
 				}
 			}
-			myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name].setval(pref_val);
-			ini.General.props['Profilist.' + pref_name] = pref_val;
+			prefObj.setval(user_set_val);
+			/* removed this write to ini and to ini file on 082914 104p because doing setval will trigger this it its onChange. the onChange also handles broadacasting to all cp clients to update dom to that value, and thats important (ie: if multiple clients open)
+			ini.General.props['Profilist.' + pref_name] = user_set_val;
 			var promise = writeIni();
 			promise.then(
 				function() {
-					Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, pref_val].join(subDataSplitter));
+					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['pref-to-dom', pref_name, pref_val].join(subDataSplitter));
+					cpCommPostMsg(['pref-to-dom', pref_name, pref_val].join(subDataSplitter));
 				},
 				function(aRejectReason) {
-					throw new Error('Failed to write ini on update-ini-with-selected-pref-value for reason: ' + aRejectReason);
+					throw new Error('Failed to write ini on update-pref-so-ini-too-with-user-setting for reason: ' + aRejectReason);
 				}
 			);
+			*/
 			break;
 		default:
 			throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');
@@ -2724,7 +2787,11 @@ function startup(aData, aReason) {
 	//end pref stuff more
 	
 	windowListener.register();
-	
+
+	for (var o in observers) {
+		observers[o].reg();
+	}
+	ifClientsAliveEnsure_thenEnsureListenersAlive();
 	//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
 	
 }
@@ -2736,13 +2803,11 @@ function shutdown(aData, aReason) {
 	myServices.sss.unregisterSheet(cssBuildIconsURI, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
-	if (openCPContWins.length > 0) {
-		console.info('openCPContWins.length>0 and aReason ==', aReason);
-		if ([ADDON_DISABLE, ADDON_UNINSTALL].indexOf(aReason) > -1) {
-			stopListenForAutoUpdateProp();
-			Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'profilist.shutdown');
-		}
-	}
+	
+	//if ([ADDON_DISABLE, ADDON_UNINSTALL].indexOf(aReason) > -1) {
+		console.log('will disable listener for clients if it was enabled');
+		disableListenerForClients();
+	//}
 	
 	if (aReason == ADDON_UNINSTALL) {
 		/*
@@ -2750,6 +2815,10 @@ function shutdown(aData, aReason) {
 			myPrefListener.watchBranches[myPrefBranch].prefNames['system-cp-tabs-open'].setval(true);
 		}
 		*/
+	}
+	
+	for (var o in observers) {
+		observers[o].unreg();
 	}
 	
 	//start pref stuff more
