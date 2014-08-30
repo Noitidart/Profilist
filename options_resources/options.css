@@ -265,6 +265,7 @@ width: 476px;
 display: flex;
 align-items: center;
 margin: 0 0 7px 0;
+flex-shrink: 0;
 }
 
 h1 img {

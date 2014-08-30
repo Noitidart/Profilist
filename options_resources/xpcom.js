@@ -241,7 +241,7 @@ var observers = {
 			cmd.push('Type=Application');
 			cmd.push('Comment=Launches Mozilla Firefox with "' + prof_props.Name + '" Profile');
 			cmd.push('Exec=' + target.path + ' ' + args);
-			cmd.push('Icon="' + icon_path);
+			cmd.push('Icon=' + icon_path);
 			cmdStr = cmd.join('\n');
 
 			var path = OS.Path.join(OS.Constants.Path.desktopDir, name + '.desktop');
