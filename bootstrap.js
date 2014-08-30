@@ -2209,15 +2209,25 @@ PrefListener.prototype.register = function(aReason, exec__on_PrefOnObj_Change__o
 					prefObj.value = prefObj.default;
 				} else {
 					console.log('not install so fetching value of owned pref, as it should exist, may need to catch error here and on error set to default');
+					console.info('aReason == ', aReason);
 					try {
 						prefObj.value = branchObj._branchLive['get' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj);
 					} catch(ex) {
-						console.warn('excpetion occured when trying to fetch value, startup is not install so it should exist, however it probably doesnt so weird, so setting it to default, CAN GET HERE IF say have v1.2 installed and prefs were introduced in v1.3, so on update it can get here. ex:', ex); //this may happen if prefs were deleted somehow even though not uninstalled
+						//console.warn('excpetion occured when trying to fetch value, startup is not install so it should exist, however it probably doesnt so weird, so setting it to default, CAN GET HERE IF say have v1.2 installed and prefs were introduced in v1.3, so on update it can get here. ex:', ex); //this may happen if prefs were deleted somehow even though not uninstalled
+						console.warn('pref is missing, aReason == ', aReason); //expected if startup and pref value was default value on shutdown. or if upgrade/downgrade to new version which has prefs that were not there in previous version.
 						prefObj.value = prefObj.default;
+						var prefMissing = true;
 					}
 				}
-				if ([ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE].indexOf(aReason)) {
+				if (prefMissing || [ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE].indexOf(aReason) > -1) {
+					if (prefMissing) {
+						console.error('setting on default branch because prefMissing is true, aReason btw is ', aReason);
+					} else {
+						console.error('setting on default branch because aReason == ', aReason);
+					}
 					branchObj._branchDefault['set' + typeStr_from_typeLong(prefObj.type) + 'Pref'](pref_name_on_obj, prefObj.default);
+				} else {
+					console.error('NOT setting on default branch because aReason == ', aReason);
 				}
 				if (branchObj.ownType == 0) {
 					var indexOfPrefName_ON_unusedPrefNamesOnTree = unusedPrefNamesOnTree.indexOf(pref_name_on_obj);
