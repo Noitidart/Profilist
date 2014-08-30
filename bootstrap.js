@@ -2519,6 +2519,7 @@ function enableListenerForClients() {
 function disableListenerForClients() {
 	if (listenersForClientsEnabled) {
 		listenersForClientsEnabled = false;
+		console.log('addon props listener removed');
 		AddonManager.removeAddonListener(addonListener);
 	} else {
 		console.log('disableListenerForClients was called but listeners ALREADY DISABLED so do nothing');
@@ -2599,7 +2600,11 @@ function cpClientListener(aSubject, aTopic, aData) {
 	switch (subTopic) {
 		/*start - generic not specific to profilist cp comm*/
 		case 'responseClients_doCb_basedOnIfResponse': //not profilist specific, i can do the reverse of this for clients to test if server is alive, but as of 082914 522p i didnt have a need for it so didnt make one
-			noResponseCbsObj[subData]();
+			if (subData in noResponseCbsObj) {
+				noResponseCbsObj[subData]();
+			} else {
+				console.warn('subData not found in noResponseCbsObj and this is probably because there were multiple clients open, and on first response the function was deleted');
+			}
 			break;
 		/*end - generic not specific to profilist cp comm*/
 		case 'query-client-born':

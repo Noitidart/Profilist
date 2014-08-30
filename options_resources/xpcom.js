@@ -3,6 +3,7 @@ const myPrefBranch = 'extensions.Profilist@jetpack.';
 const subDataSplitter = '::'; //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
 const clientId = Math.random();
 
+Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
@@ -172,7 +173,27 @@ var observers = {
 	
 	function createShortcut(identifier) {
 		var loader = document.querySelector('#scLoader');
+		var load_img = document.querySelector('#scLoader img');
+		load_img.src = 'options_resources/loading.gif';
+		
 		loader.style.opacity = 1;
+		var select = document.getElementById('profiles');
+		select.disabled = true;
+		
+		var successAnim = function() {
+			setTimeout(function() {
+				loader.style.opacity = 0;
+			}, 300);
+			setTimeout(function() {
+				load_img.src = 'options_resources/loading-done.gif';
+				loader.style.opacity = 1;
+			}, 400); //do in 100s because 200ms is transition time so opactiy only gets to 0.5 before i go for 1
+			setTimeout(function() {
+				loader.style.opacity = 0;
+				select.selectedIndex = 0;
+				select.removeAttribute('disabled');
+			}, 700);
+		}
 		
 		var prof_props;
 		for (var p in ini) {
@@ -200,19 +221,61 @@ var observers = {
 		loader.style.display = 'flex-block';
 		if (OS.Constants.Sys.Name == 'WINNT') {
 			var exe = FileUtils.getFile('XREExeF', []);
-			var myShortcut = FileUtils.getFile('Desk', ['Mozilla Firefox - ' + prof_props.Name + '.lnk']);
+			var myShortcut = FileUtils.getFile('Desk', ['Firefox - ' + prof_props.Name + '.lnk']);
 			var myShortcutWin = myShortcut.QueryInterface(Ci.nsILocalFileWin);
 
 			//var myScIcon = new FileUtils.File('moz-icon:' + Services.io.newFileURI(exe).spec);
 			//can use identifier as path because identifier is path. i thought but it didnt work out right so moving tgo full path to profile
 			myShortcutWin.setShortcut(exe, null, '-profile "' + fullPathToProfile + '" -no-remote', 'Launches Mozilla Firefox with "' + prof_props.Name + '" Profile', exe);
-		} else if (OS.Constants.Sys.Name == '') {
-		
+			successAnim();
+		} else if (OS.Constants.Sys.Name == 'Linux') {
+			var exe = FileUtils.getFile('XREExeF', []);
+			var args = '-profile "' + fullPathToProfile + '" -no-remote';
+
+			var name = 'Firefox - ' + prof_props.Name;
+			var target = exe;
+			var icon_path = 'firefox'; //OS.Path.join(OS.Constants.Path.desktopDir, 'beta.png');
+			var cmd = [];
+			cmd.push('[Desktop Entry]');
+			cmd.push('Name=' + name);
+			cmd.push('Type=Application');
+			cmd.push('Comment=Launches Mozilla Firefox with "' + prof_props.Name + '" Profile');
+			cmd.push('Exec=' + target.path + ' ' + args);
+			cmd.push('Icon="' + icon_path);
+			cmdStr = cmd.join('\n');
+
+			var path = OS.Path.join(OS.Constants.Path.desktopDir, name + '.desktop');
+			var tmpPath = OS.Path.join(OS.Constants.Path.desktopDir, name + '.desktop.tmp');
+
+			var encoder = new TextEncoder();
+			var promise = OS.File.writeAtomic(path, encoder.encode(cmdStr), {tmpPath: tmpPath});
+			promise.then(
+			  function(aVal) {
+				var promise2 = OS.File.setPermissions(path, {unixMode: 0o4777});
+				promise2.then(
+				 function(aVal) {
+				   //console.log('promise2 success', 'aVal:', aVal);
+				   successAnim();
+				 },
+				  function(aReason) {
+					console.warn('promise2 rejected', 'aReason:', aReason);
+					alert('Desktop File Trust Failed - Desktop file was created but could not be marked as trusted - After closing this message see "Browser Console" for more information');
+					loader.style.opacity = 0;
+					throw new Error('Desktop File Trust Failed - Desktop file was created but could not be marked as trusted - Reason: ' + aReason);
+				  }
+				);
+			  },
+			  function(aReason) {
+				alert('Desktop File Write Failed - After closing this message see "Browser Console" for more information');
+				loader.style.opacity = 0;
+				throw new Error('Desktop File Write Failed - Reason: ' + aReason);
+				//Services.ww.activeWindow.alert('rejected for reason: ' + uneval(aReason))
+			  }
+			);
 		} else {
 			alert('Unrecognized Operating System - Desktop shortcut creation failed');
+			loader.style.opacity = 0;
 		}
-		
-		loader.style.opacity = 0;
 	}
 	
 	function changeIcon(e) {
