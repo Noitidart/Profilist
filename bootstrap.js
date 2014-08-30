@@ -2429,9 +2429,26 @@ function writePrefToIni(oldVal, newVal, refObj) {
 }
 
 function activated(e) {
-	//console.log('activated browser window so check if clients-alive and on  reponse readIni and updateDom:');
-	//Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
-	//cpCommPostMsg('query-clients-alive-for-win-activated-ini-refresh-and-dom-update');
+	//console.log('activated browser window so check if clients-alive and on  reponse readIni and updateDom:');	
+	queryClients_doCb_basedOnIfResponse(
+	  function onResponse() {
+		var promise = readIni();
+		promise.then(
+			function() {
+				//Services.obs.notifyObservers(null, 'profilist-cp-server', ['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
+				cpCommPostMsg(['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
+			},
+			function(aRejectReason) {
+				throw new Error('Failed to read ini on reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update for reason: ' + aRejectReason);
+			}
+		);
+	  },
+	  function onNoResp(){
+		//alert('all dead');
+	  }
+	);
+
+	
 	/*
 	if (openCPContWins.length > 0) {
 		console.log('cp tabs are open somewhere, e:', e);
@@ -2507,40 +2524,56 @@ function disableListenerForClients() {
 		console.log('disableListenerForClients was called but listeners ALREADY DISABLED so do nothing');
 	}
 }
-
-var timer_killListeners = null;
-const suitableAmountOfTime = 1000; //1sec
-var timer_event_killListeners = {
-	notify: function(timer) {
-		console.warn('no response received from clients, "reponse-clients-alive" not received, so killing listener');
-		//if (listenersForClientsEnabled) { //dont need this line as this listener would not have been added if listeners were disabled
-			timer_killListeners = undefined;
-			disableListenerForClients();
-		//}
-	}
-};
-
-function ifClientsAliveEnsure_thenEnsureListenersAlive(disable_if_enabled_then_restart_on_response) {
-	disable_if_enabled_then_restart_on_response = true;
-	if (disable_if_enabled_then_restart_on_response) { //i just coded so this is cookie cutter use for future i always go wit htimer method in profilist
-		if (listenersForClientsEnabled) {
-			disableListenerForClients();
+/* start - generic not specific for profilist cp comm*/
+var noResponseCbsObj = {};
+const suitableAmountOfTimeToWaitBeforeDeclareNoResponse = 1000; //1sec //amount of time to wait before deciding no response received
+function queryClients_doCb_basedOnIfResponse(cb_onResponse, cb_onNone) {
+	var timer_NoResponse = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+	var timer_event_NOResponse = {
+		notify: function(timer) {
+			console.log('ABSOLUTELY NO response for cb based on resp');
+			cb_onNone();
 		}
-	} else {
-		//disable_if_enabled_then_restart_on_response == false SO dev wants listeners to keep listening if alive and if response not received in suitable amount of time then disable the listeners
-		if (listenersForClientsEnabled) {
-			if (timer_killListeners === null || timer_killListeners === undefined) {
-				timer_killListeners = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
-				timer_killListeners.initWithCallback(timer_event_killListeners, suitableAmountOfTime, Ci.nsITimer.TYPE_ONE_SHOT);
-			} else {
-				console.warn('would need to start timer to wait and kill, but one was already started, so just wait for that to trigger, no need to reset the timer');
-			}
-		} else {
-			console.warn('clientListeners are DISABLED and dev wants to wait for LACK OF RESPONSE to disable listeners -- if a response is is recieved then listerns are enabled, and if no response is received then we run stopListeners, but IF it finds things are disabled so it wont do anything');
-		}
+	};
+	var onResponseSubTopic = Math.random();
+	while (onResponseSubTopic in noResponseCbsObj) {
+		console.log('generated onResponseSubTopic of ', onResponseSubTopic, 'in noResponseCbsObj so gen again');
+		onResponseSubTopic = Math.random();
 	}
-	//Services.obs.notifyObservers(null, 'profilist-cp-server', 'query-clients-alive');
-	cpCommPostMsg('query-clients-alive');
+	
+	noResponseCbsObj[onResponseSubTopic] = function(subData) {
+		console.log('RESPONSE RECEIVED for cb based on resp');
+		timer_NoResponse.cancel();
+		delete noResponseCbsObj[onResponseSubTopic];
+		cb_onResponse();
+	}
+	
+	timer_NoResponse.initWithCallback(timer_event_NOResponse, suitableAmountOfTimeToWaitBeforeDeclareNoResponse, Ci.nsITimer.TYPE_ONE_SHOT);
+	cpCommPostMsg(['queryClients_doCb_basedOnIfResponse', onResponseSubTopic].join(subDataSplitter));
+}
+/***************** how to use
+console.time('rawr');
+queryClients_doCb_basedOnIfResponse(
+  function onResponse() {
+    console.timeEnd('rawr');
+    alert('SOMETHINGS ALIVE');
+  },
+  function onNoResp(){
+	console.timeEnd('rawr');
+    alert('all dead');
+  }
+);
+******************/
+/* end - generic not specific for profilist cp comm*/
+function onResponseEnsureEnabledElseDisabled() {
+	queryClients_doCb_basedOnIfResponse(
+	  function onResponse() {
+		enableListenerForClients();
+	  },
+	  function onNoResp(){
+		disableListenerForClients();
+	  }
+	);
 }
 
 function cpCommPostMsg(msg) {
@@ -2564,6 +2597,11 @@ function cpClientListener(aSubject, aTopic, aData) {
 	}
 	
 	switch (subTopic) {
+		/*start - generic not specific to profilist cp comm*/
+		case 'responseClients_doCb_basedOnIfResponse': //not profilist specific, i can do the reverse of this for clients to test if server is alive, but as of 082914 522p i didnt have a need for it so didnt make one
+			noResponseCbsObj[subData]();
+			break;
+		/*end - generic not specific to profilist cp comm*/
 		case 'query-client-born':
 			enableListenerForClients();
 			var promise = readIni();
@@ -2623,23 +2661,6 @@ function cpClientListener(aSubject, aTopic, aData) {
 				}
 			);
 			break;
-		case 'response-clients-alive':
-			if (timer_killListeners !== undefined && timer_killListeners !== null) { //i set time to undefined after im done with it
-				//if got here, than listenersForClientsEnabled is obviously true, becuase only if listenersForClientsEnabled is true than the timer is started
-				//so cancel timer and do nothing as listeners are already enabled
-				console.log('repsonse-clients-alive received before timer triggered, so clients are alive SO DO NOT kill listeners');
-				timer_killListeners.cancel();
-				timer_killListeners = undefined;
-			}
-			if (listenersForClientsEnabled) {
-				//do nothing as things are already enabled
-				console.log('do nothing as things are already enabled');
-			} else {
-				console.log('clients are alive so enable listeners as they were not enabled');
-				enableListenerForClients();
-			}
-			
-			break;
 		case 'read-ini-to-tree':
 			//start - make sure prefs on tree are what is pref values in ini
 			//and if any pref-on-tree is not found in ini then write to ini and send message from server (to clients) to update dom value and their ini objects
@@ -2693,18 +2714,14 @@ function cpClientListener(aSubject, aTopic, aData) {
 			}
 			break;
 		case 'client-closing-if-i-no-other-clients-then-shutdown-listeners':
-			ifClientsAliveEnsure_thenEnsureListenersAlive();
-			break;
-		case 'reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update':
-			var promise = readIni();
-			promise.then(
-				function() {
-					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
-					cpCommPostMsg(['read-ini-to-dom', JSON.stringify(ini)].join(subDataSplitter));
-				},
-				function(aRejectReason) {
-					throw new Error('Failed to read ini on reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update for reason: ' + aRejectReason);
-				}
+			//ifClientsAliveEnsure_thenEnsureListenersAlive();
+			queryClients_doCb_basedOnIfResponse(
+			  function onResponse() {
+				enableListenerForClients();
+			  },
+			  function onNoResp(){
+				disableListenerForClients();
+			  }
 			);
 			break;
 		case 'update-pref-so-ini-too-with-user-setting':
@@ -2791,7 +2808,8 @@ function startup(aData, aReason) {
 	for (var o in observers) {
 		observers[o].reg();
 	}
-	ifClientsAliveEnsure_thenEnsureListenersAlive();
+	//ifClientsAliveEnsure_thenEnsureListenersAlive();
+	onResponseEnsureEnabledElseDisabled();
 	//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
 	
 }

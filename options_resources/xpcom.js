@@ -107,6 +107,11 @@ var observers = {
 			}
 
 			switch (subTopic) {
+				/*start - generic not specific to profilist cp comm*/
+				case 'queryClients_doCb_basedOnIfResponse':
+					cpCommPostMsg(['responseClients_doCb_basedOnIfResponse', subData].join(subDataSplitter));
+					break;
+				/*end - generic not specific to profilist cp comm*/
 				case 'response-client-born':
 					var responseJson = JSON.parse(subData);
 					if (responseJson.clientId == clientId) {
@@ -134,15 +139,6 @@ var observers = {
 						console.warn('no control found for', pref_name);
 					}
 					//ini.General.props['Profilist.' + pref_name] = pref_val; //i dont think this should be here 082914 12p
-					break;
-				case 'query-clients-alive': //should rename to `query-clients-alive-for-enabling-or-keeping-listeners-alive'
-					//server is wondering if any clients are alive so it can --> restart its processes/listeners to support clients alive
-					//Services.obs.notifyObservers(null, 'profilist-cp-client', 'response-clients-alive');
-					cpCommPostMsg(['response-clients-alive', 'clientId = ' + clientId].join(subDataSplitter));
-					break;
-				case 'query-clients-alive-for-win-activated-ini-refresh-and-dom-update':
-					//Services.obs.notifyObservers(null, 'profilist-cp-client', 'reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update');
-					cpCommPostMsg('reponse-clients-alive-for-win-activated-ini-refresh-and-dom-update');
 					break;
 				default:
 					throw new Error('"profilist-cp-server": subTopic of "' + subTopic + '" is unrecognized');
