@@ -117,6 +117,7 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 }
 .current-build:before {
 	content: '\e809';
+	cursor: ns-resize !important;
 }
 
 .builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:before {

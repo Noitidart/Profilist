@@ -283,7 +283,81 @@ var observers = {
 		var oTarg = e.originalTarget;
 		if (oTarg.classList.contains('browse-icon')) {
 			//clicked browse icon
-			alert('open browse');
+			var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
+			fp.init(window, 'Profilist - Select Custom Build Icon', Ci.nsIFilePicker.modeOpen);
+			fp.appendFilters(Ci.nsIFilePicker.filterImages);
+			fp.displayDirectory = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
+			var rv = fp.show();
+			if (rv == Ci.nsIFilePicker.returnOK || rv == Ci.nsIFilePicker.returnReplace) {
+				var file = fp.file; // Get the path as string. Note that you usually won't need to work with the string paths.
+				var path = fp.file.path; // work with returned nsILocalFile...
+				
+				//start - size to 16x16 and save it to profile folder
+				//using canvas technique because in case i need to resize it i can do so right away. rather than xhr first then if not right size the go to canvas anyways
+				var img = new Image();
+				img.onload = function() {
+					var canvas = document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+					canvas.width = 16;
+					canvas.height = 16;
+					var ctx = canvas.getContext('2d');
+					if (img.naturalHeight != 16 || img.naturalWidth != 16) {
+						ctx.drawImage(img, 0, 0, 16, 16);
+					} else {
+						ctx.drawImage(img, 0, 0);
+					}
+					/*
+					var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+					var XOR = data.length;
+					var AND = canvas.width * canvas.height / 8;
+					var size = XOR + AND;
+					var buffer = new ArrayBuffer(size);
+					var png = new Uint8Array(buffer);
+					*/
+					(canvas.toBlobHD || canvas.toBlob).call(canvas, function(b) {
+						var r = new FileReader();
+						r.onloadend = function () {
+							// r.result contains the ArrayBuffer.
+							var basename = OS.Path.basename(fp.file.path);
+							var basename_noext = basename.substr(0, basename.lastIndexOf('.'));
+							var writeAttempt = 0;
+							var writeIt = function() {
+								if (writeAttempt > 0) {
+									var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '-' + writeAttempt + '.png');
+								} else {
+									var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '.png');
+								}
+								var promise = OS.File.writeAtomic(writePath, new Uint8Array(r.result), {tmpPath:writePath + '.tmp', noOverwrite:true});
+								promise.then(
+									function(aVal) {
+										console.log('succesfully saved image to disk');
+										target = target.parentNode;
+										target.classList.remove('browse');
+										//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
+										//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
+										//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
+										target.style.backgroundImage = 'url(' + OS.Path.toFileURI(writePath) + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
+									},
+									function(aReason) {
+										if (aReason instanceof OS.File.Error && aReason.becauseExists) {
+											console.warn('failed simply cuz a file with that name already exists so will writeAttempt++');
+											writeAttempt++;
+											writeIt();
+										} else {
+											alert('Custom image for build failed to copy to Profilist directory on disk, see "Browser Console" after closing this message for more information');
+											throw new Error('Custom image for build failed to copy to Profilist directory on disk - ' + aReason);
+										}
+										//console.log('writeAtomic failed for reason:', aReason);
+									}
+								);
+							};
+							writeIt();
+						};
+						r.readAsArrayBuffer(b);
+					}, 'image/png');
+				};
+				img.src = OS.Path.toFileURI(fp.file.path);
+				//end - size to 16x16 and save it to profile folder
+			}
 			return;
 		}
 		if (oTarg.classList.contains('change-icon')) {
@@ -304,6 +378,10 @@ var observers = {
 		} else if (target.classList.contains('browse')) {
 			target.classList.remove('browse');
 			target.classList.add('release');
+		} else {
+			//showing a custom image, take it to release
+			target.style.backgroundImage = '';
+			target.classList.add('release');
 		}
 	}
 	
@@ -314,9 +392,24 @@ var observers = {
 		//iconSwitcher.style.opacity = '0';
 	}
 	
+	function generateDevBuildsStr() {
+		//ini.General.props.devbuilds
+	}
+	
 	function browseLeave(e) {
 		console.log('make icon in app dir');
 		e.target.parentNode.classList.remove('noswitch');
+		setTimeout(function() {
+			alert(e.target.parentNode.style.backgroundImage + '\n' + e.target.parentNode.getAttribute('class'));
+			if (e.target.parentNode.style.backgroundImage != '') {
+				//custom image applied
+				//check if textbox value is not blank and if it isnt then update profiles.ini `dev-builds`
+				var textbox = e.target.parentNode.parentNode.querySelector('input[type=text]');
+				if (textbox.value != '') {
+					
+				}
+			}
+		}, 100);
 		//var iconSwitcher = e.target.parentNode.querySelector('.change-icon');
 		//iconSwitcher.style.opacity = '';
 	}
