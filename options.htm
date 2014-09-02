@@ -19,7 +19,7 @@
 
             <div class="bd" id="login-dialog-inner">
 			<div class="inner-bg">
-              <div class="section log-in">
+              <div class="section log-in sect-gen sect-dev-on">
                 <h2>General</h2>
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
@@ -77,7 +77,7 @@
                 </form>
               </div>
 			  <!--next section-->
-              <div class="section log-in" style="padding-top:0;">
+              <div class="section log-in sect-dev" style="padding-top:0;">
                 <h2>Developer</h2>
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
@@ -102,9 +102,9 @@
 							<span class="icon tools"></span>
 						</span>
                       </div>
+					  
                       <div class="attn">
                         <span onclick="changeIcon(event)" class="release">
-							<!--<img src="bullet_release.png">-->
 							<span class="icon change-icon"></span>
 							<span class="icon browse-icon" onmouseenter="browseEnter(event)" onmouseleave="browseLeave(event)"></span>
 						</span>
@@ -117,6 +117,21 @@
 							<span class="icon current-build"></span>
 						</span>
                       </div>
+                      <div class="attn">
+                        <span onclick="changeIcon(event)" class="beta">
+							<span class="icon change-icon"></span>
+							<span class="icon browse-icon" onmouseenter="browseEnter(event)" onmouseleave="browseLeave(event)"></span>
+						</span>
+                        <span>
+							<input type="text"><span class="icon"></span>
+						</span>
+                        <span>
+							<span class="icon cancel"></span>
+							<span class="icon updown"></span>
+							<span class="icon current-build"></span>
+						</span>
+                      </div>
+					  
                     </div>
                   </fieldset>
                 </form>

@@ -73,6 +73,10 @@ function readIniToDom() {
 			var control = document.getElementById(p);
 			if (control) {
 				control.value = ini.General.props[p];
+				var just_pref_name = p.substr(10);
+				if (just_pref_name in onSettingChange) {
+					onSettingChange[just_pref_name](ini.General.props[p]);
+				}
 			} else {
 				console.warn('no control found for', p);
 			}
@@ -136,6 +140,9 @@ var observers = {
 					var control = document.getElementById('Profilist.' + pref_name);
 					if (control) {
 						control.value = pref_val;
+						if (pref_name in onSettingChange) {
+							onSettingChange[pref_name](ini.General.props['Profilist.' + pref_name]);
+						}
 					} else {
 						console.warn('no control found for', pref_name);
 					}
@@ -318,39 +325,53 @@ var observers = {
 						r.onloadend = function () {
 							// r.result contains the ArrayBuffer.
 							var basename = OS.Path.basename(fp.file.path);
+							var dirname = OS.Path.dirname(fp.file.path).toLowerCase();
+							console.log('dirname = ', dirname, 'OS.Const:', OS.Constants.Path.userApplicationDataDir);
+							if (dirname == OS.Constants.Path.userApplicationDataDir.toLowerCase()) {
+								//alert('no need to write just use as its in userAppDataDir');
+								var dontWriteJustUse = true;
+							}
 							var basename_noext = basename.substr(0, basename.lastIndexOf('.'));
-							var writeAttempt = 0;
-							var writeIt = function() {
-								if (writeAttempt > 0) {
-									var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '-' + writeAttempt + '.png');
-								} else {
-									var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '.png');
-								}
-								var promise = OS.File.writeAtomic(writePath, new Uint8Array(r.result), {tmpPath:writePath + '.tmp', noOverwrite:true});
-								promise.then(
-									function(aVal) {
-										console.log('succesfully saved image to disk');
-										target = target.parentNode;
-										target.classList.remove('browse');
-										//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
-										//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
-										//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
-										target.style.backgroundImage = 'url(' + OS.Path.toFileURI(writePath) + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
-									},
-									function(aReason) {
-										if (aReason instanceof OS.File.Error && aReason.becauseExists) {
-											console.warn('failed simply cuz a file with that name already exists so will writeAttempt++');
-											writeAttempt++;
-											writeIt();
-										} else {
-											alert('Custom image for build failed to copy to Profilist directory on disk, see "Browser Console" after closing this message for more information');
-											throw new Error('Custom image for build failed to copy to Profilist directory on disk - ' + aReason);
-										}
-										//console.log('writeAtomic failed for reason:', aReason);
+							var postImgReady = function() {
+								target = target.parentNode;
+								target.classList.remove('browse');
+								//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
+								//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
+								//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
+								target.style.backgroundImage = 'url(' + OS.Path.toFileURI(writePath) + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
+							}
+							
+							var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '.png');
+							if (dontWriteJustUse) {
+								console.log('user selected image from AppDataDir so no need to write just use it');
+								postImgReady();
+							} else {
+								var writeAttempt = 0;
+								var writeIt = function() {
+									if (writeAttempt > 0) {
+										writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, basename_noext + '-' + writeAttempt + '.png');
 									}
-								);
-							};
-							writeIt();
+									var promise = OS.File.writeAtomic(writePath, new Uint8Array(r.result), {tmpPath:writePath + '.tmp', noOverwrite:true});
+									promise.then(
+										function(aVal) {
+											console.log('succesfully saved image to disk');
+											postImgReady();
+										},
+										function(aReason) {
+											if (aReason instanceof OS.File.Error && aReason.becauseExists) {
+												console.warn('failed simply cuz a file with that name already exists so will writeAttempt++');
+												writeAttempt++;
+												writeIt();
+											} else {
+												alert('Custom image for build failed to copy to Profilist directory on disk, see "Browser Console" after closing this message for more information');
+												throw new Error('Custom image for build failed to copy to Profilist directory on disk - ' + aReason);
+											}
+											//console.log('writeAtomic failed for reason:', aReason);
+										}
+									);
+								};
+								writeIt();
+							}
 						};
 						r.readAsArrayBuffer(b);
 					}, 'image/png');
@@ -392,8 +413,86 @@ var observers = {
 		//iconSwitcher.style.opacity = '0';
 	}
 	
+	var rowTempalateDomJson = 
+								['div', {class:'attn'}, 
+									['span', {class:'beta', style:'', onclick:'changeIcon(event)'},
+										['span', {class:'icon change-icon'}],
+										['span',{class:'icon browse-icon', onmouseenter:'browseEnter(event)', onmouseleave:'browseLeave(event)'}]
+									],
+									['span', {},
+										['input', {type:'text'}],
+										['span', {class:'icon'}]
+									],
+									['span', {},
+										['span', {class:'icon cancel'}],
+										['span', {class:'icon updown'}],
+										['span', {class:'icon current-build'}]
+									]
+								];
+	
+	function devBuildsStrToDom() {
+		var cont = document.querySelector('.builds-cont');
+		var rows = document.querySelectorAll('.builds-cont > div'); //first row is header
+		console.log('num rows = ', rows.length);
+		var propName = 'Profilist.dev-builds'
+		var propVal = ini.General.props[propName];
+		
+		//remove all rows
+		for (var i=rows.length-1; i>0; i--) {
+			rows[i].parentNode.removeChild(rows[i]);
+		}
+		if (propVal == '') {
+			if (rows.length == 1) {
+				//add single row
+			} else if (rows.length > 2) {
+				//remove ending rows
+				for (var i=rows.length-1; i>1; i--) {
+					rows[i].parentNode.removeChild(rows[i]);
+				}
+			}
+		} else {
+			var json = JSON.parse(propVal);
+			for (var i=0; i<json.length; i++) {
+				var rowDomJson = rowTempalateDomJson.slice();
+				rowDomJson[1].class = ''; //remove `attn` class
+				var builtinIcon = json[i][0].match(/^(?:release|beta|aurora|nightly)$/im);
+				console.log('builtinIcon match:', builtinIcon);
+				if (builtinIcon) {
+					rowDomJson[2][1].class = builtinIcon[0];
+				} else {
+					rowDomJson[2][1].class = '';
+					rowDomJson[2][1].style = 'background-image:url("' + json[i][0] + '")';
+				}
+				cont.appendChild(jsonToDOM(rowDomJson, document, {}));
+			}
+		}
+	}
+	
 	function generateDevBuildsStr() {
 		//ini.General.props.devbuilds
+		var devbuildsJson = [];
+		var rows = document.querySelectorAll('.builds-cont > div');
+		for (var i=1; i<rows.length; i++) {
+			var iconSpan = rows[i].childNodes[0];
+			var textbox = rows[i].querySelector('input[type=text]');
+			
+			var buildPath = textbox.value.trim();
+			if (iconSpan.classList.contains('browse')) {
+				continue;
+			}
+			if (buildPath == '') {
+				continue;
+			}
+			var iconPath = iconSpan.style.backgroundImage;
+			if (iconPath == '') {
+				var iconPath = iconSpan.getAttribute('class').match(/(?:release|beta|aurora|nightly)/);
+				console.log('iconPath:', iconPath);
+			} else {
+				var iconPath = iconSpan.style.backgroundImage.substr(5, iconPath.length-2);
+			}
+			console.log('iconPath:', iconPath);
+			devbuildsJson.push([buildPath, iconPath]);
+		}
 	}
 	
 	function browseLeave(e) {
@@ -415,6 +514,57 @@ var observers = {
 	}
 	
 	//this contians some communication stuff
+	var onSettingChange = { //keys are pref_name
+		'dev': function(newVal) {
+			if (newVal == 'true') {
+				newVal = true;
+			} else if (newVal == 'false') {
+				newVal = false;
+			}
+		
+			var cont = document.querySelector('.inner-bg');
+			var sect_gen = document.querySelector('.sect-gen');
+			var sect_dev = document.querySelector('.sect-dev');
+			
+			var sect_dev_height = sect_dev.offsetHeight;
+			var cont_height = cont.offsetHeight;
+			
+			if (newVal == true) {
+				if (sect_gen.classList.contains('sect-dev-on')) {
+					//dom already showing as state of `true`
+					if (cont.style.height == '') {
+						//init the height
+						cont.style.height = cont_height + 'px';
+						sect_dev.style.opacity = 1;
+						//sect_dev.style.transition = 'opacity 500ms';
+					}
+				} else {
+					sect_gen.classList.add('sect-dev-on');
+					cont.style.height = (cont_height + sect_dev_height) + 'px';
+					sect_dev.style.opacity = 1;
+				}
+			} else if (newVal == false) {
+				if (!sect_gen.classList.contains('sect-dev-on')) {
+					//dom already showing as state of `false`
+					if (cont.style.height == '') {
+						//init the height
+						cont.style.height = cont_height + 'px';
+						sect_dev.style.opacity = 0;
+						//sect_dev.style.transition = 'opacity 500ms';
+					}
+				} else {
+					sect_gen.classList.remove('sect-dev-on');
+					cont.style.height = (cont_height - sect_dev_height) + 'px';
+					sect_dev.style.opacity = 0;
+				}
+			} else {
+				throw new Error('onSettingChange: "dev"', 'newVal is not true/false');
+			}
+			
+			devBuildsStrToDom();
+		}
+	}
+	
 	 function updatePrefAndIni_to_UserSetting(e) {
 		var targ = e.target;
 		var selectedText = targ[targ.selectedIndex].text;
@@ -439,6 +589,74 @@ var observers = {
 			//Services.obs.notifyObservers(null, 'profilist-cp-client', ['update-ini-with-selected-pref-value', pref_name, selectedValue].join(subDataSplitter));
 			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
 		}
+		
+		if (pref_name in onSettingChange) {
+			onSettingChange[pref_name](selectedValue);
+		}
 	 }
 	 //end - this contains some communication stuff
+	 
+	/*dom insertion library function from MDN - https://developer.mozilla.org/en-US/docs/XUL_School/DOM_Building_and_HTML_Insertion*/
+	jsonToDOM.namespaces = {
+		html: 'http://www.w3.org/1999/xhtml',
+		xul: 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul'
+	};
+	jsonToDOM.defaultNamespace = jsonToDOM.namespaces.html;
+	function jsonToDOM(xml, doc, nodes) {
+		function namespace(name) {
+			var m = /^(?:(.*):)?(.*)$/.exec(name);        
+			return [jsonToDOM.namespaces[m[1]], m[2]];
+		}
+
+		function tag(name, attr) {
+			if (Array.isArray(name)) {
+				var frag = doc.createDocumentFragment();
+				Array.forEach(arguments, function (arg) {
+					if (!Array.isArray(arg[0]))
+						frag.appendChild(tag.apply(null, arg));
+					else
+						arg.forEach(function (arg) {
+							frag.appendChild(tag.apply(null, arg));
+						});
+				});
+				return frag;
+			}
+
+			var args = Array.slice(arguments, 2);
+			var vals = namespace(name);
+			var elem = doc.createElementNS(vals[0] || jsonToDOM.defaultNamespace, vals[1]);
+
+			for (var key in attr) {
+				var val = attr[key];
+				if (nodes && key == 'key')
+					nodes[val] = elem;
+
+				vals = namespace(key);
+				if (typeof val == 'function')
+					elem.addEventListener(key.replace(/^on/, ''), val, false);
+				else
+					elem.setAttributeNS(vals[0] || '', vals[1], val);
+			}
+			args.forEach(function(e) {
+				try {
+					elem.appendChild(
+								Object.prototype.toString.call(e) == '[object Array]'
+								?
+									tag.apply(null, e)
+								:
+									e instanceof doc.defaultView.Node
+									?
+										e
+									:
+										doc.createTextNode(e)
+							);
+				} catch (ex) {
+					elem.appendChild(doc.createTextNode(ex));
+				}
+			});
+			return elem;
+		}
+		return tag.apply(null, xml);
+	}
+	/*end - dom insertion library function from MDN*/
 /* end - non communication stuff, just internal js like creating shortcuts and handling select changes*/

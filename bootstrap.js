@@ -2455,7 +2455,8 @@ function activated(e) {
 	  },
 	  function onNoResp(){
 		//alert('all dead');
-	  }
+	  },
+	  'window_activated'
 	);
 
 	
@@ -2538,12 +2539,26 @@ function disableListenerForClients() {
 /* start - generic not specific for profilist cp comm*/
 var noResponseCbsObj = {};
 const suitableAmountOfTimeToWaitBeforeDeclareNoResponse = 1000; //1sec //amount of time to wait before deciding no response received
-function queryClients_doCb_basedOnIfResponse(cb_onResponse, cb_onNone) {
-	var timer_NoResponse = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+var noResponseActiveTimers = {};
+function queryClients_doCb_basedOnIfResponse(cb_onResponse, cb_onNone, timerName, cb_onCancel) {
+	//added timerName so can cancel
+	if (!timerName) {
+		throw new Error('timerName not provided!');
+	}
+	if (timerName in noResponseActiveTimers) {
+		throw new Error('timerName of "' + timerName + '" is already active so will not start this queryClients_doCb_basedOnIfResponse');
+		return false;
+	} else {
+		noResponseActiveTimers[timerName] = {};
+		noResponseActiveTimers[timerName].timer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer)
+	}
+	//var timer_NoResponse = noResponseActiveTimers[timerName];
 	var timer_event_NOResponse = {
 		notify: function(timer) {
 			console.log('ABSOLUTELY NO response for cb based on resp');
 			cb_onNone();
+			delete noResponseActiveTimers[timerName];
+			delete noResponseCbsObj[onResponseSubTopic];
 		}
 	};
 	var onResponseSubTopic = Math.random();
@@ -2552,14 +2567,25 @@ function queryClients_doCb_basedOnIfResponse(cb_onResponse, cb_onNone) {
 		onResponseSubTopic = Math.random();
 	}
 	
+	noResponseActiveTimers[timerName].cancel = function() {
+		noResponseActiveTimers[timerName].timer.cancel();
+		console.warn('CANCELED timerName', timerName, ' was canceled');
+		delete noResponseCbsObj[onResponseSubTopic];
+		if (cb_onCancel) {
+			cb_onCancel();
+		}
+		delete noResponseActiveTimers[timerName];
+	}
+	
 	noResponseCbsObj[onResponseSubTopic] = function(subData) {
 		console.log('RESPONSE RECEIVED for cb based on resp');
-		timer_NoResponse.cancel();
+		noResponseActiveTimers[timerName].timer.cancel();
+		delete noResponseActiveTimers[timerName];
 		delete noResponseCbsObj[onResponseSubTopic];
 		cb_onResponse();
 	}
 	
-	timer_NoResponse.initWithCallback(timer_event_NOResponse, suitableAmountOfTimeToWaitBeforeDeclareNoResponse, Ci.nsITimer.TYPE_ONE_SHOT);
+	noResponseActiveTimers[timerName].timer.initWithCallback(timer_event_NOResponse, suitableAmountOfTimeToWaitBeforeDeclareNoResponse, Ci.nsITimer.TYPE_ONE_SHOT);
 	cpCommPostMsg(['queryClients_doCb_basedOnIfResponse', onResponseSubTopic].join(subDataSplitter));
 }
 /***************** how to use
@@ -2572,7 +2598,9 @@ queryClients_doCb_basedOnIfResponse(
   function onNoResp(){
 	console.timeEnd('rawr');
     alert('all dead');
-  }
+  },
+  'must_provide_a_timer_name', //used for cancelling
+  cb_onCancel //this is optional
 );
 ******************/
 /* end - generic not specific for profilist cp comm*/
@@ -2583,7 +2611,8 @@ function onResponseEnsureEnabledElseDisabled() {
 	  },
 	  function onNoResp(){
 		disableListenerForClients();
-	  }
+	  },
+	  'onResponseEnsureEnabledElseDisabled'
 	);
 }
 
@@ -2618,6 +2647,9 @@ function cpClientListener(aSubject, aTopic, aData) {
 			break;
 		/*end - generic not specific to profilist cp comm*/
 		case 'query-client-born':
+			if ('client-closing-if-i-no-other-clients-then-shutdown-listeners' in noResponseActiveTimers) {
+				noResponseActiveTimers['client-closing-if-i-no-other-clients-then-shutdown-listeners'].cancel();
+			}
 			enableListenerForClients();
 			var promise = readIni();
 			promise.then(
@@ -2736,7 +2768,8 @@ function cpClientListener(aSubject, aTopic, aData) {
 			  },
 			  function onNoResp(){
 				disableListenerForClients();
-			  }
+			  },
+			  'client-closing-if-i-no-other-clients-then-shutdown-listeners'
 			);
 			break;
 		case 'update-pref-so-ini-too-with-user-setting':

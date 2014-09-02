@@ -49,6 +49,16 @@
 	display:flex; flex-direction: row;
 }
 
+.sect-gen:not(.sect-dev-on) ~ .sect-dev {
+	position: absolute;
+	transition: opacity 300ms;
+}
+
+.sect-gen.sect-dev-on ~ .sect-dev {
+	position: static;
+	transition: opacity 300ms;
+}
+
 /* start toggling build */
 
 div:not(:first-of-type) > span:nth-of-type(1).browse {
@@ -114,10 +124,10 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 
 .updown:before {
 	content: '\e805';
+	cursor: ns-resize !important;
 }
 .current-build:before {
 	content: '\e809';
-	cursor: ns-resize !important;
 }
 
 .builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:before {
@@ -394,5 +404,8 @@ width: 500px;
 	width: 476px;
 	background: linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top transparent;
 	border-radius: 0 0px 5px 5px;
+	transition: height 300ms;
+	overflow: hidden;
+	position: relative;
 }
 /*end - pge stuff molded*/
