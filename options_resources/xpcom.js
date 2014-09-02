@@ -9,11 +9,31 @@ Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 var ini;
+/*global el holders*/
+var innerbg;
+var sect_gen;
+var sect_dev;
+var shortcutSelect;
+var loader;
+var load_img;
+var buildsCont;
+/*end - global el holders*/
 
 document.addEventListener('DOMContentLoaded', setup, false);
 window.addEventListener('unload', uninit, false);
 
 function setup() {
+
+	/*global el holders*/
+	innerbg = document.getElementById('innerbg');
+	sect_gen = document.getElementById('sectGen');
+	sect_dev = document.getElementById('sectDev');
+	shortcutSelect = document.getElementById('profiles');
+	loader = document.getElementById('scLoader');
+	load_img = loader.querySelector('img');
+	buildsCont = document.getElementById('buildsCont');
+	/*end - global el holders*/
+	
 	for (var o in observers) {
 		observers[o].reg();
 	}
@@ -56,7 +76,7 @@ function readIniToDom() {
 		b = b[0];
 		return a > b;
 	});
-	var shortcutSelect = document.querySelector('#profiles');
+	//var shortcutSelect = document.querySelector('#profiles');
 	var opts = shortcutSelect.querySelectorAll('option');
 	for (var i=opts.length-1; i>0; i--) {
 	  opts[i].parentNode.removeChild(opts[i])
@@ -179,12 +199,10 @@ var observers = {
 	}
 	
 	function createShortcut(identifier) {
-		var loader = document.querySelector('#scLoader');
-		var load_img = document.querySelector('#scLoader img');
 		load_img.src = 'options_resources/loading.gif';
 		
 		loader.style.opacity = 1;
-		var select = document.getElementById('profiles');
+		var select = shortcutSelect;
 		select.disabled = true;
 		
 		var successAnim = function() {
@@ -414,8 +432,8 @@ var observers = {
 	}
 	
 	var rowTempalateDomJson = 
-								['div', {class:'attn'}, 
-									['span', {class:'beta', style:'', onclick:'changeIcon(event)'},
+								['div', {class:'', style:''}, //class can be attn //style should hold order
+									['span', {class:'release', style:'', onclick:'changeIcon(event)'}, //class can be release/beta/etc or style can be url background-image
 										['span', {class:'icon change-icon'}],
 										['span',{class:'icon browse-icon', onmouseenter:'browseEnter(event)', onmouseleave:'browseLeave(event)'}]
 									],
@@ -430,8 +448,7 @@ var observers = {
 									]
 								];
 	
-	function devBuildsStrToDom() {
-		var cont = document.querySelector('.builds-cont');
+	function devBuildsStrToDom(sizeIt) {
 		var rows = document.querySelectorAll('.builds-cont > div'); //first row is header
 		console.log('num rows = ', rows.length);
 		var propName = 'Profilist.dev-builds'
@@ -441,7 +458,9 @@ var observers = {
 		for (var i=rows.length-1; i>0; i--) {
 			rows[i].parentNode.removeChild(rows[i]);
 		}
+		//done remove all rows
 		if (propVal == '') {
+			/*
 			if (rows.length == 1) {
 				//add single row
 			} else if (rows.length > 2) {
@@ -450,22 +469,33 @@ var observers = {
 					rows[i].parentNode.removeChild(rows[i]);
 				}
 			}
+			*/
+			var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
+			rowDomJson[1].style = 'order:0;';
+			buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 		} else {
 			var json = JSON.parse(propVal);
-			for (var i=0; i<json.length; i++) {
-				var rowDomJson = rowTempalateDomJson.slice();
-				rowDomJson[1].class = ''; //remove `attn` class
+			for (var i=0; i<=json.length-1; i++) {
+				var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
+				rowDomJson[1].style = 'order:' + i + ';';
+				//rowDomJson[1].class = ''; //remove `attn` class
 				var builtinIcon = json[i][0].match(/^(?:release|beta|aurora|nightly)$/im);
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
-					rowDomJson[2][1].class = builtinIcon[0];
+					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
-					rowDomJson[2][1].class = '';
+					rowDomJson[2][1].class = ''; //remove the release class
 					rowDomJson[2][1].style = 'background-image:url("' + json[i][0] + '")';
 				}
-				cont.appendChild(jsonToDOM(rowDomJson, document, {}));
+				rowDomJson[3][2][1].value = json[i][1]; //textbox value
+				buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 			}
+			//add blank row
+			var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
+			rowDomJson[1].style = 'order:' + json.length + ';';
+			buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 		}
+		sizeContToDev(sizeIt);
 	}
 	
 	function generateDevBuildsStr() {
@@ -486,7 +516,7 @@ var observers = {
 			var iconPath = iconSpan.style.backgroundImage;
 			if (iconPath == '') {
 				var iconPath = iconSpan.getAttribute('class').match(/(?:release|beta|aurora|nightly)/);
-				console.log('iconPath:', iconPath);
+				console.log('iconPath:', iconPath[0]);
 			} else {
 				var iconPath = iconSpan.style.backgroundImage.substr(5, iconPath.length-2);
 			}
@@ -513,55 +543,79 @@ var observers = {
 		//iconSwitcher.style.opacity = '';
 	}
 	
+	function sizeContToDev(dowhat) {			
+			 if (dowhat == -2) {
+				//figure out what state should be based on .sect-dev-on
+				if (sect_dev.classList.innerbgains('sect-dev-on')) {
+					newVal = 1;
+				} else {
+					newVal = 0;
+				}
+			} else if (dowhat == -1) {
+				//figure out what state should be based on select value
+				var newVal = document.getElementById('Profilist.dev').value;
+				if (newVal == 'true') {
+					newVal = 1;
+				} else {
+					newVal = 2;
+				}
+			} else if (dowhat == 0) {
+				//close dev sect-dev
+				newVal = 0;
+			} else if (dowhat == 1) {
+				//show dev sect
+				newVal = 1;
+			}
+			console.error('in sizeinnerbgToDev');
+
+			
+			var sect_gen_height = sect_gen.offsetHeight;
+			var sect_dev_height = sect_dev.offsetHeight;
+			//var innerbg_height = innerbg.offsetHeight;
+			
+			if (newVal == 1) {
+				innerbg.style.height = (sect_gen_height + sect_dev_height) + 'px';
+				sect_dev.style.opacity = 1;
+			} else if (newVal == 0) {
+				innerbg.style.height = sect_gen_height + 'px';
+				sect_dev.style.opacity = 0;
+			} else {
+				throw new Error('newVal is not true/false');
+			}
+	}
+	
 	//this contians some communication stuff
 	var onSettingChange = { //keys are pref_name
 		'dev': function(newVal) {
-			if (newVal == 'true') {
-				newVal = true;
-			} else if (newVal == 'false') {
-				newVal = false;
-			}
-		
-			var cont = document.querySelector('.inner-bg');
-			var sect_gen = document.querySelector('.sect-gen');
-			var sect_dev = document.querySelector('.sect-dev');
-			
-			var sect_dev_height = sect_dev.offsetHeight;
-			var cont_height = cont.offsetHeight;
-			
-			if (newVal == true) {
-				if (sect_gen.classList.contains('sect-dev-on')) {
-					//dom already showing as state of `true`
-					if (cont.style.height == '') {
-						//init the height
-						cont.style.height = cont_height + 'px';
-						sect_dev.style.opacity = 1;
-						//sect_dev.style.transition = 'opacity 500ms';
-					}
-				} else {
-					sect_gen.classList.add('sect-dev-on');
-					cont.style.height = (cont_height + sect_dev_height) + 'px';
-					sect_dev.style.opacity = 1;
-				}
-			} else if (newVal == false) {
-				if (!sect_gen.classList.contains('sect-dev-on')) {
-					//dom already showing as state of `false`
-					if (cont.style.height == '') {
-						//init the height
-						cont.style.height = cont_height + 'px';
-						sect_dev.style.opacity = 0;
-						//sect_dev.style.transition = 'opacity 500ms';
-					}
-				} else {
-					sect_gen.classList.remove('sect-dev-on');
-					cont.style.height = (cont_height - sect_dev_height) + 'px';
-					sect_dev.style.opacity = 0;
-				}
+			//purpose of this is to toggle the sect-div-on class
+			console.error('in onSettingChange dev newVal == ', newVal);
+			if (newVal == 'true' || newVal == true) {
+				newVal = 1;
+			} else if (newVal == 'false' || newVal == false) {
+				newVal = 0;
 			} else {
 				throw new Error('onSettingChange: "dev"', 'newVal is not true/false');
 			}
+		
+			var sect_gen = document.querySelector('.sect-gen');
+			var devOn = sect_gen.classList.contains('sect-dev-on');
 			
-			devBuildsStrToDom();
+			if (newVal == 1) {
+				if (devOn) {
+					//dom already showing as state of `true`
+				} else {
+					sect_gen.classList.add('sect-dev-on');
+				}
+			} else if (newVal == 0) {
+				if (!devOn) {
+					//dom already showing as state of `false`
+				} else {
+					sect_gen.classList.remove('sect-dev-on');
+				}
+			} else {
+				throw('huh???');
+			}
+			devBuildsStrToDom(newVal);
 		}
 	}
 	

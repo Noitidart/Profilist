@@ -49,8 +49,14 @@
 	display:flex; flex-direction: row;
 }
 
-.sect-gen:not(.sect-dev-on) ~ .sect-dev {
+.sect-dev {
 	position: absolute;
+	transition: opacity 300ms;
+}
+
+/*
+.sect-gen:not(.sect-dev-on) ~ .sect-dev {
+	position: static;
 	transition: opacity 300ms;
 }
 
@@ -58,6 +64,7 @@
 	position: static;
 	transition: opacity 300ms;
 }
+*/
 
 /* start toggling build */
 
