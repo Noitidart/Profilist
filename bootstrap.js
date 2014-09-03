@@ -27,7 +27,7 @@ Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/Promise.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
-XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
+//XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
 
@@ -1837,7 +1837,9 @@ var windowListener = {
 		
 		aDOMWindow.addEventListener('activate', activated, false);
 		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
-		if (PanelUI) {			
+		if (PanelUI) {
+			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
 			//var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
 //			//console.info('PUIsync on start up = ', PUIsync);
 
@@ -2009,6 +2011,8 @@ var windowListener = {
 			if (profilistHBox) {
 				profilistHBox.parentNode.removeChild(profilistHBox);
 			}
+			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+			domWinUtils.removeSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
 		}
 	}
 };
@@ -2828,7 +2832,7 @@ function startup(aData, aReason) {
 		aBaseURI: null
 	}
 	cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
-	myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
+	//myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	//start pref stuff more
 	myPrefListener = new PrefListener(); //init
@@ -2850,7 +2854,7 @@ function startup(aData, aReason) {
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
 		
-	myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
+	//myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
 	
