@@ -1551,6 +1551,38 @@ function properactive(e) {
 	console.log('obj on md:', obj);
 	*/
 	
+	
+	console.log('origTarg.nodeName', origTarg.nodeName);
+	/*
+	if (origTarg.nodeName == 'div') {
+		//clicked in text box
+	}
+	*/
+
+	if (origTarg.nodeName == 'div') {
+		console.log('in input parentNode:', origTarg);
+		box.classList.add('profilist-tbb-box-inactivatable');
+		origTarg.parentNode.addEventListener('mouseleave', function() {
+			origTarg.parentNode.removeEventListener('mouseleave', arguments.callee, false);
+			console.log('doing remove on left');
+			box.classList.remove('profilist-tbb-box-inactivatable');
+		}, false);
+		console.log('added');
+		return;
+	}
+	
+	if (origTarg.parentNode.className == 'profilist-submenu') {
+		console.log('over submenu');
+		box.classList.add('profilist-tbb-box-inactivatable');
+		origTarg.parentNode.addEventListener('mouseleave', function() {
+			origTarg.parentNode.removeEventListener('mouseleave', arguments.callee, false);
+			console.log('doing remove on left');
+			box.classList.remove('profilist-tbb-box-inactivatable');
+		}, false);
+		console.log('added');
+		return;
+	}
+	console.log('origTarg.parentNode:', origTarg.parentNode);
 	if (origTarg.nodeName == 'xul:image') { //origTarg.classList.contains('toolbarbutton-icon') || origTarg.classList.contains('profilist-submenu')) {
 		//*NEVERMIND*: //check if they are clicking on the icon of create new profile, do this by seeing if this is the first toolbar element of the stack *NOTE**IMPORTANT* this is why it is important for create new profile button to be first child of stack
 		if (origTarg.className == 'toolbarbutton-icon' && origTarg.parentNode.parentNode.classList.contains('profilist-create')) {
@@ -1627,6 +1659,9 @@ function tbb_box_click(e) {
 		},
 		'profilist-clone': function() {
 			console.log('wiggle for clone');
+		},
+		'profilist-inactive-del': function() {
+			console.log('delete');
 		},
 		'profilist-default': function() {
 			console.log('set this profile as default');

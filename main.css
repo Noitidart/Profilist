@@ -267,7 +267,7 @@
 .profilist-create .profilist-submenu box.profilist-clone {
 	/* list-style-image: url(chrome://profilist/content/clone.png); */
 	background: url(chrome://profilist/content/clone.png) no-repeat center center transparent;
-	padding: 8px;
+	width: 32px;
 }
 .profilist-create .profilist-submenu box:not(.profilist-clone) {
 	display: none;
