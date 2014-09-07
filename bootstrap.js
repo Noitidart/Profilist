@@ -19,7 +19,7 @@ var unloaders = {};
 var PUIsync_height;
 var PUIsync;
 
-const { TextEncoder, TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
+const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
@@ -54,20 +54,27 @@ function readIni() {
 //is promise
 	try {
 	//	console.log('in read');
-		if (!decoder) {
-	//		console.log('decoder not inited');
-			decoder = new TextDecoder(); // This decoder can be reused for several reads
-		}
 	//	console.log('decoder got');
 	//	console.log('starting read');
-		let promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
+		if (Services.appinfo.version < 30) {
+			var promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
+		} else {
+			var promise = OS.File.read(pathProfilesIni, {encoding:'utf-8'}); // Read the complete file as an array
+		}
 	//	console.log('read promise started');
 		return promise.then(
-			function(ArrayBuffer) {
-				var readStr = decoder.decode(ArrayBuffer); // Convert this array to a text
+			function(aVal) {
+				if (Services.appinfo.version < 30) {
+					if (!decoder) {
+						decoder = new TextDecoder(); // This decoder can be reused for several reads
+					}
+					var readStr = decoder.decode(aVal); // Convert this array to a text
+				} else {
+					var readStr = aVal;
+				}
 	//			//console.log(readStr);
 				ini = {};
-				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg;
+				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
 				var blocks = [];
 
 				var match;
@@ -142,15 +149,9 @@ function writeIni() {
 
 		writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
 
-		if (!encoder) {
-			encoder = new TextEncoder(); // This encoder can be reused for several writes
-		}
+		var writeStrJoined = writeStr.join('\n');
 		
-		let BufferArray = encoder.encode(writeStr.join('\n')); // Convert the text to an array
-		let promise = OS.File.writeAtomic(pathProfilesIni, BufferArray, // Write the array atomically to "file.txt", using as temporary
-			{
-				tmpPath: pathProfilesIni + '.profilist.tmp'
-			}); // buffer "file.txt.tmp".
+		let promise = OS.File.writeAtomic(pathProfilesIni, writeStrJoined, {tmpPath:pathProfilesIni + '.profilist.tmp', encoding:'utf-8'});
 		return promise.then(
 			function() {
 				return Promise.resolve('writeAtomic complete');
@@ -267,15 +268,9 @@ function createProfile(refreshIni, profName) {
 			promise.then(
 				function() {
 	//				console.log('successfully created root dir for profile ' + profName + ' the path is = ', rootPathDefaultDirName);
-					if (!encoder) {
-						encoder = new TextEncoder(); // This encoder can be reused for several writes
-					}
-					let BufferArray = encoder.encode('{\n"created": ' + new Date().getTime() + '}\n');
-					let promise3 = OS.File.writeAtomic(OS.Path.join(rootPathDefaultDirName, 'times.json'), BufferArray,
-						{
-							tmpPath: OS.Path.join(rootPathDefaultDirName, 'times.json') + '.profilist.tmp'
-						}
-					);
+					var writeStrForTimesJson = '{\n"created": ' + new Date().getTime() + '}\n';
+					var timeJsonPath = OS.Path.join(rootPathDefaultDirName, 'times.json');
+					let promise3 = OS.File.writeAtomic(timeJsonPath, writeStrForTimesJson, {tmpPath: timeJsonPath + '.profilist.tmp', encoding:'utf-8'});
 					return promise3.then(
 						function() {
 //							console.log('succesfully created times.json for profName of ' + profName + ' path is = ', OS.Path.join(rootPathDefaultDirName, 'times.json'));
