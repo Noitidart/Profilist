@@ -2201,6 +2201,13 @@ PrefListener.prototype.watchBranches = {
 				value: undefined,
 				type: Ci.nsIPrefBranch.PREF_STRING,
 				on_PrefOnObj_Change: writePrefToIni
+			},
+			'launch_on_create': {
+				owned: true,
+				default: true,
+				value: undefined,
+				type: Ci.nsIPrefBranch.PREF_BOOL,
+				on_PrefOnObj_Change: writePrefToIni
 			}
 		},
 		on_UnknownPrefNameOnObj_Change: function(oldVal, newVal, refObj) {

@@ -37,7 +37,19 @@
                         </option>
                       </select>
                     </div><!--next row-->
-
+					
+                    <div class="row">
+                      <label class="input-hint">Launch on Create Profile</label>
+					  <select style="width:8em" id="Profilist.launch_on_create" onchange="updatePrefAndIni_to_UserSetting(event)">
+                        <option value="true">
+                          Enabled
+                        </option>
+                        <option value="false">
+                          Disabled
+                        </option>
+                      </select>
+                    </div><!--next row-->
+					
                     <div class="row">
                       <label class="input-hint">Notifications</label>
 					  <select style="width:8em" id="Profilist.notifications" onchange="updatePrefAndIni_to_UserSetting(event)">
