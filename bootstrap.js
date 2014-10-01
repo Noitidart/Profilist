@@ -30,6 +30,8 @@ Cu.import('resource://gre/modules/AddonManager.jsm');
 //XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
+var PromiseWorker;
+var ProfilistWorker;
 
 var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 var ini = {};
@@ -56,7 +58,7 @@ function readIni() {
 	//	console.log('in read');
 	//	console.log('decoder got');
 	//	console.log('starting read');
-		if (Services.appinfo.version < 30) {
+		if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
 			var promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
 		} else {
 			var promise = OS.File.read(pathProfilesIni, {encoding:'utf-8'}); // Read the complete file as an array
@@ -64,7 +66,7 @@ function readIni() {
 	//	console.log('read promise started');
 		return promise.then(
 			function(aVal) {
-				if (Services.appinfo.version < 30) {
+				if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
 					if (!decoder) {
 						decoder = new TextDecoder(); // This decoder can be reused for several reads
 					}
@@ -454,189 +456,95 @@ function deleteProfile(refreshIni, profName) {
 			);
 		} else {
 			//check if profile is in use and get the PathRootDir and PathLocalDir
-			 if (ini[profName].props.IsRelative == '1') {
+			if (ini[profName].props.IsRelative == '1') {
 				var dirName = OS.Path.basename(OS.Path.normalize(ini[profName].props.Path));
-	//			console.info('dirname of this profile is = ', dirName);
 				var PathRootDir = OS.Path.join(profToolkit.rootPathDefault, dirName);
 				var PathLocalDir = OS.Path.join(profToolkit.localPathDefault, dirName);
-				
-				var aDirect = new FileUtils.File(PathRootDir);
-				if (!aDirect.exists()){
-					aDirect = null;
-	//				console.warn('Could not find the root profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathRootDir);
-					//return Promise.reject(new Error('Could not find the root profile directory at relative path specified in Profiles.ini.\nPath: ' + PathRootDir));
-				}			
-				var aTemp = new FileUtils.File(PathLocalDir);
-				if (!aTemp.exists()){
-					aTemp = null;
-	//				console.warn('Could not find the local profile directory at relative path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + PathLocalDir);
-					//return Promise.reject(new Error('Could not find the local profile directory at relative path specified in Profiles.ini.\nPath: ' + PathLocalDir));
-				}
-			 } else {
-				var aDirect = new FileUtils.File(ini[profName].props.Path); //may need to normalize this for other os's than xp and 7  im not sure
-				if (!aDirect.exists()){
-					aDirect = null;
-	//				console.warn('Could not find the profile directory at path specified in Profiles.ini. It must already be deleted. No problem we are deleting anyways.\nPath: ' + ini[profName].props.Path);
-					//return Promise.reject(new Error('Could not find the profile directory at path specified in Profiles.ini.\nPath: ' + ini[profName].props.Path));
-				} else {
-					var aTemp = aDirect;
-				}
-			 }
-			 if (aDirect !== null) {
-				 try {
-					 var locker = myServices.tps.lockProfilePath(aDirect,aTemp);
-					 //if it gets to this line then the profile was not in use as it was succesfully locked
-					 locker.unlock(); //its not in use so lets unlock the profile
-	//				 console.log('continue as profile is not in use');
-				 } catch (ex) {
-					if (ex.result == Components.results.NS_ERROR_FILE_ACCESS_DENIED) {
-	//					console.warn('PROFILE IS IN USE');
-						//Services.prompt.alert(null, self.name + ' - ' + 'EXCEPTION', 'The profile "' + profName + '" is currently in use, cannot delete.');
-						return Promise.reject('The profile, "' + profName + '", is currently in use.');
+			} else {
+				var PathRootDir = ini[profName].props.Path; //may need to normalize this for other os's than xp and 7  im not sure
+				var PathLocalDir = null;
+			}
+			var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
+			return promise_queryProfileLocked.then(
+				function(aVal) {
+					//aVal is TRUE if LOCKED
+					//aVal is FALSE if NOT locked
+					if (aVal) {
+						return Promise.reject('Could not delete beacuse the profile, "' + profName + '", is currently in use.');
 					} else {
-						//throw ex;
-	//					console.log('ex happend = ', ex);
-	//					console.log('ex.result = ', ex.result);
-						return Promise.reject('Could not delete beacuse an error occured during profile use test.\nMessage: ' + ex.message);
-					}
-				 }
-			 } else {
-	//		 	console.warn('aDirect doesnt exist so assuming profile is not in use, its gotta be impossible to be in use if aDirect doesnt exist')
-			 }
-			 //end - check if profile is in use and get the PathRootDir and PathLocalDir
-			/*
-			var done = {
-				ini: false,
-				root: false,
-				local: false
-			}
-			var checkReadyAndUpdateStack = function () {
-				if (!done.ini) {
-	//				console.log('ini not yet updated');
-				}
-				if (!done.ini) {
-	//				console.log('root dir not yet deleted');
-				}
-				if (PathRootDir == PathLocalDir) {
-					done.local = true;
-				}
-				if (!done.local) {
-	//				console.log('local dir not yet deleted');
-				}
-				
-				for (var p in done) {
-					if (!done[p]) {
-						return;
-					}
-				}
-	//			console.log('ALLLL done so updateProfToolkit');
-				updateProfToolkit(1, 1);
-			}
-			*/
-			var PromiseAllArr = [];
-			if (ini[profName].props.IsRelative == '1') {
-				
-				if (aDirect !== null) {
-	//				console.log('now removing PathRootDir', PathRootDir);
-					var promise = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
-					promise.then(
-						function() {
-	//						console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
-							//done.root = true;
-							//checkReadyAndUpdateStack();
-							return Promise.resolve('PathRootDir deleted');
-						},
-						function(aRejectReason) {
-	//						console.warn('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
-							return Promise.reject('FAILED to remove PathRootDir for profName of ' + profName);
-						}
-					);
-					PromiseAllArr.push(promise);
-				}// else {
-	//				console.warn('no need to try to delete PathRootDir as it doesnt exist');
-				//	done.root = true;
-				//}
-				if (PathRootDir != PathLocalDir) {
-					if (aTemp !== null) {
-	//					console.log('now removing PathLocalDir', PathLocalDir);
-						var promise2 = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
-						promise2.then(
+						////do the delete
+						var PromiseAllArr = [];
+							
+						var promise_DeleteRootDir = OS.File.removeDir(PathRootDir, {ignoreAbsent:true, ignorePermissions:false});
+						promise_DeleteRootDir.then(
 							function() {
-	//							console.info('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
-								//done.local = true;
-								//checkReadyAndUpdateStack();
-								return Promise.resolve('PathLocalDir deleted');
+								console.log('successfully removed PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir);
+								return Promise.resolve('PathRootDir deleted');
 							},
 							function(aRejectReason) {
-	//							console.warn('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
-								return Promise.reject('FAILED to remove PathLocalDir for profName of ' + profName);
+								console.error('FAILED to remove PathRootDir for profName of ' + profName, 'PathRootDir=', PathRootDir, 'aRejectReason=', aRejectReason);
+								return Promise.reject('FAILED to remove PathRootDir for profName of ' + profName);
 							}
 						);
-						PromiseAllArr.push(promise2);
-					}// else {
-	//					console.warn('no need to try to delete PathLocalDir as it doesnt exist');
-						//done.local = true;
-					//}
-				}// else {
-	//				console.warn('PathRootDir == PathLocalDir so just assume its been deleted')
-				//	done.local = true;
-				//}
-			} else {
-				if (aDirect !== null) {
-					var Path = ini[profName].props.Path;
-					var promise = OS.File.removeDir(Path);
-					promise.then(
-						function() {
-	//						console.log('successfully removed Path for profName of ' + profName, 'Path=', Path);
-							//done.root = true;
-							//done.local = true;
-							//checkReadyAndUpdateStack();
-							return Promise.resolve('removeDir success');
-						},
-						function() {
-	//						console.warn('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
-							return Promise.reject('FAILED to remove Path for profName of ' + profName + ' path = ' + Path);
+						PromiseAllArr.push(promise_DeleteRootDir);
+						
+						if (PathLocalDir !== null && PathRootDir != PathLocalDir) {
+							var promise_DeleteLocalDir = OS.File.removeDir(PathLocalDir, {ignoreAbsent:true, ignorePermissions:false});
+							promise_DeleteLocalDir.then(
+								function() {
+									console.error('successfully removed PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir);
+									return Promise.resolve('PathLocalDir deleted');
+								},
+								function(aRejectReason) {
+									console.error('FAILED to remove PathLocalDir for profName of ' + profName, 'PathLocalDir=', PathLocalDir, 'aRejectReason=', aRejectReason);
+									return Promise.reject('FAILED to remove PathLocalDir for profName of ' + profName);
+								}
+							);
+							PromiseAllArr.push(promise_DeleteLocalDir);
 						}
-					);
-					PromiseAllArr.push(promise);
-				}// else {
-	//				console.warn('no need to try to delete as it doesnt exist, is not relative so local == root');
-					//done.root = true;
-					//done.local = true;
-				//}
-			}
-			
-			delete ini[profName];
-			var promise0 = writeIni();
-			promise0.then(
-				function() {
-	//				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
-					//done.ini = true;
-					//checkReadyAndUpdateStack();
-					return Promise.resolve('promise0=suc');
+						
+						var iniProfEntryBkp = JSON.stringify(ini[profName]);//used to restore to ini file on deletion fail
+						delete ini[profName];
+						
+						var promise_UpdateIni = writeIni();
+						promise_UpdateIni.then(
+							function() {
+				//				console.log('successfully edited out profName of ' + profName + ' from Profiles.ini');
+								//done.ini = true;
+								//checkReadyAndUpdateStack();
+								return Promise.resolve('promise_UpdateIni=suc');
+							},
+							function() {
+				//				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+								return Promise.reject('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
+							}
+						);
+						PromiseAllArr.push(promise_UpdateIni);
+						
+						return Promise.all(PromiseAllArr).then(
+							function(aDat) {
+								console.log('ALLLL done so updateProfToolkit');
+								return updateProfToolkit(1, 1).then(
+									function() {
+										return Promise.resolve('updateProfToolkit success');
+									},
+									function() {
+										return Promise.reject('updateProfToolkit failed');
+									}
+								);
+							},
+							function onRej(aReas) {
+								ini[profName] = JSON.parse(iniProfEntryBkp); //restore prof name details to profiles.ini as delete failed, this way they can try to delete again from profilist, else they have to try to delete from some other way which they probably dont know how
+								console.error('Promise Rejected - `PromiseAllArr`:', aReas);
+								return Promise.reject('Promise Rejected - `PromiseAllArr`:' + aReas);
+							}
+						);
+						//end do the delete
+					}
 				},
-				function() {
-	//				console.error('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
-					return Promise.reject('FAILED to edit out profName of ' + profName + ' from Profiles.ini');
-				}
-			);
-			PromiseAllArr.push(promise0);
-			
-			return Promise.all(PromiseAllArr).then(
-				function(aDat) {
-					console.log('ALLLL done so updateProfToolkit');
-					return updateProfToolkit(1, 1).then(
-						function() {
-							return Promise.resolve('updateProfToolkit success');
-						},
-						function() {
-							return Promise.reject('updateProfToolkit failed');
-						}
-					);
-				},
-				function onRej(aReas) {
-					console.error('Promise Rejected - `PromiseAllArr`:', aReas);
-					return Promise.reject('Promise Rejected - `PromiseAllArr`:' + aReas);
+				function(aReason) {
+					console.error('failed to figure out if profile is in use, aReason:', aReason);
+					return Promise.reject('Could not delete because failed to figure out if the profile, "' + profName + '", is in use.');
 				}
 			);
 		}
@@ -760,6 +668,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		//win.setTimeout(function() { updateProfToolkit(updateIni, 1, win); }, 5000); //was testing to see how it handles when os.file takes long time to read
 		updateProfToolkit(updateIni, 1, win).then(
 			function() {
+				console.log('update statuses of proflies now');
+				updateDomProfileStatuses();
 				//return Promise.resolve('updateProfToolkit success');
 			},
 			function() {
@@ -767,6 +677,32 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 			}
 		);
 
+}
+
+function updateDomProfileStatuses() {
+	Object.keys(ini).forEach(function(p) {
+		if ('num' in ini[p]) {
+			if (p == profToolkit.selectedProfile.name) {
+				console.log('profile', p, 'is the active profile so in use duh');
+				return; //continue;
+			}
+			var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
+			promise_queryProfileLocked.then(
+				function(aVal) {
+					//aVal is TRUE if LOCKED
+					//aVal is FALSE if NOT locked
+					if (aVal) {
+						console.log('profile', p, 'is IN USE');
+					} else {
+						console.log('profile', p, 'is NOT in use');
+					}
+				},
+				function(aReason) {
+					console.warn('failed to get status of profName', p, 'aReason:', aReason);
+				}
+			);
+		}
+	});
 }
 
 function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
@@ -1656,7 +1592,17 @@ function tbb_box_click(e) {
 			console.log('wiggle for clone');
 		},
 		'profilist-inactive-del': function() {
-			console.log('delete');
+			var nameOfProfileToDelete = origTarg.parentNode.parentNode.getAttribute('label');
+			console.log('delete, prof name:', nameOfProfileToDelete);
+			var promise_deleteProf = deleteProfile(0, nameOfProfileToDelete);
+			promise_deleteProf.then(
+				function() {
+					console.log('succesfully deleted prof');
+				},
+				function(aReason) {
+					console.error('deleting profile failed for aReason:', aReason);
+				}
+			);
 		},
 		'profilist-default': function() {
 			console.log('set this profile as default');
@@ -2856,6 +2802,8 @@ function cpClientListener(aSubject, aTopic, aData) {
 function startup(aData, aReason) {
 //	console.log('in startup');
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
+	PromiseWorker = Cu.import(self.chrome_path + 'modules/PromiseWorker.jsm').BasePromiseWorker;
+	ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
 	//console.log('aData', aData);
 //	//console.log('initing prof toolkit');
 	//initProfToolkit();
@@ -2915,6 +2863,8 @@ function shutdown(aData, aReason) {
 	//start pref stuff more
 	myPrefListener.unregister();
 	//end pref stuff more
+	
+	Cu.unload(self.chrome_path + 'modules/PromiseWorker.jsm');
 }
 
 function install() {}
