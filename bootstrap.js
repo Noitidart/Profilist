@@ -669,7 +669,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 		updateProfToolkit(updateIni, 1, win).then(
 			function() {
 				console.log('update statuses of proflies now');
-				updateDomProfileStatuses();
+				updateDomProfileStatuses(stack);
 				//return Promise.resolve('updateProfToolkit success');
 			},
 			function() {
@@ -679,7 +679,16 @@ function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 
 }
 
-function updateDomProfileStatuses() {
+function updateDomProfileStatuses(pb_stack) {
+	var tbb_boxes = pb_stack.childNodes;
+	console.log(tbb_boxes);
+	var tbb_boxes_name_to_i = {}
+	Array.prototype.forEach.call(tbb_boxes, function(tbb_box, i) {
+	  var profName = tbb_box.getAttribute('label');
+	  if (profName in ini && 'num' in ini[profName]) {
+		tbb_boxes_name_to_i[profName] = i;
+	  }
+	});
 	Object.keys(ini).forEach(function(p) {
 		if ('num' in ini[p]) {
 			if (p == profToolkit.selectedProfile.name) {
@@ -693,8 +702,10 @@ function updateDomProfileStatuses() {
 					//aVal is FALSE if NOT locked
 					if (aVal) {
 						console.log('profile', p, 'is IN USE');
+						tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
 					} else {
 						console.log('profile', p, 'is NOT in use');
+						tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
 					}
 				},
 				function(aReason) {
@@ -1581,11 +1592,30 @@ function tbb_box_click(e) {
 	var classAction = {
 		'profilist-tbb-box': function() {
 			if (classList.contains('perm-hover')) {
+				//e.view.document.documentElement.click();
 				console.log('do nothing as its the active profile - maybe rename?');
 			} else if (classList.contains('profilist-create')) {
 				console.log('create new profile');
 			} else {
-				console.log('launching profile');
+				e.view.PanelUI.toggle();
+				var profName = origTarg.getAttribute('label');
+				console.log('checking if running, either focus or launch profile');
+				var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
+				promise_queryProfileLocked.then(
+					function(aVal) {
+						//aVal is TRUE if LOCKED
+						//aVal is FALSE if NOT locked
+						if (aVal) {
+							console.log('profile', profName, 'is IN USE so FOCUS it');
+						} else {
+							console.log('profile', profName, 'is NOT in use so LAUNCH it');
+							launchProfile(null, profName);
+						}
+					},
+					function(aReason) {
+						console.warn('failed to get status of profName', profName, 'aReason:', aReason);
+					}
+				);
 			}
 		},
 		'profilist-clone': function() {
@@ -1634,7 +1664,7 @@ function tbb_box_click(e) {
 	var BreakException= {};
 	try {
 		var i = 0;
-		while (i < 4) {
+		while (i < 5) {
 			i++;
 			//console.log('checking classes on origTarg of:', origTarg);
 			Object.keys(classList).forEach.call(classList, function(c) {
