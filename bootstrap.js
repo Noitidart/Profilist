@@ -1605,11 +1605,22 @@ function tbb_box_click(e) {
 					function(aVal) {
 						//aVal is TRUE if LOCKED
 						//aVal is FALSE if NOT locked
-						if (aVal) {
+						if (aVal === 1) {
 							console.log('profile', profName, 'is IN USE so FOCUS it');
-						} else {
+							var promise_FMRWOP = ProfilistWorker.post('focusMostRecentWinOfProfile', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
+							promise_FMRWOP.then(
+								function() {
+									console.log('succesfully focused most recent window');
+								},
+								function(aReason) {
+									console.error('failed to focus most recent window, aReason:', aReason);
+								}
+							);
+						} else if (aVal === 0) {
 							console.log('profile', profName, 'is NOT in use so LAUNCH it');
 							launchProfile(null, profName);
+						} else {
+							throw new Error('huh??? should not get here');
 						}
 					},
 					function(aReason) {
