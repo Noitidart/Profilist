@@ -432,7 +432,7 @@ var observers = {
 	}
 	
 	var rowTempalateDomJson = 
-								['div', {class:'', style:''}, //class can be attn //style should hold order
+								['div', {class:'devBuildSortable', style:'position:relative; top:0; transition:top 100ms;'}, //class can be attn //style should hold order
 									['span', {class:'release', style:'', onclick:'changeIcon(event)'}, //class can be release/beta/etc or style can be url background-image
 										['span', {class:'icon change-icon'}],
 										['span',{class:'icon browse-icon', onmouseenter:'browseEnter(event)', onmouseleave:'browseLeave(event)'}]
@@ -443,11 +443,11 @@ var observers = {
 									],
 									['span', {},
 										['span', {class:'icon cancel'}],
-										['span', {class:'icon updown'}],
+										['span', {class:'icon updown', onmousedown:'dragParent(event)'}],
 										['span', {class:'icon current-build'}]
 									]
 								];
-	
+		
 	function devBuildsStrToDom(sizeIt) {
 		var rows = document.querySelectorAll('.builds-cont > div'); //first row is header
 		console.log('num rows = ', rows.length);
@@ -477,7 +477,7 @@ var observers = {
 			var json = JSON.parse(propVal);
 			for (var i=0; i<=json.length-1; i++) {
 				var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
-				rowDomJson[1].style = 'order:' + i + ';';
+				rowDomJson[1].style += 'order:' + i + ';';
 				//rowDomJson[1].class = ''; //remove `attn` class
 				var builtinIcon = json[i][0].match(/^(?:release|beta|aurora|nightly)$/im);
 				console.log('builtinIcon match:', builtinIcon);
@@ -492,10 +492,213 @@ var observers = {
 			}
 			//add blank row
 			var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
-			rowDomJson[1].style = 'order:' + json.length + ';';
+			rowDomJson[1].class = '';
+			rowDomJson[1].style += 'order:' + json.length + ';';
 			buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 		}
 		sizeContToDev(sizeIt);
+		
+		
+		//start - setup drag drop
+		var cont = document.getElementById('buildsCont');
+		devBuildRows = cont.querySelectorAll('.devBuildSortable');
+		for (var i=0; i<devBuildRows.length; i++) {
+			devBuildRowYs.push(devBuildRows[i].offsetTop);
+		}
+		devBuildRowH = devBuildRowYs[1] - devBuildRowYs[0];
+		for (var i=0; i<devBuildRows.length; i++) {
+			//devBuildMoveRowYs.push([devBuildRowYs, devBuildRowYs + (devBuildRowH/2)]); //array of min y when closest is row 1, max y when closest is row 1
+			devBuildMoveRowYs.push(devBuildRowYs);
+			devBuildMoveRowYs.push(devBuildRowYs + (devBuildRowH/2));
+		}		
+		//end - setup drag drop
+		
+	}
+	
+	var devBuildRows;
+	var parentInitY = 0;
+	var parentEl = 0;
+	var parentElOrder = -1;
+	var devBuildRowYs = [];
+	var devBuildMoveRowYs = [];
+	var devBuildMoveRowYsREL = [];
+	var devBuildRowYsRel = []; //
+	var devBuildRowYSteps = [];
+	var devBuildRowH = 0; //row height
+	var devBuildEmptyRow = -1; //order at which empty
+	
+	var devBuildRowsLIVE = [];
+	
+	function moveParent(e) {
+		var offsetY = (parentInitY - e.clientY) * -1;
+		if (offsetY < devBuildRowYsRel[0]) { //not <= but < otherwise 1px off
+			offsetY = devBuildRowYsRel[0]; //min
+		}
+		if (offsetY > devBuildRowYsRel[devBuildRowYsRel.length-1]) {
+			offsetY = devBuildRowYsRel[devBuildRowYsRel.length-1]; //max
+		}
+		parentEl.style.top = offsetY + 'px';
+		
+		
+		for (var i=0; i<devBuildMoveRowYsREL.length; i++) {
+			if (offsetY >= devBuildMoveRowYsREL[i] && offsetY <= devBuildMoveRowYsREL[i+1]) {
+				//var prevEmptyRow = devBuildEmptyRow;
+				//devBuildEmptyRow = i; //order at which is on right now
+				
+				var moveOutRowI = Math.ceil(i / 2);
+				if (moveOutRowI < 0) {
+					moveOutRowI = 0;
+				}
+				
+				//console.log('need to move out row from position of order', moveOutRowI);
+				
+				var cEmptyI = devBuildRowsLIVE.indexOf('');
+				if (devBuildRowsLIVE[moveOutRowI] != '') {
+					//its not empty, so move it out
+					if (cEmptyI < moveOutRowI) {
+						//move row at moveOutRowI up
+						devBuildRowsLIVE[moveOutRowI][0].style.top = (parseInt(devBuildRowsLIVE[moveOutRowI][0].style.top) - devBuildRowH) + 'px';
+						devBuildRowsLIVE.splice(cEmptyI, 1);
+						devBuildRowsLIVE.splice(moveOutRowI, 0, '');
+						cEmptyI = moveOutRowI;
+						console.log('after shifting empty:', devBuildRowsLIVE, 'needed to move UP row at:', moveOutRowI);
+					} else if (cEmptyI > moveOutRowI) {
+						//move row at moveOutRowI down
+						devBuildRowsLIVE[moveOutRowI][0].style.top = (parseInt(devBuildRowsLIVE[moveOutRowI][0].style.top) + devBuildRowH) + 'px';
+						devBuildRowsLIVE.splice(cEmptyI, 1);
+						devBuildRowsLIVE.splice(moveOutRowI, 0, '');
+						cEmptyI = moveOutRowI;
+						console.log('after shifting empty:', devBuildRowsLIVE, 'needed to move DOWN row at:', moveOutRowI);
+					} else {
+						console.warn('huh? can cEmptyI == current row? they are now..', i, cEmptyI);
+					}
+				} else {
+					//console.log('its already empty, dont do anything');
+					console.log('already empty do nothing', 'needed to move out row from position of order', moveOutRowI);
+				}
+				break;
+			}
+		}
+	}
+
+	function dragParent(e) {
+		//startDrag
+		parentInitY = e.clientY;
+		parentEl = e.target.parentNode.parentNode;
+		
+		devBuildRowsLIVE = [];
+		for (var i=0; i<devBuildRows.length; i++) {
+			var cOrder = parseInt(devBuildRows[i].style.order);
+			devBuildRowsLIVE.push([devBuildRows[i], cOrder]);
+			devBuildRows[i].style.transition = 'top 100ms';
+		}
+		devBuildRowsLIVE.sort(function(a, b) {
+			return a[1] > b[1];
+		});
+		
+		parentEl.style.transition = '';
+		parentEl.style.zIndex = 1;
+		
+		parentElOrder = parseInt(parentEl.style.order);
+		
+		devBuildEmptyRow = parentElOrder;
+		
+		console.log('parentElOrder:', parentElOrder);
+		devBuildRowYsRel = [];
+		devBuildMoveRowYsREL = [];
+		
+		for (var i=0; i<devBuildRows.length; i++) {
+			if (devBuildRowsLIVE[i][1] == parentElOrder) {
+				devBuildRowsLIVE.splice(i, 1, '');
+				devBuildEmptyRow = i;
+				break;
+			}
+		}
+		
+		console.log(devBuildRowsLIVE);
+		
+		for (var i=0; i<devBuildRowYs.length; i++) {
+			devBuildRowYsRel.push(devBuildRowYs[i] - devBuildRowYs[parentElOrder]);
+			devBuildMoveRowYsREL.push(devBuildRowYsRel[i]);
+			devBuildMoveRowYsREL.push(devBuildRowYsRel[i] + (devBuildRowH/2));
+		}
+		
+		console.log(devBuildRowYs);
+		console.log(devBuildRowYsRel);
+		console.log('parentInitY:', parentInitY);
+		console.log('parentEl:', parentEl);
+		document.addEventListener('mousemove', moveParent, false);
+		document.addEventListener('mouseup', droppedParent, false);
+	}
+	
+	function droppedParent(e) {
+		document.removeEventListener('mousemove', moveParent, false);
+		document.removeEventListener('mouseup', droppedParent, false);
+		parentEl.style.transition = 'top 100ms';
+		
+		/*
+		var closestRel = 10000;
+		var closestRelI = 0;
+		var cTop = parseInt(parentEl.style.top);
+		for (var i=0; i<devBuildRowYsRel.length; i++) {
+			var RelDiff = Math.abs(devBuildRowYsRel[i] - cTop);
+			//console.log('RelDiff with i', i, 'is', RelDiff);
+			if (RelDiff < closestRel) {
+				closestRel = RelDiff;
+				closestRelI = i;
+			}
+		}
+		*/
+		
+		//alt to closestreli
+		var offsetY = parseInt(parentEl.style.top);
+		var cTop = offsetY;
+		for (var i=0; i<devBuildMoveRowYsREL.length; i++) {
+			if (offsetY >= devBuildMoveRowYsREL[i] && offsetY <= devBuildMoveRowYsREL[i+1]) {
+				var moveOutRowI = Math.ceil(i / 2);
+				if (moveOutRowI < 0) {
+					moveOutRowI = 0;
+				}
+				//console.log('need to move out row from position of order', moveOutRowI);
+				break;
+			}
+		}
+		//alt to closestRelI
+		
+		//console.log('moveOutRowI:', moveOutRowI, 'closestRelI:', closestRelI);
+		
+		var postTrans = function() {
+			console.log('transition ended');
+			if (cTop != devBuildRowYsRel[moveOutRowI]) {
+				console.log('removing transend listener');
+				parentEl.removeEventListener('transitionend', arguments.callee, false);
+			}
+			
+			for (var i=0; i<devBuildRowsLIVE.length; i++) {
+				if (devBuildRowsLIVE[i] == '') {
+					parentEl.style.transition = '';
+					parentEl.style.order = i;
+					parentEl.style.top = '0px';
+					//parentEl.style.transition = 'top 100ms';
+				} else {
+					devBuildRowsLIVE[i][0].style.transition = '';
+					devBuildRowsLIVE[i][0].style.order = i;
+					devBuildRowsLIVE[i][0].style.top = '0px';
+					//devBuildRowsLIVE[i][0].style.transition = 'top 100ms';
+				}
+			}
+			parentEl.style.zIndex = 0;
+			parentEl = 0;
+			//console.log('post trans stuff ended');
+		};
+		if (cTop == devBuildRowYsRel[moveOutRowI]) {
+			postTrans();
+		} else {
+			//do transition
+			parentEl.style.top = devBuildRowYsRel[moveOutRowI] + 'px';
+			parentEl.addEventListener('transitionend', postTrans, false);
+		}
+		console.log('dropped');
 	}
 	
 	function generateDevBuildsStr() {
