@@ -447,12 +447,18 @@ var observers = {
 										['span', {class:'icon current-build'}]
 									]
 								];
-		
+	var oldPropValForDevBuilds = ''; //used for testing if devBuildsStrToDom should really build again	
 	function devBuildsStrToDom(sizeIt) {
 		var rows = document.querySelectorAll('.builds-cont > div'); //first row is header
 		console.log('num rows = ', rows.length);
 		var propName = 'Profilist.dev-builds'
 		var propVal = ini.General.props[propName];
+		
+		if (propVal == oldPropValForDevBuilds) {
+			console.info('dev-builds propval is unchanged so do not update');
+			return;
+		}
+		oldPropValForDevBuilds = propVal;
 		
 		//remove all rows
 		for (var i=rows.length-1; i>0; i--) {
@@ -506,24 +512,35 @@ var observers = {
 			devBuildRowYs.push(devBuildRows[i].offsetTop);
 		}
 		devBuildRowH = devBuildRowYs[1] - devBuildRowYs[0];
-		for (var i=0; i<devBuildRows.length; i++) {
-			//devBuildMoveRowYs.push([devBuildRowYs, devBuildRowYs + (devBuildRowH/2)]); //array of min y when closest is row 1, max y when closest is row 1
-			devBuildMoveRowYs.push(devBuildRowYs);
-			devBuildMoveRowYs.push(devBuildRowYs + (devBuildRowH/2));
-		}		
 		//end - setup drag drop
 		
+		var texts = cont.querySelectorAll('input');
+		Array.prototype.forEach.call(texts, function(t) {
+			t.addEventListener('keyup', devBuildTextChange, false);
+			//t.addEventListener('focus', devBuildTextChange, false);
+		});
+		
+		var current_build = cont.querySelectorAll('.current-build');
+		Array.prototype.forEach.call(current_build, function(t) {
+			t.addEventListener('click', setThisToCurrentBuild, false);
+		});
+		
+		var cancels = cont.querySelectorAll('.cancel');
+		Array.prototype.forEach.call(cancels, function(t) {
+			t.addEventListener('click', deleteThisBuild, false);
+		});
+		
 	}
+	
+	// start - drag stuff
 	
 	var devBuildRows;
 	var parentInitY = 0;
 	var parentEl = 0;
 	var parentElOrder = -1;
 	var devBuildRowYs = [];
-	var devBuildMoveRowYs = [];
 	var devBuildMoveRowYsREL = [];
-	var devBuildRowYsRel = []; //
-	var devBuildRowYSteps = [];
+	var devBuildRowYsRel = [];
 	var devBuildRowH = 0; //row height
 	var devBuildEmptyRow = -1; //order at which empty
 	
@@ -701,6 +718,148 @@ var observers = {
 		console.log('dropped');
 	}
 	
+	// end - drag stuff
+	
+	var selfBuildPathInUse = false;
+	var pathExe = FileUtils.getFile('XREExeF', []).path;
+	
+	function devBuildTextChange(e) {
+		var cont = this.parentNode.parentNode.parentNode;
+		var div = this.parentNode.parentNode;
+		var me_t = this;
+		var checkIfShouldRemoveCurrentBuild = function() {
+			if (me_t.classList.contains('current-build-on-this')) {
+				me_t.classList.remove('current-build-on-this');
+				cont.classList.remove('current-build-used');
+			}
+		};
+		//console.log('text changed');
+		console.log(this, this.value.length);
+		if (this.value.length == 0) {
+			//do error
+			div.classList.add('error');
+			if (div.classList.contains('current-build-on-this')) {
+				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+					//ok we're good
+					console.log('paths match 3');
+				} else {
+					console.log('path mismatch 3');
+					div.classList.remove('current-build-on-this');
+					cont.classList.remove('current-build-used');
+				}
+			}
+		} else {
+			div.classList.remove('error');
+			if (!div.classList.contains('devBuildSortable')) {
+				addBuildRow();
+			}
+			
+			if (div.classList.contains('current-build-on-this')) {
+				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+					//ok we're good
+					console.log('paths match');
+				} else {
+					console.log('path mismatch');
+					div.classList.remove('current-build-on-this');
+					cont.classList.remove('current-build-used');
+				}
+			} else {
+				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+					console.log('paths match 2');
+					cont.classList.add('current-build-used');
+					div.classList.add('current-build-on-this');
+				} else {
+					console.log('path mismatch 2');
+				}
+			}
+		}
+	}
+	
+	function setThisToCurrentBuild(e) {
+		var cont = e.target.parentNode.parentNode.parentNode;
+		if (cont.classList.contains('current-build-used')) {
+			document.querySelector('.current-build-on-this').classList.add('warn');
+			setTimeout(function() {
+				document.querySelector('.current-build-on-this').classList.remove('warn');
+			}, 2000);
+			return;
+		}
+		var div = this.parentNode.parentNode;
+		var text = div.querySelector('input');
+		text.value = pathExe;
+		div.classList.add('current-build-on-this');
+		cont.classList.add('current-build-used');
+		div.classList.remove('error');
+		
+		if (!div.nextSibling) {
+			addBuildRow();
+		}
+	}
+	
+	function deleteThisBuild(e) {
+		var div = this.parentNode.parentNode;
+		div.style.transition = 'opacity 300ms, margin 300ms'; //note: if i choose not to do 300ms here than change innerbg transition time
+		div.addEventListener('transitionend', function(e1) {
+			if (e1.target.getAttribute('class').contains('devBuildSortable')) { //have to do this because the opacity transitioned is firing for the mini icons as well
+				//console.log('transend e1:', e1.propertyName, e1.target.getAttribute('class').contains('devBuildSortable'));
+				if (e1.propertyName == 'opacity') {
+					div.style.marginBottom = (-1 * (devBuildRowH - 5)) + 'px'; //note: if i add more margin, like non-bottom then i should adjust this here as well
+					innerbg.style.height = (parseInt(innerbg.style.height) - devBuildRowH) + 'px'; //note: can do this here because the transition timing on this innerbg is also 300ms.
+				} else if (e1.propertyName == 'margin-bottom') { //note: if change margin-bottom of marging then update this
+					var cont = div.parentNode;
+					cont.removeChild(div); //no need to remove transitionend listener here as we're deleting the element the event listeners go with it, need to verify this is true
+					
+					//fix order's so no skip
+					devBuildRows = cont.querySelectorAll('.devBuildSortable');
+					var LIVE = [];
+					devBuildRowYs = [];
+					Array.prototype.forEach.call(devBuildRows, function(t) {
+						LIVE.push([t, t.style.order]);
+						devBuildRowYs.push(t.offsetTop);
+					});
+					
+					LIVE.push([devBuildRows[devBuildRows.length-1].nextSibling, devBuildRows[devBuildRows.length-1].nextSibling.style.order]);
+					devBuildRowYs.sort();
+					
+					LIVE.sort(function(a, b) {
+						return a[1] > b[1];
+					});
+					
+					Array.prototype.forEach.call(LIVE, function(t, i) {
+						t[0].style.order = i;
+					});
+				}
+			}
+		}, false);
+		div.style.opacity = '0';
+	}
+	
+	function addBuildRow() {
+		var cont = document.getElementById('buildsCont');
+		
+		var lastDiv = cont.querySelector('div:last-of-type');
+		lastDiv.classList.add('devBuildSortable');
+		
+		devBuildRows = cont.querySelectorAll('.devBuildSortable');
+		
+		var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
+		rowDomJson[1].class = '';
+		rowDomJson[1].style += 'order:' + devBuildRows.length + ';';// margin-bottom:' + devBuildRowH + 'px;';
+		var newRow = jsonToDOM(rowDomJson, document, {});
+		buildsCont.appendChild(newRow);
+		
+		innerbg.style.height = (parseInt(innerbg.style.height) + devBuildRowH) + 'px'; //note: can do this here because the transition timing on this innerbg is also 300ms.
+		
+		//start - setup drag drop
+		devBuildRowYs.push(lastDiv.offsetTop);
+		//end - setup drag drop
+		
+		newRow.querySelector('input').addEventListener('keyup', devBuildTextChange, false); //var texts = 
+		//newRow.querySelector('input').addEventListener('focus', devBuildTextChange, false); //var texts = 
+		newRow.querySelector('.current-build').addEventListener('click', setThisToCurrentBuild, false); //var current_build = 
+		newRow.querySelector('.cancel').addEventListener('click', deleteThisBuild, false); //var cancels = 
+	}
+	
 	function generateDevBuildsStr() {
 		//ini.General.props.devbuilds
 		var devbuildsJson = [];
@@ -732,7 +891,7 @@ var observers = {
 		console.log('make icon in app dir');
 		e.target.parentNode.classList.remove('noswitch');
 		setTimeout(function() {
-			alert(e.target.parentNode.style.backgroundImage + '\n' + e.target.parentNode.getAttribute('class'));
+			//alert(e.target.parentNode.style.backgroundImage + '\n' + e.target.parentNode.getAttribute('class'));
 			if (e.target.parentNode.style.backgroundImage != '') {
 				//custom image applied
 				//check if textbox value is not blank and if it isnt then update profiles.ini `dev-builds`

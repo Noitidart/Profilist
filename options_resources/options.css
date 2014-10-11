@@ -10,7 +10,8 @@
 }
 
 .builds-cont > div {
-	margin-bottom: 5px;
+	margin-bottom: 5px; /*note: if change this margin then must change margin in xpcom.js deleteThisBuild()*/
+	/*note: if add more margin or padding should also adjust in the setting to 0 in deleteThisBuild()*/
 }
 
 .builds-cont > div > span {
@@ -113,7 +114,7 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 
 /*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {*/
 .builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .change-icon:before {
-	opacity: 0.3 !important;
+	opacity: 0.5 !important;
 	transition: opacity 300ms !important;
 }
 
@@ -159,11 +160,21 @@ div  > span:nth-of-type(2) > input[type=text] {
 div  > span:nth-of-type(2) > .icon:before {
 	content: '\e804';
 	opacity: 1 !important;
-	color: crimson;
 	width: 0;
+	color: #000;
 	text-align:right;
 	overflow: hidden;
-	transition: width 150ms, border-color 300ms;
+	transition: width 150ms, border-color 300ms, color 0ms ease 150ms;  /*so the color doesnt change to black right away when hiding*/
+}
+
+div.error  > span:nth-of-type(2) > .icon:before {
+	color: rgba(187, 59, 1, 1); /*#bb3b01;*/
+	transition: width 150ms, border-color 300ms, color 0ms ease 0ms;  /*so the color doesnt change to black right away*/
+}
+
+div.warn  > span:nth-of-type(2) > .icon:before {
+	color: rgba(232, 188, 0, 1); /*#e8bc00;*/
+	transition: width 150ms, border-color 300ms, color 0ms ease 0ms; /*so the color doesnt change to black right away*/
 }
 
 .builds-cont.single-build .updown {
@@ -171,25 +182,41 @@ div  > span:nth-of-type(2) > .icon:before {
 }
 
 .builds-cont.single-build.current-build-used > div > span:nth-of-type(3) {
-	width: 20px;
+	/*width: 20px;*/
 }
 .builds-cont.current-build-used > div > span:nth-of-type(3),
 .builds-cont.single-build > div > span:nth-of-type(3) {
-	width: 40px;
+	/*width: 40px;*/
 }
 
-.builds-cont.current-build-used .current-build {
-	display: none;
+.builds-cont.current-build-used .current-build.icon:before {
+	/*display: none;*/
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default;
 }
 
-div.attn  > span:nth-of-type(2) > .icon:before  {
+div.warn  > span:nth-of-type(2) > .icon:before,
+div.error  > span:nth-of-type(2) > .icon:before  {
 	width: 19px;
 }
 
 
-div.attn  > span:nth-of-type(2) > input[type=text] {
+div.warn  > span:nth-of-type(2) > input[type=text],
+div.error  > span:nth-of-type(2) > input[type=text] {
 	width: 80%;
-	border: 1px solid crimson;
+}
+
+div.error  > span:nth-of-type(2) > input[type=text] {
+	border: 1px solid rgba(187, 59, 1, 1); /*#bb3b01;*/
+	/*background-color: rgba(187, 59, 1, .1);*/
+	background: url('bg_error.png') repeat scroll left top #fff; /*because i want the opacity of red bg on white bg, i have to use image*/
+}
+
+div.warn  > span:nth-of-type(2) > input[type=text] {
+	border: 1px solid rgba(232, 188, 0, 1); /*#e8bc00;*/
+	/*background-color: rgba(232, 188, 0, .1);*/
+	background: url('bg_warn.png') repeat scroll left top #fff;
 }
 
 .tools:before {
@@ -411,7 +438,7 @@ width: 500px;
 	width: 476px;
 	background: linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top transparent;
 	border-radius: 0 0px 5px 5px;
-	transition: height 300ms;
+	transition: height 300ms; /*note: if i choose not to do 300ms here than change xpcom.js deleteThisBuild() transition time*/
 	overflow: hidden;
 	position: relative;
 }
