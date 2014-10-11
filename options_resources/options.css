@@ -154,6 +154,19 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 	content: '\e805';
 	cursor: ns-resize !important;
 }
+
+.builds-cont > div:last-of-type .updown:before {
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default !important;
+}
+
+.builds-cont > div:last-of-type .cancel:before {
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default !important;
+}
+
 .current-build:before {
 	content: '\e809';
 }

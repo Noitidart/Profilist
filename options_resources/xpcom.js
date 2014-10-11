@@ -529,7 +529,7 @@ var observers = {
 		var texts = cont.querySelectorAll('input');
 		Array.prototype.forEach.call(texts, function(t) {
 			t.addEventListener('keyup', devBuildTextChange, false);
-			t.addEventListener('change', saveDevBuilds, false);
+			t.addEventListener('change', devBuildTextBlur, false);
 			//t.addEventListener('focus', devBuildTextChange, false);
 		});
 		
@@ -613,6 +613,11 @@ var observers = {
 
 	function dragParent(e) {
 		//startDrag
+		if (e.target.parentNode.parentNode.nextSibling == null) { //is last div so dont do drag
+			console.warn('last div, cannot drag');
+			return;
+		}
+		
 		parentInitY = e.clientY;
 		parentEl = e.target.parentNode.parentNode;
 		
@@ -809,8 +814,17 @@ var observers = {
 		saveDevBuilds();
 	}
 	
+	function devBuildTextBlur(e) {
+		devBuildTextChange.bind(this, e)();
+		saveDevBuilds();
+	}
+	
 	function deleteThisBuild(e) {
 		var div = this.parentNode.parentNode;
+		if (div.nextSibling == null) { //is last div so cannot delete
+			console.warn('last div, cannot delete');
+			return;
+		}
 		div.style.transition = 'opacity 300ms, margin 300ms'; //note: if i choose not to do 300ms here than change innerbg transition time
 		div.addEventListener('transitionend', function(e1) {
 			if (e1.target.getAttribute('class').contains('devBuildSortable')) { //have to do this because the opacity transitioned is firing for the mini icons as well
@@ -820,6 +834,9 @@ var observers = {
 					innerbg.style.height = (parseInt(innerbg.style.height) - devBuildRowH) + 'px'; //note: can do this here because the transition timing on this innerbg is also 300ms.
 				} else if (e1.propertyName == 'margin-bottom') { //note: if change margin-bottom of marging then update this
 					var cont = div.parentNode;
+					if (div.classList.contains('current-build-on-this')) {
+						cont.classList.remove('current-build-used');
+					}
 					cont.removeChild(div); //no need to remove transitionend listener here as we're deleting the element the event listeners go with it, need to verify this is true
 					
 					//fix order's so no skip
@@ -846,6 +863,8 @@ var observers = {
 					Array.prototype.forEach.call(LIVE, function(t, i) {
 						t[0].style.order = i;
 					});
+					
+					saveDevBuilds();
 				}
 			}
 		}, false);
@@ -873,7 +892,7 @@ var observers = {
 		//end - setup drag drop
 		
 		newRow.querySelector('input').addEventListener('keyup', devBuildTextChange, false); //var texts = 
-		newRow.querySelector('input').addEventListener('change', saveDevBuilds, false);
+		newRow.querySelector('input').addEventListener('change', devBuildTextBlur, false);
 		//newRow.querySelector('input').addEventListener('focus', devBuildTextChange, false); //var texts = 
 		newRow.querySelector('.current-build').addEventListener('click', setThisToCurrentBuild, false); //var current_build = 
 		newRow.querySelector('.cancel').addEventListener('click', deleteThisBuild, false); //var cancels = 
@@ -938,7 +957,8 @@ var observers = {
 		if (oldStr == newStr) {
 			console.warn('oldStr and newStr are same so dont save');
 		} else {
-			//ini.General.props[propName] = newStr; //i shouldnt do this as the cpCommPostMsg handles that
+			ini.General.props[propName] = newStr; //i shouldnt do this as the cpCommPostMsg handles that //actually this seems to fix the bug where when i have no rows. i click set cur build. then delete, then repeat. weird
+			console.log('sending to server for update of dev-builds');
 			oldPropValForDevBuilds = newStr; //i do this so it doesnt unnecesarily refresh the dom on the current one
 			var selectedValue = newStr;
 			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
