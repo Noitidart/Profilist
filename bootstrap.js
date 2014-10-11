@@ -2530,7 +2530,7 @@ var observers = {
 };
 
 /* start - control panel server/client communication */
-const subDataSplitter = '::'; //must match splitter const used in client //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
+const subDataSplitter = ':~:~:~:'; //note: must match splitter const used in client //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
 
 var addonListener = {
   onPropertyChanged: function(addon, properties) {

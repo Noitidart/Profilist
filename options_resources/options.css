@@ -11,7 +11,7 @@
 
 .builds-cont > div {
 	margin-bottom: 5px; /*note: if change this margin then must change margin in xpcom.js deleteThisBuild()*/
-	/*note: if add more margin or padding should also adjust in the setting to 0 in deleteThisBuild()*/
+	/*note: if add more margin or padding should also adjust in the setting to 0 in deleteThisBuild() AND ALSO devBuildsStrToDom()*/
 }
 
 .builds-cont > div > span {
@@ -128,6 +128,26 @@ installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1
 	font-size: 13px !important;
 	opacity: 0 !important;
 	transition: opacity 200ms !important;
+}
+
+.builds-cont > div:not(:first-of-type) > span.browse:nth-of-type(1):hover .change-icon:after {
+	opacity: 0 !important;
+}
+.builds-cont > div:not(:first-of-type) > span.browse:nth-of-type(1) .change-icon:after {
+	/*change-icon icon*/
+	color: rgba(187, 59, 1, 1);
+	content: '\e804';
+	position: absolute;
+	top: calc(50% - 9px);
+	right: -8px; /*right: 12px;*/ /*12px centers it*/
+	font-size: 13px !important;
+	opacity: 1 !important;
+	transition: opacity 200ms !important;
+	z-index: 0;
+	font-family: "fontello";
+	font-style: normal;
+	font-weight: normal;
+	speak: none;
 }
 
 .updown:before {

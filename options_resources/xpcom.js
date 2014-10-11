@@ -1,6 +1,6 @@
 const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
 const myPrefBranch = 'extensions.Profilist@jetpack.';
-const subDataSplitter = '::'; //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
+const subDataSplitter = ':~:~:~:'; //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to //note: must batch subDataSplitter in bootstrap.js
 const clientId = Math.random();
 
 Cu.import('resource://gre/modules/osfile.jsm');
@@ -9,6 +9,7 @@ Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 var ini;
+const pathProfileIniFolder = OS.Constants.Path.userApplicationDataDir;
 /*global el holders*/
 var innerbg;
 var sect_gen;
@@ -433,7 +434,7 @@ var observers = {
 	
 	var rowTempalateDomJson = 
 								['div', {class:'devBuildSortable', style:'position:relative; top:0; transition:top 100ms;'}, //class can be attn //style should hold order
-									['span', {class:'release', style:'', onclick:'changeIcon(event)'}, //class can be release/beta/etc or style can be url background-image
+									['span', {class:'release', style:'', onclick:'changeIcon(event)', onmouseenter:'iconChangerEnter(event)', onmouseleave:'iconChangerLeave(event)'}, //class can be release/beta/etc or style can be url background-image
 										['span', {class:'icon change-icon'}],
 										['span',{class:'icon browse-icon', onmouseenter:'browseEnter(event)', onmouseleave:'browseLeave(event)'}]
 									],
@@ -451,11 +452,12 @@ var observers = {
 	function devBuildsStrToDom(sizeIt) {
 		var rows = document.querySelectorAll('.builds-cont > div'); //first row is header
 		console.log('num rows = ', rows.length);
-		var propName = 'Profilist.dev-builds'
+		var propName = 'Profilist.dev-builds';
 		var propVal = ini.General.props[propName];
 		
 		if (propVal == oldPropValForDevBuilds) {
 			console.info('dev-builds propval is unchanged so do not update');
+			sizeContToDev(sizeIt);
 			return;
 		}
 		oldPropValForDevBuilds = propVal;
@@ -491,9 +493,17 @@ var observers = {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
-					rowDomJson[2][1].style = 'background-image:url("' + json[i][0] + '")';
+					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(pathProfileIniFolder, json[i][0]))  + '#' + Math.random() + '")';
 				}
 				rowDomJson[3][2][1].value = json[i][1]; //textbox value
+				if (json[i][1].toLowerCase() == pathExe.toLowerCase()) {
+					if (rowDomJson[1].class != '') {
+						rowDomJson[1].class += ' current-build-on-this';
+					} else {
+						rowDomJson[1].class = 'current-build-on-this';
+					}
+					buildsCont.classList.add('current-build-used');
+				}
 				buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 			}
 			//add blank row
@@ -511,12 +521,15 @@ var observers = {
 		for (var i=0; i<devBuildRows.length; i++) {
 			devBuildRowYs.push(devBuildRows[i].offsetTop);
 		}
-		devBuildRowH = devBuildRowYs[1] - devBuildRowYs[0];
+		var blankRow = cont.querySelector('div:last-of-type');
+		devBuildRowH = blankRow.offsetHeight + parseInt(window.getComputedStyle(blankRow, null).getPropertyValue('margin-bottom')); //devBuildRowYs[1] - devBuildRowYs[0]; //note: update here if add more than margin-bottom
+		console.info('devBuildRowH:', devBuildRowH);
 		//end - setup drag drop
 		
 		var texts = cont.querySelectorAll('input');
 		Array.prototype.forEach.call(texts, function(t) {
 			t.addEventListener('keyup', devBuildTextChange, false);
+			t.addEventListener('change', saveDevBuilds, false);
 			//t.addEventListener('focus', devBuildTextChange, false);
 		});
 		
@@ -706,6 +719,7 @@ var observers = {
 			}
 			parentEl.style.zIndex = 0;
 			parentEl = 0;
+			saveDevBuilds();
 			//console.log('post trans stuff ended');
 		};
 		if (cTop == devBuildRowYsRel[moveOutRowI]) {
@@ -727,16 +741,13 @@ var observers = {
 		var cont = this.parentNode.parentNode.parentNode;
 		var div = this.parentNode.parentNode;
 		var me_t = this;
-		var checkIfShouldRemoveCurrentBuild = function() {
-			if (me_t.classList.contains('current-build-on-this')) {
-				me_t.classList.remove('current-build-on-this');
-				cont.classList.remove('current-build-used');
-			}
-		};
 		//console.log('text changed');
 		console.log(this, this.value.length);
 		if (this.value.length == 0) {
 			//do error
+			if (!div.classList.contains('devBuildSortable')) {
+				return;
+			}
 			div.classList.add('error');
 			if (div.classList.contains('current-build-on-this')) {
 				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
@@ -794,6 +805,8 @@ var observers = {
 		if (!div.nextSibling) {
 			addBuildRow();
 		}
+		
+		saveDevBuilds();
 	}
 	
 	function deleteThisBuild(e) {
@@ -818,8 +831,13 @@ var observers = {
 						devBuildRowYs.push(t.offsetTop);
 					});
 					
-					LIVE.push([devBuildRows[devBuildRows.length-1].nextSibling, devBuildRows[devBuildRows.length-1].nextSibling.style.order]);
-					devBuildRowYs.sort();
+					if (devBuildRows.length > 0) {
+						LIVE.push([devBuildRows[devBuildRows.length-1].nextSibling, devBuildRows[devBuildRows.length-1].nextSibling.style.order]);
+						devBuildRowYs.sort();
+					} else {
+						var lastDiv = cont.querySelector('div:last-of-type');
+						LIVE.push([lastDiv, lastDiv.style.order]);
+					}
 					
 					LIVE.sort(function(a, b) {
 						return a[1] > b[1];
@@ -855,11 +873,78 @@ var observers = {
 		//end - setup drag drop
 		
 		newRow.querySelector('input').addEventListener('keyup', devBuildTextChange, false); //var texts = 
+		newRow.querySelector('input').addEventListener('change', saveDevBuilds, false);
 		//newRow.querySelector('input').addEventListener('focus', devBuildTextChange, false); //var texts = 
 		newRow.querySelector('.current-build').addEventListener('click', setThisToCurrentBuild, false); //var current_build = 
 		newRow.querySelector('.cancel').addEventListener('click', deleteThisBuild, false); //var cancels = 
 	}
 	
+	function saveDevBuilds() {
+		//reads and creates dev-builds string from the dom
+		var err1 = document.querySelector('.browse'); //if any custom browse buttons are visible
+		if (err1) {
+			console.error('cannot save as errors exist');
+			return;
+		}
+		var err2 = document.querySelector('.error'); //any errors on the rows?
+		if (err2) {
+			console.error('cannot save as errors exist');
+			return;
+		}
+		
+		devBuildRows = document.querySelectorAll('.devBuildSortable');
+		
+		var str = [];
+		
+		Array.prototype.forEach.call(devBuildRows, function(t, i) {
+			var iconSpan = t.querySelector('span');
+			var icon = iconSpan.style.backgroundImage;
+			if (icon == '') {
+				icon = iconSpan.getAttribute('class').match(/(?:release|beta|aurora|nightly)/i);
+				if (!icon) {
+					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
+					return;
+				} else {
+					icon = icon[0];
+				}
+			} else {
+				var iconUrl = icon.match(/url\(["']?(.*?)#/);
+				if (!iconUrl) {
+					console.error('failed to run regex on background image', icon, i, t.innerHTML);
+				} else {
+					icon = OS.Path.basename(OS.Path.fromFileURI(iconUrl[1]));
+				}
+			}
+			var path = t.querySelector('input').value;
+			var order = t.style.order;
+			str.push([icon, path, order]);
+		});
+		
+		str.sort(function(a, b) {
+			return a[2] > b[2];
+		});
+		
+		for (var i=0; i<str.length; i++) {
+			str[i].splice(2, 1);
+		}
+		
+		var propName = 'Profilist.dev-builds';
+		var pref_name = 'dev-builds';
+		var oldStr = ini.General.props[propName];
+		var newStr = JSON.stringify(str);
+		console.log('oldStr:', newStr);
+		console.log('newStr:', newStr);
+		
+		if (oldStr == newStr) {
+			console.warn('oldStr and newStr are same so dont save');
+		} else {
+			//ini.General.props[propName] = newStr; //i shouldnt do this as the cpCommPostMsg handles that
+			oldPropValForDevBuilds = newStr; //i do this so it doesnt unnecesarily refresh the dom on the current one
+			var selectedValue = newStr;
+			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
+		}
+	}
+	/*
 	function generateDevBuildsStr() {
 		//ini.General.props.devbuilds
 		var devbuildsJson = [];
@@ -886,11 +971,41 @@ var observers = {
 			devbuildsJson.push([buildPath, iconPath]);
 		}
 	}
+	*/
+	var enteredIconClass;
+	var enteredIconBG;
+	
+	function iconChangerEnter(e) {
+		e.stopPropagation(); //so it doenst bubble to children
+		enteredIconBG = e.target.style.backgroundImage;
+		enteredIconClass = e.target.getAttribute('class');
+	}
+	
+	function iconChangerLeave(e) {
+		setTimeout(function() {
+			var leaveIconBG = e.target.style.backgroundImage;
+			var leaveIconClass = e.target.getAttribute('class');
+			
+			if (enteredIconBG != leaveIconBG) {
+				console.log('running save cuz icongBg differs');
+				saveDevBuilds();
+				return;
+			}
+			
+			if (enteredIconClass != leaveIconClass) {
+				console.log('running save cuz iconClass differs');
+				saveDevBuilds();
+				return;
+			}
+		}, 100); //do the wait because if leaving after file picker, it needs some time to take
+	}
 	
 	function browseLeave(e) {
 		console.log('make icon in app dir');
 		e.target.parentNode.classList.remove('noswitch');
 		setTimeout(function() {
+			//saveDevBuilds();
+			/*
 			//alert(e.target.parentNode.style.backgroundImage + '\n' + e.target.parentNode.getAttribute('class'));
 			if (e.target.parentNode.style.backgroundImage != '') {
 				//custom image applied
@@ -900,6 +1015,7 @@ var observers = {
 					
 				}
 			}
+			*/
 		}, 100);
 		//var iconSwitcher = e.target.parentNode.querySelector('.change-icon');
 		//iconSwitcher.style.opacity = '';
@@ -990,7 +1106,7 @@ var observers = {
 			console.warn('not set up to listen to non-Profilist. selects');
 			return;
 		}
-		var pref_name = targ.id.substr(10);
+		var pref_name = targ.id.substr(10); //without the `Profilist.`
 		console.log('pref_name of select:', pref_name);
 		console.log('newval:', selectedValue);
 		
