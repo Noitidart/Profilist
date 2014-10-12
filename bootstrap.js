@@ -1764,6 +1764,60 @@ function tbb_box_click(e) {
 		},
 		'profilist-dev-build': function() {
 			console.log('change build');
+			console.log('box:', box, 'origTarg:', origTarg);
+			//box == box
+			//origTarg == .profilist-dev-build
+			var nameOfProfileSubmenuClickedOn = origTarg.parentNode.parentNode.getAttribute('label');
+			console.log('prof dev build click, nameOfProfileSubmenuClickedOn:', nameOfProfileSubmenuClickedOn);
+			if (tieOnEnter == '') {
+				tieOnEnter = ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
+			}
+			
+			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+			
+			if (!box.classList.contains('profilist-tied')) {
+				box.classList.add('profilist-tied');
+				ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = FileUtils.getFile('XREExeF', []).path; //do this to get proper casing, rather than theExePath
+				//check if theExePath is in dev-builds, if it is then use its icon right way, else on mouse out download icon and add to dev-builds
+				/*
+				//check to make sure that exe path is in dev-builds
+				try {
+					devBuilds.forEach(function(b) {
+						if (b[1].toLowerCase() == theExePath) {
+							box.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")'; //can use current as it will have been file formatted already
+							ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = b[1];
+							throw BreakException;
+						}
+					}
+					//got here so it wasn't found so add this to dev-builds
+					box.addEventListener('mouseleave', saveTieAndDownload, false);
+				} catch (ex) {
+					if (ex != BreakException) throw ex
+				}
+				*/
+			} else {
+				//has profilist-tied				
+				try {
+					devBuilds.forEach(function(b) {
+						if (b[1].toLowerCase() != theExePath && b[1] != ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie']) {
+							if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
+								var useIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+							} else {
+								var useIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
+							}
+							box.style.backgroundImage = 'url("' + useIconPath + '")';
+							ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = b[1];
+							throw BreakException;
+						}
+					});
+					//either had nothing in there, or had just theExePath in there. I THINK nothing in there is not supposed to happen. but its time to untie
+					box.style.backgroundImage = '';
+					delete ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
+					box.classList.remove('profilist-tied');
+				} catch (ex) { if (ex != BreakException) throw ex }
+			}
+			
+			origTarg.addEventListener('mouseleave', saveTie, false); //learned: same e that got passed to tbb_box_click which is the containing parent func. gets passed to this addEventListener. very good. this is what i was hoping for.
 		},
 		'profilist-dev-safe': function() {
 			console.log('launch this profile in safe mode');
@@ -1808,6 +1862,92 @@ function tbb_box_click(e) {
 	}
 	
 	classAction[className]();
+}
+
+var tieOnEnter = '';
+function saveTie(e) {
+	e.target.removeEventListener('mouseleave', saveTie, false);
+	console.log('saving tie on e.target:', e.target); //e.target == .profilist-dev-build
+	
+	var nameOfProfileSubmenuClickedOn = e.target.parentNode.parentNode.getAttribute('label');
+	console.log('saveTie nameOfProfileSubmenuClickedOn:', nameOfProfileSubmenuClickedOn);
+	
+	var theTieOnEnter = tieOnEnter;
+	tieOnEnter = '';
+	var tieOnLeave = ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
+	if (theTieOnEnter != tieOnLeave) {
+		console.log('SAVING ini as tie is different, it was:', theTieOnEnter, 'is now:', tieOnLeave);
+		//start - if tie is not undefined, then check if its dev-builds if not then add it, this only happens if user clicks to enable first time, as that uses the current build, and if that current builds path was not already in dev-builds
+		if (tieOnLeave && tieOnLeave.toLowerCase() == theExePath) {
+			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+			try {
+				devBuilds.forEach(function(b) {
+					if (b[1].toLowerCase() == theExePath) {
+						throw BreakException;
+					}
+				});
+				//start - theExePath wasnt found in dev-builds so add it
+				var iconP = updateChannel + '_auto.png'; //icon path
+				var downloadP = currentThisBuildsIconPath; //its obviously the current builds path if got here
+				xhr(downloadP, data => {
+					//Services.prompt.alert(null, 'XHR Success', data);
+					var file = OS.Path.join(OS.Constants.Path.userApplicationDataDir, iconP);
+					var promise_downloadP_save = OS.File.writeAtomic(file, new Uint8Array(data));
+					promise_downloadP_save.then(
+						function() {
+							console.log('succesfully saved image to desktop');
+						},
+						function(ex) {
+							 console.error('FAILED in saving image to desktop');
+						}
+					);
+				});
+				devBuilds.push([iconP, tieOnLeave]);
+				ini.General.props['Profilist.dev-builds'] = JSON.stringify(devBuilds);
+				//end - it wasnt found in dev-builds so add it
+			} catch (ex) { if (ex != BreakException) throw ex }
+		}
+		//end - if tie is not undefined, then check if its dev-builds if not then add it, this only happens if user clicks to enable first time, as that uses the current build, and if that current builds path was not already in dev-builds
+		var promise_saveTie = writeIni();
+		promise_saveTie.then(
+			function() {
+				//return Promise.resolve('writeIni success');
+			},
+			function(aReason) {
+				//return Promise.reject('updating ini with newly created profile failed');
+				console.error('failed to save ini for promise_saveTie, aReason:', aReason);
+			}
+		);
+	} else {
+		console.log('tie state UNCHANGED so do no saving');
+	}
+}
+
+function xhr(url, cb) {
+    let xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
+
+    let handler = ev => {
+        evf(m => xhr.removeEventListener(m, handler, !1));
+        switch (ev.type) {
+            case 'load':
+                if (xhr.status == 200) {
+                    cb(xhr.response);
+                    break;
+                }
+            default:
+                Services.prompt.alert(null, 'XHR Error', 'Error Fetching Package: ' + xhr.statusText + ' [' + ev.type + ':' + xhr.status + ']');
+                break;
+        }
+    };
+
+    let evf = f => ['load', 'error', 'abort'].forEach(f);
+    evf(m => xhr.addEventListener(m, handler, false));
+
+    xhr.mozBackgroundRequest = true;
+    xhr.open('GET', url, true);
+    xhr.channel.loadFlags |= Ci.nsIRequest.LOAD_ANONYMOUS | Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_PERSISTENT_CACHING;
+    xhr.responseType = "arraybuffer"; //dont set it, so it returns string, you dont want arraybuffer. you only want this if your url is to a zip file or some file you want to download and make a nsIArrayBufferInputStream out of it or something
+    xhr.send(null);
 }
 
 function launchProfile(e, profName, suppressAlert, url) {

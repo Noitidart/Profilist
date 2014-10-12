@@ -166,14 +166,18 @@
 }
 /*end - submenu positions when dev enabled*/
 
+.profilist-tbb-box.profilist-tied .profilist-submenu {
+	width: calc(10px + 18px + 5px);
+}
+
 /* end submenu*/
 
 
 /* dots */
-.profilist-submenu box.profilist-dots {
+.profilist-tbb-box .profilist-submenu box.profilist-dots {
 	/*padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
 	/* list-style-image: url(chrome://profilist/content/3dots.png); */
-	background: url(chrome://profilist/content/3dots.png) no-repeat center center transparent;
+	background: url(chrome://profilist/content/3dots_shifted.png) no-repeat center center transparent;
 	filter: none;
 	opacity: 1;
 	flex-shrink: 0;
@@ -181,6 +185,18 @@
 	/*transition: opacity 150ms ease 150ms, width 150ms, padding 150ms;*/
 	/*/*transition: opacity 300ms;*/
 }
+
+.profilist-tbb-box.profilist-tied .profilist-submenu box.profilist-dots {
+	width: 8px;
+	/*background-image: url(chrome://profilist/content/3dots_shifted.png); *//*margin-top: 1px;*/ /*margin-top 1px messes up the hover, there is 1px sliver at top where still wtihin tbb-box but it hides the submenu*/
+	margin-left: 3px;
+}
+
+.profilist-tbb-box.profilist-tied .profilist-submenu:not(:hover) box.profilist-dev-safe {
+	visibility: hidden;
+	pointer-events: none;
+}
+
 .profilist-submenu:hover .profilist-dots {
 	/*/*opacity: 0;*/
 	display: none;
@@ -274,7 +290,7 @@
 		background: url(chrome://profilist/content/bullet_nightly.png) no-repeat center center transparent;
 	}
 	*/
-.profilist-tbb-box/*[class*="profilist-tied-"]*/ .profilist-dev-build {
+.profilist-tbb-box.profilist-tied .profilist-dev-build {
 	opacity: 1;
 	filter: none;
 }

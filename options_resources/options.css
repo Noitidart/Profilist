@@ -362,7 +362,7 @@ flex-grow: 1;
 position: relative;
 margin: 0px auto;
 padding: 0px;
-height: 100%;
+height: 95%;
 display: flex;
 flex-direction: column;
 align-items: center;
@@ -463,7 +463,7 @@ color: #FFF;
 font-size: 0.93em;
 float: left;
 height: 10px;
-padding-top: 130px;
+padding-top: 5px;
 width: 500px;
 }
 
