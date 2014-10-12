@@ -1,3 +1,18 @@
+/* start - get the background image from proflist_box to dev-build */
+.profilist-tbb-box[status] .profilist-submenu,
+.profilist-tbb-box[status],
+#profilist_box > stack {
+	background-image: inherit;
+	background-repeat: no-repeat;
+	background-position: 0px -30px;
+}
+
+#profilist_box {
+	background-repeat: no-repeat;
+	background-position: 0px -30px; /*because the height of the image i set it to is 16px i should be able to set this to -16px, because purpose of background-image from here inherits all the way down to profilist-dev*/
+}
+/* end - get the background image from proflist_box to dev-build */
+
 .profilist-display-stack {
 	margin: 0;
 	padding: 0;
@@ -135,7 +150,7 @@
 
 /*start - submenu positions when dev disabled*/
 #profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu:hover {
-	width: calc(3*18px);
+	width: calc(2*18px);
 }
 #profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
 	width: calc(3*18px);
@@ -158,7 +173,7 @@
 .profilist-submenu box.profilist-dots {
 	/*padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
 	/* list-style-image: url(chrome://profilist/content/3dots.png); */
-	background: url(chrome://profilist/content/3dots.png) no-repeat center center red;
+	background: url(chrome://profilist/content/3dots.png) no-repeat center center transparent;
 	filter: none;
 	opacity: 1;
 	flex-shrink: 0;
@@ -238,26 +253,28 @@
 }
 .profilist-dev-build {
 	/* list-style-image: url(chrome://branding/content/icon16.png); */
-	background: url(chrome://branding/content/icon16.png) no-repeat center center transparent;
+	background-image: inherit;
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-color: transparent;
+	/*background: url(chrome://branding/content/icon16.png) no-repeat center center transparent;*/
 	filter: url(filters.svg#grayscale);
 }
+	/*
 	.profilist-tbb-box.profilist-tied-release .profilist-dev-build {
-		/* list-style-image: url(chrome://profilist/content/bullet_release.png); */
 		background: url(chrome://profilist/content/bullet_release.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-beta .profilist-dev-build {
-		/* list-style-image: url(chrome://profilist/content/bullet_beta.png); */
 		background: url(chrome://profilist/content/bullet_beta.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-aurora .profilist-dev-build {
-		/* list-style-image: url(chrome://profilist/content/bullet_aurora.png); */
 		background: url(chrome://profilist/content/bullet_aurora.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-nightly .profilist-dev-build {
-		/* list-style-image: url(chrome://profilist/content/bullet_nightly.png); */
 		background: url(chrome://profilist/content/bullet_nightly.png) no-repeat center center transparent;
 	}
-.profilist-tbb-box[class*="profilist-tied-"] .profilist-dev-build {
+	*/
+.profilist-tbb-box/*[class*="profilist-tied-"]*/ .profilist-dev-build {
 	opacity: 1;
 	filter: none;
 }

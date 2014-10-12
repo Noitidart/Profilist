@@ -9,6 +9,7 @@ const self = {
 const myPrefBranch = 'extensions.' + self.name + '@jetpack.';
 const tbb_box_style = '';
 const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
+const BreakException = {};
 
 const myServices = {};
 var cssUri;
@@ -18,6 +19,11 @@ var stackDOMJson = []; //array holding menu structure in stack /*:note: :importa
 var unloaders = {};
 var PUIsync_height;
 var PUIsync;
+
+var updateChannel = '';
+var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instead of dom as im thinking of making it not update all windows, just update the current window on menu panel show
+var currentThisBuildsIconPath = '';
+var theExePath = '';
 
 const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
@@ -620,7 +626,7 @@ function initProfToolkit() {
 
 function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
 	if (!e) {
-		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
+		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
 		var win = aDOMWindow;
 	} else {
 //		console.log('e on panel showing = ', e);
@@ -891,7 +897,7 @@ function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
 				if (!profToolkit.selectedProfile.name) {
 	//				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
 	//				console.log('trying to change label')
-					var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.querySelector('#profilist-loading');
+					var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.getElementById('profilist-loading');
 					if (profilistLoadingT) {
 	//					console.log('profilistLoadingT found')
 						profilistLoadingT.setAttribute('label', 'Temporary Profile');
@@ -1015,7 +1021,7 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 				let DOMWindows = Services.wm.getEnumerator(null);
 				while (DOMWindows.hasMoreElements()) {
 					let aDOMWindow = DOMWindows.getNext();
-					if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
+					if (aDOMWindow.document.getElementById('profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
 //						console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
 						updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
 					}
@@ -1038,7 +1044,7 @@ function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and 
 						let DOMWindows = Services.wm.getEnumerator(null);
 						while (DOMWindows.hasMoreElements()) {
 							let aDOMWindow = DOMWindows.getNext();
-							if (aDOMWindow.document.querySelector('#profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
+							if (aDOMWindow.document.getElementById('profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
 //								console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
 								updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
 							}
@@ -1060,7 +1066,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	//if jsonStackChanged is true then it will update for sure
 	
 	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
-	var profilist_box = aDOMWindow.document.querySelector('#profilist_box');
+	var profilist_box = aDOMWindow.document.getElementById('profilist_box');
 	if (!profilist_box) {
 //		console.warn('no profilist_box to add to');
 		return new Error('no profilist_box to update to');
@@ -1157,7 +1163,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	
 	if (dontUpdateDom) {
 //		console.info('need to update dom but dontUpdateDom was set to true so will not update it');
-		return false;
+		return false; //note: i think i need to return promise here
 	}
 	
 	var cumHeight = 0;
@@ -1337,6 +1343,31 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			}
 		}
 	}
+
+	//i was putting a check here for if in dev mode, to check if current build icon matches, but realized i should do that on pref change instead
+	//actually i think it should go here
+	
+	//start - make sure the dev mode and dev-build icon is right
+	if (ini.General.props['Profilist.dev'] == 'true') {//does not work: `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {`
+		//so learned as a note: that i should use (for programmatic stuff) ini to check props rather than pref system, pref system is only there for communication between user interface
+		//make sure its enabled in menu dom
+		/*
+		if (!profilist_box.classList.contains('profilist-dev-enabled')) {
+			console.warn('dev is ENABLED, but menu dom is not, so ENABLING it');
+		}
+		*/
+		profilist_box.classList.add('profilist-dev-enabled');
+		checkIfIconIsRight(ini.General.props['Profilist.dev-builds'], profilist_box, true);
+	} else {
+		//make sure its disabled in menu dom
+		/*
+		if (profilist_box.classList.contains('profilist-dev-enabled')) {
+			console.warn('dev is DISABLED, but menu dom is not, so DISABLING it');
+		}
+		*/
+		profilist_box.classList.remove('profilist-dev-enabled');
+	}
+	//end - make sure the dev mode and dev-build icon is right
 	
 	/* [].forEach.call(stackChilds, function(sc) {
 //		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini', 'ini=', ini);
@@ -1347,6 +1378,86 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 	}); */
 	
 //	console.info('json=',json);
+}
+
+function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box, update_dom_element_even_if_icon_unchanged) {
+	//if `dom_element_to_update_profilist_box` == string of `ALL WINDOWS` then update all windows
+	//if `dom_element_to_update_profilist_box` === null THEN no dom is updated
+	
+	//if icon changed then it is definitely going to update
+	
+		var icon_changed = false;
+		//make sure the icon is up to date
+		if (currentThisBuildsIconPath != '' && devBuildsStrOnLastUpdateToGlobalVar == dev_builds_str) {
+			console.log('dev_builds_str is unchanged, so no need to bother with looping to check for update');
+		} else {
+			//start the generic-ish check stuff
+			var devBuilds = JSON.parse(dev_builds_str);
+			if (theExePath == '') {
+				theExePath = FileUtils.getFile('XREExeF', []).path.toLowerCase();
+			}
+			var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
+			//start - figure out from dev_builds_str what icon path should be
+			try {
+				devBuilds.forEach(function(b) {
+					if (b[1].toLowerCase() == theExePath) {
+						if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
+							console.log('making bullet');
+							currentThisBuildsIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+						} else {
+							currentThisBuildsIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
+						}
+						throw BreakException;
+					}
+				});
+				//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
+				if (updateChannel == '') {
+					updateChannel = Services.prefs.getCharPref('app.update.channel');
+				}
+				if (updateChannel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+					currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
+				} else {
+					currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
+				}
+			} catch (ex) {
+				if (ex !== BreakException) {
+					throw ex;
+				}
+			}
+			//end - figure out from dev_builds_str what icon path should be
+			if (currentThisBuildsIconPath != OLDcurrentThisBuildsIconPath) {
+				//icon of currentThisBuildsIconPath CHANGED
+				console.log('icon of currentThisBuildsIconPath CHANGED');
+				icon_changed = true;
+				devBuildsStrOnLastUpdateToGlobalVar = dev_builds_str;
+			} else {
+				//icon of currentThisBuildsIconPath is unchanged
+				console.log('icon of currentThisBuildsIconPath is unchanged')
+			}
+			//end the generic-ish check stuff
+		}
+		
+		if (dom_element_to_update_profilist_box !== null) {
+			if (update_dom_element_even_if_icon_unchanged == true || icon_changed == true) {
+				console.log('updating dom for checkIfIconIsRight');
+				if (dom_element_to_update_profilist_box == 'ALL WINDOWS') {
+					var DOMWindows = Services.wm.getEnumerator(null);
+					while (DOMWindows.hasMoreElements()) {
+						var aDOMWindow = DOMWindows.getNext();
+						var profilistBox = aDOMWindow.document.getElementById('profilist_box');
+						if (profilistBox) {
+							//console.log('profilistBox found updating its profilistBox.style.backgroundImage:', profilistBox.style.backgroundImage);
+							profilistBox.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")';
+							//console.log('after update profilistBox.style.backgroundImage:', profilistBox.style.backgroundImage);
+						}
+					}
+				} else {
+					//it must be a dom element
+					console.log('updating this dom element bg img to:', 'url("' + currentThisBuildsIconPath + '")');
+					dom_element_to_update_profilist_box.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")';
+				}
+			}
+		}
 }
 
 var renameTimeouts = [];
@@ -1461,7 +1572,7 @@ function actuallyMakeRename(el) {
 	return;
 	el.style.fontWeight = 'bold';
 	
-	var PanelUI = doc.querySelector('#PanelUI-popup');
+	var PanelUI = doc.getElementById('PanelUI-popup');
 	PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
 }
 
@@ -1471,7 +1582,7 @@ function submitRename() {
 	var doc = this.ownerDocument;
 	var win = doc.defaultView;
 	
-	var PanelUI = doc.querySelector('#PanelUI-popup');
+	var PanelUI = doc.getElementById('PanelUI-popup');
 	PanelUI.removeEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
 	
 	delete win.ProfilistInRenameMode;
@@ -1672,7 +1783,6 @@ function tbb_box_click(e) {
 		}
 	};
 	
-	var BreakException= {};
 	try {
 		var i = 0;
 		while (i < 5) {
@@ -1791,7 +1901,7 @@ function prevHide(e) {
 function beforecustomization(e) {
 //	console.info('beforecustomization e = ', e);
 	var doc = e.target.ownerDocument;
-	var stack = doc.querySelector('#profilist_box');
+	var stack = doc.getElementById('profilist_box');
 	var active = stack.querySelector('[status=active]');
 	active.setAttribute('disabled', true);
 }
@@ -1799,7 +1909,7 @@ function beforecustomization(e) {
 function customizationending(e) {
 //	console.info('customizationending e = ', e);
 	var doc = e.target.ownerDocument;
-	var stack = doc.querySelector('#profilist_box');
+	var stack = doc.getElementById('profilist_box');
 	var active = stack.querySelector('[status=active]');
 	active.removeAttribute('disabled');
 }
@@ -1853,7 +1963,7 @@ var windowListener = {
 		}
 		
 		aDOMWindow.addEventListener('activate', activated, false);
-		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
+		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
 		if (PanelUI) {
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
@@ -1863,14 +1973,25 @@ var windowListener = {
 			var PUIf = PanelUI.querySelector('#PanelUI-footer');
 			var PUIcs = PanelUI.querySelector('#PanelUI-contents-scroller');
 			
+			
 //			//console.log('PUIcs.style.width',PUIcs.style.width);
 			var profilistHBoxJSON =
-			['xul:vbox', {id:'profilist_box', class:'profilist-dev-enabled'},
+			['xul:vbox', {id:'profilist_box', class:'', style:''},
 				['xul:stack', {key:'profilist_stack'},
 					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
 					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
 				]
 			];
+			
+			//set dev mode, and current builds icon on the json template
+			if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
+				profilistHBoxJSON[1].class = 'profilist-dev-enabled';
+				//start - figure out icon for this build
+				checkIfIconIsRight(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value, null, false);
+				profilistHBoxJSON[1].style = 'background-image:url("' + currentThisBuildsIconPath + '")';
+				//end - figure out icon for this build
+			}
+			
 			var referenceNodes = {};
 			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
 
@@ -2017,14 +2138,14 @@ var windowListener = {
 		}
 		
 		aDOMWindow.removeEventListener('activate', activated, false);
-		var PanelUI = aDOMWindow.document.querySelector('#PanelUI-popup');
+		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
 		if (PanelUI) {
 			delete aDOMWindow.ProfilistInRenameMode;
 			PanelUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
 			PanelUI.removeEventListener('popuphiding', prevHide, false);
 			aDOMWindow.gNavToolbox.removeEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.removeEventListener('customizationending', customizationending, false);
-			var profilistHBox = aDOMWindow.document.querySelector('#profilist_box');
+			var profilistHBox = aDOMWindow.document.getElementById('profilist_box');
 			if (profilistHBox) {
 				profilistHBox.parentNode.removeChild(profilistHBox);
 			}
@@ -2163,46 +2284,47 @@ function PrefListener() {
 		//this.watchBranches[branch_name]._branchLive.QueryInterface(Ci.nsIPrefBranch2); //do not need this anymore as i dont support FF3.x
 	}.bind(this));
 }
+//start - edit in here your prefs to watch
+PrefListener.prototype.watchBranches = {}
 
-PrefListener.prototype.watchBranches = {
-	'extensions.Profilist@jetpack.': {
-		ownType: 0, //0-full, 1-none, 2-partial
-		prefNames: {
-			'notifications': {
-				owned: true,
-				default: true,
-				value: undefined,
-				type: Ci.nsIPrefBranch.PREF_BOOL,
-				on_PrefOnObj_Change: writePrefToIni
-			},
-			'dev': {
-				owned: true,
-				default: false,
-				value: undefined,
-				type: Ci.nsIPrefBranch.PREF_BOOL,
-				on_PrefOnObj_Change: writePrefToIni
-			},
-			'dev-builds': {
-				owned: true,
-				default: '',
-				value: undefined,
-				type: Ci.nsIPrefBranch.PREF_STRING,
-				on_PrefOnObj_Change: writePrefToIni
-			},
-			'launch_on_create': {
-				owned: true,
-				default: true,
-				value: undefined,
-				type: Ci.nsIPrefBranch.PREF_BOOL,
-				on_PrefOnObj_Change: writePrefToIni
-			}
+PrefListener.prototype.watchBranches[myPrefBranch] = { //have to do it this way because in the watchBranches obj i can't do { myPrefBranch: {...} }
+	ownType: 0, //0-full, 1-none, 2-partial
+	prefNames: {
+		'notifications': {
+			owned: true,
+			default: true,
+			value: undefined,
+			type: Ci.nsIPrefBranch.PREF_BOOL,
+			on_PrefOnObj_Change: writePrefToIni
 		},
-		on_UnknownPrefNameOnObj_Change: function(oldVal, newVal, refObj) {
-			console.warn('on_UnknownPrefNameOnObj_Change', 'oldVal:', oldVal, 'newVal:', newVal, 'refObj:', refObj);
+		'dev': {
+			owned: true,
+			default: false,
+			value: undefined,
+			type: Ci.nsIPrefBranch.PREF_BOOL,
+			on_PrefOnObj_Change: writePrefToIni
+		},
+		'dev-builds': {
+			owned: true,
+			default: '',
+			value: undefined,
+			type: Ci.nsIPrefBranch.PREF_STRING,
+			on_PrefOnObj_Change: writePrefToIni
+		},
+		'launch_on_create': {
+			owned: true,
+			default: true,
+			value: undefined,
+			type: Ci.nsIPrefBranch.PREF_BOOL,
+			on_PrefOnObj_Change: writePrefToIni
 		}
+	},
+	on_UnknownPrefNameOnObj_Change: function(oldVal, newVal, refObj) {
+		console.warn('on_UnknownPrefNameOnObj_Change', 'oldVal:', oldVal, 'newVal:', newVal, 'refObj:', refObj);
 	}
-}
+};
 
+//end - edit in here your prefs to watch
 PrefListener.prototype.observe = function(subject, topic, data) {
 	//console.log('incoming PrefListener observe :: ', 'topic:', topic, 'data:', data, 'subject:', subject);
 	//console.info('compare subject to this._branchLive[extensions.MailtoWebmails@jetpack.]', this.watchBranches[subject.root]._branchLive);
