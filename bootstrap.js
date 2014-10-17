@@ -2152,6 +2152,7 @@ var windowListener = {
 					PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
 				}
 				
+				
 				var cPopHeight = THIS._viewStack.clientHeight;
 				var heightChildren = PUIf.childNodes;
 				var expandedFooterHeight = 0;
@@ -2179,12 +2180,118 @@ var windowListener = {
 					THIS._ignoreMutations = true;
 					THIS._mainViewHeight = THIS._viewStack.clientHeight;
 					THIS._transitioning = true;
-					THIS._viewContainer.style.transition = 'height 300ms'; //need to make this take longer than the 0.25s of the profilist_box expand anim so it doesnt show any white space
+						
+					//start - figure out cubic bezier and timings
+					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height;
+					
+					console.log('maxStackHeightBeforeOverflow:', maxStackHeightBeforeOverflow);
+					
+					//when will stack get to this height?
+					var finalStackHeight = expandedheight;
+					var finalTime = 300;
+					
+					console.log('finalStackHeight:', finalStackHeight);
+					
+					/****lets ittereate to get percent*/
+					/*old way
+					//doesnt work as it was using linear calc to get percent
+					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
+					
+					console.log('percentOfFinalHeight:', percentOfFinalHeight);
+					
+					var theBezier = cubicBezier_ease;
+					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
+					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
+					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
+					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
+					
+					var timeAtMaxHeightBeforeOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
+					*//*
+					//doesnt work as it was using linear calc to get percent
+					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
+					
+					console.log('percentOfFinalHeight:', percentOfFinalHeight);
+					
+					var theBezier = cubicBezier_ease;
+					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
+					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
+					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
+					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
+					
+					var timeAtMaxHeightBeforeOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
+					var LUTper = [];
+					for (var i=0; i<100; i++) {
+					
+					}*/
+					/*******/
+					var theBezier = {
+						xs: cubicBezier_ease.xs.map(function(v) {
+							return v * finalTime;
+						}),
+						ys: cubicBezier_ease.ys.map(function(v) {
+							return v * finalStackHeight;
+						})
+					};
+
+					var timeAtMaxHeightBeforeOverflow = getValOnCubicBezier_givenXorY({y:maxStackHeightBeforeOverflow, cubicBezier:theBezier});
+					
+					var percentOfFinalTime = timeAtMaxHeightBeforeOverflow.x / finalTime; //percent of `maxStackHeightBeforeOverflow` of final height
+					
+					console.log('time it stack takes to reach max height before overflow ,percentOfFinalTime:', timeAtMaxHeightBeforeOverflow);
+					
+					console.log('time it takes to reach this max height, is this % of finalTime', percentOfFinalTime);
+					
+					//the transition duration of the panel should be finalTime - timeAtMaxHeightBeforeOverflow.x
+					//figure out cubic bezier
+				
+					var fT_minus_timeAtMaxH = finalTime - timeAtMaxHeightBeforeOverflow.x;
+					
+					console.log('duration of panel height increase anim is, fT_minus_timeAtMaxH:', fT_minus_timeAtMaxH);
+					
+					var splitRes = splitCubicBezier({
+					  z: timeAtMaxHeightBeforeOverflow.percent,
+					  x: theBezier.xs,
+					  y: theBezier.ys,
+					  fitUnitSquare: false
+					});
+					console.log('splitRes no fit time values:', splitRes);
+					
+					/*
+					var splitRes = splitCubicBezier({
+					  z: timeAtMaxHeightBeforeOverflow.percent,
+					  x: theBezier.xs,
+					  y: theBezier.ys,
+					  fitUnitSquare: true
+					});
+					console.log('splitRes fitted  but using theBezier so time values:', splitRes);
+					//did this test to see how well this fitUnitSquare matches when just use ease, extremly close, like the last 2 digits after decmial (like 14th and 15th) place sometimes are off
+					*/
+					
+					var splitRes = splitCubicBezier({
+					  z: timeAtMaxHeightBeforeOverflow.percent,
+					  x: ease.xs,
+					  y: ease.ys,
+					  fitUnitSquare: true
+					});
+					console.log('splitRes fitted using ease:', splitRes);
+					
+					var useCubicBezier = 'cubic-bezier(' + splitRes.right.slice(2, 6).map(function(v){return v.toFixed(2)}) + ')';
+					console.log('cubic-bezier:', useCubicBezier);
+					console.log('rounded duration:', Math.round(fT_minus_timeAtMaxH));
+					console.log('rounded delay:', Math.round(timeAtMaxHeightBeforeOverflow.x));
+					//end - figure out cubic bezier and timings
+					
+					THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH*.5) + 'ms ' + useCubicBezier + ' ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
+					//THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH) + 'ms ease ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
+					
+					//THIS._viewContainer.style.transition = 'height 300ms'; //need to make this take longer than the 0.25s of the profilist_box expand anim so it doesnt show any white space
 					THIS._viewContainer.addEventListener('transitionend', function trans() {
 						THIS._viewContainer.removeEventListener('transitionend', trans);
 						//THIS._ignoreMutations = false; //important to set this to false before setting THIS._transitioning to false, because when set ignoreMut to false it runs `syncContainerWithMainView` and if it finds ignoreMut is false AND showingSubView is false AND transitioning is false then it will set the panel height to regular without anim
 						THIS._transitioning = false;
 					});
+					
+					
 					
 					THIS._viewContainer.style.height = Math.round(expandedFooterHeight) + 'px';
 				} else {
@@ -2216,7 +2323,49 @@ var windowListener = {
 					return;
 				}
 				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
-//					console.info('YES need to reflow panel back to orig height');
+					console.info('YES need to reflow panel back to orig height');
+
+					/*
+					//start - figure out cubic bezier and timings
+					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height + PUIsync_height;
+					
+					//when will stack get to this height?
+					var finalStackHeight = collapsedheight; //parseInt(THIS._viewContainer.style.height);
+					var finalTime = 300;
+					
+					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
+					
+					console.log('percentOfFinalHeight:', percentOfFinalHeight);
+					
+					var theBezier = cubicBezier_ease;
+					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
+					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
+					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
+					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
+
+					
+					var timeAtHeightBeforeUnderOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
+					console.log('delay time is timeAtMaxHeightBeforeOverflow:', timeAtMaxHeightBeforeOverflow);
+					
+					//the transition duration of the panel should be finalTime - timeAtMaxHeightBeforeOverflow.x
+					//figure out cubic bezier
+					
+					var fT_minus_timeAtMaxH = finalTime - timeAtMaxHeightBeforeOverflow.x; //var timeTillStackReachesHeightBeforeOverflow
+					
+					console.log('delay time is fT_minus_timeAtMaxH:', fT_minus_timeAtMaxH);
+					
+					var splitRes = splitCubicBezier({
+					  z: percentOfFinalHeight,
+					  x: ease.xs,
+					  y: ease.ys,
+					  fitUnitSquare: true
+					});
+					
+					var useCubicBezier = 'cubic-bezier(' + splitRes.right.slice(2, 6) + ')';
+					console.log('cubic-bezier:', useCubicBezier);
+					//end - figure out cubic bezier and timings
+					//THIS._viewContainer.style.transition = 'height ' + fT_minus_timeAtMaxH + 'ms ' + useCubicBezier;
+					*/
 					THIS._transitioning = true;
 					THIS._viewContainer.style.transition = 'height 150ms'; //need to make this take quicker than the 0.25s of the profilist_box expand anim so it doesnt show any white space
 					THIS._viewContainer.addEventListener('transitionend', function trans() {
@@ -2295,6 +2444,149 @@ var windowListener = {
 	}
 };
 /*end - windowlistener*/
+
+//start - calcualting cubic-bezier stuff
+function getValOnCubicBezier_givenXorY(options) {
+  /*
+  options = {
+   cubicBezier: {xs:[x1, x2, x3, x4], ys:[y1, y2, y3, y4]};
+   x: NUMBER //this is the known x, if provide this must not provide y, a number for x will be returned
+   y: NUMBER //this is the known y, if provide this must not provide x, a number for y will be returned
+  }
+  */
+  if ('x' in options && 'y' in options) {
+    throw new Error('cannot provide known x and known y');
+  }
+  if (!('x' in options) && !('y' in options)) {
+    throw new Error('must provide EITHER a known x OR a known y');
+  }
+
+  var x1 = options.cubicBezier.xs[0];
+  var x2 = options.cubicBezier.xs[1];
+  var x3 = options.cubicBezier.xs[2];
+  var x4 = options.cubicBezier.xs[3];
+
+  var y1 = options.cubicBezier.ys[0];
+  var y2 = options.cubicBezier.ys[1];
+  var y3 = options.cubicBezier.ys[2];
+  var y4 = options.cubicBezier.ys[3];
+
+  var LUT = {
+    x: [],
+    y: []
+  }
+
+  for(var i=0; i<100; i++) {
+    var t = i/100;
+    LUT.x.push( (1-t)*(1-t)*(1-t)*x1 + 3*(1-t)*(1-t)*t*x2 + 3*(1-t)*t*t*x3 + t*t*t*x4 );
+    LUT.y.push( (1-t)*(1-t)*(1-t)*y1 + 3*(1-t)*(1-t)*t*y2 + 3*(1-t)*t*t*y3 + t*t*t*y4 );
+  }
+
+  if ('x' in options) {
+    var knw = 'x'; //known
+    var unk = 'y'; //unknown
+  } else {
+    var knw = 'y'; //known
+    var unk = 'x'; //unknown
+  }
+
+  for (var i=1; i<100; i++) {
+    if (options[knw] >= LUT[knw][i] && options[knw] <= LUT[knw][i+1]) {
+		console.log('found at t between:', (i/100), ((i+1)/100));
+      var linearInterpolationValue = options[knw] - LUT[knw][i];
+	  var linearInterpolationFactor = (options[knw] - LUT[knw][i])/ options[knw];
+      retObj = {};
+	  retObj[unk] = LUT[unk][i] + linearInterpolationValue;
+	  retObj.percent = (i/100) + linearInterpolationFactor;
+	  return retObj;
+    }
+  }
+
+}
+
+var cubicBezier_ease = { //cubic-bezier(0.25, 0.1, 0.25, 1.0)
+  xs: [0, .25, .25, 1],
+  ys: [0, .1, 1, 1]
+};
+
+
+//var theBezier = ease;
+//me.alert(getBezier(.8, new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalHeight), new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalHeight), new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalHeight), new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalHeight)).toSource());
+//me.alert(getPointOnCubicBezier_AtPercent(.8, myC1, myC2, myC3, myC4).toSource());
+
+function splitCubicBezier(options) {
+  var z = options.z,
+      cz = z-1,
+      z2 = z*z,
+      cz2 = cz*cz,
+      z3 = z2*z,
+      cz3 = cz2*cz,
+      x = options.x,
+      y = options.y;
+
+  var left = [
+    x[0],
+    y[0],
+    z*x[1] - cz*x[0], 
+    z*y[1] - cz*y[0], 
+    z2*x[2] - 2*z*cz*x[1] + cz2*x[0],
+    z2*y[2] - 2*z*cz*y[1] + cz2*y[0],
+    z3*x[3] - 3*z2*cz*x[2] + 3*z*cz2*x[1] - cz3*x[0],
+    z3*y[3] - 3*z2*cz*y[2] + 3*z*cz2*y[1] - cz3*y[0]];
+
+  var right = [
+    z3*x[3] - 3*z2*cz*x[2] + 3*z*cz2*x[1] - cz3*x[0],
+    z3*y[3] - 3*z2*cz*y[2] + 3*z*cz2*y[1] - cz3*y[0],
+                    z2*x[3] - 2*z*cz*x[2] + cz2*x[1],
+                    z2*y[3] - 2*z*cz*y[2] + cz2*y[1],
+                                    z*x[3] - cz*x[2], 
+                                    z*y[3] - cz*y[2], 
+                                                x[3],
+                                                y[3]];
+  
+  if (options.fitUnitSquare) {
+    return {
+      left: left.map(function(el, i) {
+        if (i % 2 == 0) {
+          //return el * (1 / left[6])
+          var Xmin = left[0];
+          var Xmax = left[6]; //should be 1
+          var Sx = 1 / (Xmax - Xmin);
+          return (el - Xmin) * Sx;
+        } else {
+          //return el * (1 / left[7])
+          var Ymin = left[1];
+          var Ymax = left[7]; //should be 1
+          var Sy = 1 / (Ymax - Ymin);
+          return (el - Ymin) * Sy;
+        }
+      }),
+      right: right.map(function(el, i) {
+        if (i % 2 == 0) {
+          //xval
+          var Xmin = right[0]; //should be 0
+          var Xmax = right[6];
+          var Sx = 1 / (Xmax - Xmin);
+          return (el - Xmin) * Sx;
+        } else {
+          //yval
+          var Ymin = right[1]; //should be 0
+          var Ymax = right[7];
+          var Sy = 1 / (Ymax - Ymin);
+          return (el - Ymin) * Sy;
+        }
+      })
+    }
+  } else {
+   return { left: left, right: right};
+  }
+}
+var ease = { //cubic-bezier(0.25, 0.1, 0.25, 1.0)
+  xs: [0, .25, .25, 1],
+  ys: [0, .1, 1, 1]
+};
+
+//end - calcualting cubic-bezier stuff
 
 /*dom insertion library function from MDN - https://developer.mozilla.org/en-US/docs/XUL_School/DOM_Building_and_HTML_Insertion*/
 jsonToDOM.namespaces = {
