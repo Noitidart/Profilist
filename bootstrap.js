@@ -2054,6 +2054,8 @@ function customizationending(e) {
 	active.removeAttribute('disabled');
 }
 
+var lastMaxStackHeight = 0;
+
 /*start - windowlistener*/
 var registered = false;
 var windowListener = {
@@ -2182,48 +2184,16 @@ var windowListener = {
 					THIS._transitioning = true;
 						
 					//start - figure out cubic bezier and timings
-					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height;
-					
+					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height - collapsedheight;
+					lastMaxStackHeight = maxStackHeightBeforeOverflow;
 					console.log('maxStackHeightBeforeOverflow:', maxStackHeightBeforeOverflow);
 					
 					//when will stack get to this height?
-					var finalStackHeight = expandedheight;
+					var finalStackHeight = expandedheight - collapsedheight;
 					var finalTime = 300;
 					
 					console.log('finalStackHeight:', finalStackHeight);
-					
-					/****lets ittereate to get percent*/
-					/*old way
-					//doesnt work as it was using linear calc to get percent
-					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
-					
-					console.log('percentOfFinalHeight:', percentOfFinalHeight);
-					
-					var theBezier = cubicBezier_ease;
-					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
-					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
-					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
-					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
-					
-					var timeAtMaxHeightBeforeOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
-					*//*
-					//doesnt work as it was using linear calc to get percent
-					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
-					
-					console.log('percentOfFinalHeight:', percentOfFinalHeight);
-					
-					var theBezier = cubicBezier_ease;
-					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
-					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
-					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
-					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
-					
-					var timeAtMaxHeightBeforeOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
-					var LUTper = [];
-					for (var i=0; i<100; i++) {
-					
-					}*/
-					/*******/
+
 					var theBezier = {
 						xs: cubicBezier_ease.xs.map(function(v) {
 							return v * finalTime;
@@ -2234,13 +2204,8 @@ var windowListener = {
 					};
 
 					var timeAtMaxHeightBeforeOverflow = getValOnCubicBezier_givenXorY({y:maxStackHeightBeforeOverflow, cubicBezier:theBezier});
-					
-					var percentOfFinalTime = timeAtMaxHeightBeforeOverflow.x / finalTime; //percent of `maxStackHeightBeforeOverflow` of final height
-					
+
 					console.log('time it stack takes to reach max height before overflow ,percentOfFinalTime:', timeAtMaxHeightBeforeOverflow);
-					
-					console.log('time it takes to reach this max height, is this % of finalTime', percentOfFinalTime);
-					
 					//the transition duration of the panel should be finalTime - timeAtMaxHeightBeforeOverflow.x
 					//figure out cubic bezier
 				
@@ -2254,18 +2219,7 @@ var windowListener = {
 					  y: theBezier.ys,
 					  fitUnitSquare: false
 					});
-					console.log('splitRes no fit time values:', splitRes);
-					
-					/*
-					var splitRes = splitCubicBezier({
-					  z: timeAtMaxHeightBeforeOverflow.percent,
-					  x: theBezier.xs,
-					  y: theBezier.ys,
-					  fitUnitSquare: true
-					});
-					console.log('splitRes fitted  but using theBezier so time values:', splitRes);
-					//did this test to see how well this fitUnitSquare matches when just use ease, extremly close, like the last 2 digits after decmial (like 14th and 15th) place sometimes are off
-					*/
+					console.log('splitRes no fit:', splitRes);
 					
 					var splitRes = splitCubicBezier({
 					  z: timeAtMaxHeightBeforeOverflow.percent,
@@ -2281,8 +2235,7 @@ var windowListener = {
 					console.log('rounded delay:', Math.round(timeAtMaxHeightBeforeOverflow.x));
 					//end - figure out cubic bezier and timings
 					
-					THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH*.5) + 'ms ' + useCubicBezier + ' ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
-					//THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH) + 'ms ease ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
+					THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH*1) + 'ms ' + useCubicBezier + ' ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
 					
 					//THIS._viewContainer.style.transition = 'height 300ms'; //need to make this take longer than the 0.25s of the profilist_box expand anim so it doesnt show any white space
 					THIS._viewContainer.addEventListener('transitionend', function trans() {
@@ -2325,49 +2278,57 @@ var windowListener = {
 				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
 					console.info('YES need to reflow panel back to orig height');
 
-					/*
 					//start - figure out cubic bezier and timings
-					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height + PUIsync_height;
+					var maxStackHeightBeforeOverflow = lastMaxStackHeight;
+					
+					console.log('maxStackHeightBeforeOverflow:', maxStackHeightBeforeOverflow);
 					
 					//when will stack get to this height?
-					var finalStackHeight = collapsedheight; //parseInt(THIS._viewContainer.style.height);
+					var finalStackHeight = expandedheight - collapsedheight;
 					var finalTime = 300;
 					
-					var percentOfFinalHeight = maxStackHeightBeforeOverflow / finalStackHeight; //percent of `maxStackHeightBeforeOverflow` of final height
-					
-					console.log('percentOfFinalHeight:', percentOfFinalHeight);
-					
-					var theBezier = cubicBezier_ease;
-					var myC1 = new coord(theBezier.xs[3]*finalTime,theBezier.ys[3]*finalStackHeight);
-					var myC2 = new coord(theBezier.xs[2]*finalTime,theBezier.ys[2]*finalStackHeight);
-					var myC3 = new coord(theBezier.xs[1]*finalTime,theBezier.ys[1]*finalStackHeight);
-					var myC4 = new coord(theBezier.xs[0]*finalTime,theBezier.ys[0]*finalStackHeight);
+					console.log('finalStackHeight:', finalStackHeight);
 
-					
-					var timeAtHeightBeforeUnderOverflow = getPointOnCubicBezier_AtPercent(percentOfFinalHeight, myC1, myC2, myC3, myC4)
-					console.log('delay time is timeAtMaxHeightBeforeOverflow:', timeAtMaxHeightBeforeOverflow);
-					
-					//the transition duration of the panel should be finalTime - timeAtMaxHeightBeforeOverflow.x
-					//figure out cubic bezier
-					
-					var fT_minus_timeAtMaxH = finalTime - timeAtMaxHeightBeforeOverflow.x; //var timeTillStackReachesHeightBeforeOverflow
-					
-					console.log('delay time is fT_minus_timeAtMaxH:', fT_minus_timeAtMaxH);
+					var theBezier = {
+						xs: cubicBezier_ease.xs.map(function(v) {
+							return v * finalTime;
+						}),
+						ys: cubicBezier_ease.ys.map(function(v) {
+							return v * finalStackHeight;
+						})
+					};
+
+					var stackHeightOfJustExpanded = finalStackHeight - maxStackHeightBeforeOverflow;
+					console.log('panel has to shrink this much: ', stackHeightOfJustExpanded);
+					var timeAtMaxHeightBeforeOverflow = getValOnCubicBezier_givenXorY({y:stackHeightOfJustExpanded, cubicBezier:theBezier});
+					console.log('time it stack takes to reach max height before overflow ,percentOfFinalTime:', timeAtMaxHeightBeforeOverflow);
 					
 					var splitRes = splitCubicBezier({
-					  z: percentOfFinalHeight,
+					  z: timeAtMaxHeightBeforeOverflow.percent,
+					  x: theBezier.xs,
+					  y: theBezier.ys,
+					  fitUnitSquare: false
+					});
+					console.log('splitRes no fit:', splitRes);
+					
+					var splitRes = splitCubicBezier({
+					  z: timeAtMaxHeightBeforeOverflow.percent,
 					  x: ease.xs,
 					  y: ease.ys,
 					  fitUnitSquare: true
 					});
+					console.log('splitRes fitted using ease:', splitRes);
 					
-					var useCubicBezier = 'cubic-bezier(' + splitRes.right.slice(2, 6) + ')';
+					var useCubicBezier = 'cubic-bezier(' + splitRes.left.slice(2, 6).map(function(v){return v.toFixed(2)}) + ')';
 					console.log('cubic-bezier:', useCubicBezier);
+					console.log('rounded duration:', Math.round(timeAtMaxHeightBeforeOverflow.x));
+					
+					THIS._viewContainer.style.transition = 'height ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms ' + useCubicBezier;
 					//end - figure out cubic bezier and timings
-					//THIS._viewContainer.style.transition = 'height ' + fT_minus_timeAtMaxH + 'ms ' + useCubicBezier;
-					*/
+					
+					
 					THIS._transitioning = true;
-					THIS._viewContainer.style.transition = 'height 150ms'; //need to make this take quicker than the 0.25s of the profilist_box expand anim so it doesnt show any white space
+					//THIS._viewContainer.style.transition = 'height 150ms'; //need to make this take quicker than the 0.25s of the profilist_box expand anim so it doesnt show any white space
 					THIS._viewContainer.addEventListener('transitionend', function trans() {
 						THIS._viewContainer.removeEventListener('transitionend', trans);
 						THIS._viewContainer.style.transition = '';
