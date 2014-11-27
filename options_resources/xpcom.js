@@ -19,12 +19,32 @@ var loader;
 var load_img;
 var buildsCont;
 /*end - global el holders*/
+var stringBundle;
 
 document.addEventListener('DOMContentLoaded', setup, false);
 window.addEventListener('unload', uninit, false);
 
 function setup() {
 
+	/*start - translate*/
+	//set title:
+	//document.title = stringBundle.GetStringFromName('profilist') + ' | ' + stringBundle.GetStringFromName('control-panel'); //no need as document.querySelector picks up title element
+	//think about hiding the document with css and display after translating done so to avoid blinking as per http://dxr.mozilla.org/mozilla-central/source/addon-sdk/source/lib/sdk/l10n/html.js#73
+	
+	stringBundle = Services.strings.createBundle('chrome://profilist/locale/options.properties?' + Math.random()); // Randomize URI to work around bug 719376
+	
+	// check all translatable children (= w/ a `data-l10n-id' attribute)
+	var translaments = document.querySelectorAll('*[data-l10n-id]'); //translament = translation elements
+	for (var i=0; i<translaments.length; i++) {
+		// translate it
+		var key = translaments[i].dataset.l10nId;
+		var data = stringBundle.GetStringFromName(key);
+		if (data)
+		  translaments[i].textContent = data;
+		}
+	}
+	/*end - translate*/
+	
 	/*global el holders*/
 	innerbg = document.getElementById('innerbg');
 	sect_gen = document.getElementById('sectGen');

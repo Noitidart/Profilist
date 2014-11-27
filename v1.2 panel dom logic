@@ -1,0 +1,53 @@
+#profilist panel dom logic as of v1.2
+## updateOnPanelShowing
+###### required args: `e` OR `aDOMWindow` to get PanelUI && dontUpdateIni for to tell `???` if should update ini
+1. gets `PanelUI` dom element by taking from either `e` or `aDOMWindow`
+2. determines if `PUIsync_height` has been declared, and if it wasnt then it figures it out and declares it
+3. gets `stack` dom element from `PanelUI`
+4. makes sure `collapsedheigh` is delcared as `PUIsync_height`
+5. makes `stack` to `collapsedheight` if necessary
+6. has option for whether to update ini
+7. calls updateProfToolkit
+
+##updateProfToolkit
+###### args: refreshIni && refreshStack && iDOMWindow
+1. if refreshIni then read ini then re-call func
+2. if `profToolkit.rootPathDefault` doesnt exist then initProfToolkit
+3. go through ini object and populate profToolkit
+	3a. create array of paths in profile `profToolkit.pathsInIni`
+		3a-i. figure out profToolkit.selectedProfile.pathAsWrittenInIni
+		3a-ii. figure out profToolkit.selectedProfile.name
+		/*******
+		3a-i. if ini[p].prpos.IsRelative == 1 THEN if ini[p].props.path == OS.Constants.root
+		3a-i. else THEN path == OS.Constants.root
+		*******/
+	3b. profToolkit.profileCount
+4. update `myPrefListener.watchBranches[myPrefBranch].prefNames` with values from ini
+	4a. if prefNames[p] not found in `ini.General['Profilist.' + p]` then set `ini.General['Profilist.' + p]` to value of of pref branch, which will obviously be the default value (so as precatuion just set it to default value, in case pref got removed)
+		4a-i. do not write to ini if values of prefNames were not found in there
+5. if path of current profile not found in ini then (obviously `profToolkit.selectedProfile.name` NOT FOUND) so this means they are using a temporary profile
+6. if refreshStrack is true then calls updateStackDOMJson_basedOnToolkit with false for refreshIni and gives it the iDOMWindow
+
+## updateStackDOMJson_basedOnToolkit
+###### required args: `refreshStack` which tells it if it should update dom if deemed necessary && `refreshIni` if should read ini or not, obeys the `updateIni` arg from `updateOnPanelShowing` && `iDOMWindow` is passed to `updateStackDOMJson_basedOnToolkit`
+1. checks if `stackDOMJson` is empty and if it is then adds in the current profile and create new profile
+2. goes through `stackDOMJson` and makes sure that the profile paths in it, exist in ini. if it doesnt exist then it removes it from `stackDOMJson` and marks `stackUpdated` to true ALSO creates an array of profpaths that should be in menu
+3. goes through ini - profiles only - identifies position of profile paths in the stack. so for each profile path, it finds it in stack
+	3a. IF IT FINDS IN STACK then checks if the `stackDOMJson.label == ini[p].Props.Name` this is checking if it is same or not. if not same then its marked as renamed and `stackUpdated` to true.
+	3b. IF IT DOES NOT FIND IN STACK then it adds the profile details to `stackDOMJSON` and marks `stackUpdated` as true
+4. if `iDOMWindow` was passed then it it calls `updateMenuDOM` on `iDOMWindow` else it enumerates and calls on all windows (btw it should never call on all windows (and it doesnt) do this, what if in other windows the panel is not initialized)
+
+## updateMenuDOM
+###### args:
+1. gets dom elements: `profilist_box`, stack, stack.childNodes
+2. goes through stack.childNodes and puts it in object. it gets attr of `identifier` so identObj[attr(childNodes)] = dom element
+3. checks arg `jsonUpdated`
+	3a. if its true, then it goes through the stackDomJson to see if its identifier exists in array above
+		3a-i. if it doesnt exist then it adds this dom element
+		3a-ii. if it exists it checks for justRenamed poperty and if it was then it takes the label from stackDomJson and updates label attribute IT ALSO checks of el.hasAttribute of all the ones in the stackDomJson (this should be optimized, i should just compare oldStackDomJson to the newStackDomJson)		
+4. if differences in dom to stackDomJson found in step 3, then it makes the changes
+	4a. if element added OR deleted/removed then it updates/recalcs `expandedheight`
+	4b. if element added then it adds the event listeners
+5. regardless if stackDomJson changed or not, it makes sure the tops are correct
+6. if menu is expanded make sure it matches the expandedheight, if its collapsed make sure it matches the collapsedheight
+7. if dev mode, then set attirbuteon stack accordingly, and if enabled, then make sure the default icon background-image path is right

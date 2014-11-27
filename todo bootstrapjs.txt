@@ -1,0 +1,30 @@
+todo bootstrap.js
+todo as of 102614 855
+* do the parsing on line 83
+* do the diffing and matching to ini from iniBkp object on line 168
+
+
+
+promise_iniObjFinalized.then(
+	function(aVal) {
+		console.error('Success', 'promise_iniObjFinalized');				
+		promise_readIniAndParseObjs.resolve('objs parsed');
+	},
+	function(aReason) {
+		console.error('Rejected', 'promise_iniObjFinalized', 'aReason:' + aReason.message);
+		promise_readIniAndParseObjs.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+		//return Promise.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+	}
+);
+
+
+return promise_updateStatus.then(
+	function(aVal) {
+		console.log('Success', 'promise_updateStatus');				
+		return Promise.resolve('statuses updated');
+	},
+	function(aReason) {
+		console.error('Rejected', 'promise_updateStatus', 'aReason:' + aReason.message);
+		return Promise.reject('Rejected promise_updateStatus aReason:' + aReason.message);
+	}
+);

@@ -15,15 +15,15 @@
 					</xul:stack>
 				</xul:box>
 			</xul:box>
-			<xul:box class="profilist-submenu" xbl:inherits="disabled">
-				<xul:box class="profilist-is-default" xbl:inherits="disabled"/>
-				<xul:box class="profilist-clone" xbl:inherits="disabled"/>
-				<xul:box class="profilist-dots" xbl:inherits="disabled"/>
-				<xul:box class="profilist-dev-build" xbl:inherits="disabled"/>
-				<xul:box class="profilist-dev-safe" xbl:inherits="disabled"/>
-				<xul:box class="profilist-default" xbl:inherits="disabled"/>
-				<xul:box class="profilist-rename" xbl:inherits="disabled"/>
-				<xul:box class="profilist-inactive-del" xbl:inherits="disabled"/>
+			<xul:box class="profilist-submenu">
+				<xul:box class="profilist-is-default"/>
+				<xul:box class="profilist-clone"/>
+				<xul:box class="profilist-dots"/>
+				<xul:box class="profilist-dev-build"/>
+				<xul:box class="profilist-dev-safe"/>
+				<xul:box class="profilist-default"/>
+				<xul:box class="profilist-rename"/>
+				<xul:box class="profilist-inactive-del"/>
 			</xul:box>
 		</content>
 	</binding>

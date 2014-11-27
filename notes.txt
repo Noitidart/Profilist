@@ -1,0 +1,34 @@
+to test if in customize mode:
+document.getElementById('PanelUI-popup').querySelector('#PanelUI-footer') == null
+or
+document.getElementById('PanelUI-popup').querySelector('#PanelUI-contents-scroller') == null
+OR
+window.PanelUI.mainView.parentNode == <hbox id="customization-panelHolder">
+
+IF NOT CUSTOMIZING THEN:
+window.PanelUI.mainView.parentNode == <xul:vbox anonid="mainViewContainer" class="panel-mainview" panelid="PanelUI-popup">
+so window.PanelUI.mainView.parentNode.id == 'customization-panelHolder';
+
+document.getElementById('PanelUI-popup').querySelector('#PanelUI-multiView') EXISTS in customizing and not in customizing
+so window.PanelUI.mainView.parentNode.id == '';
+
+document.getElementById('PanelUI-footer')
+
+
+window.PanelUI.mainView == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
+#PanelUI-multiView == window.PanelUI.multiView
+PanelUI == window.PanelUI.panel
+PUIcs == window.PanelUI.scroller == window.PanelUI.mainView.childNodes[0]
+PUIf == window.PanelUI.mainView.childNodes[1]
+
+
+first wait for window.PanelUI._initialized
+once that is true, then PanelUI can be opened. if PanelUI._isReady is undefined then it has never been opened ELSE if its true then it has been opened
+
+REPEAT: i decidd on this: to test if in customizing mode then window.PanelUI.mainView.parentNode.id == 'customization-panelHolder' ELSE it is ''
+
+
+it does look like though that the official way to test if its customizing is by going: ` document.documentElement.hasAttribute("customizing")`
+
+
+TODO: on window actiate, should check if that window is in customizing mode, and if it is, then make sure if renamed or icon changed its refelcted, so maybe just run updateOnPanelShowing but keep it disabled

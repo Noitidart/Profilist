@@ -23,7 +23,9 @@ var PUIsync;
 var updateChannel = '';
 var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instead of dom as im thinking of making it not update all windows, just update the current window on menu panel show
 var currentThisBuildsIconPath = '';
-var theExePath = '';
+
+//var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
+//var pathProfilesIniBkp = profToolkit.path_iniFile + '.profilist.bkp';
 
 const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
@@ -35,12 +37,15 @@ Cu.import('resource://gre/modules/Promise.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
 //XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
-XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService) });
+XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
+XPCOMUtils.defineLazyGetter(myServices, 'dsp', function () { return Cc['@mozilla.org/file/directory_service;1'].getService(Ci.nsIProperties) });
+XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle('chrome://profilist/locale/bootstrap.properties?' + Math.random()) /* Randomize URI to work around bug 719376 */ });
 var PromiseWorker;
 var ProfilistWorker;
 
-var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
-var ini = {};
+var ini = {UnInitialized:true};
+var iniStr = ''; //str of ini on last read
+var iniStr_thatAffectsDOM = ''; //str of ini on last read (but just the props that affect dom) (so like properties like Profilist.launch_on_create doesnt affect dom as the function creatProfile checks this Profilist.launch_on_create property when deciding to launch or not
 var profToolkit = {
 	rootPathDefault: 0,
 	localPathDefault: 0,
@@ -58,20 +63,181 @@ var profToolkit = {
 var decoder = 0;
 var encoder = 0;
 
-function readIni() {
+var iniStr_thatAffectDOM = '';
+var iniObj_thatAffectDOM = {};
+//learned: that if StartWithLastProfile=1 then profile manager/startup obeys the Default=1 but note that Default=1 is never removed
+var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name', 'Profilist.tie']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+/*
+//keys that i add to thatAffectDOM object:
+num - outside of props // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+Profilist.defaultProfilePath
+Profilist.defaultProfileIsRelative - (not outside of props as if deafultProfilePath doesnt change this obviously doesnt change)
+Profilist.currentThisBuildsIconPath
+*/
+function readIniAndParseObjs() {
 //is promise
+//reads ini and if its not touched by profilist, then it reads bkp, if bkp doesnt exist than it touches ini and queus writeIniBkp and writeIni
+/* //updates:
+ini
+iniStr
+iniStr_thatAffectDOM
+watchBranches[myPrefBranch]
+current builds icon if dev mode is enabled
+*/
 	try {
+		var promise_readIniAndParseObjs = Promise.defer();
+		var promise_iniObjFinalized = Promise.defer();
+		promise_iniObjFinalized.then(
+			function(aVal) {
+				console.error('Success', 'promise_iniObjFinalized');
+				//parse objs
+				iniStr = readStr; //or can do JSON.stringify(ini);
+				//iniStr_thatAffectDOM
+				iniObj_thatAffectDOM = {};
+				for (var k=0; k<iniKeys_thatAffectDOM.length; k++) {
+					for (var p in ini) {
+						if (iniKeys_thatAffectDOM[k] in ini[p].props) {
+							if (iniKeys_thatAffectDOM[k] == 'Default') {
+								var defaultProfilePath = ini[p].props['Path'];
+								var defaultProfileIsRelative = ini[p].props['IsRelative'];
+							}
+							iniObj_thatAffectDOM[p].props[iniKeys_thatAffectDOM[k]] = ini[p].props[iniKeys_thatAffectDOM[k]];
+						}
+						if ('num' in ini[p]) { // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ 
+							iniObj_thatAffectDOM[p].num = ini[p].num;
+						}
+					}
+				}
+				//iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM); //dont do this here as i need to first update currentThisBuildsIconPath
+				
+				//update watchBranches[myPrefBranch]
+				for (var pref_name_in_obj in myPrefListener.watchBranches[myPrefBranch].prefNames) {
+					var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+					if (pref_name_in_ini in ini.General.props) {
+						var prefValInPrefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
+						var prefValInIni = ini.General.props[pref_name_in_ini];
+						if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].type == Ci.nsIPrefBranch.PREF_BOOL) {
+							if (prefValInIni == 'false' || prefValInIni == '0') {
+								prefValInIni = false;
+							} else if (prefValInIni == 'true' || prefValInIni == '1') {
+								prefValInIni = true;
+							}
+						}
+						if (prefValInIni != prefValInPrefObj) {
+							myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].setval(prefValInIni, true); //i dont have to pass seoncd arg of true, as the onChange listener will see that the ini value is == newVal so it wont writeIni
+						}
+					} else {
+						//take value from pref and write it to ini
+						ini.General.props['Profilist.' + pref_name_in_ini] = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_ini].value;
+						//note:todo:11/14/14 112a: i edited in something to ini, so i should do a writeIni or mark it so that a writeIni is done sometime
+					}
+				}
+				
+				//update icon `currentThisBuildsIconPath`
+				if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == true) { //if (ini.General.props['Profilist.dev'] == 'true') { //OR I can test `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == true) {` but if i use this pref test method then i need to update watch branches block before this currentBuildIcons
+				
+				
+					//start the generic-ish check stuff
+					var devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']); //can instead use `JSON.parse(ini.General.props['Profilist.dev-builds'])` here
+					//var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
+					//start - figure out from dev_builds_str what icon path should be
+					try {
+						devBuilds.forEach(function(b) {
+							if (b[1].toLowerCase() == profToolkit.exePathLower) {
+								if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
+									console.log('making bullet');
+									currentThisBuildsIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+								} else {
+									currentThisBuildsIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
+								}
+								throw BreakException;
+							}
+						});
+						//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
+						if (updateChannel == '') {
+							updateChannel = Services.prefs.getCharPref('app.update.channel');
+						}
+						if (updateChannel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+							currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
+						} else {
+							currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
+						}
+					} catch (ignore if ex === BreakException) {}
+					//end - figure out from dev_builds_str what icon path should be
+					/*
+					if (currentThisBuildsIconPath != OLDcurrentThisBuildsIconPath) {
+						//icon of currentThisBuildsIconPath CHANGED
+						//console.log('icon of currentThisBuildsIconPath CHANGED');
+						//icon_changed = true;
+						//devBuildsStrOnLastUpdateToGlobalVar = dev_builds_str;
+					} else {
+						//icon of currentThisBuildsIconPath is unchanged
+						//console.log('icon of currentThisBuildsIconPath is unchanged')
+					}
+					*/
+					//end the generic-ish check stuff
+				
+					//have to add this in as another prop because its possible that currentThisBuildsIconPath can change even though Profilist.dev did not (ie: it reamined true)
+					//actually ignore this crap comment on right::: i think i sould set selectedProfile here //i dont figure out the default=1 profile and add is prop as that can be done on run time, that inf
+					iniObj_thatAffectDOM.General.props['Profilist.currentThisBuildsIconPath'] = currentThisBuildsIconPath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
+				}
+				
+				//update which profile is the Default profile
+				if (ini.General.props.StartWithLastProfile == '1') {
+					if (defaultProfilePath) {
+						iniObj_thatAffectDOM.General.props['Profilist.defaultProfilePath'] = defaultProfilePath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
+						iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIsRelative'] = defaultProfileIsRelative; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
+					} else {
+						console.warn('start with last profile is 1 however no default profile marked in ini');
+					}
+				} else {
+					//its 0
+					delete iniObj_thatAffectDOM[defaultProfilePath].props.Default;
+				}
+				
+				iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM);
+				
+				
+				//figure selectedProfile.name					
+				//get from selectedProfile.rootDirPath to iniPath format to get its name
+				if (profToolkit.selectedProfile.relativeDescriptor_rootDirPath !== null) {
+					//its possible to be relative
+					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.relativeDescriptor_rootDirPath].props.Name;
+				} else {
+					//its absolute
+					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+				}
+				
+				if (!profToolkit.selectedProfile.name) { //probably null
+					console.warn('this profile at path does not exist, so its a temporary profile');
+					profToolkit.selectedProfile.name = 'Temporary Profile'; //as it has no name
+					profToolkit.selectedProfile.iniKey = null;
+				} else {
+					profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
+				}
+				
+				promise_readIniAndParseObjs.resolve('objs parsed');
+			},
+			function(aReason) {
+				console.error('Rejected', 'promise_iniObjFinalized', 'aReason:' + aReason.message);
+				promise_readIniAndParseObjs.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+				//return Promise.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+			}
+		);
+		///////////
+		//start - read the ini file and if needed read the bkp to create the ini object
 	//	console.log('in read');
 	//	console.log('decoder got');
 	//	console.log('starting read');
 		if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
-			var promise = OS.File.read(pathProfilesIni); // Read the complete file as an array
+			var promise_readIni = OS.File.read(profToolkit.path_iniFile); // Read the complete file as an array
 		} else {
-			var promise = OS.File.read(pathProfilesIni, {encoding:'utf-8'}); // Read the complete file as an array
+			var promise_readIni = OS.File.read(profToolkit.path_iniFile, {encoding:'utf-8'});
 		}
 	//	console.log('read promise started');
-		return promise.then(
+		promise_readIni.then(
 			function(aVal) {
+				console.log('Success', 'promise_readIni',
 				if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
 					if (!decoder) {
 						decoder = new TextDecoder(); // This decoder can be reused for several reads
@@ -80,7 +246,7 @@ function readIni() {
 				} else {
 					var readStr = aVal;
 				}
-	//			//console.log(readStr);
+				//console.log('radStr:', readStr);
 				ini = {};
 				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
 				var blocks = [];
@@ -109,71 +275,197 @@ function readIni() {
 
 					if (group == 'Profile') {
 						//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
-						ini[ini[group].props.Name] = ini[group];
+						ini[ini[group].props.Path] = ini[group];
 						delete ini[group];
 					}
 				}
-	//			console.log('successfully read ini = ', ini);
-				return Promise.resolve(ini);
+				if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
+					promise_iniObjFinalized.resolve('ini object finalized via non-bkp');
+					//return Promise.resolve('Success promise_readIni',);
+				} else {
+					//ini was not touched
+					//so read from bkp and update ini with properties that are missing
+					if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
+						var promise_readIniBkp = OS.File.read(profToolkit.path_iniBkpFile); // Read the complete file as an array
+					} else {
+						var promise_readIniBkp = OS.File.read(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
+					}
+					promise_readIniBkp.then(
+						function() {
+							console.log('Success', 'promise_readIniBkp');
+							if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
+								//dont need the decoder check here as already did that above
+								var readStr = decoder.decode(aVal); // Convert this array to a text
+							} else {
+								var readStr = aVal;
+							}
+							//should readStr
+							//ini is currently the untouched ini
+							//go through readStr and update ini with the properties that are missing (if a profile is in ini but not in iniBkp then it means that profile no longer exists)
+								//meaning add all Profilist. properties to the ini that dont exist there
+							//console.log('readStrBkp:', readStr);
+							//start read ini to str
+							var iniBkp = {};
+							//no need to redefine patt //var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
+							var blocks = [];
+
+							var match;
+							while (match = patt.exec(readStr)) {
+				//				//console.log('MAAAAAAAAAAATCH', match);
+
+								var group = match[1];
+								iniBkp[group] = {};
+
+								if (group == 'Profile') {
+									iniBkp[group]['num'] = match[2];
+								}
+
+								iniBkp[group].props = {};
+
+								for (var i = 3; i < match.length; i = i + 2) {
+									var prop = match[i];
+									if (prop === undefined) {
+										break;
+									}
+									var propVal = match[i + 1]
+									iniBkp[group].props[prop] = propVal;
+								}
+
+								if (group == 'Profile') {
+									//Object.defineProperty(iniBkp, iniBkp[group].props.Name, Object.getOwnPropertyDescriptor(iniBkp[group], group));
+									iniBkp[iniBkp[group].props.Path] = iniBkp[group];
+									delete iniBkp[group];
+								}
+							}
+							//end read str to obj
+							var somethingResotredFromBkpToIni = false;
+							for (var p in ini) {
+								if (p in iniBkp) {
+									for (var sub_p in iniBkp[p]) {
+										if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+											somethingResotredFromBkpToIni = true;
+											ini[p][sub_p] = iniBkp[p][sub_p];
+										}
+									}
+									if ('num' in ini[p]) {
+										//its a profile entry
+										for (var sub_p in iniBkp[p].props) {
+											if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+												somethingResotredFromBkpToIni = true;
+												ini[p].props[sub_p] = iniBkp[p].props[sub_p];
+											}
+										}
+									}
+								}
+							}
+							if (somethingResotredFromBkpToIni) {
+								iniStr = JSON.stringify(ini);
+							}
+							promise_iniObjFinalized.resolve('ini object finalized via bkp');
+						},
+						function() {
+							console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
+							promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message);
+						}
+					);
+				}
 			},
-			function(aRejectReason) {
-	//			console.error('Read ini failed');
-				return Promise.reject('Profiles.ini could not be read to memoery. ' + aRejectReason.message);
+			function(aReason) {
+				console.error('Rejected', 'promise_readIni', 'aReason:', aReason);
+				promise_iniObjFinalized.reject('Profiles.ini could not be read. ' + aReason.message);
+				//return Promise.reject('Profiles.ini could not be read. ' + aReason.message);
 			}
 		);
+		//end - read the ini file and if needed read the bkp to create the ini object
+		return promise_readIniAndParseObjs.promise;
 	} catch (ex) {
 		console.error('Promise Rejected `readIni` - ', ex);
 		return Promise.reject('Promise Rejected `readIni` - ' + ex);
 	}
 }
 
-function writeIni() {
-//is promise
+function writeIniAndBkp() {
+	//is promise
+	//writes ini to files
 	try {
+		var appendNonProfilesAndGens = 8000; //so this allows user to have 8000 profiles then it will push the non general and non profile# blocks after it
 		var writeStr = [];
 		var profileI = -1;
+		var blocksToWriteWithGroupOrder = [];
 		for (var p in ini) {
-
-
+			var blockNum = -1;
+			var blockLines = [];
+			
 			if ('num' in ini[p]) {
 				//is profile
 				profileI++; //because we init profileI at -1
-				var group = 'Profile' + profileI;
-				if (ini[p].num != profileI) {
-	//				console.log('profile I of profile changed from ' + ini[p].num + ' to ' + profileI + ' the object from ini read is =', ini[p]);
+				var group = 'Profile' + ini[p].num;
+				blockNum = ini[p].num;
+				if (profileI != blockNum) {
+					console.warn('profileI != blockNum', profileI, blockNum); //this is a problem because the order profiles show in profiles.ini is how i show them in stack, and things like promise_all_updateProfStatuses uses that order to figure out which childNode is which profile
 				}
 			} else {
 				var group = p;
+				if (group == 'General') {
+					blockNum = -1; //well can make this anything <= -1, its just that the first profile in ini is Profile0 so i cant use 0 here
+				} else {
+					blockNum = appendNonProfilesAndGens;
+					appendNonProfilesAndGens++;
+				}
 			}
 
+			
 			writeStr.push('[' + group + ']');
-
+			blockLines.push('[' + group + ']');
+			
 			for (var p2 in ini[p].props) {
 				writeStr.push(p2 + '=' + ini[p].props[p2]);
+				blockLines.push(p2 + '=' + ini[p].props[p2]);
 			}
 
-			writeStr.push('');
+			blockLines.push('');
+			
+			blocksToWriteWithGroupOrder.push([blockNum, blockLines.join('\n');
 		}
 
-		writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
+		blocksToWriteWithGroupOrder.sort(function(a, b) {
+			return a[0] > b[0];
+		});
+		
+		for (var i=0; i<blocksToWriteWithGroupOrder.length; i++) {
+			writeStr.push(blocksToWriteWithGroupOrder[i][1]);
+		}
+		//writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
+		writeStr.push('');
 
 		var writeStrJoined = writeStr.join('\n');
 		
-		let promise = OS.File.writeAtomic(pathProfilesIni, writeStrJoined, {tmpPath:pathProfilesIni + '.profilist.tmp', encoding:'utf-8'});
-		return promise.then(
+		var promise_writeIni = OS.File.writeAtomic(profToolkit.path_iniFile, writeStrJoined, {tmpPath:profToolkit.path_iniFile + '.profilist.tmp', encoding:'utf-8'});
+		var promise_writeIniBkp = OS.File.writeAtomic(profToolkit.path_iniBkpFile, writeStrJoined, {tmpPath:profToolkit.path_iniBkpFile + '.profilist.tmp', encoding:'utf-8'});
+		promise_writeIniBkp.then(
 			function() {
-				return Promise.resolve('writeAtomic complete');
+				console.log('Success', 'promise_writeIniBkp');
 			},
-			function(aRejectReason) {
-	//			console.error('writeIni failed');
-				return Promise.reject('Profiles.ini could not be be written to disk. ' + aRejectReason.message);
+			function(aReason) {
+				console.error('Rejected', 'promise_writeIniBkp', 'aReason:', aReason);
+			}
+		);
+		return promise_writeIni.then(
+			function() {
+				console.log('Success', 'promise_writeIni');
+				return Promise.resolve('Success, promise_writeIni');
+			},
+			function(aReason) {
+				console.error('Rejected', 'promise_writeIni', 'aReason:', aReason);
+				return Promise.reject('Profiles.ini could not be be written to disk. ' + aReason.message);
 			}
 		);
 	} catch(ex) {
-		console.error('Promise Rejected `writeIni` - ', ex);
-		return Promise.reject('Promise Rejected `writeIni` - ' + ex);
+		console.error('Rejected', 'writeIniAndBkp', 'ex:', ex);
+		return Promise.reject('Rejected `writeIniAndBkp` - ' + ex);
 	}
 }
+
 /*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
 var kSaltTable = [
 	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
@@ -576,16 +868,46 @@ function initProfToolkit() {
 		} //reference to the profiles object but to the current profile in the profiles object
 	};
 	
-	profToolkit.rootPathDefault = FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
+	profToolkit.exePath = myServices.dsp.get('XREExeF', Ci.nsIFile).path;
+	profToolkit.exePathLower = profToolkit.exePath.toLowerCase();
+	profToolkit.rootPathDefault =  myServices.dsp.get('DefProfRt', Ci.nsIFile).path; //FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
 //	console.log('initProfToolkit 1');
-	profToolkit.localPathDefault = FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
+	profToolkit.localPathDefault = myServices.dsp.get('DefProfLRt', Ci.nsIFile).path //FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
 //	console.log('initProfToolkit 2');
-
-	profToolkit.selectedProfile.rootDirName = OS.Path.basename(OS.Constants.Path.profileDir);
-	profToolkit.selectedProfile.localDirName = OS.Path.basename(OS.Constants.Path.localProfileDir);
 
 	profToolkit.selectedProfile.rootDirPath = OS.Constants.Path.profileDir;
 	profToolkit.selectedProfile.localDirPath = OS.Constants.Path.localProfileDir;
+	
+	profToolkit.selectedProfile.rootDirName = OS.Path.basename(profToolkit.selectedProfile.rootDirPath);
+	profToolkit.selectedProfile.localDirName = OS.Path.basename(profToolkit.selectedProfile.localDirPath);
+	
+	//var profToolkit.path_iniFile = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
+	//var profToolkit.path_iniBkpFile = profToolkit.path_iniFile + '.profilist.bkp';
+	
+	profToolkit.path_iniDir = OS.Constants.Path.userApplicationDataDir;
+	profToolkit.path_iniFile = OS.Path.join(profToolkit.path_iniDir, 'profiles.ini');
+	profToolkit.path_iniBkpFile = profToolkit.path_iniFile + '.profilist.bkp';
+	
+	profToolkit.nsIFile_iniDir = new FileUtils.File(profToolkit.path_iniDir); //for getRelativeDescriptor use
+	
+	if (profToolkit.selectedProfile.rootDirPath.indexOf(profToolkit.rootPathDefault) > -1) {
+		//then its PROBABLY relative as its in the folder it should be
+		var IniPathStr = new FileUtils.File(profToolkit.selectedProfile.rootDirPath); //OS.Path.join(profToolkit.rootPathDefault, profToolkit.selectedProfile.rootDirName);
+		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(profToolkit.nsIFile_iniDir); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
+		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = PathToWriteToIni;
+	} else {
+		//its not relative
+		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = null;
+	}
+	profToolkit.selectedProfile.iniKey = undefined; //note: i set it to undefined meaning it hasnt been verified yet, i set it to null for temp profile meaning name not found, i set it to string once it was verified
+	
+	//get relative path
+	//this way too slow dont do it: var IniPathStr = FileUtils.getFile('DefProfRt', ['name of folder you want in profiles folder']); //3.32ms
+	//var IniPathStr = OS.Path.join(profToolkit.rootPathDefault, 'name of folder you want in profiles folder'); //0.1ms /***console.time('blah'); var sep = new FileUtils.File(OS.Path.join(scope.profToolkit.rootPathDefault, 'name of folder you want in profiles folder')); console.timeEnd('blah'); console.log(sep); ~~~ 0.17ms***/
+	//var PathToWriteToIni = IniPathStr.getRelativeDescriptor(profToolkit.nsIFile_iniDir); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
+	//btw if do 
+	//end get relative path
+	
 	
 //	console.log('initProfToolkit DONE');
 	/*
@@ -624,48 +946,235 @@ function initProfToolkit() {
 	*/
 }
 
-function updateOnPanelShowing(e, aDOMWindow, dontUpdateIni) {
-	if (!e) {
-		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
-		var win = aDOMWindow;
-	} else {
-//		console.log('e on panel showing = ', e);
-//		console.log('e.view == e.target.ownerDocument.defaultView == ', e.view == e.target.ownerDocument.defaultView); //is true!! at least when popup id is PanelUI-popup
-		if (e.target.id != 'PanelUI-popup') {
-//			console.log('not main panel showing so dont updateProfToolkit');
-			return;
+function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
+	//does not fire when entering customize mode
+	
+	//get aDOMWindow
+	if (!aDOMWindow) {
+		if (!e) {
+			throw new Error('no e and no aDOMWindow');
+			//return false;
+			return Promise.reject('no e and no aDOMWindow');
 		} else {
-			var PanelUI = e.target;
-			var win = e.view;
-		}
-	}
-		/*if edit anything here make sure to copy updateOnPanelShowing*/
-		if (!PUIsync_height) {
-			PUIsync_height = PanelUI.querySelector('#profilist-loading');
-			if (!PUIsync_height) {
-				console.error('errrror PUIsync_height is undefined and profilistLoading is not there so cannot obtain height so assuming height of 38');
-				PUIsync_height = 38;
-			} else {
-				//start debug				
-				//var computedHeight = win.getComputedStyle(el, '').height;
-				//console.log('computed PUIsync_height:', computedHeight);
-				//end debug
-				PUIsync_height = PUIsync_height.boxObject.height;
-				console.log('PUIsync_height determined to be = ', PUIsync_height);
+			//console.log('e on panel showing = ', e);
+			//console.log('e.view == e.target.ownerDocument.defaultView == ', e.view == e.target.ownerDocument.defaultView); //is true!! at least when popup id is PanelUI-popup
+			aDOMWindow = e.view;
+			if (e.target.id != 'PanelUI-popup') {
+				console.info('not main panel showing so dont updateProfToolkit');
+				//return false;
+				return Promise.reject('not main panel showing so dont updateProfToolkit');
 			}
 		}
-
-		var stack = PanelUI.querySelector('#profilist_box').childNodes[0];
-		//assume its supposed to be in collapsed state right now
-		if (collapsedheight != PUIsync_height || stack.style.height == '') {
-			var oldCollapsedheight = collapsedheight;
-			//if collapsedheight != PUIsync_height then obviously we have to set stack.style.height because we are assuming on popupshowing it should already be in collapsed style.height, (this is why i dont bother checking style.height) so if it is in this collapsed style.height then the last one used was the oldCollapsedheight obviously, so we want to set style.height as we are updating collapsedheight now to puisynch so set style.height to puisync too
-			collapsedheight = PUIsync_height;
-//			console.warn('setting stack height to collapsedheight which = ' + collapsedheight);
-			stack.style.height = collapsedheight + 'px';
+	}
+	
+	//get panel
+	var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup
+	var PUIf = aDOMWindow.PanelUI.mainView.childNodes[1]; //PanelUI-footer //aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
+	//var PUIcs = aDOMWindow.PanelUI.mainView.childNodes[0]; //PanelUI-contents-scroller
+	
+	//check if profilist is in there already and get profilist nodes
+	var PBox;
+	var PStack; //dom element key=profilist_stack
+	var PLoading;
+	if (!('Profilist' in aDOMWindow)) {
+			var profilistHBoxJSON =
+			['xul:vbox', {id:'profilist_box', class:'', style:''},
+				['xul:stack', {/*key:'profilist_stack'*/},
+					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading', */disabled:'true', label:'Loading Profiles...'}]
+				]
+			];
+			var basePNodes = {}; //baseProfilistNodes
+			var PBox = jsonToDOM(profilistHBoxJSON, aDOMWindow.document, basePNodes);
+			PUIf.insertBefore(PBox, PUIf.firstChild);
+			PStack = PBox.childNodes[0];
+			PLoading = PStack.childNodes[0];
+			
+			if (!PUIsync_height) {
+				PUIsync_height = PLoading.boxObject.height;
+				collapsedheight = PUIsync_height;
+				//var computedHeight = win.getComputedStyle(el, '').height;
+				//console.log('computed PUIsync_height:', computedHeight);
+				console.log('PUIsync_height determined to be = ', PUIsync_height);
+			}
+			
+			//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
+			/*
+			aDOMWindow.Profilist.basePNodes = {
+				'profilist_stack': basePNodes.profilist_stack
+			}
+			*/
+			aDOMWindow.Profilist = {};
+			
+			PStack.addEventListener('mouseenter', function() {
+			
+			}, false);
+			PStack.addEventListener('mouseleave', function() {
+			
+			}, false);
+	} else {
+		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
+		console.time('PBox getElementById');
+		PBox = aDOMWindow.document.getElementById('profilist_box'); //alternative `PUI.querySelector('#profilist_box')`
+		console.timeEnd('PBox getElementById');
+		PStack = PBox.childNodes[0];
+	}
+	
+	//make sure its PStack is collapsed
+	//PStack.style.height = collapsedheight + 'px'; //maybe not needed //was doing this in past: `if (collapsedheight != PUIsync_height || stack.style.height == '') {`
+	
+	//start read ini
+	if (dontRefreshIni) {
+		var defer_refreshIni = Promise.defer();
+		var promise_refreshIni = defer_refreshIni.promise;
+		promise_refreshIni.resolve('dontRefreshIni is true so will skip readIniAndParseObjs and just resolve the promise');
+	} else {
+		var promise_refreshIni = readIniAndParseObjs();
+	}
+	
+	
+	
+	return promise_refreshIni.then( /* note LINK 87318*/
+		function(aVal) {
+			console.log('Success', 'promise_refreshIni', 'aVal:', aVal);
+			//compare aDOMWindow.Profilist.iniObj_thatAffectDOM to global iniObj_thatAffectDOM
+			
+			//note, in the dom, the tbb_boxes should be in order as they are seen in iniFile
+			
+			//and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+			if ('iniObj_thatAffectDOM' in aDOMWindow.Profilist) {
+				var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM; //just to short form it
+				var objBoot = iniObj_thatAffectDOM; //just to short form it
+				//figure out main key that were REMOVED in global (thus was FOUND in aDOMWindow... and NOT found in global)
+				var removeTheseChildIndexes = [];
+				for (var pw in objWin) { //pw means p_from_window
+					if (!(pw in objBoot)) {
+						for (var p in objWin[pw].props) {
+							if (pw == 'General') {
+								
+							} else if ('num' in objWin[pw]) {
+								//its a profile
+								removeTheseChildIndexes.push(objWin.num);
+							} else {
+								console.warn('pw is unrecognized', 'pw:', pw);
+								continue;
+							}
+						}
+					}
+				}
+				removeTheseChildIndexes.sort(function(a, b){return b-a});
+				for (var i=0; i<removeTheseChildIndexes.length; i++) {
+					PStack.removeChild(PStack.childNodes[removeTheseChildIndexes[i]]);
+				}
+				//figure out main key that are NEWLY ADDED in global (thus NOT found in aDOMWindow... but FOUND in global)
+				for (var pb in objBoot) { //pb means p_from_bootstrap
+					if (!(pb in objWin)) {
+						for (var p in objBoot[pb].props) {
+							if (pb == 'General') {
+								
+							} else if ('num' in objBoot[pb]) {
+								//its a profile
+								var newElement = ;// make jsonToDOM of objBoot[pb].props
+								//assuming that as we go through objBoot they are in asc order of .num
+								PStack.insertBefore(newElement, PStack.childNodes[objBoot[pb].num + 1]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
+							} else {
+								console.warn('pb is unrecognized', 'pb:', pb);
+								continue;
+							}
+						}
+					}
+				}
+				//figure out prop key that were CHANGED in global (thus was FOUND in aDOMWindow... and FOUND in global but value in aDOMWindow... is different from what is in global)
+					//note: i only check PROPS object differences to see if change needs to be made
+				for (var pw in objWin) { //pw means p_from_window
+					if (pw in objBoot) {
+						for (var p in objBoot[pw].props) { //going through objBoot here instead of objWin BECAUSE objBoot vals are what are to be shown //so if something was in objWin and is no longer there, then the key will not be in objBoot this is a problem //so this handles only if it existed before (in win) and is now changed (in boot) OR if it did not exist before (in win) and is now added (in boot)
+							if (pw == 'General') {
+								if (objBoot[pw].props[p] != objWin[pw].props[p]) {
+									
+									if (p == 'Profilist.currentThisBuildsIconPath') {
+										PBox.style.backgroundImage = 'url("' + objBoot[pw].props[p] + '")';
+									} else if (p == 'Profilist.defaultProfilePath') {
+										
+									}
+								}
+							} else if ('num' in objWin[pw]) {
+								//its a profile
+								if (objWin[pw].props[p] != objBoot[pw].props[p]) {
+									//so num in objWin COULD have changed, so use num of objBoot as I handled the removing and adding of nodes so objBoot num is now the childNodes order that is in win
+									PStack.childNodes[objBoot[pw].num].setAttribute(p, objBoot[pw].props[p])
+								}
+							} else {
+								console.warn('pw is unrecognized', 'pw:', pw);
+								continue;
+							}
+						}
+					}
+				}
+				
+				//ok done
+			} else {
+				//create json of global iniObj_thatAffectDOM (remember to add the "Create Profile" button) //note: important: all profiles should follow ini[p].num childNode order. all non profile tbbBoxes should go after that. so create profile tbbBox is lastChild if just all profiles and that button
+				//remove loading
+				//insert jsonToDom of the json created
+			}
+			
+			//10. update running icons
+			//var PTbbBoxes = PStack.childNodes;
+			var promise_all_updateProfStatuses = [];
+			for (var p in ini) {
+				if ('num' in ini[p]) {
+					if (p == profToolkit.selectedProfile.iniKey) { // alt to `if (ini[p].props.Name == profToolkit.selectedProfile.name) {`
+						//console.log('profile', p, 'is the active profile so in use duh');
+						continue;
+					}
+					var promise_profLokChk = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
+					promise_all_updateProfStatuses.push(promise_profLokChk);
+					promise_profLokChk.then(
+						function(aVal) {
+							console.log('Success', 'promise_profLokChk', 'ini[p].num:', ini[p].num, 'ini[p].props.Name:', ini[p].props.Name, 'aVal:', aVal);
+							
+							//aVal is TRUE if LOCKED
+							//aVal is FALSE if NOT locked
+							if (aVal) {
+								console.info('profile', ini[p].props.Name, 'is IN USE');
+								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
+								PStack.childNodes[ini[p].num].setAttribute('status', 'active');
+							} else {
+								console.info('profile', ini[p].props.Name, 'is NOT in use');
+								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
+								PStack.childNodes[ini[p].num].setAttribute('status', 'inactive');
+							}
+							
+							return Promise.resolve('Success promise_profLokChk num:' + ini[p].num);
+						},
+						function(aReason) {
+							console.error('Rejected', 'promise_profLokChk', 'ini[p].num:', ini[p].num, 'ini[p].props.Name:', ini[p].props.Name, 'aReason:' + aReason.message);
+							return Promise.reject('Rejected' +' '+ 'promise_profLokChk' +' '+ 'ini[p].num:' +' '+ ini[p].num +' '+ 'ini[p].props.Name:' +' '+ ini[p].props.Name +' '+ 'aReason:' +' '+ aReason.message);
+						}
+					);
+				}
+			}
+			
+			return Promise.all(promise_all_updateProfStatuses).then(
+				function(aVal) {
+					console.log('Success', 'promise_all_updateProfStatuses');				
+					return Promise.resolve('statuses updated');
+				},
+				function(aReason) {
+					console.error('Rejected', 'promise_all_updateProfStatuses', 'aReason:' + aReason.message);
+					return Promise.reject('Rejected promise_all_updateProfStatuses aReason:' + aReason.message);
+				}
+			);
+		},
+		function(aReason) {
+			console.error('Rejected', 'promise_refreshIni', 'aReason:' + aReason.message);
+			promise_readIniAndParseObjs.reject('Rejected promise_refreshIni aReason:' + aReason.message);
+			return Promise.reject('Rejected promise_refreshIni aReason:' + aReason.message); //if i return here then i should do the /*return */promise_re /* note LINK 87318*/
 		}
-		/*end if edit anything here make sure to copy updateOnPanelShowing*/
-		
+	);
+	//end read ini
+	
+	//////////////////////////// old stuff
 		var updateIni = 1;
 		if (dontUpdateIni) {
 			updateIni = 0;
@@ -1381,6 +1890,8 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 }
 
 function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box, update_dom_element_even_if_icon_unchanged) {
+//im moving this computation to on read so i think i can discontinue this function 11/13/14
+
 	//if `dom_element_to_update_profilist_box` == string of `ALL WINDOWS` then update all windows
 	//if `dom_element_to_update_profilist_box` === null THEN no dom is updated
 	
@@ -1393,14 +1904,11 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 		} else {
 			//start the generic-ish check stuff
 			var devBuilds = JSON.parse(dev_builds_str);
-			if (theExePath == '') {
-				theExePath = FileUtils.getFile('XREExeF', []).path.toLowerCase();
-			}
 			var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
 			//start - figure out from dev_builds_str what icon path should be
 			try {
 				devBuilds.forEach(function(b) {
-					if (b[1].toLowerCase() == theExePath) {
+					if (b[1].toLowerCase() == profToolkit.exePathLower) {
 						if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
 							console.log('making bullet');
 							currentThisBuildsIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
@@ -1777,13 +2285,13 @@ function tbb_box_click(e) {
 			
 			if (!box.classList.contains('profilist-tied')) {
 				box.classList.add('profilist-tied');
-				ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = FileUtils.getFile('XREExeF', []).path; //do this to get proper casing, rather than theExePath
-				//check if theExePath is in dev-builds, if it is then use its icon right way, else on mouse out download icon and add to dev-builds
+				ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = profToolkit.exePath; //do this to get proper casing, rather than profToolkit.exePathLower
+				//check if profToolkit.exePathLower is in dev-builds, if it is then use its icon right way, else on mouse out download icon and add to dev-builds
 				/*
 				//check to make sure that exe path is in dev-builds
 				try {
 					devBuilds.forEach(function(b) {
-						if (b[1].toLowerCase() == theExePath) {
+						if (b[1].toLowerCase() == profToolkit.exePathLower) {
 							box.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")'; //can use current as it will have been file formatted already
 							ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = b[1];
 							throw BreakException;
@@ -1799,7 +2307,7 @@ function tbb_box_click(e) {
 				//has profilist-tied				
 				try {
 					devBuilds.forEach(function(b) {
-						if (b[1].toLowerCase() != theExePath && b[1] != ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie']) {
+						if (b[1].toLowerCase() != profToolkit.exePathLower && b[1] != ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie']) {
 							if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
 								var useIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
 							} else {
@@ -1810,7 +2318,7 @@ function tbb_box_click(e) {
 							throw BreakException;
 						}
 					});
-					//either had nothing in there, or had just theExePath in there. I THINK nothing in there is not supposed to happen. but its time to untie
+					//either had nothing in there, or had just profToolkit.exePathLower in there. I THINK nothing in there is not supposed to happen. but its time to untie
 					box.style.backgroundImage = '';
 					delete ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
 					box.classList.remove('profilist-tied');
@@ -1878,15 +2386,15 @@ function saveTie(e) {
 	if (theTieOnEnter != tieOnLeave) {
 		console.log('SAVING ini as tie is different, it was:', theTieOnEnter, 'is now:', tieOnLeave);
 		//start - if tie is not undefined, then check if its dev-builds if not then add it, this only happens if user clicks to enable first time, as that uses the current build, and if that current builds path was not already in dev-builds
-		if (tieOnLeave && tieOnLeave.toLowerCase() == theExePath) {
+		if (tieOnLeave && tieOnLeave.toLowerCase() == profToolkit.exePathLower) {
 			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
 			try {
 				devBuilds.forEach(function(b) {
-					if (b[1].toLowerCase() == theExePath) {
+					if (b[1].toLowerCase() == profToolkit.exePathLower) {
 						throw BreakException;
 					}
 				});
-				//start - theExePath wasnt found in dev-builds so add it
+				//start - profToolkit.exePathLower wasnt found in dev-builds so add it
 				var iconP = updateChannel + '_auto.png'; //icon path
 				var downloadP = currentThisBuildsIconPath; //its obviously the current builds path if got here
 				xhr(downloadP, data => {
@@ -1982,9 +2490,9 @@ function launchProfile(e, profName, suppressAlert, url) {
 		return false;
 	}
 
-	var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
+	//var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
 	var process = Cc['@mozilla.org/process/util;1'].createInstance(Ci.nsIProcess);
-	process.init(exe);
+	process.init(profToolkit.exePath);
 	
 	var args = ['-P', profName, '-no-remote']; //-new-instance
 	if (url) {
@@ -2048,16 +2556,21 @@ function beforecustomization(e) {
 
 function customizationending(e) {
 //	console.info('customizationending e = ', e);
+
+	/*
 	var doc = e.target.ownerDocument;
 	var stack = doc.getElementById('profilist_box');
 	var active = stack.querySelector('[status=active]');
 	active.removeAttribute('disabled');
+	*/
 }
 
 var lastMaxStackHeight = 0;
 
 /*start - windowlistener*/
 var registered = false;
+var updateThesePanelUI_on_promise_riapo_success = [];
+
 var windowListener = {
 	//DO NOT EDIT HERE
 	onOpenWindow: function (aXULWindow) {
@@ -2104,281 +2617,66 @@ var windowListener = {
 			return;
 		}
 		
-		aDOMWindow.addEventListener('activate', activated, false);
-		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
-		if (PanelUI) {
-			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
-			//var PUIsync = PanelUI.querySelector('#PanelUI-fxa-status');
-//			//console.info('PUIsync on start up = ', PUIsync);
-
-			var PUIf = PanelUI.querySelector('#PanelUI-footer');
-			var PUIcs = PanelUI.querySelector('#PanelUI-contents-scroller');
-			
-			
-//			//console.log('PUIcs.style.width',PUIcs.style.width);
-			var profilistHBoxJSON =
-			['xul:vbox', {id:'profilist_box', class:'', style:''},
-				['xul:stack', {key:'profilist_stack'},
-					//['xul:box', {style:tbb_box_style, class:'profilist-tbb-box profilist-loading', key:'profilistLoading', disabled:'true'}, ['xul:toolbarbutton', {label:'Loading Profiles...', class:'profilist-tbb', style:tbb_style}]]
-					['xul:box', {style:tbb_box_style, class:'profilist-tbb-box', id:'profilist-loading', key:'profilistLoading', disabled:'true', label:'Loading Profiles...'}]
-				]
-			];
-			
-			//set dev mode, and current builds icon on the json template
-			if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
-				profilistHBoxJSON[1].class = 'profilist-dev-enabled';
-				//start - figure out icon for this build
-				checkIfIconIsRight(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value, null, false);
-				profilistHBoxJSON[1].style = 'background-image:url("' + currentThisBuildsIconPath + '")';
-				//end - figure out icon for this build
-			}
-			
-			var referenceNodes = {};
-			PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, referenceNodes), PUIf.firstChild);
-
-			//PUIsync_height = referenceNodes.profilistLoading.boxObject.height;
-			//myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'DEBUG', 'PUIsync_height set to = ' + PUIsync_height, false, null, null, 'Profilist');
-			
-			var THIS = PanelUI.querySelector('#PanelUI-multiView');
-			//todo: probably should only do this overflow stuff if scrollbar is not vis prior to mouseenter, but i think for usual case scrollbar is not vis.
-			referenceNodes.profilist_stack.addEventListener('mouseenter', function() {
-				//console.log('entered');
-				if (referenceNodes.profilist_stack.lastChild.hasAttribute('disabled')) {
-					return;
-				}
-				var PUIcs_scrollsVis = PUIcs.scrollHeight - PUIcs.clientHeight > 0 ? true : false;
-//				console.log('PUIcs_scrollsVis = ', PUIcs_scrollsVis);
-				if (!PUIcs_scrollsVis) {
-//					console.error('hidding overflow');
-					PUIcs.style.overflow = 'hidden'; //prevents scrollbar from showing
-				}
-				
-				
-				var cPopHeight = THIS._viewStack.clientHeight;
-				var heightChildren = PUIf.childNodes;
-				var expandedFooterHeight = 0;
-				var profilistBoxFound = false;
-				for (var i=0; i<heightChildren.length; i++) {
-				    if (!profilistBoxFound && heightChildren[i].getAttribute('id') == 'profilist_box') {
-				        expandedFooterHeight += expandedheight;
-				        profilistBoxFound = true;
-				    } else {
-				       //expandedFooterHeight += heightChildren[i].boxObject.height;
-				       var childHeight = parseFloat(aDOMWindow.getComputedStyle(heightChildren[i],null).getPropertyValue('height'));
-				       if (isNaN(childHeight)) {
-//				       	console.log('childHeight is NaN so set it to 0. childHeight = ', childHeight)
-				       	childHeight = 0;
-				       }
-//				       console.info('PARSEFLOAT = ' + parseFloat(childHeight))
-				       expandedFooterHeight += Math.floor(parseFloat(childHeight));
-				    }
-				}
-				
-//				console.info('panel height no expanded = ' + cPopHeight + '\nfooter height with profilist box expanded = ' + expandedFooterHeight);
-				//me.alert(scopeProfilist.expandedheight)
-				if (cPopHeight < expandedFooterHeight) {
-//				    console.info('NEEDS adjust')
-					THIS._ignoreMutations = true;
-					THIS._mainViewHeight = THIS._viewStack.clientHeight;
-					THIS._transitioning = true;
-						
-					//start - figure out cubic bezier and timings
-					var maxStackHeightBeforeOverflow = PUIcs.boxObject.height - collapsedheight;
-					lastMaxStackHeight = maxStackHeightBeforeOverflow;
-					console.log('maxStackHeightBeforeOverflow:', maxStackHeightBeforeOverflow);
-					
-					//when will stack get to this height?
-					var finalStackHeight = expandedheight - collapsedheight;
-					var finalTime = 300;
-					
-					console.log('finalStackHeight:', finalStackHeight);
-
-					var theBezier = {
-						xs: cubicBezier_ease.xs.map(function(v) {
-							return v * finalTime;
-						}),
-						ys: cubicBezier_ease.ys.map(function(v) {
-							return v * finalStackHeight;
-						})
-					};
-
-					var timeAtMaxHeightBeforeOverflow = getValOnCubicBezier_givenXorY({y:maxStackHeightBeforeOverflow, cubicBezier:theBezier});
-
-					console.log('time it stack takes to reach max height before overflow ,percentOfFinalTime:', timeAtMaxHeightBeforeOverflow);
-					//the transition duration of the panel should be finalTime - timeAtMaxHeightBeforeOverflow.x
-					//figure out cubic bezier
-				
-					var fT_minus_timeAtMaxH = finalTime - timeAtMaxHeightBeforeOverflow.x;
-					
-					console.log('duration of panel height increase anim is, fT_minus_timeAtMaxH:', fT_minus_timeAtMaxH);
-					
-					var splitRes = splitCubicBezier({
-					  z: timeAtMaxHeightBeforeOverflow.percent,
-					  x: theBezier.xs,
-					  y: theBezier.ys,
-					  fitUnitSquare: false
-					});
-					console.log('splitRes no fit:', splitRes);
-					
-					var splitRes = splitCubicBezier({
-					  z: timeAtMaxHeightBeforeOverflow.percent,
-					  x: ease.xs,
-					  y: ease.ys,
-					  fitUnitSquare: true
-					});
-					console.log('splitRes fitted using ease:', splitRes);
-					
-					var useCubicBezier = 'cubic-bezier(' + splitRes.right.slice(2, 6).map(function(v){return v.toFixed(2)}) + ')';
-					console.log('cubic-bezier:', useCubicBezier);
-					console.log('rounded duration:', Math.round(fT_minus_timeAtMaxH));
-					console.log('rounded delay:', Math.round(timeAtMaxHeightBeforeOverflow.x));
-					//end - figure out cubic bezier and timings
-					
-					THIS._viewContainer.style.transition = 'height ' + Math.round(fT_minus_timeAtMaxH*1) + 'ms ' + useCubicBezier + ' ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms';
-					
-					//THIS._viewContainer.style.transition = 'height 300ms'; //need to make this take longer than the 0.25s of the profilist_box expand anim so it doesnt show any white space
-					THIS._viewContainer.addEventListener('transitionend', function trans() {
-						THIS._viewContainer.removeEventListener('transitionend', trans);
-						//THIS._ignoreMutations = false; //important to set this to false before setting THIS._transitioning to false, because when set ignoreMut to false it runs `syncContainerWithMainView` and if it finds ignoreMut is false AND showingSubView is false AND transitioning is false then it will set the panel height to regular without anim
-						THIS._transitioning = false;
-					});
-					
-					
-					
-					THIS._viewContainer.style.height = Math.round(expandedFooterHeight) + 'px';
-				} else {
-//				    console.info('no need for adjust')
-				}
-
-				
-//				console.log('expandedheight on expand = ' + expandedheight);
-//				console.warn('setting stack height to expandedheight which = ' + expandedheight);
-				referenceNodes.profilist_stack.style.height = expandedheight + 'px';
-				referenceNodes.profilist_stack.lastChild.classList.add('perm-hover');
-			}, false);
-			referenceNodes.profilist_stack.addEventListener('mouseleave', function() {
-				//console.log('left');
-				//commenting out this block as using services prompt for renaming right now
-				// if (aDOMWindow.ProfilistInRenameMode) {
-//					// console.log('in rename mdoe so dont close');
-					// return;
-				// }
-				if (!collapsedheight) {
-//					console.log('collapsedheight is unknown so not doing mouseleave', 'collapsedheight=', collapsedheight)
-					return;
-				}
-				var cStackHeight = parseInt(referenceNodes.profilist_stack.style.height);
-//				console.log('cStackHeight = ', cStackHeight);
-//				console.log('collapsedheight = ', collapsedheight);
-				if (cStackHeight == collapsedheight) {
-//					console.log('cStackheight is already collapsedheight so return');
-					return;
-				}
-				if (THIS._ignoreMutations) { //meaning that i did for reflow of panel
-					console.info('YES need to reflow panel back to orig height');
-
-					//start - figure out cubic bezier and timings
-					var maxStackHeightBeforeOverflow = lastMaxStackHeight;
-					
-					console.log('maxStackHeightBeforeOverflow:', maxStackHeightBeforeOverflow);
-					
-					//when will stack get to this height?
-					var finalStackHeight = expandedheight - collapsedheight;
-					var finalTime = 300;
-					
-					console.log('finalStackHeight:', finalStackHeight);
-
-					var theBezier = {
-						xs: cubicBezier_ease.xs.map(function(v) {
-							return v * finalTime;
-						}),
-						ys: cubicBezier_ease.ys.map(function(v) {
-							return v * finalStackHeight;
-						})
-					};
-
-					var stackHeightOfJustExpanded = finalStackHeight - maxStackHeightBeforeOverflow;
-					console.log('panel has to shrink this much: ', stackHeightOfJustExpanded);
-					var timeAtMaxHeightBeforeOverflow = getValOnCubicBezier_givenXorY({y:stackHeightOfJustExpanded, cubicBezier:theBezier});
-					console.log('time it stack takes to reach max height before overflow ,percentOfFinalTime:', timeAtMaxHeightBeforeOverflow);
-					
-					var splitRes = splitCubicBezier({
-					  z: timeAtMaxHeightBeforeOverflow.percent,
-					  x: theBezier.xs,
-					  y: theBezier.ys,
-					  fitUnitSquare: false
-					});
-					console.log('splitRes no fit:', splitRes);
-					
-					var splitRes = splitCubicBezier({
-					  z: timeAtMaxHeightBeforeOverflow.percent,
-					  x: ease.xs,
-					  y: ease.ys,
-					  fitUnitSquare: true
-					});
-					console.log('splitRes fitted using ease:', splitRes);
-					
-					var useCubicBezier = 'cubic-bezier(' + splitRes.left.slice(2, 6).map(function(v){return v.toFixed(2)}) + ')';
-					console.log('cubic-bezier:', useCubicBezier);
-					console.log('rounded duration:', Math.round(timeAtMaxHeightBeforeOverflow.x));
-					
-					THIS._viewContainer.style.transition = 'height ' + Math.round(timeAtMaxHeightBeforeOverflow.x) + 'ms ' + useCubicBezier;
-					//end - figure out cubic bezier and timings
-					
-					
-					THIS._transitioning = true;
-					//THIS._viewContainer.style.transition = 'height 150ms'; //need to make this take quicker than the 0.25s of the profilist_box expand anim so it doesnt show any white space
-					THIS._viewContainer.addEventListener('transitionend', function trans() {
-						THIS._viewContainer.removeEventListener('transitionend', trans);
-						THIS._viewContainer.style.transition = '';
-						THIS._ignoreMutations = false; //important to set this to false before setting THIS._transitioning to false, because when set ignoreMut to false it runs `syncContainerWithMainView` and if it finds ignoreMut is false AND showingSubView is false AND transitioning is false then it will set the panel height to regular without anim
-						THIS._transitioning = false;
-					});
-					
-					THIS._viewContainer.style.height = THIS._mainViewHeight + 'px';
-				}
-				referenceNodes.profilist_stack.addEventListener('transitionend', function(e) {
-					if (e.propertyName != 'height') { //can further check to see if e.originalTarget == referenceNodes.profilist_stack but because thats the only one with height transition im just testing this property as i think comparing two dom nodes is much harder on perf than is comparing string value of propertyName. its opacity of the submenu thats triggering the first transitionend anyways.
-//						console.warn('skipping. tranitionend happend but probably not for referenceNodes.profilist_stack as its propertyName is not height', 'e:', e);
-						return;
-					}
-					referenceNodes.profilist_stack.removeEventListener('transitionend', arguments.callee, false);
-//					console.log('running transitionend func step 2')
-					if (referenceNodes.profilist_stack.style.height == collapsedheight + 'px') {
-						if (PUIcs.style.overflow == 'hidden') {
-//							console.error('showing overflow');
-							PUIcs.style.overflow = ''; //remove the hidden style i had forced on it
-						}
-					} else {
-//						console.info('overflow not reset as height is not collapsed height (' + collapsedheight + ') but it is right now = ', referenceNodes.profilist_stack.style.height);
-					}
-				}, false);
-//				console.warn('setting stack height to collapsedheight which = ' + collapsedheight);
-				referenceNodes.profilist_stack.style.height = collapsedheight + 'px';
-//				console.log('collapsed height on collapse == ', 'stack.boxObject.height = ', referenceNodes.profilist_stack.boxObject.height, 'stack.style.height = ', referenceNodes.profilist_stack.style.height);
-				referenceNodes.profilist_stack.lastChild.classList.remove('perm-hover');
-			}, false);
-			//PanelUI.addEventListener('popuphiding', prevHide, false);
-			PanelUI.addEventListener('popupshowing', updateOnPanelShowing, false);
-//			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
+		aDOMWindow.addEventListener('activate', activated, false); //because might have the options tab open in a non PanelUI window
+		//var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
+		if (aDOMWindow.PanelUI) {
+			PanelUI.panel.addEventListener('popupshowing', updateOnPanelShowing, false);
 			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
-			
-			if (PanelUI.state == 'open') { //USED TO BE "if (PUIsync_height == 0)"
-			
-				if (!registered) {
-					if (Object.keys(ini).length == 0) {
-						updateOnPanelShowing(null, aDOMWindow);
-					} else {
-						updateOnPanelShowing(null, aDOMWindow, 1); //for dont read ini //we also dont want it to updateStack but i dont think its an expensive operation so i didnt program the skip in
-						//updateMenuDOM(aDOMWindow, stackDOMJson);
-					}
+//			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
+
+			if ((aDOMWindow.PanelUI.panel.state == 'open' || aDOMWindow.PanelUI.panel.state == 'showing') || aDOMWindow.document.documentElement.hasAttribute('customizing')) { //or if in customize mode
+			//start: point of this if is to populate panel dom IF it is visible
+				console.log('visible in this window so populate its dom, aDOMWindow:', aDOMWindow);
+				if (ini.UnInitialized) { //do this test to figure out if need to readIni
+					ini.Pending_RIAPO = true;
+					delete ini.UnInitialized;
+					var promise_riapo = readIniAndParseObjs();
+					updateThesePanelUI_on_promise_riapo_success.push(aDOMWindow);
+					promise_riapo.then(
+						function(aVal) {
+							console.log('Success', 'promise_riapo');
+							updateThesePanelUI_on_promise_riapo_success.forEach(function(subADOMWindow) {
+								var upos_args = {
+									e: null,
+									aDOMWindow: subADOMWindow,
+									readIni: 0
+								};
+								var promise_upos_liw_with_riapo = updatePanelOnShowing(upos_args.e, upos_args.aDOMWindow, upos_args.readIni);
+								promise_upos_liw_with_riapo.then(
+									function(aVal) {
+										console.log('Success', 'promise_upos_liw_with_riapo', i);
+									},
+									function(aReason) {
+										console.error('Rejected', 'promise_upos_liw_with_riapo', i, 'aReason:', aReason);
+									}
+								);
+							});
+							updateThesePanelUI_on_promise_riapo_success = null; //i hope this trashes the referenced dom windows in there //note: need to verify
+						},
+						function(aReason) {
+							console.error('Rejected', 'promise_riapo', 'aReason:', aReason);
+						}
+					);
+				} else if (ini.Pending_RIAPO) {
+					updateThesePanelUI_on_promise_riapo_success.push(aDOMWindow);
 				} else {
-					//will get here on new window open AND of course panel.state  is open (i removed the .state==showing from the if)
-					updateOnPanelShowing(null, aDOMWindow);
+					var upos_args = {
+						e: null,
+						aDOMWindow: aDOMWindow,
+						readIni: 0
+					};
+					var promise_upos_liw = updatePanelOnShowing(upos_args.e, upos_args.aDOMWindow, upos_args.readIni);
+					promise_upos_liw.then(
+						function(aVal) {
+							console.log('Success', 'promise_upos_liw');
+						},
+						function(aReason) {
+							console.error('Rejected', 'promise_upos_liw', 'aReason:', aReason);
+						}
+					);
 				}
-			}
+			} // end: point of this if is to populate panel dom IF it is visible
 		}
 		
 	},
@@ -3362,7 +3660,7 @@ function startup(aData, aReason) {
 	ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
 	//console.log('aData', aData);
 //	//console.log('initing prof toolkit');
-	//initProfToolkit();
+	initProfToolkit();
 //	//console.log('init done');
 	//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 	//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';

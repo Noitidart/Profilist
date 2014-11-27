@@ -1,0 +1,116 @@
+function readIni() {
+//is promise
+	try {
+	//	console.log('in read');
+	//	console.log('decoder got');
+	//	console.log('starting read');
+		if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
+			var promise = OS.File.read(profToolkit.path_iniFile); // Read the complete file as an array
+		} else {
+			var promise = OS.File.read(profToolkit.path_iniFile, {encoding:'utf-8'}); // Read the complete file as an array
+		}
+	//	console.log('read promise started');
+		return promise.then(
+			function(aVal) {
+				if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
+					if (!decoder) {
+						decoder = new TextDecoder(); // This decoder can be reused for several reads
+					}
+					var readStr = decoder.decode(aVal); // Convert this array to a text
+				} else {
+					var readStr = aVal;
+				}
+	//			//console.log(readStr);
+				ini = {};
+				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
+				var blocks = [];
+
+				var match;
+				while (match = patt.exec(readStr)) {
+	//				//console.log('MAAAAAAAAAAATCH', match);
+
+					var group = match[1];
+					ini[group] = {};
+
+					if (group == 'Profile') {
+						ini[group]['num'] = match[2];
+					}
+
+					ini[group].props = {};
+
+					for (var i = 3; i < match.length; i = i + 2) {
+						var prop = match[i];
+						if (prop === undefined) {
+							break;
+						}
+						var propVal = match[i + 1]
+						ini[group].props[prop] = propVal;
+					}
+
+					if (group == 'Profile') {
+						//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
+						ini[ini[group].props.Name] = ini[group];
+						delete ini[group];
+					}
+				}
+	//			console.log('successfully read ini = ', ini);
+				return Promise.resolve(ini);
+			},
+			function(aRejectReason) {
+	//			console.error('Read ini failed');
+				return Promise.reject('Profiles.ini could not be read to memoery. ' + aRejectReason.message);
+			}
+		);
+	} catch (ex) {
+		console.error('Promise Rejected `readIni` - ', ex);
+		return Promise.reject('Promise Rejected `readIni` - ' + ex);
+	}
+}
+
+function writeIni() {
+//is promise
+	try {
+		var writeStr = [];
+		var profileI = -1;
+		for (var p in ini) {
+
+
+			if ('num' in ini[p]) {
+				//is profile
+				profileI++; //because we init profileI at -1
+				var group = 'Profile' + profileI;
+				if (ini[p].num != profileI) {
+	//				console.log('profile I of profile changed from ' + ini[p].num + ' to ' + profileI + ' the object from ini read is =', ini[p]);
+				}
+			} else {
+				var group = p;
+			}
+
+			writeStr.push('[' + group + ']');
+
+			for (var p2 in ini[p].props) {
+				writeStr.push(p2 + '=' + ini[p].props[p2]);
+			}
+
+			writeStr.push('');
+		}
+
+		writeStr[writeStr.length - 1] = '\n'; //we want double new line at end of file
+
+		var writeStrJoined = writeStr.join('\n');
+		
+		let promise = OS.File.writeAtomic(profToolkit.path_iniFile, writeStrJoined, {tmpPath:profToolkit.path_iniFile + '.profilist.tmp', encoding:'utf-8'});
+		return promise.then(
+			function() {
+				return Promise.resolve('writeAtomic complete');
+			},
+			function(aRejectReason) {
+	//			console.error('writeIni failed');
+				return Promise.reject('Profiles.ini could not be be written to disk. ' + aRejectReason.message);
+			}
+		);
+	} catch(ex) {
+		console.error('Promise Rejected `writeIni` - ', ex);
+		return Promise.reject('Promise Rejected `writeIni` - ' + ex);
+	}
+}

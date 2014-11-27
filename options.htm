@@ -1,6 +1,6 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
-  <title>Profilist | Control Panel</title>
+  <title data-l10n-id="title">Profilist | Control Panel</title>
   <meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
   <meta name="description" content="Control Panel for Profilist Firefox Add-on" />
   <link rel="shortcut icon" href="icon16.png" type="image/png" />
@@ -11,8 +11,7 @@
 
 
         <div class="glb-bdy">
-          <h1><img src="icon.png">Profilist<small>Control
-          Panel</small></h1>
+          <h1><img src="icon.png"><span data-l10n-id="profilist">Profilist</span><small data-l10n-id="control-panel">Control Panel</small></h1>
 
           <div id="login-dialog">
             <div class="hd"></div>
@@ -20,19 +19,19 @@
             <div class="bd" id="login-dialog-inner">
 			<div id="innerbg" class="inner-bg">
               <div class="section log-in sect-gen sect-dev-on" id="sectGen">
-                <h2>General</h2>
+                <h2 data-l10n-id="general">General</h2>
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
                     <div class="row">
-                      <label class="input-hint">Automatic Updates</label>
+                      <label class="input-hint" data-l10n-id="automatic-updates">Automatic Updates</label>
 					  <select style="width:8em" id="Profilist.autoupdate" onchange="updatePrefAndIni_to_UserSetting(event)">
-                        <option value="1">
+                        <option value="1" data-l10n-id="default">
                           Default
                         </option>
-                        <option value="2">
+                        <option value="2" data-l10n-id="on">
                           On
                         </option>
-                        <option value="0">
+                        <option value="0" data-l10n-id="off">
                           Off
                         </option>
                       </select>
@@ -41,43 +40,43 @@
                     <div class="row">
                       <label class="input-hint">Launch on Create Profile</label>
 					  <select style="width:8em" id="Profilist.launch_on_create" onchange="updatePrefAndIni_to_UserSetting(event)">
-                        <option value="true">
+                        <option value="true" data-l10n-id="enabled">
                           Enabled
                         </option>
-                        <option value="false">
+                        <option value="false" data-l10n-id="disabled">
                           Disabled
                         </option>
                       </select>
                     </div><!--next row-->
 					
                     <div class="row">
-                      <label class="input-hint">Notifications</label>
+                      <label class="input-hint" data-l10n-id="notifications">Notifications</label>
 					  <select style="width:8em" id="Profilist.notifications" onchange="updatePrefAndIni_to_UserSetting(event)">
-                        <option value="true">
+                        <option value="true" data-l10n-id="enabled">
                           Enabled
                         </option>
-                        <option value="false">
+                        <option value="false" data-l10n-id="disabled">
                           Disabled
                         </option>
                       </select>
                     </div><!--next row-->
 
                     <div class="row">
-                      <label class="input-hint">Developer Options</label>
+                      <label class="input-hint" data-l10n-id="developer-options">Developer Options</label>
 					  <select style="width:8em" id="Profilist.dev" onchange="updatePrefAndIni_to_UserSetting(event)">
-                        <option value="true">
+                        <option value="true" data-l10n-id="enabled">
                           Enabled
                         </option>
-                        <option value="false">
+                        <option value="false" data-l10n-id="disabled">
                           Disabled
                         </option>
                       </select>
                     </div><!--next row-->
 
                     <div style="" class="row">
-                      <label style="" class="input-hint">Create Desktop Shortcut</label>
+                      <label style="" class="input-hint" data-l10n-id="create-desktop-shortcut">Create Desktop Shortcut</label>
                       <select id="profiles" onchange="selectChange(event)" style="width:14em; text-overflow:ellipsis;">
-                        <option value="null">
+                        <option value="null" data-l10n-id="select-profile-name">
                           Select Profile Name
                         </option>
                       </select>
@@ -90,11 +89,11 @@
               </div>
 			  <!--next section-->
               <div class="section log-in sect-dev" id="sectDev" style="padding-top:0;">
-                <h2>Developer</h2>
+                <h2 data-l10n-id="developer">Developer</h2>
                 <form name="login" action="/eum/login" method="post">
                   <fieldset>
                     <div class="row" style="padding-bottom:3px;">
-                      <label class="input-hint">Firefox Builds</label> <select style=
+                      <label class="input-hint" data-l10n-id="firefox-builds">Firefox Builds</label> <select style=
                       "pointer-events: none; visibility: hidden;" disabled="disabled">
                         <option>
                           dummy for height of row
@@ -104,10 +103,10 @@
 
                     <div class="builds-cont" id="buildsCont">
                       <div>
-                        <span>
+                        <span data-l10n-id="icon">
 							Icon
 						</span>
-                        <span>
+                        <span data-l10n-id="path-to-executable">
 							Path to Executable
 						</span>
                         <span>
