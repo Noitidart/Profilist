@@ -981,7 +981,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box', class:'', style:''},
 				['xul:stack', {/*key:'profilist_stack'*/},
-					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading', */disabled:'true', label:'Loading Profiles...'}]
+					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading', */disabled:'true', label:myServices.stringBundle.GetStringFromName('loading-profiles')}]
 				]
 			];
 			var basePNodes = {}; //baseProfilistNodes
@@ -1042,82 +1042,163 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			//note, in the dom, the tbb_boxes should be in order as they are seen in iniFile
 			
 			//and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
-			if ('iniObj_thatAffectDOM' in aDOMWindow.Profilist) {
-				var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM; //just to short form it
-				var objBoot = iniObj_thatAffectDOM; //just to short form it
-				//figure out main key that were REMOVED in global (thus was FOUND in aDOMWindow... and NOT found in global)
-				var removeTheseChildIndexes = [];
-				for (var pw in objWin) { //pw means p_from_window
-					if (!(pw in objBoot)) {
-						for (var p in objWin[pw].props) {
-							if (pw == 'General') {
-								
-							} else if ('num' in objWin[pw]) {
-								//its a profile
-								removeTheseChildIndexes.push(objWin.num);
-							} else {
-								console.warn('pw is unrecognized', 'pw:', pw);
-								continue;
-							}
-						}
-					}
-				}
-				removeTheseChildIndexes.sort(function(a, b){return b-a});
-				for (var i=0; i<removeTheseChildIndexes.length; i++) {
-					PStack.removeChild(PStack.childNodes[removeTheseChildIndexes[i]]);
-				}
-				//figure out main key that are NEWLY ADDED in global (thus NOT found in aDOMWindow... but FOUND in global)
-				for (var pb in objBoot) { //pb means p_from_bootstrap
-					if (!(pb in objWin)) {
-						for (var p in objBoot[pb].props) {
-							if (pb == 'General') {
-								
-							} else if ('num' in objBoot[pb]) {
-								//its a profile
-								var newElement = ;// make jsonToDOM of objBoot[pb].props
-								//assuming that as we go through objBoot they are in asc order of .num
-								PStack.insertBefore(newElement, PStack.childNodes[objBoot[pb].num + 1]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
-							} else {
-								console.warn('pb is unrecognized', 'pb:', pb);
-								continue;
-							}
-						}
-					}
-				}
-				//figure out prop key that were CHANGED in global (thus was FOUND in aDOMWindow... and FOUND in global but value in aDOMWindow... is different from what is in global)
-					//note: i only check PROPS object differences to see if change needs to be made
-				for (var pw in objWin) { //pw means p_from_window
-					if (pw in objBoot) {
-						for (var p in objBoot[pw].props) { //going through objBoot here instead of objWin BECAUSE objBoot vals are what are to be shown //so if something was in objWin and is no longer there, then the key will not be in objBoot this is a problem //so this handles only if it existed before (in win) and is now changed (in boot) OR if it did not exist before (in win) and is now added (in boot)
-							if (pw == 'General') {
-								if (objBoot[pw].props[p] != objWin[pw].props[p]) {
-									
-									if (p == 'Profilist.currentThisBuildsIconPath') {
-										PBox.style.backgroundImage = 'url("' + objBoot[pw].props[p] + '")';
-									} else if (p == 'Profilist.defaultProfilePath') {
-										
-									}
-								}
-							} else if ('num' in objWin[pw]) {
-								//its a profile
-								if (objWin[pw].props[p] != objBoot[pw].props[p]) {
-									//so num in objWin COULD have changed, so use num of objBoot as I handled the removing and adding of nodes so objBoot num is now the childNodes order that is in win
-									PStack.childNodes[objBoot[pw].num].setAttribute(p, objBoot[pw].props[p])
-								}
-							} else {
-								console.warn('pw is unrecognized', 'pw:', pw);
-								continue;
-							}
-						}
-					}
-				}
-				
-				//ok done
-			} else {
-				//create json of global iniObj_thatAffectDOM (remember to add the "Create Profile" button) //note: important: all profiles should follow ini[p].num childNode order. all non profile tbbBoxes should go after that. so create profile tbbBox is lastChild if just all profiles and that button
-				//remove loading
-				//insert jsonToDom of the json created
+			if (!('iniObj_thatAffectDOM' in aDOMWindow.Profilist)) {
+				PStack.removeChild(PStack.childNodes[0]); //remove loading
+				//create and add create new profile tbb
+				var elFromJson_createNewProfile = ['xul:box', {class:'profilist-tbb-box', label:myServices.stringBundle.GetStringFromName('create-new-profile')}];
+				//{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create profilist-do_not_auto_remove', addEventListener:['click',createUnnamedProfile,false], style:tbb_style}
+				elFromJson_createNewProfile.addEventListener('click', tbb_box_click, false);
+				PStack.appendChild(elFromJson_createNewProfile);
+				aDOMWindow.Profilist.iniObj_thatAffectDOM = {};
+				//profToolkit.selectedProfile.iniKey == null then this is a temporary profile
+				var elFromJson_createNewProfile = ['xul:box', {class:'profilist-tbb-box profilist-temp-prof', label:myServices.stringBundle.GetStringFromName('temporary-profile')}];
+				PStack.appendChild(elFromJson_createNewProfile);
 			}
+			
+			var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM; //just to short form it
+			var objBoot = iniObj_thatAffectDOM; //just to short form it
+			//figure out main key that were REMOVED in global (thus was FOUND in aDOMWindow... and NOT found in global)
+			var removeTheseChildIndexes = [];
+			var pwAdded = []; //this p was found in objBoot but not in objWin
+			var pwRemoved = []; //this p was found in objWin but not in objBoot
+			var pwChanged = []; //the pp of what is objWin[pw] has changed
+			for (var pw in objWin) { //pw means p_from_window
+				if (!(pw in objBoot)) {
+					pwRemoved.push(pw);
+					if ('num' in objWin[pw]) {
+						removeTheseChildIndexes.push(objWin[pw].num);
+					}
+				} else {
+					//the pw is in objBoot, so lets check if the pp of pw changed
+					//start - handleProps
+					var ppAdded = [];
+					var ppRemoved = [];
+					var ppChanged = [];
+					for (var pp in objBoot[pw].props) {
+						if (pp in objWin[pw].props) {
+							// link 32547584324
+							if (objWin[pw].props[pp] != objBoot[pw].props[pp]) {
+								ppChanged.push({pp:pp, was:objWin[pw].props[pp], now:objBoot[pw].props[pp]});
+							}
+						} else {
+							ppAdded.push({pp:pp, was:null, now:objBoot[pw].props[pp]});
+						}
+					}
+					for (var pp in objWin[pw].props) {
+						if (pp in objBoot[pw].props) {
+							// redundant see link 32547584324
+							// if (objWin[pw].props[pp] != objBoot[pw].props[pp]) {
+								// ppChanged.push({pp:pp, was:objWin[pw].props[pp], now:objBoot[pw].props[pp]});
+							// }
+						} else {
+							ppRemoved.push({pp:pp, was:objWin[pw].props[pp], now:null});
+						}
+					}
+					
+					//start - writePPToDOM
+					for (var i=0; i<ppChanged.length; i++) {
+						if (pw == 'General') {
+							if (ppChanged.pp == 'Profilist.currentThisBuildsIconPath') {
+								PBox.style.backgroundImage = 'url("' + ppChanged.now + '")';
+							} else if (pp == 'Profilist.defaultProfilePath') {
+								PBox.setAttribute('defaultProfilePath', ppChanged.now);
+							}
+						} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+							PStack.childNodes[objWin[pw].num].setAttribute(ppChanged.pp, ppChanged.now);
+						} else {
+							console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
+							throw 'pw/pp combination is unrecognized' + ' ' + 'pw:' + ' ' + pw + ' ' + 'pp:' + ' ' + pp;
+							continue;
+						}
+					}
+					for (var i=0; i<ppRemoved.length; i++) {
+						if (pw == 'General') {
+							if (ppChanged.pp == 'Profilist.currentThisBuildsIconPath') {
+								PBox.style.backgroundImage = '';
+							} else if (pp == 'Profilist.defaultProfilePath') {
+								PBox.removeAttribute('defaultProfilePath');
+							}
+						} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+							PStack.childNodes[objWin[pw].num].removeAttribute(ppRemoved.pp);
+						} else {
+							console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
+							throw 'pw/pp combination is unrecognized' + ' ' + 'pw:' + ' ' + pw + ' ' + 'pp:' + ' ' + pp;
+							continue;
+						}
+					}
+					for (var i=0; i<ppAdded.length; i++) {
+						if (pw == 'General') {
+							if (ppChanged.pp == 'Profilist.currentThisBuildsIconPath') {
+								PBox.style.backgroundImage = 'url("' + ppChanged.now + '")';
+							} else if (pp == 'Profilist.defaultProfilePath') {
+								PBox.setAttribute('defaultProfilePath', ppChanged.now);
+							}
+						} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+							PStack.childNodes[objWin[pw].num].setAttribute(ppChanged.pp, ppChanged.now);
+						} else {
+							console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
+							throw 'pw/pp combination is unrecognized' + ' ' + 'pw:' + ' ' + pw + ' ' + 'pp:' + ' ' + pp;
+							continue;
+						}
+					}
+					//end - writePPToDOM
+					if (ppRemoved.length != 0 || ppChanged.length != 0 || ppAdded.length != 0) {
+						pwChanged.push(pw);
+					}
+					//end - handleProps
+				}
+			}
+
+			removeTheseChildIndexes.sort(function(a, b){return b-a});
+			for (var i=0; i<removeTheseChildIndexes.length; i++) {
+				PStack.removeChild(PStack.childNodes[removeTheseChildIndexes[i]]);
+			}
+			
+			//figure out main key that are NEWLY ADDED in global (thus NOT found in aDOMWindow... but FOUND in global)
+			for (var pb in objBoot) { //pb means p_from_bootstrap
+				if (!(pb in objWin)) {
+					pwAdded.push(pb);
+					for (var p in objBoot[pb].props) {
+						if (pb == 'General') {
+							
+						} else if ('num' in objBoot[pb]) {
+							//its a profile
+							var elJson = ['xul:box', {class:['profilist-tbb-box'], label:objBoot[pb].props.Name, status:'inactive', style:[]}];
+							if (objBoot[pb].props.Default == '1') {
+								elJson[1].isdefault = true;
+							}
+							if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' && 'Profilist.tie' in objBoot[pb].props) {
+								var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(objBoot[pb].props['Profilist.tie']);
+								if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
+									elJson[1].class.push('profilist-tied');
+									elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")';
+								} else {
+									console.warn('profile is tied and dev mode is enabled, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
+									throw 'profile is tied and dev mode is enabled + ' ' + but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
+								}
+							}	
+							if (pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
+								elJson.status = 'active';
+							}
+							elJson[1].class = elJson[1].class.join(' ');
+							elJson[1].style = elJson[1].style.join('; ');
+							var elFromJson = jsonToDOM(elJson); // make jsonToDOM of objBoot[pb].props
+							elFromJson.addEventListener('click', tbb_box_click, false);
+							//assuming that as we go through objBoot they are in asc order of .num
+							PStack.insertBefore(elFromJson, PStack.childNodes[objBoot[pb].num + 1]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
+						} else {
+							console.warn('pb is unrecognized', 'pb:', pb);
+							continue;
+						}
+					}
+				}
+			}
+			
+			if (pwAdded.length > 0 || pwRemoved.length > 0) {
+				//re-calc margin-top's
+			}
+			//ok done
+
 			
 			//10. update running icons
 			//var PTbbBoxes = PStack.childNodes;
@@ -1193,6 +1274,30 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			}
 		);
 
+}
+
+function cssBackgroundUrl_for_devBuildExePath(exePath) {
+	var devBuildsPathsAndIconsArr = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']);
+	//var tieFoundInArr = false;
+	for (var i=0; i<devBuildsPathsAndIconsArr.length; i++) {
+		if (devBuildsPathsAndIconsArr[i][1] == exePath) {
+			//tieFoundInArr = true;
+			console.info('tieFound/path so path to icon of this tiePath is:', devBuildsPathsAndIconsArr[i][0]);
+			if (/^(?:release|beta|aurora|nightly)$/m.test(exePath)) {
+				return self.chrome_path + 'bullet_' + b[0] + '.png';
+			} else {
+				return OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, exePath) + '#' + Math.random();
+			}
+			break;
+		}
+	}
+	return false; //will only get here if it doesnt find return th tie
+	
+	/* if (!tieFoundInArr) {
+		return false;
+	} else {
+		throw 'should never get here as if tie was found it should have returend it';
+	} */
 }
 
 function updateDomProfileStatuses(pb_stack) {
