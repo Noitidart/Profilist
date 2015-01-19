@@ -34,6 +34,7 @@ Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/Promise.jsm');
+Cu.import('resource://gre/modules/PromiseUtils.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
 //XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
@@ -85,14 +86,13 @@ iniStr_thatAffectDOM
 watchBranches[myPrefBranch]
 current builds icon if dev mode is enabled
 */
-	try {
-		var promise_readIniAndParseObjs = Promise.defer();
-		var promise_iniObjFinalized = Promise.defer();
-		promise_iniObjFinalized.then(
+		var promise_readIniAndParseObjs = new Deferred();
+		var promise_iniObjFinalized = new Deferred();
+		promise_iniObjFinalized.promise.then(
 			function(aVal) {
 				console.error('Success', 'promise_iniObjFinalized');
 				//parse objs
-				iniStr = readStr; //or can do JSON.stringify(ini);
+				iniStr = aVal; //or can do JSON.stringify(ini);
 				//iniStr_thatAffectDOM
 				iniObj_thatAffectDOM = {};
 				for (var k=0; k<iniKeys_thatAffectDOM.length; k++) {
@@ -217,12 +217,18 @@ current builds icon if dev mode is enabled
 					profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
 				}
 				
-				promise_readIniAndParseObjs.resolve('objs parsed');
+				return promise_readIniAndParseObjs.resolve('objs parsed');
 			},
 			function(aReason) {
-				console.error('Rejected', 'promise_iniObjFinalized', 'aReason:' + aReason.message);
-				promise_readIniAndParseObjs.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+				var refObj = {name:'promise_iniObjFinalized', aReason:aReason};
+				console.error('Rejected - promise_iniObjFinalized - ', refObj);
+				return promise_readIniAndParseObjs.reject(refObj);
 				//return Promise.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_iniObjFinalized - ', aCaught);
+				throw aCaught;
 			}
 		);
 		///////////
@@ -238,7 +244,7 @@ current builds icon if dev mode is enabled
 	//	console.log('read promise started');
 		promise_readIni.then(
 			function(aVal) {
-				console.log('Success', 'promise_readIni',
+				console.log('Success', 'promise_readIni');
 				if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
 					if (!decoder) {
 						decoder = new TextDecoder(); // This decoder can be reused for several reads
@@ -281,9 +287,12 @@ current builds icon if dev mode is enabled
 					}
 				}
 				if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
-					promise_iniObjFinalized.resolve('ini object finalized via non-bkp');
+					console.log('ini object finalized via non-bkp');
+					iniStr = JSON.stringify(ini);
+					return promise_iniObjFinalized.resolve(iniStr);
 					//return Promise.resolve('Success promise_readIni',);
 				} else {
+					console.log('ini was not touched');
 					//ini was not touched
 					//so read from bkp and update ini with properties that are missing
 					if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
@@ -339,12 +348,12 @@ current builds icon if dev mode is enabled
 								}
 							}
 							//end read str to obj
-							var somethingResotredFromBkpToIni = false;
+							var somethingRestoredFromBkpToIni = false;
 							for (var p in ini) {
 								if (p in iniBkp) {
 									for (var sub_p in iniBkp[p]) {
 										if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
-											somethingResotredFromBkpToIni = true;
+											somethingRestoredFromBkpToIni = true;
 											ini[p][sub_p] = iniBkp[p][sub_p];
 										}
 									}
@@ -352,43 +361,53 @@ current builds icon if dev mode is enabled
 										//its a profile entry
 										for (var sub_p in iniBkp[p].props) {
 											if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
-												somethingResotredFromBkpToIni = true;
+												somethingRestoredFromBkpToIni = true;
 												ini[p].props[sub_p] = iniBkp[p].props[sub_p];
 											}
 										}
 									}
 								}
 							}
-							if (somethingResotredFromBkpToIni) {
+							if (somethingRestoredFromBkpToIni) {
 								iniStr = JSON.stringify(ini);
 							}
-							promise_iniObjFinalized.resolve('ini object finalized via bkp');
+							return promise_iniObjFinalized.resolve('ini object finalized via bkp');
 						},
-						function() {
+						function(aReason) {
 							console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
-							promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message);
+							if (aReason.becauseNoSuchFile) {
+								// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
+								return promise_iniObjFinalized.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+							} else {
+								return promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message);
+							}
+						}
+					).catch(
+						function(aCaught) {
+							console.error('Caught - promise_readIniBkp - ', aCaught);
+							throw aCaught;
 						}
 					);
 				}
 			},
 			function(aReason) {
-				console.error('Rejected', 'promise_readIni', 'aReason:', aReason);
-				promise_iniObjFinalized.reject('Profiles.ini could not be read. ' + aReason.message);
-				//return Promise.reject('Profiles.ini could not be read. ' + aReason.message);
+				var refObj = {name:'promise_readIni', aReason:aReason};
+				console.error('Rejected - promise_readIni - ', refObj);
+				return promise_iniObjFinalized.reject(refObj);
 			}
-		);
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_readIni - ', aCaught);
+				throw aCaught;
+			}
+		);;
 		//end - read the ini file and if needed read the bkp to create the ini object
 		return promise_readIniAndParseObjs.promise;
-	} catch (ex) {
-		console.error('Promise Rejected `readIni` - ', ex);
-		return Promise.reject('Promise Rejected `readIni` - ' + ex);
-	}
 }
 
 function writeIniAndBkp() {
 	//is promise
 	//writes ini to files
-	try {
 		var appendNonProfilesAndGens = 8000; //so this allows user to have 8000 profiles then it will push the non general and non profile# blocks after it
 		var writeStr = [];
 		var profileI = -1;
@@ -426,7 +445,7 @@ function writeIniAndBkp() {
 
 			blockLines.push('');
 			
-			blocksToWriteWithGroupOrder.push([blockNum, blockLines.join('\n');
+			blocksToWriteWithGroupOrder.push(blockNum, blockLines.join('\n'));
 		}
 
 		blocksToWriteWithGroupOrder.sort(function(a, b) {
@@ -446,25 +465,40 @@ function writeIniAndBkp() {
 		promise_writeIniBkp.then(
 			function() {
 				console.log('Success', 'promise_writeIniBkp');
+				return 'Success promise_writeIniBkp';
 			},
 			function(aReason) {
 				console.error('Rejected', 'promise_writeIniBkp', 'aReason:', aReason);
+				var refObj = {name:'promise_writeIniBkp', aReason:aReason};
+				console.error('Rejected - promise_writeIniBkp - ', refObj);
+				//promise_iniObjFinalized.reject(refObj);
+				throw refObj;
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_writeIniBkp - ', aCaught);
+				throw aCaught;
 			}
 		);
 		return promise_writeIni.then(
 			function() {
 				console.log('Success', 'promise_writeIni');
-				return Promise.resolve('Success, promise_writeIni');
+				return 'Success, promise_writeIni'; //return Promise.resolve('Success, promise_writeIni');
 			},
 			function(aReason) {
-				console.error('Rejected', 'promise_writeIni', 'aReason:', aReason);
-				return Promise.reject('Profiles.ini could not be be written to disk. ' + aReason.message);
+				//console.error('Rejected', 'promise_writeIni', 'aReason:', aReason);
+				//return Promise.reject('Profiles.ini could not be be written to disk. ' + aReason.message);
+				var refObj = {name:'promise_writeIni', aReason:aReason};
+				console.error('Rejected - promise_writeIni - ', refObj);
+				//promise_iniObjFinalized.reject(refObj);
+				throw refObj;
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_writeIni - ', aCaught);
+				throw aCaught;
 			}
 		);
-	} catch(ex) {
-		console.error('Rejected', 'writeIniAndBkp', 'ex:', ex);
-		return Promise.reject('Rejected `writeIniAndBkp` - ' + ex);
-	}
 }
 
 /*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
@@ -946,7 +980,6 @@ function initProfToolkit() {
 	// C:\Users\ali57233\AppData\Local\Mozilla\Firefox\Profiles\ncc90nnv.default
 	*/
 }
-
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	//does not fire when entering customize mode
 	
@@ -978,6 +1011,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	var PStack; //dom element key=profilist_stack
 	var PLoading;
 	if (!('Profilist' in aDOMWindow)) {
+			aDOMWindow.Profilist = {};
+			
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box', class:'', style:''},
 				['xul:stack', {/*key:'profilist_stack'*/},
@@ -1004,7 +1039,6 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				'profilist_stack': basePNodes.profilist_stack
 			}
 			*/
-			aDOMWindow.Profilist = {};
 			
 			PStack.addEventListener('mouseenter', function() {
 			
@@ -1025,11 +1059,25 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	
 	//start read ini
 	if (dontRefreshIni) {
-		var defer_refreshIni = Promise.defer();
+		var defer_refreshIni = new Deferred();
 		var promise_refreshIni = defer_refreshIni.promise;
 		promise_refreshIni.resolve('dontRefreshIni is true so will skip readIniAndParseObjs and just resolve the promise');
 	} else {
 		var promise_refreshIni = readIniAndParseObjs();
+		promise_refreshIni.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_refreshIni - ', aVal);
+			},
+			function(aReason) {
+				var refObj = {name:'promise_refreshIni', aReason:aReason};
+				console.error('Rejected - promise_refreshIni - ', refObj);
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_refreshIni - ', aCaught);
+				throw aCaught;
+			}
+		);
 	}
 	
 	
@@ -1171,10 +1219,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 								var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(objBoot[pb].props['Profilist.tie']);
 								if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
 									elJson[1].class.push('profilist-tied');
-									elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")';
+									elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")');
 								} else {
 									console.warn('profile is tied and dev mode is enabled, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
-									throw 'profile is tied and dev mode is enabled + ' ' + but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
+									throw 'profile is tied and dev mode is enabled' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
 								}
 							}	
 							if (pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
@@ -1286,7 +1334,7 @@ function cssBackgroundUrl_for_devBuildExePath(exePath) {
 			if (/^(?:release|beta|aurora|nightly)$/m.test(exePath)) {
 				return self.chrome_path + 'bullet_' + b[0] + '.png';
 			} else {
-				return OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, exePath) + '#' + Math.random();
+				return OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, exePath) + '#' + Math.random());
 			}
 			break;
 		}
@@ -2726,7 +2774,7 @@ var windowListener = {
 		aDOMWindow.addEventListener('activate', activated, false); //because might have the options tab open in a non PanelUI window
 		//var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
 		if (aDOMWindow.PanelUI) {
-			PanelUI.panel.addEventListener('popupshowing', updateOnPanelShowing, false);
+			aDOMWindow.PanelUI.panel.addEventListener('popupshowing', updateOnPanelShowing, false);
 			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
 //			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
@@ -2734,54 +2782,7 @@ var windowListener = {
 			if ((aDOMWindow.PanelUI.panel.state == 'open' || aDOMWindow.PanelUI.panel.state == 'showing') || aDOMWindow.document.documentElement.hasAttribute('customizing')) { //or if in customize mode
 			//start: point of this if is to populate panel dom IF it is visible
 				console.log('visible in this window so populate its dom, aDOMWindow:', aDOMWindow);
-				if (ini.UnInitialized) { //do this test to figure out if need to readIni
-					ini.Pending_RIAPO = true;
-					delete ini.UnInitialized;
-					var promise_riapo = readIniAndParseObjs();
-					updateThesePanelUI_on_promise_riapo_success.push(aDOMWindow);
-					promise_riapo.then(
-						function(aVal) {
-							console.log('Success', 'promise_riapo');
-							updateThesePanelUI_on_promise_riapo_success.forEach(function(subADOMWindow) {
-								var upos_args = {
-									e: null,
-									aDOMWindow: subADOMWindow,
-									readIni: 0
-								};
-								var promise_upos_liw_with_riapo = updatePanelOnShowing(upos_args.e, upos_args.aDOMWindow, upos_args.readIni);
-								promise_upos_liw_with_riapo.then(
-									function(aVal) {
-										console.log('Success', 'promise_upos_liw_with_riapo', i);
-									},
-									function(aReason) {
-										console.error('Rejected', 'promise_upos_liw_with_riapo', i, 'aReason:', aReason);
-									}
-								);
-							});
-							updateThesePanelUI_on_promise_riapo_success = null; //i hope this trashes the referenced dom windows in there //note: need to verify
-						},
-						function(aReason) {
-							console.error('Rejected', 'promise_riapo', 'aReason:', aReason);
-						}
-					);
-				} else if (ini.Pending_RIAPO) {
-					updateThesePanelUI_on_promise_riapo_success.push(aDOMWindow);
-				} else {
-					var upos_args = {
-						e: null,
-						aDOMWindow: aDOMWindow,
-						readIni: 0
-					};
-					var promise_upos_liw = updatePanelOnShowing(upos_args.e, upos_args.aDOMWindow, upos_args.readIni);
-					promise_upos_liw.then(
-						function(aVal) {
-							console.log('Success', 'promise_upos_liw');
-						},
-						function(aReason) {
-							console.error('Rejected', 'promise_upos_liw', 'aReason:', aReason);
-						}
-					);
-				}
+				updateOnPanelShowing(null, aDOMWindow, true);
 			} // end: point of this if is to populate panel dom IF it is visible
 		}
 		
@@ -2792,17 +2793,18 @@ var windowListener = {
 		}
 		
 		aDOMWindow.removeEventListener('activate', activated, false);
-		var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
-		if (PanelUI) {
+		if ('Profilist' in aDOMWindow) {
+			var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup
 			delete aDOMWindow.ProfilistInRenameMode;
-			PanelUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
-			PanelUI.removeEventListener('popuphiding', prevHide, false);
+			PUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
+			PUI.removeEventListener('popuphiding', prevHide, false);
 			aDOMWindow.gNavToolbox.removeEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.removeEventListener('customizationending', customizationending, false);
 			var profilistHBox = aDOMWindow.document.getElementById('profilist_box');
 			if (profilistHBox) {
 				profilistHBox.parentNode.removeChild(profilistHBox);
 			}
+			delete aDOMWindow.Profilist;
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 			domWinUtils.removeSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
 		}
@@ -3434,17 +3436,17 @@ function activated(e) {
 }
 
 var observers = {
+	// key should be `aTopic`
 	'profilist-cp-client': {
-		observe: function (aSubject, aTopic, aData) {
-			cpClientListener(aSubject, aTopic, aData);
-		},
-		reg: function () {
-			Services.obs.addObserver(observers['profilist-cp-client'], 'profilist-cp-client', false);
-		},
-		unreg: function () {
-			console.error('removing server side observer for messages from profilist-cp-client');
-			Services.obs.removeObserver(observers['profilist-cp-client'], 'profilist-cp-client');
-		}
+		anObserver: {
+			observe: function (aSubject, aTopic, aData) {
+				cpClientListener(aSubject, aTopic, aData);
+			}
+		}/*,
+		preReg: function() {},
+		postReg: function() {},
+		preUnreg: function() {},
+		postUnreg: function() {} */
 	}
 };
 
@@ -3785,14 +3787,33 @@ function startup(aData, aReason) {
 	myPrefListener.register(aReason, false);
 	//end pref stuff more
 	
-	windowListener.register();
-
-	for (var o in observers) {
-		observers[o].reg();
-	}
-	//ifClientsAliveEnsure_thenEnsureListenersAlive();
-	onResponseEnsureEnabledElseDisabled();
-	//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
+	var promise_iniFirstRead = readIniAndParseObjs();
+	promise_iniFirstRead.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_iniFirstRead - ', aVal);
+			
+			windowListener.register();
+			
+			for (var o in observers) {
+				if (observers[o].preReg) { observers[o].preReg() }
+				Services.obs.addObserver(observers[o].anObserver, o, false);
+				observers[o].WAS_REGGED = true;
+				if (observers[o].postReg) { observers[o].postReg() }
+			}
+			//ifClientsAliveEnsure_thenEnsureListenersAlive();
+			onResponseEnsureEnabledElseDisabled();
+			//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
+		},
+		function(aReason) {
+			var refObj = {name:'promise_iniFirstRead', aReason:aReason};
+			console.error('Rejected - promise_iniFirstRead - ', refObj);
+		}
+	).catch(
+		function(aCaught) {
+			console.error('Caught - promise_iniFirstRead - ', aCaught);
+			throw aCaught;
+		}
+	);
 	
 }
 
@@ -3817,7 +3838,13 @@ function shutdown(aData, aReason) {
 	}
 	
 	for (var o in observers) {
-		observers[o].unreg();
+		if (observers[o].WAS_REGGED) {
+			if (observers[o].preUnreg) { observers[o].preUnreg() }
+			Services.obs.removeObserver(observers[o].anObserver, o, false);
+			if (observers[o].postUnreg) { observers[o].postUnreg() }
+		} else {
+			console.warn('observer named', o, 'was not regged so no need to unreg');
+		}
 	}
 	
 	//start pref stuff more
@@ -3839,3 +3866,42 @@ function uninstall(aData, aReason) {
 	myPrefListener.uninstall(aReason); //deletes owned branches AND owned prefs on UNowned branches, this is optional, you can choose to leave your preferences on the users computer	
 	//end pref stuff more
 }
+
+// start - common helper functions
+function Deferred() {
+	if (Promise.defer) {
+		//need import of Promise.jsm for example: Cu.import('resource:/gree/modules/Promise.jsm');
+		return Promise.defer();
+	} else if (PromiseUtils.defer) {
+		//need import of PromiseUtils.jsm for example: Cu.import('resource:/gree/modules/PromiseUtils.jsm');
+		return PromiseUtils.defer();
+	} else {
+		/* A method to resolve the associated Promise with the value passed.
+		 * If the promise is already settled it does nothing.
+		 *
+		 * @param {anything} value : This value is used to resolve the promise
+		 * If the value is a Promise then the associated promise assumes the state
+		 * of Promise passed as value.
+		 */
+		this.resolve = null;
+
+		/* A method to reject the assocaited Promise with the value passed.
+		 * If the promise is already settled it does nothing.
+		 *
+		 * @param {anything} reason: The reason for the rejection of the Promise.
+		 * Generally its an Error object. If however a Promise is passed, then the Promise
+		 * itself will be the reason for rejection no matter the state of the Promise.
+		 */
+		this.reject = null;
+
+		/* A newly created Pomise object.
+		 * Initially in pending state.
+		 */
+		this.promise = new Promise(function(resolve, reject) {
+			this.resolve = resolve;
+			this.reject = reject;
+		}.bind(this));
+		Object.freeze(this);
+	}
+}
+// end - common helper functions
