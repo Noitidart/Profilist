@@ -102,9 +102,17 @@ current builds icon if dev mode is enabled
 								var defaultProfilePath = ini[p].props['Path'];
 								var defaultProfileIsRelative = ini[p].props['IsRelative'];
 							}
+							if (!(p in iniObj_thatAffectDOM)) {
+								iniObj_thatAffectDOM[p] = {props:{}};
+							}/*  else if (!('props' in iniObj_thatAffectDOM)) {
+								iniObj_thatAffectDOM[p].props = {};
+							} */
 							iniObj_thatAffectDOM[p].props[iniKeys_thatAffectDOM[k]] = ini[p].props[iniKeys_thatAffectDOM[k]];
 						}
 						if ('num' in ini[p]) { // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ 
+							if (!(p in iniObj_thatAffectDOM)) {
+								iniObj_thatAffectDOM[p] = {props:{}};
+							}
 							iniObj_thatAffectDOM[p].num = ini[p].num;
 						}
 					}
@@ -1025,6 +1033,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			PStack = PBox.childNodes[0];
 			PLoading = PStack.childNodes[0];
 			
+			aDOMWindow.Profilist.PBox = PBox;
+			aDOMWindow.Profilist.PStack = PStack;
+			//aDOMWindow.Profilist.PLoading = PLoading;
+			
 			if (!PUIsync_height) {
 				PUIsync_height = PLoading.boxObject.height;
 				collapsedheight = PUIsync_height;
@@ -1049,11 +1061,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	} else {
 		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
 		console.time('PBox getElementById');
-		PBox = aDOMWindow.document.getElementById('profilist_box'); //alternative `PUI.querySelector('#profilist_box')`
+		PBox = aDOMWindow.Profilist.PBox; //aDOMWindow.document.getElementById('profilist_box'); //alternative `PUI.querySelector('#profilist_box')`
 		console.timeEnd('PBox getElementById');
-		PStack = PBox.childNodes[0];
+		PStack = aDOMWindow.Profilist.PStack; //PBox.childNodes[0];
 	}
 	
+	return; // debug
 	//make sure its PStack is collapsed
 	//PStack.style.height = collapsedheight + 'px'; //maybe not needed //was doing this in past: `if (collapsedheight != PUIsync_height || stack.style.height == '') {`
 	
@@ -1300,6 +1313,11 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			console.error('Rejected', 'promise_refreshIni', 'aReason:' + aReason.message);
 			promise_readIniAndParseObjs.reject('Rejected promise_refreshIni aReason:' + aReason.message);
 			return Promise.reject('Rejected promise_refreshIni aReason:' + aReason.message); //if i return here then i should do the /*return */promise_re /* note LINK 87318*/
+		}
+	).catch(
+		function(aCaught) {
+			console.error('Caught - promise_refreshIni - ', aCaught);
+			throw aCaught;
 		}
 	);
 	//end read ini
@@ -2703,9 +2721,14 @@ function prevHide(e) {
 function beforecustomization(e) {
 //	console.info('beforecustomization e = ', e);
 	var doc = e.target.ownerDocument;
-	var stack = doc.getElementById('profilist_box');
-	var active = stack.querySelector('[status=active]');
-	active.setAttribute('disabled', true);
+	//var stack = doc.getElementById('profilist_box');
+	//var active = stack.querySelector('[status=active]');
+	//active.setAttribute('disabled', true);
+	
+	var aDOMWindow = doc.defaultView;
+	console.info('aDOMWindow.Profilist:', aDOMWindow.Profilist); //if aDOMWindow.Profilist is undefined then it hasnt been built yet
+	updateOnPanelShowing(null, aDOMWindow); //builds it if its not there
+	aDOMWindow.Profilist.PBox.setAttribute('disabled', true);
 }
 
 function customizationending(e) {
@@ -2774,6 +2797,9 @@ var windowListener = {
 		aDOMWindow.addEventListener('activate', activated, false); //because might have the options tab open in a non PanelUI window
 		//var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup');
 		if (aDOMWindow.PanelUI) {
+			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
+			
 			aDOMWindow.PanelUI.panel.addEventListener('popupshowing', updateOnPanelShowing, false);
 			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
@@ -2794,19 +2820,21 @@ var windowListener = {
 		
 		aDOMWindow.removeEventListener('activate', activated, false);
 		if ('Profilist' in aDOMWindow) {
-			var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup
 			delete aDOMWindow.ProfilistInRenameMode;
+
+			var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup 
 			PUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
 			PUI.removeEventListener('popuphiding', prevHide, false);
 			aDOMWindow.gNavToolbox.removeEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.removeEventListener('customizationending', customizationending, false);
-			var profilistHBox = aDOMWindow.document.getElementById('profilist_box');
-			if (profilistHBox) {
-				profilistHBox.parentNode.removeChild(profilistHBox);
-			}
-			delete aDOMWindow.Profilist;
+			
+			var PBox = aDOMWindow.Profilist.PBox;
+			PBox.parentNode.removeChild(PBox);
+			
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 			domWinUtils.removeSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
+			
+			delete aDOMWindow.Profilist;
 		}
 	}
 };

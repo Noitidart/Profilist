@@ -100,7 +100,8 @@
 .profilist-tbb-box.profilist-create .toolbarbutton-icon {
 	list-style-image: url(chrome://profilist/content/plus.png);
 }
-.profilist-tbb-box.profilist-loading .toolbarbutton-icon {
+
+#profilist-loading .toolbarbutton-icon {
 	list-style-image: url(chrome://profilist/content/icon16.png);
 }
 
