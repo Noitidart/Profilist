@@ -137,7 +137,7 @@ current builds icon if dev mode is enabled
 						}
 					} else {
 						//take value from pref and write it to ini
-						ini.General.props['Profilist.' + pref_name_in_ini] = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_ini].value;
+						ini.General.props[pref_name_in_ini] = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
 						//note:todo:11/14/14 112a: i edited in something to ini, so i should do a writeIni or mark it so that a writeIni is done sometime
 					}
 				}
@@ -194,6 +194,9 @@ current builds icon if dev mode is enabled
 				//update which profile is the Default profile
 				if (ini.General.props.StartWithLastProfile == '1') {
 					if (defaultProfilePath) {
+						if (!('General' in iniObj_thatAffectDOM)) {
+							iniObj_thatAffectDOM.General = {props:{}};
+						}
 						iniObj_thatAffectDOM.General.props['Profilist.defaultProfilePath'] = defaultProfilePath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
 						iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIsRelative'] = defaultProfileIsRelative; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
 					} else {
