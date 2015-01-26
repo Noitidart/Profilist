@@ -194,7 +194,7 @@ current builds icon if dev mode is enabled
 				//update which profile is the Default profile
 				if (ini.General.props.StartWithLastProfile == '1') {
 					if (defaultProfilePath) {
-						if (!('General' in iniObj_thatAffectDOM)) {
+						if (!('General' in iniObj_thatAffectDOM)) { // this block is needed because if its a totally untouched by profilist ini then no props are found so General doesnt exist in iniObj_thatAffectDOM
 							iniObj_thatAffectDOM.General = {props:{}};
 						}
 						iniObj_thatAffectDOM.General.props['Profilist.defaultProfilePath'] = defaultProfilePath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
@@ -382,15 +382,17 @@ current builds icon if dev mode is enabled
 							if (somethingRestoredFromBkpToIni) {
 								iniStr = JSON.stringify(ini);
 							}
-							return promise_iniObjFinalized.resolve('ini object finalized via bkp');
+							//return promise_iniObjFinalized.resolve('ini object finalized via bkp'); //promise_iniObjFinalized.then.promise onFulliflled expects aVal to be iniStr
+							return promise_iniObjFinalized.resolve(iniStr);
 						},
 						function(aReason) {
 							console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
 							if (aReason.becauseNoSuchFile) {
 								// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
-								return promise_iniObjFinalized.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+								//return promise_iniObjFinalized.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+								return promise_iniObjFinalized.resolve(iniStr); //promise_iniObjFinalized.then.promise onFulliflled expects aVal to be iniStr
 							} else {
-								return promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message);
+								return promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message); //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
 							}
 						}
 					).catch(
