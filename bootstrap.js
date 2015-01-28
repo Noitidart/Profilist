@@ -316,7 +316,7 @@ current builds icon if dev mode is enabled
 						ini[group] = {};
 
 						if (group == 'Profile') {
-							ini[group]['num'] = match[2];
+							ini[group]['num'] = parseInt(match[2]);
 						}
 
 						ini[group].props = {};
@@ -378,7 +378,7 @@ current builds icon if dev mode is enabled
 									iniBkp[group] = {};
 
 									if (group == 'Profile') {
-										iniBkp[group]['num'] = match[2];
+										iniBkp[group]['num'] = parseInt(match[2]);
 									}
 
 									iniBkp[group].props = {};
@@ -1177,7 +1177,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				
 				//create and add create new profile tbb
 				var elFromJson_createNewProfile = jsonToDOM(
-					['xul:box', {class:'profilist-tbb-box', label:myServices.stringBundle.GetStringFromName('create-new-profile'), top:PUIsync_height}]
+					['xul:box', {class:'profilist-tbb-box profilist-create', label:myServices.stringBundle.GetStringFromName('create-new-profile'), top:PUIsync_height}]
 					, aDOMWindow.document
 					, {}
 				);
@@ -1186,12 +1186,46 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				PStack.appendChild(elFromJson_createNewProfile);
 				
 				//profToolkit.selectedProfile.iniKey == null then this is a temporary profile
+				/*
 				var elFromJson_currentProfile = jsonToDOM(
-					['xul:box', {class:'profilist-tbb-box', label:myServices.stringBundle.GetStringFromName('temporary-profile'), status:'active', top:0}]
+					['xul:box', {class:'profilist-tbb-box profilist-cur-prof', label:myServices.stringBundle.GetStringFromName('temporary-profile'), status:'active', top:0}]
 					, aDOMWindow.document
 					, {}
 				);
-				PStack.appendChild(elFromJson_currentProfile);
+				*/
+				////// copy/modification/strips of block 8752123154
+				var elJson = ['xul:box', {class:['profilist-tbb-box'], status:'active', style:[], top:0}];
+				var sIniKey = profToolkit.selectedProfile.iniKey;
+				if (sIniKey) {
+					elJson[1].label = ini[sIniKey].props.Name;
+					if ('Default' in ini[sIniKey].props && ini[sIniKey].props.Default == '1') {
+						elJson[1].isdefault = true;
+					}
+					if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' && */'Profilist.tie' in ini[sIniKey].props) {
+						var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(ini[sIniKey].props['Profilist.tie']);
+						if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
+							elJson[1].class.push('profilist-tied');
+							elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")');
+						} else {
+							console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', ini[sIniKey].props['Profilist.tie'], 'sIniKey:', sIniKey);
+							throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + ini[sIniKey].props['Profilist.tie'] + ' ' + 'sIniKey:' + ' ' + sIniKey;
+						}
+					}	
+					elJson[1].class = elJson[1].class.join(' ');
+					elJson[1].style = elJson[1].style.join('; ');
+				} else {
+					//is temp profile
+					elJson[1].label = myServices.stringBundle.GetStringFromName('temporary-profile');
+				}
+				var elFromJson = jsonToDOM(	// make jsonToDOM of ini[pb].props
+					elJson
+					, aDOMWindow.document
+					, {}
+				);
+				elFromJson.addEventListener('click', tbb_box_click, false);
+				////// end copy/modification/strips of block 8752123154
+				
+				PStack.appendChild(elFromJson);
 			}
 			
 			var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM; //just to short form it
@@ -1265,10 +1299,11 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 									PBox.setAttribute('defaultProfilePath', ppChanged[i].now);
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+								var childNodeI = getChildNodeI(pw, objWin, PStack);
 								if (ppChanged[i].pp == 'Profilist.tie') {
-									PStack.childNodes[objWin[pw].num].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
+									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
 								} else {
-									PStack.childNodes[objWin[pw].num].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
+									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1284,11 +1319,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 									PBox.removeAttribute('defaultProfilePath');
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+								var childNodeI = getChildNodeI(pw, objWin, PStack);
 								if (ppChanged[i].pp == 'Profilist.tie') {
-									PStack.childNodes[objWin[pw].num].classList.remove('profilist-tied');
-									PStack.childNodes[objWin[pw].num].style.backgroundImage = '';
+									PStack.childNodes[childNodeI].classList.remove('profilist-tied');
+									PStack.childNodes[childNodeI].style.backgroundImage = '';
 								} else {
-									PStack.childNodes[objWin[pw].num].removeAttribute(pp_to_attr(ppRemoved.pp));
+									PStack.childNodes[childNodeI].removeAttribute(pp_to_attr(ppRemoved.pp));
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1304,11 +1340,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 									PBox.setAttribute('defaultProfilePath', ppChanged[i].now);
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
+								var childNodeI = getChildNodeI(pw, objWin, PStack);
 								if (ppChanged[i].pp == 'Profilist.tie') {
-									PStack.childNodes[objWin[pw].num].classList.add('profilist-tied');
-									PStack.childNodes[objWin[pw].num].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
+									PStack.childNodes[childNodeI].classList.add('profilist-tied');
+									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
 								} else {
-									PStack.childNodes[objWin[pw].num].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
+									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1332,33 +1369,40 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				//figure out main key that are NEWLY ADDED in global (thus NOT found in aDOMWindow... but FOUND in global)
 				for (var pb in objBoot) { //pb means p_from_bootstrap
 					if (!(pb in objWin)) {
+						
 						console.log('key of', pb, 'ADDED');
 						pwAdded.push(pb);
-						for (var p in objBoot[pb].props) {
+						//console.log('uneval(objBoot[pb].props):', uneval(objBoot[pb].props));
+						//for (var p in objBoot[pb].props) {
 							if (pb == 'General') {
 								
 							} else if ('num' in objBoot[pb]) {
 								//its a profile
+								if (profToolkit.selectedProfile.iniKey && pb == profToolkit.selectedProfile.iniKey) {
+									//dont add the selected profile
+									continue;
+								}
+								////// block 8752123154
 								var elJson = ['xul:box', {class:['profilist-tbb-box'], label:objBoot[pb].props.Name, status:'inactive', style:[]}];
 								if ('Default' in objBoot[pb].props && objBoot[pb].props.Default == '1') {
 									elJson[1].isdefault = true;
 								}
-								if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' && 'Profilist.tie' in objBoot[pb].props) {
+								if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' &&*/ 'Profilist.tie' in objBoot[pb].props) {
 									var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(objBoot[pb].props['Profilist.tie']);
 									if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
 										elJson[1].class.push('profilist-tied');
 										elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")');
 									} else {
-										console.warn('profile is tied and dev mode is enabled, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
-										throw 'profile is tied and dev mode is enabled' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
+										console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
+										throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
 									}
 								}	
-								if (pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
+								if (profToolkit.selectedProfile.iniKey && pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
 									elJson.status = 'active';
 								}
-								//elJson[1].style.push('margin-top: ' + (parseInt(objBoot[pb].num) * PUIsync_height) + 'px'); // its stretching it, weird, having to use xul top attr
+								//elJson[1].style.push('margin-top: ' + (objBoot[pb].num * PUIsync_height) + 'px'); // its stretching it, weird, having to use xul top attr
 								//elJson[1].style.push('height: ' + PUIsync_height + 'px'); //not needed for some reason its auto height is correct
-								elJson[1].top = (parseInt(objBoot[pb].num) + 1) * PUIsync_height;
+								elJson[1].top = (getChildNodeI(pb, objBoot, PStack)+1) * PUIsync_height;
 								elJson[1].class = elJson[1].class.join(' ');
 								elJson[1].style = elJson[1].style.join('; ');
 								var elFromJson = jsonToDOM(	// make jsonToDOM of objBoot[pb].props
@@ -1367,13 +1411,16 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 									, {}
 								);
 								elFromJson.addEventListener('click', tbb_box_click, false);
+								////// end block 8752123154
 								//assuming that as we go through objBoot they are in asc order of .num
-								PStack.insertBefore(elFromJson, PStack.childNodes[parseInt(objBoot[pb].num)]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
+								var childNodeI = getChildNodeI(pb, objBoot, PStack);
+								console.log('doing insert of:', childNodeI);
+								PStack.insertBefore(elFromJson, PStack.childNodes[childNodeI]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
 							} else {
 								console.warn('pb is unrecognized', 'pb:', pb);
 								continue;
 							}
-						}
+						//}
 					}
 				}
 				
@@ -1382,7 +1429,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				if (pwAdded.length > 0 || pwRemoved.length > 0) {
 					//re-calc margin-top's
 					//adjust top of create-new-profile
-					PStack.childNodes[PStack.childNodes.length-2].setAttribute('top', Object.keys(objBoot).length * PUIsync_height); //PStack.childNodes.length-2 is create new profile and -1 is currentProfile
+					PStack.childNodes[PStack.childNodes.length-2].setAttribute('top', (PStack.childNodes.length - 1) * PUIsync_height); //PStack.childNodes.length-2 is create new profile and -1 is currentProfile
 				}
 				//ok done
 			} else { // close if objWin objBoot str compairson
@@ -1401,27 +1448,27 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 					var promise_profLokChk = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
 					promiseAll_updateStatuses.push(promise_profLokChk);
 					
-					let hoisted_iniP = ini[p];
+					let hoisted_p = p;
 					promise_profLokChk.then(
 						function(aVal) {
-							console.log('Fullfilled - promise_profLokChk - ', aVal, 'hoisted_iniP.num:', hoisted_iniP.num, 'hoisted_iniP.props.Name:', hoisted_iniP.props.Name);
+							console.log('Fullfilled - promise_profLokChk - ', aVal, 'objBoot[hoisted_p].num:', objBoot[hoisted_p].num, 'objBoot[hoisted_p].props.Name:', objBoot[hoisted_p].props.Name);
 							
 							//aVal is TRUE if LOCKED
 							//aVal is FALSE if NOT locked
 							if (aVal) {
-								console.info('profile', hoisted_iniP.props.Name, 'is IN USE');
+								console.info('profile', objBoot[hoisted_p].props.Name, 'is IN USE');
 								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
-								PStack.childNodes[hoisted_iniP.num].setAttribute('status', 'active');
+								PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'active');
 							} else {
-								console.info('profile', hoisted_iniP.props.Name, 'is NOT in use');
+								console.info('profile', objBoot[hoisted_p].props.Name, 'is NOT in use');
 								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
-								PStack.childNodes[hoisted_iniP.num].setAttribute('status', 'inactive');
+								PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'inactive');
 							}
 							
-							return 'Success promise_profLokChk num: ' + hoisted_iniP.num + ' and name: ' + hoisted_iniP.props.Name;
+							return 'Success promise_profLokChk num: ' + objBoot[hoisted_p].num + ' and name: ' + objBoot[hoisted_p].props.Name;
 						},
 						function(aReason) {
-							var refObj = {name:'promise_profLokChk', aReason:aReason, aExtra:hoisted_iniP.num, aExtra2:hoisted_iniP.props.Name};
+							var refObj = {name:'promise_profLokChk', aReason:aReason, aExtra:objBoot[hoisted_p].num, aExtra2:objBoot[hoisted_p].props.Name};
 							console.error('Rejected - promise_profLokChk - ', refObj);
 							throw refObj;
 						}
@@ -1507,6 +1554,26 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 		);
 	old stuff */
 	//////////////////////////// end - old stuff
+}
+
+function getChildNodeI(key, obj, stack) {
+	if ('num' in obj[key]) {
+		if (profToolkit.selectedProfile.iniKey && key == profToolkit.selectedProfile.iniKey) {
+			var childNodeI = stack.childNodes.length - 1; // this works but its too much weird thinking about it, it wont hold true if there are more then General and all rest are Profile blocks in ini `Object.keys(obj).length;` // get the profilist-cur-prof element // last element in stack
+		} else {							
+			if (profToolkit.selectedProfile.iniKey) {
+				//meaning not a temp profile
+				if (obj[key].num > obj[profToolkit.selectedProfile.iniKey].num) {
+					var childNodeI = obj[key].num - 1;
+				} else {
+					var childNodeI = obj[key].num;
+				}
+			} else {
+				var childNodeI = obj[key].num;
+			}
+		}
+	}
+	return childNodeI;
 }
 
 function cssBackgroundUrl_for_devBuildExePath(exePath) {
