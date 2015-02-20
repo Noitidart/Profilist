@@ -36,12 +36,46 @@
 	transition:height 250ms;
 }
 
+/* start drawer look */
+.profilist-hovered .profilist-tbb-box[top="0"] { /*current profile*/
+	box-shadow: 0 0px 2px 1px #b4b4b4;
+	background-color: rgba(24, 25, 26, 0.07);
+}
+
+/*
+.profilist-tbb-box[status='active'] {
+	background-color: rgba(24, 25, 26, 0.07);
+}
+*/
+
+.profilist-hovered .profilist-tbb-box:not([top="0"]) { /*drawer look*/
+	border-color: rgba(24, 25, 26, 0.04) transparent transparent; /*based on border-color of `.profilist-tbb-box`*/
+	background-color: rgba(24, 25, 26, 0.04);
+}
+
+/*
+.profilist-create { *//*last .profilist-tbb-box*//*
+	border: 1px solid green;
+}
+*/
+
+#profilist_box.profilist-hovered ~ toolbarbutton:not([hidden]):last-of-type { /*first button after profilist box, have to use last of type as things are reversed here*/
+	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.28);
+	border-top-color: #fff;
+}
+/* i dont have to worry about hover over the button, as i only give the button after stack this border style when its expanded, and its only expanded when hovered
+#profilist_box ~ toolbarbutton:not([hidden]):last-of-type:hover {
+	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.2);
+	border-top-color: rgba(255,255,255,0.3);
+}
+*/
+/* end drawer look */
 .profilist-tbb-box {
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
 	display:flex;
 	border-style: solid;
-	border-width: 1px 0;
-	border-color: rgba(24, 25, 26, 0.14) transparent transparent;
+	border-width: 1px 0; /*border top and bottom at 1, left and right at 0*/
+	border-color: rgba(24, 25, 26, 0.14) transparent transparent; /*left, right, bottom: transparent, top is colored*/
 	margin-bottom: -1px;
 	
 	-moz-box-align: center;
@@ -49,11 +83,16 @@
 	transition-property: background-color;
 	max-width: 0;
 }
-.profilist-tbb-box:hover {
+
+#profilist_box .profilist-tbb-box:hover {
 	background-color: hsla(210,4%,10%,.07);
 }
-.profilist-tbb-box:not(.profilist-tbb-box-inactivatable):active {
+#profilist_box .profilist-tbb-box:not(.profilist-tbb-box-inactivatable):active {
 	background-color: hsla(210,4%,10%,.12);
+}
+
+.profilist-tbb-box:not(.profilist-edit) .profilist-input {
+	display: none;
 }
 
 .profilist-tbb {
@@ -128,21 +167,22 @@
 
 /* start submenu for profilist-create*/
 .profilist-create .profilist-submenu  {
+/* clone button*/
 	margin-right: 10px;
-	border-radius: 50%;
+	/*border-radius: 100%;*/
 	margin-top: 2px;
 	margin-bottom: 2px;
-	transition: background-color 150ms, opacity 150ms;
+	transition: /*background-color 150ms, */opacity 150ms;
 	opacity: 0;
 	overflow: hidden;
 	width: 32px;
 }
 .profilist-create .profilist-submenu:hover  {
-	background-color: hsla(210,4%,10%,.06);
+	/*background-color: hsla(210,4%,10%,.06);*/
 	opacity: 1;
 }
 .profilist-create .profilist-submenu:active  {
-	background-color: hsla(210,4%,10%,.12);
+	/*background-color: hsla(210,4%,10%,.12);*/
 	opacity: 1;
 	transition: opacity 150ms;
 }

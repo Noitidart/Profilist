@@ -1194,7 +1194,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				);
 				*/
 				////// copy/modification/strips of block 8752123154
-				var elJson = ['xul:box', {class:['profilist-tbb-box'], status:'active', style:[], top:0}];
+				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable'], status:'active', style:[], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
 				if (sIniKey) {
 					elJson[1].label = ini[sIniKey].props.Name;

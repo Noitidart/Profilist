@@ -1,5 +1,5 @@
-<!ENTITY profilist.options.profilist 'Profilist'>'>
-<!ENTITY profilist.options.control-panel 'Control Panel'>'>
+<!ENTITY profilist.options.profilist 'Profilist'>
+<!ENTITY profilist.options.control-panel 'Control Panel'>
 <!ENTITY profilist.options.title 'Profilist | Control Panel'>
 <!ENTITY profilist.options.general 'General'>
 <!ENTITY profilist.options.automatic-updates 'Automatic Updates'>
@@ -16,3 +16,4 @@
 <!ENTITY profilist.options.developer 'Developer'>
 <!ENTITY profilist.options.firefox-builds 'Firefox Builds'>
 <!ENTITY profilist.options.icon 'Icon'>
+<!ENTITY profilist.options.path-to-executable 'Path to Executable'>
