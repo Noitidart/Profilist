@@ -63,12 +63,12 @@
 	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.28);
 	border-top-color: #fff;
 }
-/* i dont have to worry about hover over the button, as i only give the button after stack this border style when its expanded, and its only expanded when hovered
-#profilist_box ~ toolbarbutton:not([hidden]):last-of-type:hover {
-	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.2);
-	border-top-color: rgba(255,255,255,0.3);
+
+#profilist_box.profilist-hovered ~ toolbarbutton:not([hidden]):last-of-type:hover { /* actually i need this hover, as when im keeping menu expanded during renaming they can hover other things, but no need for :active on it as a click on it will collapse the menu*/
+	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.28);
+	border-top-color: rgba(255,255,255,0.7);
 }
-*/
+
 /* end drawer look */
 .profilist-tbb-box {
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
