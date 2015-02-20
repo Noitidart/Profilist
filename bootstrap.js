@@ -1135,11 +1135,30 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			}
 			*/
 			
-			PStack.addEventListener('mouseenter', function() {
-			
+			PBox.addEventListener('mouseenter', function(e) {
+				e.stopPropagation();
+				expandedheight = PStack.childNodes.length * PUIsync_height;
+				PBox.addEventListener('transitionend', function(e2) {
+					PBox.removeEventListener('transitionend', arguments.callee, false);
+					e2.stopPropagation();
+					console.log('PBox height transed');
+					// start test if overflowing to show custom scroll bar
+					console.info('PUI.boxObject.height:', PUI.boxObject.height);
+					console.info('PBox.boxObject.height:', PBox.boxObject.height);
+					if (PUI.boxObject.height < PBox.boxObject.height) {
+						console.log('need to show scroll bar');
+					} else {
+						console.log('no need 4 scrollbar');
+					}
+					// end test if overflowing to show custom scroll bar
+				}, false);
+				PBox.style.height = expandedheight + 'px';
+				PBox.classList.add('profilist-hovered');
 			}, false);
-			PStack.addEventListener('mouseleave', function() {
-			
+			PBox.addEventListener('mouseleave', function(e) {
+				e.stopPropagation();
+				PBox.style.height = collapsedheight + 'px';
+				PBox.classList.remove('profilist-hovered');
 			}, false);
 	} else {
 		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
