@@ -10,6 +10,7 @@
 #profilist_box {
 	background-repeat: no-repeat;
 	background-position: 0px -30px; /*because the height of the image i set it to is 16px i should be able to set this to -16px, because purpose of background-image from here inherits all the way down to profilist-dev*/
+	overflow:hidden;
 }
 /* end - get the background image from proflist_box to dev-build */
 
@@ -35,9 +36,15 @@
 	overflow:hidden;
 	transition:height 250ms;
 }
-
+/* start deletion handling
+.profilist-tbb-box.profilist-deleting > *{
+	transition: opacity 500ms;
+	opacity: 0 !important;
+	cursor: default;
+}
+/* end deletion handling */
 /* start drawer look */
-.profilist-hovered .profilist-tbb-box[top="0"] { /*current profile*/
+.profilist-hovered .profilist-tbb-box.profilist-cur-profile { /*current profile*/
 	box-shadow: 0 0px 2px 1px #b4b4b4;
 	background-color: rgba(24, 25, 26, 0.07);
 }
@@ -48,7 +55,7 @@
 }
 */
 
-.profilist-hovered .profilist-tbb-box:not([top="0"]) { /*drawer look*/
+.profilist-hovered .profilist-tbb-box:not(.profilist-cur-profile) { /*drawer look*/
 	border-color: rgba(24, 25, 26, 0.04) transparent transparent; /*based on border-color of `.profilist-tbb-box`*/
 	background-color: rgba(24, 25, 26, 0.04);
 }

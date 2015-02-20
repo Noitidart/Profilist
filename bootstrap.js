@@ -1127,7 +1127,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				//console.log('computed PUIsync_height:', computedHeight);
 				console.log('PUIsync_height determined to be = ', PUIsync_height);
 			}
-			
+			PBox.style.height = PUIsync_height + 'px';
 			//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
 			/*
 			aDOMWindow.Profilist.basePNodes = {
@@ -1177,7 +1177,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				
 				//create and add create new profile tbb
 				var elFromJson_createNewProfile = jsonToDOM(
-					['xul:box', {class:'profilist-tbb-box profilist-create', label:myServices.stringBundle.GetStringFromName('create-new-profile'), top:PUIsync_height}]
+					['xul:box', {class:'profilist-tbb-box profilist-create', label:myServices.stringBundle.GetStringFromName('create-new-profile'), top:0}]
 					, aDOMWindow.document
 					, {}
 				);
@@ -1194,7 +1194,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				);
 				*/
 				////// copy/modification/strips of block 8752123154
-				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable'], status:'active', style:[], top:0}];
+				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile'], status:'active', style:['margin-top:0'], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
 				if (sIniKey) {
 					elJson[1].label = ini[sIniKey].props.Name;
@@ -1383,7 +1383,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 									continue;
 								}
 								////// block 8752123154
-								var elJson = ['xul:box', {class:['profilist-tbb-box'], label:objBoot[pb].props.Name, status:'inactive', style:[]}];
+								var elJson = ['xul:box', {class:['profilist-tbb-box'], label:objBoot[pb].props.Name, status:'inactive', style:[], top:'0'}];
 								if ('Default' in objBoot[pb].props && objBoot[pb].props.Default == '1') {
 									elJson[1].isdefault = true;
 								}
@@ -1402,7 +1402,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 								}
 								//elJson[1].style.push('margin-top: ' + (objBoot[pb].num * PUIsync_height) + 'px'); // its stretching it, weird, having to use xul top attr
 								//elJson[1].style.push('height: ' + PUIsync_height + 'px'); //not needed for some reason its auto height is correct
-								elJson[1].top = (getChildNodeI(pb, objBoot, PStack)+1) * PUIsync_height;
+								elJson[1].style.push('margin-top: ' + ((getChildNodeI(pb, objBoot, PStack)+1) * PUIsync_height) + 'px');//elJson[1].top = (getChildNodeI(pb, objBoot, PStack)+1) * PUIsync_height;
 								elJson[1].class = elJson[1].class.join(' ');
 								elJson[1].style = elJson[1].style.join('; ');
 								var elFromJson = jsonToDOM(	// make jsonToDOM of objBoot[pb].props
@@ -1429,7 +1429,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				if (pwAdded.length > 0 || pwRemoved.length > 0) {
 					//re-calc margin-top's
 					//adjust top of create-new-profile
-					PStack.childNodes[PStack.childNodes.length-2].setAttribute('top', (PStack.childNodes.length - 1) * PUIsync_height); //PStack.childNodes.length-2 is create new profile and -1 is currentProfile
+					PStack.childNodes[PStack.childNodes.length-2].style.marginTop = ((PStack.childNodes.length - 1) * PUIsync_height) + 'px'; //PStack.childNodes[PStack.childNodes.length-2].setAttribute('top', (PStack.childNodes.length - 1) * PUIsync_height); //PStack.childNodes.length-2 is create new profile and -1 is currentProfile
 				}
 				//ok done
 			} else { // close if objWin objBoot str compairson
