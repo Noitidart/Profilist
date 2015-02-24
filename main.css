@@ -143,6 +143,19 @@
 	transition: opacity 0.5s ease 0.5s; /*link651432 reverse of ZED but more delay here than delay on opacity in complement*/
 }
 
+/* start - clicked so force it */
+.profilist-tbb-box.profilist-in-badge-change .profilist-tbb .toolbarbutton-icon {
+	transition: opacity 0.5s ease !important; /* make it immediate */
+	opacity: 0 !important;
+}
+
+.profilist-tbb-box.profilist-in-badge-change .profilist-tbb .toolbarbutton-icon + image {
+	transform: translate(-9px, -1px) scale(16) !important; /*this transforms to be exactly over the toolbarbutton-icon*/
+	transition: opacity 0.5s, transform 0.5s ease  !important; /*link987436154 reverse of ABC*/
+	opacity: 1 !important;
+}
+/* end - clicked so force it */
+
 .profilist-tbb-box:not([badge]) .profilist-badge {
 	opacity: 0;
 }

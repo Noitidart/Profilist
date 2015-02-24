@@ -69,7 +69,7 @@ var encoder = 0;
 var iniStr_thatAffectDOM = '';
 var iniObj_thatAffectDOM = {};
 //learned: that if StartWithLastProfile=1 then profile manager/startup obeys the Default=1 but note that Default=1 is never removed
-var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name', 'Profilist.tie']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name', 'Profilist.tie', 'Profilist.badge']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
 /*
 //keys that i add to thatAffectDOM object:
 num - outside of props // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
@@ -1208,6 +1208,17 @@ function initProfToolkit() {
 	// C:\Users\ali57233\AppData\Local\Mozilla\Firefox\Profiles\ncc90nnv.default
 	*/
 }
+
+function updateOnPanelHid(e) {
+	// do these actions on hid because like if we dont close it, then if user goes to customize, then it remains open blah blah ya
+	console.log('execing updateOnPanelHid, e:', e);
+	if (e.target.id != 'PanelUI-popup') { return }
+	
+	var DOMWin = e.view;
+	DOMWin.Profilist.PBox.style.height = collapsedheight + 'px';
+	DOMWin.Profilist.PBox.classList.remove('profilist-hovered');
+}
+
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	//does not fire when entering customize mode
 	
@@ -1299,6 +1310,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			}, false);
 			PBox.addEventListener('mouseleave', function(e) {
 				e.stopPropagation();
+				if (PBox.classList.contains('profilist-keep-open')) { return }
 				PBox.style.height = collapsedheight + 'px';
 				PBox.classList.remove('profilist-hovered');
 			}, false);
@@ -1371,7 +1383,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 							console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', ini[sIniKey].props['Profilist.tie'], 'sIniKey:', sIniKey);
 							throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + ini[sIniKey].props['Profilist.tie'] + ' ' + 'sIniKey:' + ' ' + sIniKey;
 						}
-					}	
+					}
+					if ('Profilist.badge' in ini[sIniKey].props) {
+						elJson[1].badge = getPathToBadge(ini[sIniKey].props['Profilist.badge'], 16);
+					}
 					elJson[1].class = elJson[1].class.join(' ');
 					elJson[1].style = elJson[1].style.join('; ');
 				} else {
@@ -1443,12 +1458,24 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 						function pp_to_attr(pp) {
 							var dict = {
 								'Name': 'label',
-								'Default': 'isdefault'
+								'Default': 'isdefault',
+								'Profilist.badge': 'badge'
 							};
 							if (dict[pp]) {
 								return dict[pp];
 							} else {
 								return pp;
+							}
+						}
+						
+						function process_attr_of(pp, attr) {
+							var dict = {
+								'Profilist.badge': function() { return getPathToBadge(attr, '16'); }
+							};
+							if (dict[pp]) {
+								return dict[pp]();
+							} else {
+								return attr;
 							}
 						}
 						
@@ -1464,7 +1491,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 								if (ppChanged[i].pp == 'Profilist.tie') {
 									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
 								} else {
-									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
+									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), process_attr_of(ppChanged[i].pp, ppChanged[i].now));
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1474,18 +1501,18 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 						}
 						for (var i=0; i<ppRemoved.length; i++) {
 							if (pw == 'General') {
-								if (ppChanged[i].pp == 'Profilist.currentThisBuildsIconPath') {
+								if (ppRemoved[i].pp == 'Profilist.currentThisBuildsIconPath') {
 									PBox.style.backgroundImage = '';
 								} else if (pp == 'Profilist.defaultProfilePath') {
 									PBox.removeAttribute('defaultProfilePath');
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
-								if (ppChanged[i].pp == 'Profilist.tie') {
+								if (ppRemoved[i].pp == 'Profilist.tie') {
 									PStack.childNodes[childNodeI].classList.remove('profilist-tied');
 									PStack.childNodes[childNodeI].style.backgroundImage = '';
 								} else {
-									PStack.childNodes[childNodeI].removeAttribute(pp_to_attr(ppRemoved.pp));
+									PStack.childNodes[childNodeI].removeAttribute(pp_to_attr(ppRemoved[i].pp));
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1495,18 +1522,21 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 						}
 						for (var i=0; i<ppAdded.length; i++) {
 							if (pw == 'General') {
-								if (ppChanged[i].pp == 'Profilist.currentThisBuildsIconPath') {
-									PBox.style.backgroundImage = 'url("' + ppChanged[i].now + '")';
+								if (ppAdded[i].pp == 'Profilist.currentThisBuildsIconPath') {
+									PBox.style.backgroundImage = 'url("' + ppAdded[i].now + '")';
 								} else if (pp == 'Profilist.defaultProfilePath') {
-									PBox.setAttribute('defaultProfilePath', ppChanged[i].now);
+									PBox.setAttribute('defaultProfilePath', ppAdded[i].now);
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
-								if (ppChanged[i].pp == 'Profilist.tie') {
+								if (ppAdded[i].pp == 'Profilist.tie') {
 									PStack.childNodes[childNodeI].classList.add('profilist-tied');
-									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
+									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppAdded[i].now) + '")';
 								} else {
-									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), ppChanged[i].now);
+									if (ppAdded[i].pp == 'Profilist.badge') {
+										console.error('YESS ITS HERE:', uneval(ppAdded[i]));
+									}
+									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppAdded[i].pp), process_attr_of(ppAdded[i].pp, ppAdded[i].now));
 								}
 							} else {
 								console.warn('pw/pp combination is unrecognized', 'pw:', pw, 'pp:', pp);
@@ -1557,7 +1587,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 										console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
 										throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
 									}
-								}	
+								}
+								if ('Profilist.badge' in objBoot[pb].props) {
+									elJson[1].badge = getPathToBadge(objBoot[pb].props['Profilist.badge'], 16);
+								}
 								if (profToolkit.selectedProfile.iniKey && pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
 									elJson.status = 'active';
 								}
@@ -2771,6 +2804,7 @@ function tbb_box_click(e) {
 	console.log('tbb_box_click e.origTarg:', e.originalTarget);
 	var origTarg = e.originalTarget;
 	var box = e.target;
+	var targetedTBB = e.target;
 	console.log('clicked target == box it should:', box);
 	var className;
 	var classList = origTarg.classList;
@@ -2909,6 +2943,53 @@ function tbb_box_click(e) {
 			console.log('should prevent closing of menu - change badge');
 			//e.stopPropagation();  //just need preventDefault to stop panel from closing on click
 			e.preventDefault();
+			
+			var targetedProfileName = targetedTBB.getAttribute('label');
+			targetedTBB.classList.add('profilist-in-badge-change');
+			console.log('targetedProfileName:', targetedProfileName);
+			
+			var PUI = origTarg.ownerDocument.defaultView.PanelUI.panel;
+			PUI.addEventListener('popuphiding', keepPuiShowing, false);
+			
+			origTarg.ownerDocument.defaultView.Profilist.PBox.classList.add('profilist-keep-open');
+			
+			Services.prompt.alert(origTarg.ownerDocument.defaultView, 'Profilist - Badging Process', 'You are on Mac OS X, ideally you should multi-select from the upcoming file dialog, 7 images. They should each be a square image of sizes 16px, 32px, 64px, 128px, 256px, and 512px. Only the 16px will be shown in the Firefox Profilist menu, but the other sizes will be used for generating badged icons for shortcuts. If a match for the size needed is not found, then the nearest sized one is scaled, this will lead to reduced quality on the scaled images. So supply high quality images of each image if you can.');
+			var promise_doBadgeProc = showPick4Badging(origTarg.ownerDocument.defaultView);
+			
+			var postPromise = function() {
+				origTarg.ownerDocument.defaultView.Profilist.PBox.classList.remove('profilist-keep-open');
+				PUI.removeEventListener('popuphiding', keepPuiShowing, false);
+				targetedTBB.classList.remove('profilist-in-badge-change');
+			};
+			
+			promise_doBadgeProc.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_doBadgeProc - ', aVal);
+					// start - do stuff here - promise_doBadgeProc
+					//Services.prompt.alert(null, '', aVal + '_16.png');
+					for (var k in ini) {
+						if ('num' in ini[k] && ini[k].props.Name == targetedProfileName) {
+							ini[k].props['Profilist.badge'] = aVal;
+							break;
+						}
+					}
+					targetedTBB.setAttribute('badge', getPathToBadge(ini[k].props['Profilist.badge'], '16'));
+					writeIniAndBkp();
+					postPromise();
+					// end - do stuff here - promise_doBadgeProc
+				},
+				function(aReason) {
+					var refObj = {name:'promise_doBadgeProc', aReason:aReason};
+					console.warn('Rejected - promise_doBadgeProc - ', refObj);
+					postPromise();
+				}
+			).catch(
+				function(aCaught) {
+					var refObj = {name:'promise_doBadgeProc', aCaught:aCaught};
+					console.error('Caught - promise_doBadgeProc - ', refObj);
+					postPromise();
+				}
+			);
 		}
 	};
 	
@@ -2937,6 +3018,14 @@ function tbb_box_click(e) {
 	}
 	
 	classAction[className]();
+}
+
+function keepPuiShowing(e) {
+	console.log('keepPuiShowing, e:', e);
+	var PUI = e.target.ownerDocument.defaultView.PanelUI.panel;
+	PUI.style.opacity = 1;
+	e.stopPropagation();
+	e.preventDefault();
 }
 
 var tieOnEnter = '';
@@ -3210,6 +3299,7 @@ var windowListener = {
 			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet //NOTE: IMPORTANT: Intermittently this errors, it says illegal value, but when i dump cssUri value its this: `"jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/main.css"` SO i changed cssUri = to self.chrome_path INSTEAD of `self.aData.resourceURI.spec` ill see how that works out ACTUALLY event with chrome_path its doing the same but only on second and after, meaning its not getting unregistered on uninstall
 			
 			pnl.addEventListener('popupshowing', updateOnPanelShowing, false);
+			pnl.addEventListener('popuphidden', updateOnPanelHid, false);
 			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
 //			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
@@ -4226,6 +4316,267 @@ function cpClientListener(aSubject, aTopic, aData) {
 }
 /* end - control panel server/client communication */
 
+// start - file picker for changing badge
+var getPathToBadge_templateFileUri;
+var getPathToBadge_templatePlatformPath;
+var getPathToBadge_seperator;
+function getPathToBadge(uniqueName, size, pathType) {
+	if (!getPathToBadge_templatePlatformPath) {
+		getPathToBadge_templatePlatformPath = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', 'UNIQUE____NAME', 'UNIQUE____NAME');
+		getPathToBadge_templateFileUri = OS.Path.toFileURI(getPathToBadge_templatePlatformPath);
+	}
+	if (!pathType) {
+		//return fileuri
+		return getPathToBadge_templateFileUri.replace(/UNIQUE____NAME/g, uniqueName) + '_' + size + '.png';
+	} else {
+		//return platform path
+		return getPathToBadge_templatePlatformPath.replace(/UNIQUE____NAME/g, uniqueName) + '_' + size + '.png';
+	}
+}
+function showPick4Badging(win) {
+	// returns promise
+	// if badge succesfully made, it resolves to the uniqueName, get a path to it like this: OS.Path.toFileURI(OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', aVal, aVal + '_16.png')) NO LONGER THIS: `with the platform path without ext or size. so to use it append a _SIZE.png`
+	var deferred_mainnnn = new Deferred();
+	var deferred_badgeProcess;
+	
+	var msgsToUser = [];
+	var reqdSizes = [16, 32, 64, 128, 256, 512]; //for mac
+	var uniqueName = new Date().getTime() + '';
+	var destPathBase = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'badge_iconsets', uniqueName, uniqueName); //without the extensions
+	var fromPathBase = OS.Constants.Path.userApplicationDataDir; // for dir recurse
+	var fileUri_to_platformPath = {};
+	// load imgs, if any error, notify user
+		// do OS.File.copy on paths of images that meet exact size
+		// scale the ones that dont meet exact size from nearestSized then OS.File.writeAtomic, and keep a record of this, i want to notify user that badges were made but X Y and Z had to be scaled so suffer suboptimal quality
+	var collectionImgs = {}; // with key equal to size
+	
+	// start - setup image load stuff
+	var handleImgLoad = function(refDeffered) {
+		var img = this;
+		var platformPath = fileUri_to_platformPath[img.src];
+		var imgBaseName = OS.Path.basename(platformPath);
+		
+		if (this.naturalHeight != this.naturalWidth) {
+			msgsToUser.push('Did not use "' + imgBaseName + '" as it is unsquare, image must have same height and width.');
+		} else if (this.naturalHeight in collectionImgs) {
+			var alreadyExistingImgBaseName = OS.Path.basename(fileUri_to_platformPath[collectionImgs[this.naturalHeight].Image.src]);
+			msgsToUser.push('Did not use "' + imgBaseName + '" has same size as "' + alreadyExistingImgBaseName + '".');
+		} else {
+			collectionImgs[this.naturalHeight] = {
+				platformPath: platformPath,
+				Image: img
+			};
+		}
+		
+		refDeffered.resolve('Loaded: "' + img.src + '"');
+	};	
+	var handleImgAbort = function(refDeffered) {
+		var img = this;
+		var imgBaseName = OS.Path.basename(OS.Path.fromFileURI(img.src));
+		msgsToUser.push('Could not use "' + imgBaseName + '" as image load was unexpectedly aborted.');
+		refDeffered.resolve('Unexpected abortion on : "' + img.src + '"');
+	};	
+	var handleImgError = function(refDeffered) {
+		var img = this;
+		var imgBaseName = OS.Path.basename(OS.Path.fromFileURI(img.src));
+		msgsToUser.push('Did not use "' + imgBaseName + '" as it failed to load, ensure the file is an image and not corrupt.');
+		refDeffered.resolve('Unexpected error on : "' + img.src + '"');
+	};
+	
+	var loadImgAndSaveData = function(platformPath) {
+		var deferred_loadImgAndSaveData = new Deferred();
+		var img = new Services.appShell.hiddenDOMWindow.Image();
+		
+		img.onload = handleImgLoad.bind(img, deferred_loadImgAndSaveData);
+		img.onabort = handleImgAbort.bind(img, deferred_loadImgAndSaveData);
+		img.onerror = handleImgError.bind(img, deferred_loadImgAndSaveData);
+		
+		var fileUri = OS.Path.toFileURI(platformPath);
+		fileUri_to_platformPath[fileUri/*.toLowerCase()*/] = platformPath; //note: may need to lower case it, im not sure, it depdns on after load if it maintins the same casing, as i use it to get matching in fileUri_to_platformPath object
+		img.src = fileUri;
+		
+		return deferred_loadImgAndSaveData.promise;
+	};
+	// end - setup image load stuff
+	
+	// start - setup blobAndWrite
+	var blobCallback = function(path_to_save_at, refDeferred, blob) {
+        var reader = Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader); //new FileReader();
+        reader.onloadend = function() {
+            // reader.result contains the ArrayBuffer.			
+			var arrview = new Uint8Array(reader.result);
+			
+			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp', encoding:'utf-8'}], fromPathBase);
+
+			promise_writeArrView.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAllArr_writePngs - ', aVal);
+					// start - do stuff here - promiseAllArr_writePngs
+					refDeferred.resolve('Saved blob to png: "' + OS.Path.basename(path_to_save_at) + '"');
+					// end - do stuff here - promiseAllArr_writePngs
+				},
+				function(aReason) {
+					var refObj = {name:'promiseAllArr_writePngs.promise', aReason:aReason};
+					console.warn('Rejected - promiseAllArr_writePngs - ', refObj);
+					refDeferred.reject(refObj);
+				}
+			).catch(
+				function(aCaught) {
+					var refObj = {name:'promiseAllArr_writePngs', aCaught:aCaught};
+					console.error('Caught - promiseAllArr_writePngs - ', refObj);
+					refDeferred.reject(refObj);
+				}
+			);
+        };
+		reader.onabort = function() {
+			refDeferred.reject('Abortion on nsIDOMFileReader, failed reading blob for saving: "' + OS.Path.basename(path_to_save_at) + '"');
+		};
+		reader.onerror = function() {
+			refDeferred.reject('Error on nsIDOMFileReader, failed reading blob for saving: "' + OS.Path.basename(path_to_save_at) + '"');
+		};
+        reader.readAsArrayBuffer(blob);
+	};
+	// end - setup blobAndWrite
+	
+	// start - copy to badge_iconsets folder
+	var scaleAndWriteAll = function() {
+		var promiseAllArr_scaleAndWriteAll = [];
+		
+		for (var i=0; i<reqdSizes.length; i++) {
+			var canvas = Services.appShell.hiddenDOMWindow.document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+			var ctx = canvas.getContext('2d');
+			canvas.width = reqdSizes[i];
+			canvas.height = reqdSizes[i];
+			//ctx.clearRect(0, 0, reqdSizes[i], reqdSizes[i]);
+			
+			var destPath = destPathBase + '_' + reqdSizes[i] + '.png';
+			
+			var nearestImg = getImg_of_exactOrNearest_Bigger_then_Smaller(reqdSizes[i], collectionImgs);
+			if (nearestImg.naturalHeight == reqdSizes[i]) {
+				console.log('nearest found is exact of required size, so no need for scalling. just OS.File.copy this image. required size:', reqdSizes[i], 'nearest size:', nearestImg.naturalHeight);
+				//promiseAllArr_scaleAndWriteAll.push(tryOsFile_ifDirsNoExistMakeThenRetry('copy', [fileUri_to_platformPath[nearestImg.src], destPath, {tmpPath:destPath+'.tmp', encoding:'utf-8'}], fromPathBase));
+				// i dont do the copy anymore, as the file may not be a png, we want to draw and save it as a png
+				ctx.drawImage(nearestImg, 0, 0);
+			} else {
+				console.log('nearest found is not exact of required size, so scalling. required size:', reqdSizes[i], 'nearest size:', nearestImg.naturalHeight);
+				ctx.drawImage(nearestImg, 0, 0, reqdSizes[i], reqdSizes[i]);
+				
+				msgsToUser.push('Exact match for size of ' + reqdSizes[i] + ' was not available among files you selected, therefore the image for this size was scaled from "' + OS.Path.basename(fileUri_to_platformPath[nearestImg.src]) + '" which was had a size of ' + nearestImg.naturalHeight + 'px');
+			}			
+			var deferred_blobAndWriteScaled = new Deferred();
+			promiseAllArr_scaleAndWriteAll.push(deferred_blobAndWriteScaled.promise);
+			(canvas.toBlobHD || canvas.toBlob).call(canvas, blobCallback.bind(null, destPath, deferred_blobAndWriteScaled), 'image/png');						
+		}
+		
+		var promiseAll_scaleAndWriteAll = Promise.all(promiseAllArr_scaleAndWriteAll);
+		promiseAll_scaleAndWriteAll.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_scaleAndWriteAll - ', aVal);
+				// start - do stuff here - promiseAll_scaleAndWriteAll
+				msgsToUser.splice(0, 0, 'Successfully created iconset of this badge!\n');
+				deferred_badgeProcess.resolve('Badges succesfully saved to iconset folder');
+				// end - do stuff here - promiseAll_scaleAndWriteAll
+			},
+			function(aReason) {
+				var refObj = {name:'promiseAll_scaleAndWriteAll', aReason:aReason};
+				console.warn('Rejected - promiseAll_scaleAndWriteAll - ', refObj);
+				deferred_badgeProcess.reject(refObj);
+			}
+		).catch(
+			function(aCaught) {
+				var refObj = {name:'promiseAll_scaleAndWriteAll', aCaught:aCaught};
+				console.error('Caught - promiseAll_scaleAndWriteAll - ', refObj);
+				deferred_badgeProcess.reject(refObj);
+			}
+		);
+	};
+	// end - copy to badge_iconsets folder
+	var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
+	fp.init(win, 'Profilist - Select Badge Images', Ci.nsIFilePicker.modeOpenMultiple);
+	fp.appendFilters(Ci.nsIFilePicker.filterImages);
+
+	var startDir = Services.dirsvc.get('UAppData', Ci.nsIFile);
+	startDir.append('profilist_data');
+	startDir.append('badge_iconsets'); //OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'badge_iconsets');
+	//console.log('the path:', startDir.path, startDir.exists());
+	fp.displayDirectory = startDir;
+
+	var rv = fp.show();
+	if (rv == Ci.nsIFilePicker.returnOK) {
+		deferred_badgeProcess = new Deferred();
+		deferred_badgeProcess.promise.then(
+			function(aVal) {
+				console.log('Fullfilled - deferred_badgeProcess - ', aVal);
+				// start - do stuff here - deferred_badgeProcess
+				if (msgsToUser.length > 0) {
+					Services.prompt.alert(win, 'Profilist - Badging Successful', msgsToUser.join('\n'));
+				}
+				deferred_mainnnn.resolve(uniqueName);
+				// end - do stuff here - deferred_badgeProcess
+			},
+			function(aReason) {
+				var refObj = {name:'deferred_badgeProcess', aReason:aReason};
+				console.warn('Rejected - deferred_badgeProcess - ', refObj);
+				if (msgsToUser.length >0) {
+					Services.prompt.alert(win, 'Profilist - Badging Failed', msgsToUser.join('\n'));
+				}
+				deferred_mainnnn.reject('rejected');
+			}
+		).catch(
+			function(aCaught) {
+				var refObj = {name:'deferred_badgeProcess', aCaught:aCaught};
+				console.error('Caught - deferred_badgeProcess - ', refObj);
+				if (msgsToUser.length >0) {
+					Services.prompt.alert(win, 'Profilist - Badging Errored', msgsToUser.join('\n'));
+				}
+				deferred_mainnnn.resolve('errored');
+			}
+		);
+		var files = fp.files;
+		console.log('files:', files);
+
+		var promiseAllArr_loadAllImgs = [];
+		while (files.hasMoreElements()) {
+			var aFile = files.getNext().QueryInterface(Ci.nsIFile);
+			console.log('aFile:', aFile.path);
+
+			// go through images, and see what all sizes they have
+			promiseAllArr_loadAllImgs.push(loadImgAndSaveData(aFile.path));
+		}
+		var promiseAll_loadAllImgs = Promise.all(promiseAllArr_loadAllImgs);
+		promiseAll_loadAllImgs.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_loadAllImgs - ', aVal);
+				// start - do stuff here - promiseAll_loadAllImgs
+				if (Object.keys(collectionImgs).length == 0) {
+					msgsToUser.splice(0, 0, 'No badge images created all, as out of the files selected files, none were suitable for image creation.\n');
+					deferred_badgeProcess.reject('No badge images created all, as out of the files selected files, none were suitable for image creation.');
+				} else {
+					scaleAndWriteAll();
+				}
+				// end - do stuff here - promiseAll_loadAllImgs
+			},
+			function(aReason) {
+				var refObj = {name:'promiseAll_loadAllImgs', aReason:aReason};
+				console.warn('Rejected - promiseAll_loadAllImgs - ', refObj);
+				deferred_badgeProcess.reject('Should never get here, I never reject it');
+			}
+		).catch(
+			function(aCaught) {
+				var refObj = {name:'promiseAll_loadAllImgs', aCaught:aCaught};
+				console.error('Caught - promiseAll_loadAllImgs - ', refObj);
+				msgsToUser.splice(0, 0, 'Error during code exectuion, this one is fault of developer.\n');
+				deferred_badgeProcess.reject('Error during code exectuion, this one is fault of developer.');
+			}
+		);
+	} else {
+		deferred_mainnnn.resolve('canceled picker');
+	}
+	
+	return deferred_mainnnn.promise;
+}
+// end - file picker for changing badge
+
 function startup(aData, aReason) {
 //	console.log('in startup');
 	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
@@ -4332,6 +4683,64 @@ function uninstall(aData, aReason) {
 	//end pref stuff more
 }
 
+// start - custom to profilist helper functions
+function getImg_of_exactOrNearest_Bigger_then_Smaller(targetSize, objOfImgs) {
+	// objOfImgs should be an object with key's representing the size of the image. images are expected to be square. so size is == height == width of image
+	// objOfImgs should hvae the Image() loaded in objOfImgs[k].Image
+	// finds and returns the image which matches targetSize, if not found then it returns the image in objOfImgs that is immediately bigger, if nothing bigger, then returns what it is immediately smaller
+	
+	//objOfImgs should have key of the size of the image. the size of the img should be square. and each item should be an object of {Image:Image()}			
+	var nearestDiff;
+	var nearestKey;
+	for (var k in objOfImgs) {
+		var cDiff = k - targetSize;
+		if (cDiff === 0) {
+			nearestKey = k;
+			nearestDiff = 0;
+			break;
+		} else if (nearestKey === undefined) {
+			nearestKey = k;
+			nearestDiff = cDiff;					
+		} else if (cDiff < 0) {
+			// k.Image is smaller then targetSize
+			if (nearestDiff > 0) {
+				// already have a key of something bigger than targetSize so dont take this to holder, as k.Image a smaller
+			} else {
+				// then nearestDiff in holder is something smaller then targetSize
+				// take to holder if this is closer to 0 then nearestDiff
+				if (cDiff - targetSize < nearestDiff - targetSize) {
+					nearestDiff = cDiff;
+					nearestKey = k;
+				}
+			}
+		} else {
+			// cDiff is > 0
+			if (nearestDiff < 0) {
+				// the current in holder is a smaller then targetSize, so lets take this one as its a bigger
+				nearestDiff = cDiff;
+				nearestKey = k;
+			} else {
+				//nearestDiff is positive, and so is cDiff // being positive means that the k.thatKey is bigger then targetSize
+				//take the key of whichever is closer to target, so whichever is smaller
+				if (cDiff < nearestDiff) {
+					nearestDiff = cDiff;
+					nearestKey = k;
+				}
+			}
+			// bigger then targetSize takes priority so always take it, if its closer then nearestDiff in holder
+			if (cDiff - targetSize < nearestDiff - targetSize) {
+				nearestDiff = cDiff;
+				nearestKey = k;
+			}					
+		}
+	}
+	
+	console.log('the nearest found is of size: ', nearestKey, 'returning img:', objOfImgs[nearestKey].Image.toString());
+	
+	return objOfImgs[nearestKey].Image;
+}
+// end - custom to profilist helper functions
+
 // start - common helper functions
 function Deferred() {
 	if (Promise.defer) {
@@ -4376,10 +4785,12 @@ function makeDir_Bug934283(path, options) {
 	// for example: path should be: `OS.Path.join('C:', 'thisDirExistsForSure', 'may exist', 'may exist2')`, and `from` should be `OS.Path.join('C:', 'thisDirExistsForSure')`
 
 	if (!('from' in options)) {
+		console.error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
 		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
 	}
 
 	if (path.toLowerCase().indexOf(options.from.toLowerCase()) == -1) {
+		console.error('The `from` string was not found in `path` string');
 		throw new Error('The `from` string was not found in `path` string');
 	}
 
@@ -4417,9 +4828,9 @@ function makeDir_Bug934283(path, options) {
 			}
 		).catch(
 			function(aCaught) {
-				var refObj = {name:'promise_makeDir', aCaught:aCaught};
-				console.error('Caught - promise_makeDir - ', refObj);
-				deferred_makeDir_Bug934283.reject(refObj); // throw aCaught;
+				var rejObj = {name:'promise_makeDir', aCaught:aCaught};
+				console.error('Caught - promise_makeDir - ', rejObj);
+				deferred_makeDir_Bug934283.reject(rejObj); // throw aCaught;
 			}
 		);
 	};
@@ -4439,7 +4850,7 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 	if (['writeAtomic', 'copy'].indexOf(nameOfOsFileFunc) == -1) {
 		deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
 		// not supported because i need to know the source path so i can get the toDir for makeDir on it
-		return; //just to exit further execution
+		return deferred_tryOsFile_ifDirsNoExistMakeThenRetry.promise; //just to exit further execution
 	}
 	
 	// setup retry
@@ -4451,15 +4862,15 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('retryAttempt succeeded');
 			},
 			function(aReason) {
-				var refObj = {name:'promise_retryAttempt', aReason:aReason};
-				console.warn('Rejected - promise_retryAttempt - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
+				var rejObj = {name:'promise_retryAttempt', aReason:aReason};
+				console.warn('Rejected - promise_retryAttempt - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
 			}
 		).catch(
 			function(aCaught) {
-				var refObj = {name:'promise_retryAttempt', aCaught:aCaught};
-				console.error('Caught - promise_retryAttempt - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
+				var rejObj = {name:'promise_retryAttempt', aCaught:aCaught};
+				console.error('Caught - promise_retryAttempt - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); // throw aCaught;
 			}
 		);
 	};
@@ -4487,21 +4898,21 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 				retryIt();
 			},
 			function(aReason) {
-				var refObj = {name:'promise_makeDirsRecurse', aReason:aReason};
-				console.warn('Rejected - promise_makeDirsRecurse - ', refObj);
+				var rejObj = {name:'promise_makeDirsRecurse', aReason:aReason};
+				console.warn('Rejected - promise_makeDirsRecurse - ', rejObj);
 				if (aReason.becauseNoSuchFile) {
 					console.log('make dirs then do retryAttempt');
 					makeDirs();
 				} else {
 					// did not get becauseNoSuchFile, which means the dirs exist (from my testing), so reject with this error
-					deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
+					deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
 				}
 			}
 		).catch(
 			function(aCaught) {
-				var refObj = {name:'promise_makeDirsRecurse', aCaught:aCaught};
-				console.error('Caught - promise_makeDirsRecurse - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
+				var rejObj = {name:'promise_makeDirsRecurse', aCaught:aCaught};
+				console.error('Caught - promise_makeDirsRecurse - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); // throw aCaught;
 			}
 		);
 	};
@@ -4514,20 +4925,20 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('initialAttempt succeeded');
 		},
 		function(aReason) {
-			var refObj = {name:'promise_initialAttempt', aReason:aReason};
-			console.warn('Rejected - promise_initialAttempt - ', refObj);
+			var rejObj = {name:'promise_initialAttempt', aReason:aReason};
+			console.warn('Rejected - promise_initialAttempt - ', rejObj);
 			if (aReason.becauseNoSuchFile) {
 				console.log('make dirs then do secondAttempt');
 				makeDirs();
 			} else {
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
 			}
 		}
 	).catch(
 		function(aCaught) {
-			var refObj = {name:'promise_initialAttempt', aCaught:aCaught};
-			console.error('Caught - promise_initialAttempt - ', refObj);
-			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
+			var rejObj = {name:'promise_initialAttempt', aCaught:aCaught};
+			console.error('Caught - promise_initialAttempt - ', rejObj);
+			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); // throw aCaught;
 		}
 	);
 	
