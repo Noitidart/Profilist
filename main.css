@@ -43,6 +43,7 @@
 	cursor: default;
 }
 /* end deletion handling */
+
 /* start drawer look */
 .profilist-hovered .profilist-tbb-box.profilist-cur-profile { /*current profile*/
 	box-shadow: 0 0px 2px 1px #b4b4b4;
@@ -77,6 +78,7 @@
 }
 
 /* end drawer look */
+
 .profilist-tbb-box {
 	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
 	display:flex;
@@ -129,8 +131,32 @@
 }
 
 /*start - badge*/
+/* start - custom badging */
+.profilist-tbb-box[status] .profilist-tbb .profilist-badge {
+	list-style-image: url(chrome://mozapps/skin/places/defaultFavicon.png);
+	transform: translate(-2px, 6px) scale(10);
+	transition: opacity 0.5s ease 1s, transform 0.5s; /*link987436154 reverse of ABC*/
+	pointer-events: none;
+}
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon:hover {
+	opacity: 0;
+	transition: opacity 0.5s ease 0.5s; /*link651432 reverse of ZED but more delay here than delay on opacity in complement*/
+}
+
+.profilist-tbb-box:not([badge]) .profilist-badge {
+	opacity: 0;
+}
+
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon:hover + image {
+	transform: translate(-9px, -1px) scale(16); /*this transforms to be exactly over the toolbarbutton-icon*/
+	opacity: 1;
+	transition: opacity 0.5s, transform 0.5s ease 0.5s; /*link987436154 reverse of ABC*/
+}
+/* end - custom badging */
 .profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon {
 	cursor: pointer;
+	opacity: 1;
+	transition: opacity 0.5s; /*link651432 reverse of ZED*/
 }
 
 .profilist-tbb-box .profilist-tbb .profilist-badge {

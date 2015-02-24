@@ -456,7 +456,7 @@ current builds icon if dev mode is enabled
 				console.error('Caught - promise_readIni - ', aCaught);
 				// throw aCaught;
 			}
-		);;
+		);
 		//end - read the ini file and if needed read the bkp to create the ini object
 		return promise_readIniAndParseObjs.promise;
 }
@@ -628,7 +628,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			}
 			
 			// generate folder path to create based on theProfileName
-			var theDirName = saltName(theProfileName.replace(/([\\*:?<>|\/\"])/g, '%'); // ensure the folder name generated based on theProfileName works on the os file directory system
+			var theDirName = saltName(theProfileName.replace(/([\\*:?<>|\/\"])/g, '%')); // ensure the folder name generated based on theProfileName works on the os file directory system
 			var theRootPath;
 			var theLocalPath;
 			if (!absolutProfile_pathToParentDir) {
