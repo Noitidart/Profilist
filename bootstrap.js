@@ -34,12 +34,11 @@ Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/Promise.jsm');
-Cu.import('resource://gre/modules/PromiseUtils.jsm');
+//Cu.import('resource://gre/modules/PromiseUtils.jsm');
 Cu.import('resource://gre/modules/AddonManager.jsm');
 //XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
 XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
-XPCOMUtils.defineLazyGetter(myServices, 'dsp', function () { return Cc['@mozilla.org/file/directory_service;1'].getService(Ci.nsIProperties) });
 XPCOMUtils.defineLazyGetter(myServices, 'stringBundle', function () { return Services.strings.createBundle('chrome://profilist/locale/bootstrap.properties?' + Math.random()) /* Randomize URI to work around bug 719376 */ });
 
 var PromiseWorker;
@@ -1131,11 +1130,11 @@ function initProfToolkit() {
 		} //reference to the profiles object but to the current profile in the profiles object
 	};
 	
-	profToolkit.exePath = myServices.dsp.get('XREExeF', Ci.nsIFile).path;
+	profToolkit.exePath = Services.dirsvc.get('XREExeF', Ci.nsIFile).path;
 	profToolkit.exePathLower = profToolkit.exePath.toLowerCase();
-	profToolkit.rootPathDefault =  myServices.dsp.get('DefProfRt', Ci.nsIFile).path; //FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
+	profToolkit.rootPathDefault =  Services.dirsvc.get('DefProfRt', Ci.nsIFile).path; //FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
 //	console.log('initProfToolkit 1');
-	profToolkit.localPathDefault = myServices.dsp.get('DefProfLRt', Ci.nsIFile).path //FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
+	profToolkit.localPathDefault = Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path //FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
 //	console.log('initProfToolkit 2');
 
 	profToolkit.selectedProfile.rootDirPath = OS.Constants.Path.profileDir;
