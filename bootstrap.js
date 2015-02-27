@@ -4496,7 +4496,7 @@ function makeLauncher(for_ini_key, ch_name) {
 				function(aVal) {
 					console.log('Fullfilled - promiseAll_makeLauncherDirAndFiles - ', aVal);
 					// start - do stuff here - promiseAll_makeLauncherDirAndFiles
-					deferred_makeLauncherDirAndFiles.resolve('ya');
+					deferred_makeLauncherDirAndFiles.resolve('finished writing mod plist and aliases');
 					// end - do stuff here - promiseAll_makeLauncherDirAndFiles
 				},
 				function(aReason) {
@@ -4684,13 +4684,13 @@ function makeLauncher(for_ini_key, ch_name) {
 					function(aReason) {
 						var rejObj = {name:'promise_makeTopLevelDirs', aReason:aReason};
 						console.warn('Rejected - promise_makeTopLevelDirs - ', rejObj);
-						deferred_makeLauncher.reject(rejObj);
+						deferred_makeLauncherDirAndFiles.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_makeTopLevelDirs', aCaught:aCaught};
 						console.error('Caught - promise_makeTopLevelDirs - ', rejObj);
-						deferred_makeLauncher.reject(rejObj);
+						deferred_makeLauncherDirAndFiles.reject(rejObj);
 					}
 				);
 			}
@@ -4939,6 +4939,7 @@ function appNameFromChan(theChName) {
 }
 
 function makeDesktopShortcut(for_ini_key) {
+	console.info('for_ini_key:', for_ini_key, 'ini[for_ini_key]:', ini[for_ini_key], ini);
 	var deferred_makeDesktopShortcut = new Deferred();
 
 	/* algo ::::
@@ -4952,7 +4953,7 @@ function makeDesktopShortcut(for_ini_key) {
 		
 		var deferred_makeCut = new Deferred();
 		
-		if (OS.Constants.Sys.Name == 'Darwin') {
+		if (OS.Constants.Sys.Name == 'Darwin') { //note:debug added in winnt
 			theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' ');
 			theLauncherAndAliasName = appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 			/*
@@ -4965,7 +4966,7 @@ function makeDesktopShortcut(for_ini_key) {
 			// makeSymLink with expected path, if it fails
 			
 			var makeLauncherThenAlias = function() {
-				var promise_doMakeLauncher = makeLauncher();
+				var promise_doMakeLauncher = makeLauncher(for_ini_key);
 				promise_doMakeLauncher.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_doMakeLauncher - ', aVal);
@@ -5059,6 +5060,7 @@ function makeDesktopShortcut(for_ini_key) {
 				console.log('Fullfilled - promise_getChName - ', aVal);
 				// start - do stuff here - promise_getChName
 				theChName = aVal;
+				do_makeCut();
 				// end - do stuff here - promise_getChName
 			},
 			function(aReason) {
@@ -5828,6 +5830,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 		var subData = aDataSplit[1];
 		if (subData.indexOf('msgJson') > -1) {
 			var incomingJson = JSON.parse(subData);
+			console.info('incomingJson:', incomingJson);
 		}
 	} else {
 		var subTopic = aDataSplit[0];
@@ -5888,7 +5891,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 				noResponseActiveTimers['client-closing-if-i-no-other-clients-then-shutdown-listeners'].cancel();
 			}
 			enableListenerForClients();
-			var promise = readIni();
+			var promise = readIniAndParseObjs();
 			promise.then(
 				function() {
 					//console.log('now that ini read it will now send notification to clientid with name = ' + profName);
