@@ -78,16 +78,19 @@ div:not(:first-of-type) > span:nth-of-type(1):not(.browse) .browse-icon {
 }
 
 div:not(:first-of-type) > span:nth-of-type(1).release {
-	background-image: url(../bullet_release.png);
+	background-image: url(../ff-channel-base-iconsets/release/release16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).beta {
-	background-image: url(../bullet_beta.png);
+	background-image: url(../ff-channel-base-iconsets/beta/beta16.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).dev {
+	background-image: url(../ff-channel-base-iconsets/dev/dev16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).aurora {
-	background-image: url(../bullet_aurora.png);
+	background-image: url(../ff-channel-base-iconsets/aurora/aurora16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).nightly {
-	background-image: url(../bullet_nightly.png);
+	background-image: url(../ff-channel-base-iconsets/nightly/nightly16.png);
 }
 
 div:not(:first-of-type) > span:nth-of-type(1) {

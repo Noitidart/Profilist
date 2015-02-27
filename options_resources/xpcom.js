@@ -315,8 +315,18 @@ function readIniToDom() {
 }
 
 function cpCommPostMsg(msg) {
+	
 	console.info('"profilist-cp-client" (id: ' + clientId + ') sending message to "profilist-cp-server"', 'msg:', msg);
 	Services.obs.notifyObservers(null, 'profilist-cp-client', msg);
+}
+function cpCommPostJson(topic, msgJson) {
+	// the client side cpCommPostJson adds in clientId
+	msgJson.clientId = clientId;
+	msgJson.msgJson = 1;
+	
+	console.info('"profilist-cp-client" (id: ' + clientId + ') sending message to "profilist-cp-server"', 'msg:', msg);
+	Services.obs.notifyObservers(null, 'profilist-cp-client', [topic, JSON.stringify(msgJson)].join(subDataSplitter));
+				
 }
 
 var observers = {
@@ -330,6 +340,9 @@ var observers = {
 			} else if (aDataSplit.length == 2) {
 				var subTopic = aDataSplit[0];
 				var subData = aDataSplit[1];
+				if (subData.indexOf('msgJson') > -1) {
+					var incomingJson = JSON.parse(subData);
+				}
 			} else {
 				var subTopic = aDataSplit[0];
 				//var subData = subDataSplitter + 'ARRAY';
@@ -373,6 +386,21 @@ var observers = {
 					}
 					//ini.General.props['Profilist.' + pref_name] = pref_val; //i dont think this should be here 082914 12p
 					break;
+				case 'response-make-desktop-shortcut':
+					var responseJson = JSON.parse(subData);
+					if (responseJson.clientId == clientId) {
+						if (responseJson.status == 1) {
+							// succesfully made shortcut
+							shortcutMade_success();
+						} else {
+							// failed to make shortcut
+							shortcutMade_failed(responseJson.explaination);
+						}
+					} else {
+						//this client is not the responder to this query-make-desktop-shortcut
+					}
+				
+					break;
 				default:
 					throw new Error('"profilist-cp-server": subTopic of "' + subTopic + '" is unrecognized');
 			}
@@ -403,27 +431,33 @@ var observers = {
 		createShortcut(identifier);
 	}
 	
+	// start - shortcut making
+	function shortcutMade_success() {
+		setTimeout(function() {
+			loader.style.opacity = 0;
+		}, 300);
+		setTimeout(function() {
+			load_img.src = 'options_resources/loading-done.gif';
+			loader.style.opacity = 1;
+		}, 400); //do in 100s because 200ms is transition time so opactiy only gets to 0.5 before i go for 1
+		setTimeout(function() {
+			loader.style.opacity = 0;
+			select.selectedIndex = 0;
+			select.removeAttribute('disabled');
+		}, 700);
+	}
+	
+	function shortcutMade_failed(rsn) {
+		loader.style.opacity = 0;
+		alert('Desktop Shortcut - The shortcut failed to be created, the reason was:\n\n' + rsn);
+	}
+	
 	function createShortcut(identifier) {
 		load_img.src = 'options_resources/loading.gif';
 		
 		loader.style.opacity = 1;
 		var select = shortcutSelect;
 		select.disabled = true;
-		
-		var successAnim = function() {
-			setTimeout(function() {
-				loader.style.opacity = 0;
-			}, 300);
-			setTimeout(function() {
-				load_img.src = 'options_resources/loading-done.gif';
-				loader.style.opacity = 1;
-			}, 400); //do in 100s because 200ms is transition time so opactiy only gets to 0.5 before i go for 1
-			setTimeout(function() {
-				loader.style.opacity = 0;
-				select.selectedIndex = 0;
-				select.removeAttribute('disabled');
-			}, 700);
-		}
 		
 		var prof_props;
 		for (var p in ini) {
@@ -436,19 +470,23 @@ var observers = {
 			}
 		}
 		if (!prof_props) {
-			alert('ERROR - Could not find idnetifier of "' + identifier + '" in profiles list');
+			alert('ERROR - Could not find identifier of "' + identifier + '" in profiles list');
 			loader.style.opacity = 0;
 			return;
 		}
 		
+		/*
 		if (prof_props.IsRelative == '1') {
 			var dirName = OS.Path.basename(OS.Path.normalize(prof_props.Path));
 			var fullPathToProfile = OS.Path.join(FileUtils.getFile('DefProfRt', []).path, dirName);
 		} else {
 			var fullPathToProfile = prof_props.Path;
 		}
+		*/
 		
 		loader.style.display = 'flex-block';
+		cpCommPostJson('query-make-desktop-shortcut', {key_in_ini: identifier});
+		/*
 		if (OS.Constants.Sys.Name == 'WINNT') {
 			var exe = FileUtils.getFile('XREExeF', []);
 			var myShortcut = FileUtils.getFile('Desk', ['Firefox - ' + prof_props.Name + '.lnk']);
@@ -505,6 +543,7 @@ var observers = {
 			alert('Unrecognized Operating System - Desktop shortcut creation failed');
 			loader.style.opacity = 0;
 		}
+		*/
 	}
 	
 	function changeIcon(e) {
