@@ -3,7 +3,6 @@ const self = {
 	name: 'Profilist',
 	id: 'Profilist@jetpack',
 	chrome_path: 'chrome://profilist/content/',
-	chrome_path_ch_iconsets: 'chrome://profilist/profilist-ch-iconsets', //inteiontally left off last slash
 	aData: 0,
 };
 
@@ -4283,6 +4282,56 @@ function duplicateDirAndContents(pathToSrcDir, pathToDestDir, max_depth, targetD
 }
 // end - helper functions for makeLauncher Darwin
 
+function delAliasThenMake(pathTrg, pathMake) {
+	var deferred_delAliasThenMake = new Deferred();
+	
+	var do_makeAlias = function() {
+		var promise_makeAlias = OS.File.unixSymLink(pathTrg, pathMake);
+		promise_makeAlias.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_makeAlias - ', aVal);
+				// start - do stuff here - promise_makeAlias
+				deferred_delAliasThenMake.resolve('alias made:' + pathMake + ' point to:' + pathTrg);
+				// end - do stuff here - promise_makeAlias
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_makeAlias', aReason:aReason};
+				console.warn('Rejected - promise_makeAlias - ', rejObj);
+				deferred_delAliasThenMake.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_makeAlias', aCaught:aCaught};
+				console.error('Caught - promise_makeAlias - ', rejObj);
+				deferred_delAliasThenMake.reject(rejObj);
+			}
+		);
+	}
+	
+	var promise_deleteThisAlias = OS.File.remove(pathMake); // succeeds if its not there
+	promise_deleteThisAlias.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_deleteThisAlias - ', aVal);
+			// start - do stuff here - promise_deleteThisAlias
+			do_makeAlias();
+			// end - do stuff here - promise_deleteThisAlias
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_deleteThisAlias', aReason:aReason};
+			console.warn('Rejected - promise_deleteThisAlias - ', rejObj);
+			deferred_delAliasThenMake.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_deleteThisAlias', aCaught:aCaught};
+			console.error('Caught - promise_deleteThisAlias - ', rejObj);
+			deferred_delAliasThenMake.reject(rejObj);
+		}
+	);
+	
+	return deferred_delAliasThenMake.promise;
+}
+
 function makeLauncher(for_ini_key, ch_name) {
 	// makes the launcher for nix/mac
 	// overwrites without making any checks (on mac it checks for existing [by checking plist.info and taking its bundle-identifier &&&& also checking dock.plist for this .app])
@@ -4298,11 +4347,14 @@ function makeLauncher(for_ini_key, ch_name) {
 		} else {
 			path_toFxApp = profToolkit.exePath; //not tied so use current builds path
 		}
-		var path_toFxAppContents = OS.File.join(path_toFxApp, 'Contents');
-		theProfName_safedForPath = ini[for_ini_key].Name.replace(/\//g, ' ');
+		var path_toFxBin = path_toFxApp;
+		path_toFxApp = path_toFxApp.substr(0, path_toFxApp.toLowerCase().indexOf('.app') + 4);
+		console.info('path_toFxApp:', path_toFxApp);
+		var path_toFxAppContents = OS.Path.join(path_toFxApp, 'Contents');
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' ');
 		theLauncherAndAliasName = appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;		
 		var path_toLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app'); // we create at this path
-		
+		var path_toLauncherContents = OS.Path.join(path_toLauncher, 'Contents');
 		var bundleIdentifer;
 		if ('Profilist.launcher' in ini[for_ini_key].props) {
 			bundleIdentifer = ini[for_ini_key].props['Profilist.launcher'];
@@ -4370,7 +4422,7 @@ function makeLauncher(for_ini_key, ch_name) {
 			};
 			// end timer for reflect mods
 			// end - reflect mods
-			ini[for_ini_key].Props['Profilist.launcher'] = bundleIdentifer;
+			ini[for_ini_key].props['Profilist.launcher'] = bundleIdentifer;
 			var promise_updateIni = writeIniAndBkp();
 			promise_updateIni.then(
 				function(aVal) {
@@ -4403,7 +4455,7 @@ function makeLauncher(for_ini_key, ch_name) {
 		var deferred_writeIcon = new Deferred(); //create badged tied icon in OS.Path.join(path_toFxApp, 'Contents', 'Resources');
 		
 		promiseAllArr_makeMac.push(deferred_makeLauncherDirAndFiles.promise);
-		promiseAllArr_makeMac.push(deferred_writeProfileExec.promise);
+		promiseAllArr_makeMac.push(deferred_writeProfileExec_Xattr.promise);
 		promiseAllArr_makeMac.push(deferred_writeIcon.promise);
 		
 		var promiseAll_makeMac = Promise.all(promiseAllArr_makeMac);
@@ -4434,8 +4486,31 @@ function makeLauncher(for_ini_key, ch_name) {
 			
 			var deferred_copyContents = new Deferred();
 			var deferred_writeModdedPlist = new Deferred();
+			//var deferred_xattr = new Deferred();
 			promiseAllArr_makeLauncherDirAndFiles.push(deferred_copyContents.promise);
 			promiseAllArr_makeLauncherDirAndFiles.push(deferred_writeModdedPlist.promise);
+			//promiseAllArr_makeLauncherDirAndFiles.push(deferred_xattr.promise);
+
+			var promiseAll_makeLauncherDirAndFiles = Promise.all(promiseAllArr_makeLauncherDirAndFiles);
+			promiseAll_makeLauncherDirAndFiles.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAll_makeLauncherDirAndFiles - ', aVal);
+					// start - do stuff here - promiseAll_makeLauncherDirAndFiles
+					deferred_makeLauncherDirAndFiles.resolve('ya');
+					// end - do stuff here - promiseAll_makeLauncherDirAndFiles
+				},
+				function(aReason) {
+					var rejObj = {name:'promiseAll_makeLauncherDirAndFiles', aReason:aReason};
+					console.warn('Rejected - promiseAll_makeLauncherDirAndFiles - ', rejObj);
+					deferred_makeLauncherDirAndFiles.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promiseAll_makeLauncherDirAndFiles', aCaught:aCaught};
+					console.error('Caught - promiseAll_makeLauncherDirAndFiles - ', rejObj);
+					deferred_makeLauncherDirAndFiles.reject(rejObj);
+				}
+			);
 			
 			// start - do_copyContents
 			var do_copyContents = function() {
@@ -4446,7 +4521,10 @@ function makeLauncher(for_ini_key, ch_name) {
 						if (/info\.plist/i.test(sourcePaths[i])) {
 							continue; // as we write this modded
 						}
-						promiseAllArr_copyAsAliases.push(OS.File.unixSymLink(sourcePaths[i], sourcePaths[i].replace(new RegExp(escapeRegExp(path_toFxApp), 'i'), path_toLauncher)));
+						var path_toThisAliasInORIG = sourcePaths[i];
+						var path_toThisAliasInLauncher = sourcePaths[i].replace(new RegExp(escapeRegExp(path_toFxApp), 'i'), path_toLauncher);
+						var promise_makeThisAlias = delAliasThenMake(path_toThisAliasInORIG, path_toThisAliasInLauncher);
+						promiseAllArr_copyAsAliases.push(promise_makeThisAlias);
 					}
 					
 					var promiseAll_copyAsAliases = Promise.all(promiseAllArr_copyAsAliases);
@@ -4518,8 +4596,8 @@ function makeLauncher(for_ini_key, ch_name) {
 						//An identifier used by iOS and Mac OS X to recognize any future updates to your app. Your Bundle ID must be registered with Apple and unique to your app. Bundle IDs are app-type specific (either iOS or Mac OS X). The same Bundle ID cannot be used for both iOS and Mac OS X apps. source https://itunesconnect.apple.com/docs/iTunesConnect_DeveloperGuide.pdf
 					});
 					
-					var path_toLauncherPlist = OS.File.join(path_toLauncherContents, 'info.plist');
-					var promise_writeModedString = OS.File.writeAtomic(path_toLauncherPlist, {tmpPath:path_toLauncherPlist+'.tmp', encoding:'utf-8'});
+					var path_toLauncherPlist = OS.Path.join(path_toLauncherContents, 'info.plist');
+					var promise_writeModedString = OS.File.writeAtomic(path_toLauncherPlist, plist_val, {tmpPath:path_toLauncherPlist+'.profilist.tmp', encoding:'utf-8'});
 					promise_writeModedString.then(
 						function(aVal) {
 							console.log('Fullfilled - promise_writeModedString - ', aVal);
@@ -4565,10 +4643,34 @@ function makeLauncher(for_ini_key, ch_name) {
 				);
 			}
 			// end - do_writeModdedPlist
-			
+			/*
+			// start - do_xattr
+			function do_xattr() {
+				// start - xattr				
+				var xattr = Cc['@mozilla.org/file/local;1'].createInstance(Ci.nsILocalFile);
+				xattr.initWithPath('/usr/bin/xattr');
+				var proc = Cc['@mozilla.org/process/util;1'].createInstance(Ci.nsIProcess);
+				proc.init(xattr);
+				
+				var procFinXattr = {
+					observe: function(aSubject, aTopic, aData) {
+						console.log('incoming procFinXattr', 'aSubject:', aSubject, 'aTopic:', aTopic, 'aData', aData);
+						if (aSubject.exitValue == '0') {
+							deferred_xattr.resolve('success xattr');
+						} else {
+							deferred_xattr.resolve('exitValue is not 0, thus xattr failed, exitValue is: "' + aSubject.exitValue + '"'); //note:debug i made this resolve should reject
+						}
+					}
+				};
+				
+				var xattrAargs = ['-d', 'com.apple.quarantine', path_toLauncher];
+				proc.runAsync(xattrAargs, xattrAargs.length, procFinXattr);
+				// end - xattr
+			}
+			// end - do_xattr
+			*/
 			// start - do_makeTopDirs
 			var do_makeTopDirs = function() {
-				var path_toLauncherContents = OS.Path.join(path_toLauncher, 'Contents');
 				var promise_makeTopLevelDirs = makeDir_Bug934283(path_toLauncherContents, {from:profToolkit.path_iniDir});
 				promise_makeTopLevelDirs.then(
 					function(aVal) {
@@ -4576,6 +4678,7 @@ function makeLauncher(for_ini_key, ch_name) {
 						// start - do stuff here - promise_makeTopLevelDirs
 						do_copyContents();
 						do_writeModdedPlist();
+						//do_xattr();
 						// end - do stuff here - promise_makeTopLevelDirs
 					},
 					function(aReason) {
@@ -4601,20 +4704,17 @@ function makeLauncher(for_ini_key, ch_name) {
 		var do_writeIcon = function() {
 			// start - copy icns
 			// figure out what name of icon in launcher_icons folder should be if we have one
-			var nameArr_launcherIcns = [];
-			if ('Profilist.badge' in ini[for_ini_key].props) {
-				nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
-			}
-			if ('Profilist.tie' in ini[for_ini_key].props) { //ini[Profilist.tie] should hold a generated tie id
-				nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key].props['Profilist.tie']);
-			}
-			var name_launcherIcns = null;
+			var name_launcherIcns = getIconName(for_ini_key, theChName);
+			console.info('name_launcherIcns:', name_launcherIcns);
+			// name starts with `CHANNEL-REF_` then i should just copy the icns from the current build icon
+			// icon names have either TIE-ID_ or CHANNEL-REF_ but never both
+			
 			var path_toIcnsToCopy;
-			if (nameArr_launcherIcns.length == 0) {
+			if (name_launcherIcns.indexOf('CHANNEL') == 0) {
 				// copy icon from path_toFxApp
 				path_toIcnsToCopy = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'firefox.icns'); //its firefox.icns in not just release, its same in nightly, aurora, and beta
 			} else {
-				name_launcherIcns = nameArr_launcherIcns.join('__') + '.icns';
+				var hasLauncherIcon = true;
 				path_toIcnsToCopy = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'launcher_icons', name_launcherIcns + '.icns');
 				// check if this name_launcherIcns exists in launcher_icons
 					// if it does, then it has right badge and tie so copy this
@@ -4623,18 +4723,19 @@ function makeLauncher(for_ini_key, ch_name) {
 			
 			
 			var path_iconDestination = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'profilist-' + bundleIdentifer + '.icns');
-			var promise_copyIcon = OS.File.copy(path_toIcnsToCopy, path_iconDestination);
+			var promise_copyIcon = OS.File.copy(path_toIcnsToCopy, path_iconDestination, {noOverwrite:false});
 			// start do_theCopy
 			var do_theCopy = function(postMake) {
 				promise_copyIcon.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_copyIcon - ', aVal);
 						// start - do stuff here - promise_copyIcon
+						deferred_writeIcon.resolve('icon made');
 						// end - do stuff here - promise_copyIcon
 					},
 					function(aReason) {
 						if (!postMake) { // meaning this is first time trying copy
-							if (aReason.becauseNoSuchFile && nameArr_launcherIcns.length > 0)  {
+							if (hasLauncherIcon && aReason.becauseNoSuchFile)  {
 								// have to make icon first as it doesnt exist
 								var promise_makeTheIconAsItDNE = makeIcon(for_ini_key);
 								promise_makeTheIconAsItDNE.then(
@@ -4660,11 +4761,13 @@ function makeLauncher(for_ini_key, ch_name) {
 						}
 						var rejObj = {name:'promise_copyIcon', aReason:aReason};
 						console.warn('Rejected - promise_copyIcon - ', rejObj);
+						deferred_writeIcon.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_copyIcon', aCaught:aCaught};
 						console.error('Caught - promise_copyIcon - ', rejObj);
+						deferred_writeIcon.reject(rejObj);
 					}
 				);
 			}
@@ -4706,9 +4809,8 @@ function makeLauncher(for_ini_key, ch_name) {
 				var deferred_execWrittenAndPermed = new Deferred();
 				var promise_execWrittenAndPermed = deferred_execWrittenAndPermed.promise;
 				
-				var path_profilistExec = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'profilist-exec');
-				var path_originalExec = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'firefox');
-				var promise_writeExec = OS.File.writeAtomic(path_profilistExec, '#!/bin/sh\nexec "' + path_toFxApp + '" -profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote', {tmpPath:path_profilistExec+'.profilist.bkp'});
+				var path_profilistExec = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'profilist-' + bundleIdentifer);
+				var promise_writeExec = OS.File.writeAtomic(path_profilistExec, '#!/bin/sh\nexec "' + path_toFxBin + '" -profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote', {tmpPath:path_profilistExec+'.profilist.bkp'});
 
 				promise_writeExec.then(
 					function(aVal) {
@@ -4738,7 +4840,7 @@ function makeLauncher(for_ini_key, ch_name) {
 		do_writeProfileExec_Xattr();
 	};
 	
-	// end - setup getChName
+	// end - setup getChName this then triggers the right os shortcut mechanism
 	var do_getChName = function() {
 		var promise_getChName = getChannelNameOfProfile(for_ini_key);
 		promise_getChName.then(
@@ -4746,6 +4848,13 @@ function makeLauncher(for_ini_key, ch_name) {
 				console.log('Fullfilled - promise_getChName - ', aVal);
 				// start - do stuff here - promise_getChName
 				theChName = aVal;
+	
+				if (OS.Constants.Sys.Name == 'Darwin') {
+					makeMac();		
+				} else {
+					//throw new Error('OS not supported for makeLauncher');
+					deferred_makeLauncher.reject('OS not supported for makeLauncher');
+				}
 				// end - do stuff here - promise_getChName
 			},
 			function(aReason) {
@@ -4767,17 +4876,29 @@ function makeLauncher(for_ini_key, ch_name) {
 	var theChName;
 	var theProfName_safedForPath;
 	var theLauncherAndAliasName;
-	var name_appIcns; // name of the icns file in the info.plist of the original fx app
 	// end - sub globals (globals used in my sub funcs)
 	
-	if (OS.Constants.Sys.Name == 'Darwin') {
-		makeMac();		
-	} else {
-		//throw new Error('OS not supported for makeLauncher');
-		deferred_makeLauncher.reject('OS not supported for makeLauncher');
-	}
+	do_getChName();
 	
 	return deferred_makeLauncher.promise;
+}
+
+function getIconName(for_ini_key, ch_name) {
+	var nameArr_launcherIcns = [];
+	if ('Profilist.badge' in ini[for_ini_key].props) {
+		nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
+	}
+	if ('Profilist.tie' in ini[for_ini_key].props) { //ini[Profilist.tie] should hold a generated tie id
+		nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key].props['Profilist.tie']); //TIE-ID is used to get base paths
+	} else {
+		nameArr_launcherIcns.push('CHANNEL-REF_' + channelNameTo_refName(ch_name));
+	}
+	// name starts with `CHANNEL-REF_` then i should just copy the icns from the current build icon
+	
+	// icon names have either TIE-ID_ or CHANNEL-REF_ but never both
+	
+	var name_launcherIcns = nameArr_launcherIcns.join('__')/* + '.icns'*/;
+	return name_launcherIcns;	
 }
 
 function getPathToBuildByTie(tie_id) {
@@ -4789,10 +4910,10 @@ function getPathToProfileDir(for_ini_key) {
 		throw new Error('getPathToProfileDir for_ini_key "' + for_ini_key + '" not found in ini');
 	}
 	
-	if (ini[for_ini_key].IsRelative == '1') {
-		return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].Path)));
+	if (ini[for_ini_key].props.IsRelative == '1') {
+		return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)));
 	} else {
-		return ini[for_ini_key].Path;
+		return ini[for_ini_key].props.Path;
 	}
 }
 
@@ -4832,11 +4953,11 @@ function makeDesktopShortcut(for_ini_key) {
 		var deferred_makeCut = new Deferred();
 		
 		if (OS.Constants.Sys.Name == 'Darwin') {
-			theProfName_safedForPath = ini[for_ini_key].Name.replace(/\//g, ' ');
+			theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' ');
 			theLauncherAndAliasName = appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 			/*
-			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].Name.replace(/\//g, '%')"
-				// if its avail, then `ini[for_ini_key]['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key]['Profilist.launcher-basename']`
+			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '%')"
+				// if its avail, then `ini[for_ini_key].props['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key].props['Profilist.launcher-basename']`
 		
 			//now whenever profile is renamed, then check if launcher
 			*/
@@ -5513,6 +5634,7 @@ function makeIcon(for_ini_key) {
 	
 	//start - do_calcIconName
 	var do_calcIconName = function() {
+		/*
 		var nameArr_launcherIcns = [];
 		if ('Profilist.badge' in ini[for_ini_key].props) {
 			nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
@@ -5525,8 +5647,10 @@ function makeIcon(for_ini_key) {
 		// name starts with `CHANNEL-REF_` then i should just copy the icns from the current build icon
 		
 		// icon names have either TIE-ID_ or CHANNEL-REF_ but never both
+		var name_launcherIcns = nameArr_launcherIcns.join('__')// + '.icns';
+		*/
 		
-		var name_launcherIcns = nameArr_launcherIcns.join('__')/* + '.icns'*/;
+		var name_launcherIcns = getIconName(for_ini_key, theChName); //nameArr_launcherIcns.join('__')/* + '.icns'*/;
 		saveas_name = name_launcherIcns;
 		path_dirIconSet = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'launcher_icons', saveas_name + '.iconset');
 		

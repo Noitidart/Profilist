@@ -324,7 +324,7 @@ function cpCommPostJson(topic, msgJson) {
 	msgJson.clientId = clientId;
 	msgJson.msgJson = 1;
 	
-	console.info('"profilist-cp-client" (id: ' + clientId + ') sending message to "profilist-cp-server"', 'msg:', msg);
+	console.info('"profilist-cp-client" (id: ' + clientId + ') sending message to "profilist-cp-server"', 'msg:', msgJson);
 	Services.obs.notifyObservers(null, 'profilist-cp-client', [topic, JSON.stringify(msgJson)].join(subDataSplitter));
 				
 }
@@ -651,6 +651,9 @@ var observers = {
 			target.classList.add('beta');
 		} else if (target.classList.contains('beta')) {
 			target.classList.remove('beta');
+			target.classList.add('dev');
+		} else if (target.classList.contains('dev')) {
+			target.classList.remove('dev');
 			target.classList.add('aurora');
 		} else if (target.classList.contains('aurora')) {
 			target.classList.remove('aurora');
@@ -730,7 +733,7 @@ var observers = {
 				var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
 				rowDomJson[1].style += 'order:' + i + ';';
 				//rowDomJson[1].class = ''; //remove `attn` class
-				var builtinIcon = json[i][0].match(/^(?:release|beta|aurora|nightly)$/im);
+				var builtinIcon = json[i][0].match(/^(?:release|beta|dev|aurora|nightly)$/im);
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
@@ -1162,7 +1165,7 @@ var observers = {
 			var iconSpan = t.querySelector('span');
 			var icon = iconSpan.style.backgroundImage;
 			if (icon == '') {
-				icon = iconSpan.getAttribute('class').match(/(?:release|beta|aurora|nightly)/i);
+				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i);
 				if (!icon) {
 					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
 					return;
@@ -1225,7 +1228,7 @@ var observers = {
 			}
 			var iconPath = iconSpan.style.backgroundImage;
 			if (iconPath == '') {
-				var iconPath = iconSpan.getAttribute('class').match(/(?:release|beta|aurora|nightly)/);
+				var iconPath = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/);
 				console.log('iconPath:', iconPath[0]);
 			} else {
 				var iconPath = iconSpan.style.backgroundImage.substr(5, iconPath.length-2);
