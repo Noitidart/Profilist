@@ -3,6 +3,7 @@ const self = {
 	name: 'Profilist',
 	id: 'Profilist@jetpack',
 	chrome_path: 'chrome://profilist/content/',
+	chrome_path_ch_iconsets: 'chrome://profilist/profilist-ch-iconsets', //inteiontally left off last slash
 	aData: 0,
 };
 
@@ -1162,6 +1163,8 @@ function initProfToolkit() {
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = null;
 	}
 	profToolkit.selectedProfile.iniKey = undefined; //note: i set it to undefined meaning it hasnt been verified yet, i set it to null for temp profile meaning name not found, i set it to string once it was verified
+	
+	profToolkit.PrfDef = Services.dirsvc.get('PrfDef', Ci.nsIFile).path;
 	
 	//get relative path
 	//this way too slow dont do it: var IniPathStr = FileUtils.getFile('DefProfRt', ['name of folder you want in profiles folder']); //3.32ms
@@ -4034,24 +4037,19 @@ function getChannelNameOfProfile(for_ini_key) {
 	if (for_ini_key == profToolkit.selectedProfile.iniKey) {
 		deferred_getChannelNameOfProfile.resolve(Services.prefs.getCharPref('app.update.channel'));
 	} else {
-		var path_channelName;
-		if ('Profilist.tie' in ini[for_ini_key]) {
-			path_channelName = OS.Path.dirname(exePathOfTie(ini[for_ini_key]['Profilist.tie'])); // used tied path if the profile is tied
-		} else {
-			path_channelName = OS.Path.dirname(profToolkit.exePath); //not tied so use current builds path
-		}
-		path_channelName = OS.Path.join(path_channelName, 'defaults', 'pref', 'channel-prefs.js');
+		var path_channelName = OS.Path.join(profToolkit.PrfDef, 'channel-prefs.js');
 		
 		var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
 		promise_readChanPref.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_readChanPref - ', aVal);
 				// start - do stuff here - promise_readChanPref
-				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"\);/);
+				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
 				if (!chanVal) {
 					var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
 					deferred_getChannelNameOfProfile.reject('Regex match failed');
 				} else {
+					chanVal = chanVal[1];
 					deferred_getChannelNameOfProfile.resolve(chanVal);
 				}
 				// end - do stuff here - promise_readChanPref
@@ -4295,8 +4293,8 @@ function makeLauncher(for_ini_key, ch_name) {
 	var makeMac = function() {
 		// start - sub globals
 		var path_toFxApp; // path we will launch
-		if ('Profilist.tie' in ini[for_ini_key]) {
-			path_toFxApp = exePathOfTie(ini[for_ini_key]['Profilist.tie']); // used tied path if the profile is tied
+		if ('Profilist.tie' in ini[for_ini_key].props) {
+			path_toFxApp = exePathOfTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
 		} else {
 			path_toFxApp = profToolkit.exePath; //not tied so use current builds path
 		}
@@ -4306,8 +4304,8 @@ function makeLauncher(for_ini_key, ch_name) {
 		var path_toLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app'); // we create at this path
 		
 		var bundleIdentifer;
-		if ('Profilist.launcher' in ini[for_ini_key]) {
-			bundleIdentifer = ini[for_ini_key]['Profilist.launcher'];
+		if ('Profilist.launcher' in ini[for_ini_key].props) {
+			bundleIdentifer = ini[for_ini_key].props['Profilist.launcher'];
 		} else {
 			bundleIdentifer = (Math.random() + '').substr(2);
 		}
@@ -4604,11 +4602,11 @@ function makeLauncher(for_ini_key, ch_name) {
 			// start - copy icns
 			// figure out what name of icon in launcher_icons folder should be if we have one
 			var nameArr_launcherIcns = [];
-			if ('Profilist.badge' in ini[for_ini_key]) {
-				nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key]['Profilist.badge']);
+			if ('Profilist.badge' in ini[for_ini_key].props) {
+				nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
 			}
-			if ('Profilist.tie' in ini[for_ini_key]) { //ini[Profilist.tie] should hold a generated tie id
-				nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key]['Profilist.tie']);
+			if ('Profilist.tie' in ini[for_ini_key].props) { //ini[Profilist.tie] should hold a generated tie id
+				nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key].props['Profilist.tie']);
 			}
 			var name_launcherIcns = null;
 			var path_toIcnsToCopy;
@@ -4897,7 +4895,7 @@ function makeDesktopShortcut(for_ini_key) {
 				);
 			}
 			
-			if ('Profilist.launcher' in ini[for_ini_key]) {
+			if ('Profilist.launcher' in ini[for_ini_key].props) {
 				//assume it exists
 				//but lets verify just in case
 				var pathToTarget = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app');
@@ -5060,6 +5058,8 @@ function makeIcon(for_ini_key) {
 				platformSupported = false; //its already false
 			}
 		}
+	} else if (OS.Constants.Sys.Name == 'WINNT') {
+		platformSupported = true;
 	}
 	if (!platformSupported) {
 		console.info('platformSupported:', platformSupported);
@@ -5074,17 +5074,44 @@ function makeIcon(for_ini_key) {
 	var saveas_name; //name_launcherIcns // without icns
 	var paths_badge;
 	var doc = Services.appShell.hiddenDOMWindow.document;
-	
+
 	var theChName;
+	
+	var path_dirIconSet;
+	var imgs_base = {};
+	var imgs_badge = {};
 	// end - sub globals (globals used by sub-functions in this funciton)
 	
 	// start - do_initializeMakeProc
 	var do_initializeMakeProc = function() { // this is where the platform selection comes in
 		// this if block should similar 67864810
-		if (OS.Constants.Sys.Name == 'Darwin') {
-			
+		if (OS.Constants.Sys.Name == 'Darwin' || OS.Constants.Sys.Name == 'WINNT') { //note:debug remove winnt
+			var deferred_makeIcnsOfPaths = new Deferred();
+			deferred_makeIcnsOfPaths.promise.then(
+				function(aVal) {
+					console.log('Fullfilled - deferred_makeIcnsOfPaths.promise - ', aVal);
+					// start - do stuff here - deferred_makeIcnsOfPaths.promise
+					delTDir();
+					deferred_makeIcon.resolve(aVal);
+					// end - do stuff here - deferred_makeIcnsOfPaths.promise
+				},
+				function(aReason) {
+					delTDir();
+					var rejObj = {name:'deferred_makeIcnsOfPaths.promise', aReason:aReason};
+					console.warn('Rejected - deferred_makeIcnsOfPaths.promise - ', rejObj);
+					deferred_makeIcon.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					delTDir();
+					var rejObj = {name:'deferred_makeIcnsOfPaths.promise', aCaught:aCaught};
+					console.error('Caught - deferred_makeIcnsOfPaths.promise - ', rejObj);
+					deferred_makeIcon.reject(rejObj);
+				}
+			);
 			// start - delete dir
 			var delTDir = function() {
+				return; //note:debug
 				var promise_delIt = OS.File.removeDir(path_dirIconSet, {ignoreAbsent:true, ignorePermissions:false});
 				promise_delIt.then(
 					function(aVal) {
@@ -5260,19 +5287,21 @@ function makeIcon(for_ini_key) {
 						ctx.drawImage(nearestImg, 0, 0, size, size);
 					}
 					
-					// overlay nearest sized badge
-					var badgeSize = reqdBadgeSize_for_BaseSize[size];
-					console.log('badgeSize needed for this size is:', badgeSize, 'size is:', size);
-					var nearestImg2 = getImg_of_exactOrNearest_Bigger_then_Smaller(badgeSize, imgs_badge);
-					console.info('nearestImg2:', nearestImg2.toString());
-					if (nearestImg2.naturalHeight == badgeSize) {
-						// its exact
-						console.log('badge is exact at ', nearestImg2.naturalHeight, 'so no need to scale, as badgeSize it is:', badgeSize);
-						ctx.drawImage(nearestImg2, size-badgeSize, size-badgeSize);
-					} else {
-						// need to scale it
-						console.log('scalling badge from size of ', nearestImg2.naturalHeight, 'to', badgeSize);
-						ctx.drawImage(nearestImg2, size-badgeSize, size-badgeSize, badgeSize, badgeSize);
+					if (paths_badge) {
+						// overlay nearest sized badge
+						var badgeSize = reqdBadgeSize_for_BaseSize[size];
+						console.log('badgeSize needed for this size is:', badgeSize, 'size is:', size);
+						var nearestImg2 = getImg_of_exactOrNearest_Bigger_then_Smaller(badgeSize, imgs_badge);
+						console.info('nearestImg2:', nearestImg2.toString());
+						if (nearestImg2.naturalHeight == badgeSize) {
+							// its exact
+							console.log('badge is exact at ', nearestImg2.naturalHeight, 'so no need to scale, as badgeSize it is:', badgeSize);
+							ctx.drawImage(nearestImg2, size-badgeSize, size-badgeSize);
+						} else {
+							// need to scale it
+							console.log('scalling badge from size of ', nearestImg2.naturalHeight, 'to', badgeSize);
+							ctx.drawImage(nearestImg2, size-badgeSize, size-badgeSize, badgeSize, badgeSize);
+						}
 					}
 					
 					var deferred_savePng = new Deferred();
@@ -5346,11 +5375,13 @@ function makeIcon(for_ini_key) {
 						path: paths_base[i]
 					});
 				}
-				for (var i=0; i<paths_badge.length; i++) {
-					paths_concatenated.push({
-						imgsObj: imgs_badge,
-						path: paths_badge[i]
-					});
+				if (paths_badge) {
+					for (var i=0; i<paths_badge.length; i++) {
+						paths_concatenated.push({
+							imgsObj: imgs_badge,
+							path: paths_badge[i]
+						});
+					}
 				}
 				console.info('paths_concatenated:', paths_concatenated.toString());
 				for (var i=0; i<paths_concatenated.length; i++) {
@@ -5362,8 +5393,13 @@ function makeIcon(for_ini_key) {
 					img.onabort = handleImgAbort.bind(img, deferred_loadImg);
 					img.onerror = handleImgError.bind(img, deferred_loadImg);
 					
-					console.info('img.src:', OS.Path.toFileURI(paths_concatenated[i].path));
-					img.src = OS.Path.toFileURI(paths_concatenated[i].path);
+					if (paths_concatenated[i].path.indexOf('chrome://') == 0) {
+						console.info('img.src:', paths_concatenated[i].path);
+						img.src = paths_concatenated[i].path;
+					} else {
+						console.info('img.src:', OS.Path.toFileURI(paths_concatenated[i].path));
+						img.src = OS.Path.toFileURI(paths_concatenated[i].path);
+					}
 				}
 				
 				//console.info('paths_concatenated:', paths_concatenated);
@@ -5407,11 +5443,20 @@ function makeIcon(for_ini_key) {
 	var do_collectPaths = function() {
 		var promiseAllArr_collectPaths = [];
 		
-		var promise_basePaths = immediateChildPaths(OS.Path.join(profToolkit.path_iniDir, 'ff-channel-base-iconsets', channelNameTo_refName(theChName)));
-		promiseAllArr_collectPaths.push(promise_basePaths);
+		//var promise_basePaths = immediateChildPaths(OS.Path.join(self.chrome_path_noslash, 'ff-channel-base-iconsets', channelNameTo_refName(theChName)));
+		if ('Profilist.tie' in ini[for_ini_key].props) {
+			var promise_basePaths = immediateChildPaths(OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'build_iconsets', ini[for_ini_key].props['Profilist.tie']));
+			promiseAllArr_collectPaths.push(promise_basePaths);
+		} else {
+			var basePathsFromChrome = [];
+			var sizesAvail = [16,24,32,48,64,96,128,256,512,1024];
+			for (var i=0; i<sizesAvail.length; i++) {
+				basePathsFromChrome.push(self.chrome_path + 'ff-channel-base-iconsets/' + theChName + '/' + theChName + sizesAvail[i] + '.png');
+			}
+		}
 		
-		if ('Profilist.badge' in ini[for_ini_key]) {
-			var promise_badgePaths = immediateChildPaths(OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', ini[for_ini_key]['Profilist.badge']));
+		if ('Profilist.badge' in ini[for_ini_key].props) {
+			var promise_badgePaths = immediateChildPaths(OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', ini[for_ini_key].props['Profilist.badge']));
 			promiseAllArr_collectPaths.push(promise_badgePaths);
 		}
 		
@@ -5420,8 +5465,10 @@ function makeIcon(for_ini_key) {
 			function(aVal) {
 				console.log('Fullfilled - promiseAll_collectPaths - ', aVal);
 				// do stuff here - promiseAll_collectPaths
-				paths_base = aVal[0];
-				if (aVal.length > 1) {
+				paths_base = basePathsFromChrome ? basePathsFromChrome : aVal[0];
+				if (basePathsFromChrome && aVal.length == 1) {
+					paths_badge = aVal[0];
+				} else if (aVal.length == 2) {
 					paths_badge = aVal[1];
 				}
 				do_initializeMakeProc();
@@ -5467,11 +5514,11 @@ function makeIcon(for_ini_key) {
 	//start - do_calcIconName
 	var do_calcIconName = function() {
 		var nameArr_launcherIcns = [];
-		if ('Profilist.badge' in ini[for_ini_key]) {
-			nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key]['Profilist.badge']);
+		if ('Profilist.badge' in ini[for_ini_key].props) {
+			nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
 		}
-		if ('Profilist.tie' in ini[for_ini_key]) { //ini[Profilist.tie] should hold a generated tie id
-			nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key]['Profilist.tie']); //TIE-ID is used to get base paths
+		if ('Profilist.tie' in ini[for_ini_key].props) { //ini[Profilist.tie] should hold a generated tie id
+			nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key].props['Profilist.tie']); //TIE-ID is used to get base paths
 		} else {
 			nameArr_launcherIcns.push('CHANNEL-REF_' + channelNameTo_refName(theChName));
 		}
@@ -5481,6 +5528,7 @@ function makeIcon(for_ini_key) {
 		
 		var name_launcherIcns = nameArr_launcherIcns.join('__')/* + '.icns'*/;
 		saveas_name = name_launcherIcns;
+		path_dirIconSet = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'launcher_icons', saveas_name + '.iconset');
 		
 		do_collectPaths();
 	}
@@ -5500,13 +5548,13 @@ function makeIcon(for_ini_key) {
 			function(aReason) {
 				var rejObj = {name:'promise_getChName', aReason:aReason};
 				console.warn('Rejected - promise_getChName - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
+				deferred_makeIcon.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
 				var rejObj = {name:'promise_getChName', aCaught:aCaught};
 				console.error('Caught - promise_getChName - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
+				deferred_makeIcon.reject(rejObj);
 			}
 		);
 	};
