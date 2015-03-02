@@ -1,4 +1,8 @@
-const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
+/* TODO
+delete mac override paths files
+delete ovveride paths pref
+*/
+const {interfaces: Ci, utils: Cu, classes: Cc, results: Cr} = Components;
 const self = {
 	name: 'Profilist',
 	id: 'Profilist@jetpack',
@@ -20,9 +24,10 @@ var unloaders = {};
 var PUIsync_height;
 var PUIsync;
 
-var updateChannel = '';
 var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instead of dom as im thinking of making it not update all windows, just update the current window on menu panel show
 var currentThisBuildsIconPath = '';
+
+var macStuff = {};
 
 //var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 //var pathProfilesIniBkp = profToolkit.path_iniFile + '.profilist.bkp';
@@ -171,10 +176,7 @@ current builds icon if dev mode is enabled
 							}
 						});
 						//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-						if (updateChannel == '') {
-							updateChannel = Services.prefs.getCharPref('app.update.channel');
-						}
-						if (updateChannel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+						if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
 							currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
 						} else {
 							currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
@@ -2520,10 +2522,7 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 					}
 				});
 				//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-				if (updateChannel == '') {
-					updateChannel = Services.prefs.getCharPref('app.update.channel');
-				}
-				if (updateChannel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+				if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
 					currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
 				} else {
 					currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
@@ -3053,7 +3052,7 @@ function saveTie(e) {
 					}
 				});
 				//start - profToolkit.exePathLower wasnt found in dev-builds so add it
-				var iconP = updateChannel + '_auto.png'; //icon path
+				var iconP = Services.prefs.getCharPref('app.update.channel') + '_auto.png'; //icon path
 				var downloadP = currentThisBuildsIconPath; //its obviously the current builds path if got here
 				xhr(downloadP, data => {
 					//Services.prompt.alert(null, 'XHR Success', data);
@@ -3284,6 +3283,16 @@ var windowListener = {
 		if (!aDOMWindow) {
 			return;
 		}
+		
+		// start - do os specific stuff
+		if (macStuff.isMac) {
+			/*
+			OS.Constants.Path.libDir = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
+			OS.Constants.Path.libsqlite3 = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
+			OS.Constants.Path.libxul = 	Services.dirsvc.get('XpcomLib', Ci.nsIFile).path;
+			*/
+		}
+		// end - do os specific stuff
 		
 		aDOMWindow.addEventListener('activate', activated, false); //because might have the options tab open in a non PanelUI window
 		//var PanelUI = aDOMWindow.document.getElementById('PanelUI-popup'); //even doc.getElementById wont exist if window isnt loaded yet, meaning readyState == complete
@@ -4019,13 +4028,15 @@ function channelNameTo_refName(ch_name) {
 		return 'beta';
 	} else if (/aurora/i.test(ch_name)) {
 		return 'dev';
-	} else if (/release/i.test(ch_name)) {
+	} else if (/(release|esr)/i.test(ch_name)) {
 		return 'release';
 	} else {
 		console.error('channelNameTo_refName unrecognized ch_name of: "' + ch_name + '"');
 		throw new Error('channelNameTo_refName unrecognized ch_name of: "' + ch_name + '"');
 	}
 }
+
+var getChannelNameOfProfile_cache_perBuild = {}; // [buildPath] = chan
 function getChannelNameOfProfile(for_ini_key) {
 	// can pass `null` for `for_ini_key` and if this is temp profile it will give that else will give regular error of not found
 	// returns promise
@@ -4033,38 +4044,56 @@ function getChannelNameOfProfile(for_ini_key) {
 	
 	var deferred_getChannelNameOfProfile = new Deferred();
 	
+	getChannelNameOfProfile_cache_perBuild[profToolkit.exePath] = Services.prefs.getCharPref('app.update.channel')
+	
 	if (for_ini_key == profToolkit.selectedProfile.iniKey) {
-		deferred_getChannelNameOfProfile.resolve(Services.prefs.getCharPref('app.update.channel'));
+		deferred_getChannelNameOfProfile.resolve(getChannelNameOfProfile_cache_perBuild[profToolkit.exePath]);
 	} else {
-		var path_channelName = OS.Path.join(profToolkit.PrfDef, 'channel-prefs.js');
-		
-		var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
-		promise_readChanPref.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_readChanPref - ', aVal);
-				// start - do stuff here - promise_readChanPref
-				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
-				if (!chanVal) {
-					var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
-					deferred_getChannelNameOfProfile.reject('Regex match failed');
-				} else {
-					chanVal = chanVal[1];
-					deferred_getChannelNameOfProfile.resolve(chanVal);
+		var path_channelName;
+		var buildPath; //build of the profile for_ini_key
+		//var path_channelName = OS.Path.join(profToolkit.PrfDef, 'channel-prefs.js');
+		if ('Profilist.tie' in ini[for_ini_key]) {
+			buildPath = getPathToBuildByTie(ini[for_ini_key]['Profilist.tie']);
+		} else {
+			buildPath = profToolkit.exePath;
+		}
+		if (OS.Constants.Sys.Name != 'Darwin') {
+			path_channelName = OS.Path.join(OS.Path.dirname(buildPath), 'defaults', 'pref', 'channel-prefs.js');
+		} else {
+			path_channelName = OS.Path.join(buildPath.substr(0, buildPath.toLowerCase().indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
+		}
+		if (path_channelName in getChannelNameOfProfile_cache_perBuild) { // note:important: requires tie id to have proper cassing on tie paths
+			deferred_getChannelNameOfProfile.resolve(getChannelNameOfProfile_cache_perBuild[path_channelName]);
+		} else {
+			var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
+			promise_readChanPref.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_readChanPref - ', aVal);
+					// start - do stuff here - promise_readChanPref
+					var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
+					if (!chanVal) {
+						var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
+						deferred_getChannelNameOfProfile.reject('Regex match failed');
+					} else {
+						chanVal = chanVal[1];
+						getChannelNameOfProfile_cache_perBuild[path_channelName] = chanVal;
+						deferred_getChannelNameOfProfile.resolve(chanVal);
+					}
+					// end - do stuff here - promise_readChanPref
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_readChanPref', aReason:aReason};
+					console.warn('Rejected - promise_readChanPref - ', rejObj);
+					deferred_getChannelNameOfProfile.reject(rejObj);
 				}
-				// end - do stuff here - promise_readChanPref
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_readChanPref', aReason:aReason};
-				console.warn('Rejected - promise_readChanPref - ', rejObj);
-				deferred_getChannelNameOfProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
-				console.error('Caught - promise_readChanPref - ', rejObj);
-				deferred_getChannelNameOfProfile.reject(rejObj);
-			}
-		);
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
+					console.error('Caught - promise_readChanPref - ', rejObj);
+					deferred_getChannelNameOfProfile.reject(rejObj);
+				}
+			);
+		}
 	}
 	
 	return deferred_getChannelNameOfProfile.promise;
@@ -4343,7 +4372,7 @@ function makeLauncher(for_ini_key, ch_name) {
 		// start - sub globals
 		var path_toFxApp; // path we will launch
 		if ('Profilist.tie' in ini[for_ini_key].props) {
-			path_toFxApp = exePathOfTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
+			path_toFxApp = getPathToBuildByTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
 		} else {
 			path_toFxApp = profToolkit.exePath; //not tied so use current builds path
 		}
@@ -4351,8 +4380,7 @@ function makeLauncher(for_ini_key, ch_name) {
 		path_toFxApp = path_toFxApp.substr(0, path_toFxApp.toLowerCase().indexOf('.app') + 4);
 		console.info('path_toFxApp:', path_toFxApp);
 		var path_toFxAppContents = OS.Path.join(path_toFxApp, 'Contents');
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' ');
-		theLauncherAndAliasName = appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;		
+		theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 		var path_toLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app'); // we create at this path
 		var path_toLauncherContents = OS.Path.join(path_toLauncher, 'Contents');
 		var bundleIdentifer;
@@ -4451,12 +4479,14 @@ function makeLauncher(for_ini_key, ch_name) {
 		var promiseAllArr_makeMac = [];
 		
 		var deferred_makeLauncherDirAndFiles = new Deferred(); // make top level dirs, then IN PARALELL (copy contents and write modded plist) then resolve deferred_makeLauncherDirFiles
-		var deferred_writeProfileExec_Xattr = new Deferred(); //write the executble in the OS.Path.join(path_toFxApp, 'Contents', 'MacOS');
+		var deferred_writeExecAndPermIt = new Deferred(); //write the executble in the OS.Path.join(path_toFxApp, 'Contents', 'MacOS');
 		var deferred_writeIcon = new Deferred(); //create badged tied icon in OS.Path.join(path_toFxApp, 'Contents', 'Resources');
+		var deferred_ensure_pathsPrefContentsJson = new Deferred();
 		
 		promiseAllArr_makeMac.push(deferred_makeLauncherDirAndFiles.promise);
-		promiseAllArr_makeMac.push(deferred_writeProfileExec_Xattr.promise);
+		promiseAllArr_makeMac.push(deferred_writeExecAndPermIt.promise);
 		promiseAllArr_makeMac.push(deferred_writeIcon.promise);
+		promiseAllArr_makeMac.push(deferred_ensure_pathsPrefContentsJson.promise);
 		
 		var promiseAll_makeMac = Promise.all(promiseAllArr_makeMac);
 		promiseAll_makeMac.then(
@@ -4480,16 +4510,61 @@ function makeLauncher(for_ini_key, ch_name) {
 		);
 		// end - meat
 		
+		// start do_pathsPrefContentsJson
+		var do_pathsPrefContentsJson = function() {
+			var path_toPrefContentsJson = OS.Path.join(OS.Path.dirname(path_toFxBin), 'profilist-main-paths.json');
+			
+			// start - write main app paths file
+			// if custom then we cant set main_profLD_LDS_basename to ProfLD as ProfLD of custom from alias and reg is path to the custom profile dir
+			// so to get right main_profLD_LDS_basename from castom we have to 
+			
+			// btw in reg non-custom-path profile (relative profile) ProfLD != ProfD AND in reg custom-profile ProfLD == ProfD
+			// in alias of realtive profile, ProfLD needs fixing, whle ProfD does not
+			//
+			var json_prefContents = {
+				mainAppPath: path_toFxApp, //Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent.path,
+				main_profLD_LDS_basename: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path
+			};
+			var pathsFileContents = JSON.stringify(json_prefContents);
+			var path_toPrefContentsJson = OS.Path.join(path_toFxApp, 'Contents', 'MacOS', 'profilist-main-paths.json');
+			var promise_writePathsFile = OS.File.writeAtomic(path_toPrefContentsJson, pathsFileContents, {encoding:'utf-8', tmpPath:path_toPrefContentsJson+'.bkp'});
+			promise_writePathsFile.then(
+				function(aVal) {
+					console.log('Fulfilled - promise_writePathsFile - ', aVal);
+					deferred_ensure_pathsPrefContentsJson.resolve('paths json written');
+				},
+				function(aReason) {
+					var rejObj = {
+						promiseName: 'promise_writePathsFile',
+						aReason: aReason
+					};
+					console.error('Rejected - ' + rejObj.promiseName + ' - ', rejObj);
+					deferred_ensure_pathsPrefContentsJson.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {
+						promiseName: 'promise_writePathsFile',
+						aCaught: aCaught
+					};
+					console.error('Caught - promise_writePathsFile - ', rejObj);
+					deferred_ensure_pathsPrefContentsJson.reject(rejObj);
+				}
+			);
+			// end - write main app paths file
+		}
+		// end do_pathsPrefContentsJson
+		
 		// start - do_makeLauncherDirAndFiles
 		var do_makeLauncherDirAndFiles = function() {
 			var promiseAllArr_makeLauncherDirAndFiles = [];
 			
 			var deferred_copyContents = new Deferred();
 			var deferred_writeModdedPlist = new Deferred();
-			//var deferred_xattr = new Deferred();
+			var deferred_xattr = new Deferred();
 			promiseAllArr_makeLauncherDirAndFiles.push(deferred_copyContents.promise);
 			promiseAllArr_makeLauncherDirAndFiles.push(deferred_writeModdedPlist.promise);
-			//promiseAllArr_makeLauncherDirAndFiles.push(deferred_xattr.promise);
+			promiseAllArr_makeLauncherDirAndFiles.push(deferred_xattr.promise);
 
 			var promiseAll_makeLauncherDirAndFiles = Promise.all(promiseAllArr_makeLauncherDirAndFiles);
 			promiseAll_makeLauncherDirAndFiles.then(
@@ -4643,7 +4718,7 @@ function makeLauncher(for_ini_key, ch_name) {
 				);
 			}
 			// end - do_writeModdedPlist
-			/*
+			
 			// start - do_xattr
 			function do_xattr() {
 				// start - xattr				
@@ -4658,7 +4733,7 @@ function makeLauncher(for_ini_key, ch_name) {
 						if (aSubject.exitValue == '0') {
 							deferred_xattr.resolve('success xattr');
 						} else {
-							deferred_xattr.resolve('exitValue is not 0, thus xattr failed, exitValue is: "' + aSubject.exitValue + '"'); //note:debug i made this resolve should reject
+							deferred_xattr.resolve('exitValue is not 0, thus xattr failed, but resolving as it returns 1 when run on something which has no quarantine so had nothing to remove, exitValue is: "' + aSubject.exitValue + '"'); //note:debug i made this resolve should reject
 						}
 					}
 				};
@@ -4668,7 +4743,7 @@ function makeLauncher(for_ini_key, ch_name) {
 				// end - xattr
 			}
 			// end - do_xattr
-			*/
+			
 			// start - do_makeTopDirs
 			var do_makeTopDirs = function() {
 				var promise_makeTopLevelDirs = makeDir_Bug934283(path_toLauncherContents, {from:profToolkit.path_iniDir});
@@ -4678,7 +4753,7 @@ function makeLauncher(for_ini_key, ch_name) {
 						// start - do stuff here - promise_makeTopLevelDirs
 						do_copyContents();
 						do_writeModdedPlist();
-						//do_xattr();
+						do_xattr();
 						// end - do stuff here - promise_makeTopLevelDirs
 					},
 					function(aReason) {
@@ -4712,7 +4787,7 @@ function makeLauncher(for_ini_key, ch_name) {
 			var path_toIcnsToCopy;
 			if (name_launcherIcns.indexOf('CHANNEL') == 0) {
 				// copy icon from path_toFxApp
-				path_toIcnsToCopy = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'firefox.icns'); //its firefox.icns in not just release, its same in nightly, aurora, and beta
+				path_toIcnsToCopy = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'firefox.icns'); //its firefox.icns in not just release, its same in nightly, aurora, and beta // can use path_toLauncher but for that i have to wait for aliases to finish copying
 			} else {
 				var hasLauncherIcon = true;
 				path_toIcnsToCopy = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'launcher_icons', name_launcherIcns + '.icns');
@@ -4723,9 +4798,9 @@ function makeLauncher(for_ini_key, ch_name) {
 			
 			
 			var path_iconDestination = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'profilist-' + bundleIdentifer + '.icns');
-			var promise_copyIcon = OS.File.copy(path_toIcnsToCopy, path_iconDestination, {noOverwrite:false});
 			// start do_theCopy
 			var do_theCopy = function(postMake) {
+				var promise_copyIcon = OS.File.copy(path_toIcnsToCopy, path_iconDestination, {noOverwrite:false});
 				promise_copyIcon.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_copyIcon - ', aVal);
@@ -4734,34 +4809,33 @@ function makeLauncher(for_ini_key, ch_name) {
 						// end - do stuff here - promise_copyIcon
 					},
 					function(aReason) {
-						if (!postMake) { // meaning this is first time trying copy
-							if (hasLauncherIcon && aReason.becauseNoSuchFile)  {
-								// have to make icon first as it doesnt exist
-								var promise_makeTheIconAsItDNE = makeIcon(for_ini_key);
-								promise_makeTheIconAsItDNE.then(
-									function(aVal) {
-										console.log('Fullfilled - promise_makeTheIconAsItDNE - ', aVal);
-										// start - do stuff here - promise_makeTheIconAsItDNE
-										do_theCopy(1);
-										// end - do stuff here - promise_makeTheIconAsItDNE
-									},
-									function(aReason) {
-										var rejObj = {name:'promise_makeTheIconAsItDNE', aReason:aReason};
-										console.warn('Rejected - promise_makeTheIconAsItDNE - ', rejObj);
-										deferred_writeIcon.reject(rejObj);
-									}
-								).catch(
-									function(aCaught) {
-										var rejObj = {name:'promise_makeTheIconAsItDNE', aCaught:aCaught};
-										console.error('Caught - promise_makeTheIconAsItDNE - ', rejObj);
-										deferred_writeIcon.reject(rejObj);
-									}
-								);
-							}
+						if (!postMake && hasLauncherIcon && aReason.becauseNoSuchFile) { // meaning this is first time trying copy
+							// have to make icon first as it doesnt exist
+							var promise_makeTheIconAsItDNE = makeIcon(for_ini_key);
+							promise_makeTheIconAsItDNE.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_makeTheIconAsItDNE - ', aVal);
+									// start - do stuff here - promise_makeTheIconAsItDNE
+									do_theCopy(1);
+									// end - do stuff here - promise_makeTheIconAsItDNE
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_makeTheIconAsItDNE', aReason:aReason};
+									console.warn('Rejected - promise_makeTheIconAsItDNE - ', rejObj);
+									deferred_writeIcon.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_makeTheIconAsItDNE', aCaught:aCaught};
+									console.error('Caught - promise_makeTheIconAsItDNE - ', rejObj);
+									deferred_writeIcon.reject(rejObj);
+								}
+							);
+						} else {
+							var rejObj = {name:'promise_copyIcon', aReason:aReason};
+							console.warn('Rejected - promise_copyIcon - ', rejObj);
+							deferred_writeIcon.reject(rejObj);
 						}
-						var rejObj = {name:'promise_copyIcon', aReason:aReason};
-						console.warn('Rejected - promise_copyIcon - ', rejObj);
-						deferred_writeIcon.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
@@ -4776,8 +4850,8 @@ function makeLauncher(for_ini_key, ch_name) {
 		}
 		// end - do_writeIcon
 		
-		// start - do_writeProfileExec_Xattr
-		var do_writeProfileExec_Xattr = function() {
+		// start - do_writeExecAndPermIt
+		var do_writeExecAndPermIt = function() {
 				// start - do_setPerms
 				var do_setPerms = function() {
 					var promise_setPermsScript = OS.File.setPermissions(path_profilistExec, {
@@ -4787,30 +4861,39 @@ function makeLauncher(for_ini_key, ch_name) {
 						function(aVal) {
 							console.log('Fullfilled - promise_setPermsScript - ', aVal);
 							// start - do stuff here - promise_setPermsScript
-							deferred_writeProfileExec_Xattr.resolve('perms set');
+							deferred_writeExecAndPermIt.resolve('perms set');
 							// end - do stuff here - promise_setPermsScript
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_setPermsScript', aReason:aReason};
 							console.warn('Rejected - promise_setPermsScript - ', rejObj);
-							deferred_writeProfileExec_Xattr.reject(rejObj);
+							deferred_writeExecAndPermIt.reject(rejObj);
 						}
 					).catch(
 						function(aCaught) {
 							var rejObj = {name:'promise_setPermsScript', aCaught:aCaught};
 							console.error('Caught - promise_setPermsScript - ', rejObj);
-							deferred_writeProfileExec_Xattr.reject(rejObj);
+							deferred_writeExecAndPermIt.reject(rejObj);
 						}
 					);
 				}
 				// end - do_setPerms
 				
 				// start - write exec
-				var deferred_execWrittenAndPermed = new Deferred();
-				var promise_execWrittenAndPermed = deferred_execWrittenAndPermed.promise;
 				
-				var path_profilistExec = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'profilist-' + bundleIdentifer);
-				var promise_writeExec = OS.File.writeAtomic(path_profilistExec, '#!/bin/sh\nexec "' + path_toFxBin + '" -profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote', {tmpPath:path_profilistExec+'.profilist.bkp'});
+				var path_toLauncherBin = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'firefox');
+				var path_profilistExec = OS.Path.join(/*path_toLauncher*/path_toFxApp, 'Contents', 'MacOS', 'profilist-' + bundleIdentifer); //i use path_toFxApp instead of path_toLauncher, so this way i dont have to wait for aliases to finish copying
+				var identJson = {
+					build: path_toFxBin,
+					iconName: getIconName(for_ini_key, theChName),
+					identifier: bundleIdentifer
+				};
+				var execConts = [
+					'#!/bin/sh',
+					'##' + JSON.stringify(identJson) + '##',
+					'exec "' + path_toLauncherBin + '" -profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
+				];
+				var promise_writeExec = OS.File.writeAtomic(path_profilistExec, execConts.join('\n'), {tmpPath:path_profilistExec+'.profilist.bkp'});
 
 				promise_writeExec.then(
 					function(aVal) {
@@ -4822,22 +4905,23 @@ function makeLauncher(for_ini_key, ch_name) {
 					function(aReason) {
 						var rejObj = {name:'promise_writeExec', aReason:aReason};
 						console.warn('Rejected - promise_writeExec - ', rejObj);
-						deferred_execWrittenAndPermed.reject(rejObj);
+						writeExecAndPermIt.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_writeExec', aCaught:aCaught};
 						console.error('Caught - promise_writeExec - ', rejObj);
-						deferred_execWrittenAndPermed.reject(rejObj);
+						writeExecAndPermIt.reject(rejObj);
 					}
 				);
 				// end - write exec			
 		}
-		// end - do_writeProfileExec_Xattr
+		// end - do_writeExecAndPermIt
 		
 		do_makeLauncherDirAndFiles();
 		do_writeIcon();
-		do_writeProfileExec_Xattr();
+		do_writeExecAndPermIt();
+		do_pathsPrefContentsJson();
 	};
 	
 	// end - setup getChName this then triggers the right os shortcut mechanism
@@ -4874,7 +4958,6 @@ function makeLauncher(for_ini_key, ch_name) {
 	
 	// start - sub globals (globals used in my sub funcs)
 	var theChName;
-	var theProfName_safedForPath;
 	var theLauncherAndAliasName;
 	// end - sub globals (globals used in my sub funcs)
 	
@@ -4954,8 +5037,7 @@ function makeDesktopShortcut(for_ini_key) {
 		var deferred_makeCut = new Deferred();
 		
 		if (OS.Constants.Sys.Name == 'Darwin') { //note:debug added in winnt
-			theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' ');
-			theLauncherAndAliasName = appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
+			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 			/*
 			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '%')"
 				// if its avail, then `ini[for_ini_key].props['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key].props['Profilist.launcher-basename']`
@@ -4989,9 +5071,9 @@ function makeDesktopShortcut(for_ini_key) {
 			}
 			
 			var makeDeskAlias = function() {
-				var pathToTarget = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app');
+				var pathToTargetDskAl = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app');
 				var pathToAlias = OS.Path.join(OS.Constants.Path.desktopDir, theLauncherAndAliasName);
-				var promise_makeDeskAlias = OS.File.unixSymLink(pathToTarget, pathToAlias)
+				var promise_makeDeskAlias = delAliasThenMake(pathToTargetDskAl, pathToAlias)
 				promise_makeDeskAlias.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_makeDeskAlias - ', aVal);
@@ -5000,13 +5082,13 @@ function makeDesktopShortcut(for_ini_key) {
 						// end - do stuff here - promise_makeDeskAlias
 					},
 					function(aReason) {
-						if (aReason.unixErrno == 17) {
-							deferred_makeDesktopShortcut.resolve('desktop shortcut already exists');
-						} else {
+						//if (aReason.unixErrno == 17) {
+						//	deferred_makeDesktopShortcut.resolve('desktop shortcut already exists'); //should never happen as i del first
+						//} else {
 							var rejObj = {name:'promise_makeDeskAlias', aReason:aReason};
 							console.warn('Rejected - promise_makeDeskAlias - ', rejObj);
 							deferred_makeDesktopShortcut.reject(rejObj);
-						}
+						//}
 					}
 				).catch(
 					function(aCaught) {
@@ -5020,18 +5102,55 @@ function makeDesktopShortcut(for_ini_key) {
 			if ('Profilist.launcher' in ini[for_ini_key].props) {
 				//assume it exists
 				//but lets verify just in case
-				var pathToTarget = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app');
-				var promise_launcherExists = OS.File.exists(pathToTarget);
+				var pathToExecViaLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app', 'Contents', 'MacOS', 'profilist-' + ini[for_ini_key].props['Profilist.launcher']);
+				var promise_launcherExists = read_encoded(pathToExecViaLauncher, {encoding:'utf-8'});
 				promise_launcherExists.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_launcherExists - ', aVal);
 						// start - do stuff here - promise_launcherExists
-						makeDeskAlias();
+						var identingJson = aVal.match(/##(.*?)##/);
+						console.info('identingJson:', identingJson);
+						if (!identingJson) {
+							throw 'failed to get identingJson';
+						} else {
+							var needUpdateLauncher = false;
+							identingJson = JSON.parse(identingJson[1]);
+							
+							var path_toFxApp; // path we will launch
+							if ('Profilist.tie' in ini[for_ini_key].props) {
+								path_toFxApp = getPathToBuildByTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
+							} else {
+								path_toFxApp = profToolkit.exePath; //not tied so use current builds path
+							}
+							var path_toFxBin = path_toFxApp;
+							path_toFxApp = path_toFxApp.substr(0, path_toFxApp.toLowerCase().indexOf('.app') + 4);
+							
+							if (identingJson.iconName != getIconName(for_ini_key, theChName)) {
+								console.log('icon of curent cut doesnt match so need to update that', 'getIconName(for_ini_key, theChName):', getIconName(for_ini_key, theChName), 'identingJson.iconName:', identingJson.iconName);
+								needUpdateLauncher = true;
+							} else if (identingJson.build != path_toFxApp) {
+								console.log('the build inside this cut doesnt match path_toFxApp', 'path_toFxApp:', path_toFxApp, 'identingJson.build:', identingJson.build);
+								needUpdateLauncher = true;
+							}
+							if (needUpdateLauncher) {
+								makeLauncherThenAlias();
+							} else {
+								console.log('no update needed, so resolve as saying it already exists');
+								deferred_makeDesktopShortcut.resolve('already exists with right params');
+							}
+						}
 						// end - do stuff here - promise_launcherExists
 					},
 					function(aReason) {
 						console.error('THIS SHOULD NEVER HAPPEN, as if Profilist.launcher is ini, then launcher should exist. launcher does not exist even though Profilist.launcher is in ini for this key, so makeLauncher then try makeAlias again');
-						makeLauncherThenAlias();
+						var deepestReason = aReason; while (deepestReason.aReason) { deepestReason = deepestReason.aReason }
+						if (deepestReason.becauseNoSuchFile) {
+							makeLauncherThenAlias();
+						} else {
+							var rejObj = {name:'promise_launcherExists', aReason:aReason};
+							console.error('Caught - promise_launcherExists - ', rejObj);
+							deferred_makeDesktopShortcut.reject(rejObj);
+						}
 					}
 				).catch(
 					function(aCaught) {
@@ -5080,13 +5199,21 @@ function makeDesktopShortcut(for_ini_key) {
 	
 	// start - globals for these sub funcs
 	var theChName;
-	var theProfName_safedForPath;
 	var theLauncherAndAliasName;
 	// end - globals for these sub funcs
 	
 	do_getChName();
 	
 	return deferred_makeDesktopShortcut.promise;
+}
+function getLauncherName(for_ini_key, theChName) {
+	var theProfName_safedForPath;
+	if (OS.Constants.Sys.Name == 'WINNT') {
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '%')
+	} else {
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' '); //for mac and nix
+	}
+	return appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 }
 // end - shortcut creation
 
@@ -5876,7 +6003,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 				function(aCaught) {
 					var rejObj = {name:'promise_makeRequestedCut', aCaught:aCaught};
 					console.error('Caught - promise_makeRequestedCut - ', rejObj);
-					var deepestReason = aReason; while (deepestReason.aReason || deepestReason.aCaught) { deepestReason = (deepestReason.aReason || deepestReason.aCaught) }
+					var deepestReason = aCaught; while (deepestReason.aReason || deepestReason.aCaught) { deepestReason = (deepestReason.aReason || deepestReason.aCaught) }
 					var responseJson = {
 						clientId: incomingJson.clientId,
 						status: 0,
@@ -6313,59 +6440,295 @@ function showPick4Badging(win) {
 }
 // end - file picker for changing badge
 
+//start - mac over and unover ride stuff
+var specialKeyReplaceType;
+var nsIFile_origAlias = {};
+function mac_doPathsOverride() {
+	// returns promise
+	var deferred_mac_doPathsOverride = new Deferred();
+	
+	var string_prefContents;
+	try {
+		string_prefContents = Services.prefs.getCharPref('extension.Profilist@jetpack.mac-paths-fixup');
+	} catch (ex/* if ex.result != Cr.NS_ERROR_UNEXPECTED*/) {
+		// Cr.NS_ERROR_UNEXPECTED is what is thrown when pref doesnt exist
+		//throw ex;
+	}
+	
+	var json_prefContents;
+	var overrideSpecialPaths = function() {
+		// returns nothing
+		//var nsIFile_origAlias = {};
+		
+		var aliasAppPath = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent.path;
+		var mainAppPath = json_prefContents.mainAppPath;
+		var main_profLD_LDS_basename = json_prefContents.main_profLD_LDS_basename;
+		
+		specialKeyReplaceType = {
+			//group
+			'XREExeF': 3,
+			'XREAppDist': 3,
+			'DefRt': 3,
+			'PrfDef': 3,
+			'profDef': 3,
+			'ProfDefNoLoc': 3,
+			'ARes': 3,
+			'AChrom': 3,
+			'APlugns': 3,
+			'SrchPlugns': 3,
+			'XPIClnupD': 3,
+			'CurProcD': 3,
+			'XCurProcD': 3,
+			'XpcomLib': 3,
+			'GreD': 3,
+			'GreBinD': 3,
+			//group
+			'UpdRootD': 5,
+			//group
+			'ProfLDS': 4,
+			'ProfLD': 4
+		};
+		
+		var replaceTypes = {
+			3: function(key) {
+				//replace aliasAppPath with mainAppPath after getting orig key value
+				var newpath = nsIFile_origAlias[key].path.replace(aliasAppPath, mainAppPath);
+				return new FileUtils.File(newpath);
+			},
+			4: function(key) {
+				// for ProfLD and ProfLDS
+				// replace basename of alias with basename of main IF its IsRelative=1
+				// ProfLD and ProfLDS are same in all cases, IsRelative==1 || 0 and reg || alias
+				// DefProfLRt AND DefProfRt are same in alias and reg in both IsRelative 1 and 0
+				// IsRelative=1 ProfLD and ProfLDS are based on DefProfLRt in regular, but on DefProfRt in alias
+				// so to detect if IsRelative == 1 I can test to see if ProfLD and ProfLDS contain DefProfLRt OR DefProfRt
+				if (nsIFile_origAlias[key].path.indexOf(Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path) > -1 || nsIFile_origAlias[key].path.indexOf(Services.dirsvc.get('DefProfRt', Ci.nsIFile).path) > -1) {
+					// ProfLD or ProfLDS are keys, and they contain either DefProfLRt or DefProfRt, so its a realtive profile
+					// IsRelative == 1
+					// so need fix up on ProfLD and ProfLDS
+					var newAlias_ProfLD_or_ProfLDS = nsIFile_origAlias[key].path.replace(nsIFile_origAlias[key].parent.path, main_profLD_LDS_basename);
+					// disovered that DefProfLRt is correct in alias of rel path and abs path. so i dont have to store it, can just do replace .parent.path with : `var newAlias_ProfLD_or_ProfLDS = nsIFile_origAlias[key].path.replace(nsIFile_origAlias[key].parent.path, Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path);`
+					return new FileUtils.File(newAlias_ProfLD_or_ProfLDS);
+				} else {
+					//IsRelative == 0
+					// so no need for fix up, just return what it was
+					console.log('no need for fixup of ProfLD or ProfLDS as this is custom path profile, meaning its absolute path, meaning IsRelative==0');
+					return nsIFile_origAlias[key];
+				}
+			},
+			5: function() {
+				// for UpdRootD
+				// replaces the aliasAppPath (minus the .app) in UpdRootD with mainAppPath (minus the .app)
+				var aliasAppPath_noExt = aliasAppPath.substr(0, aliasAppPath.length-('.app'.length));
+				var mainAppPath_noExt = mainAppPath.substr(0, mainAppPath.length-('.app'.length));
+				var newpath = nsIFile_origAlias['UpdRootD'].path.replace(aliasAppPath_noExt, mainAppPath_noExt);
+				return new FileUtils.File(newpath);
+			}
+			// not yet cross checked with custom path
+		};
+		
+		macStuff.overidingDirProvider = {
+			getFile: function(aProp, aPersistent) {
+				aPersistent.value = true;
+				if (replaceTypes[specialKeyReplaceType[aProp]]) {
+					return replaceTypes[specialKeyReplaceType[aProp]](aProp);
+				}
+				return null;
+			},
+			QueryInterface: function(aIID) {
+				if (aIID.equals(Ci.nsIDirectoryServiceProvider) || aIID.equals(Ci.nsISupports)) {
+					return this;
+				}
+				console.error('override DirProvider error:', Cr.NS_ERROR_NO_INTERFACE, 'aIID:', aIID);
+			}
+		};
+
+		for (var key in specialKeyReplaceType) {
+			nsIFile_origAlias[key] = Services.dirsvc.get(key, Ci.nsIFile);
+			/*
+			if (specialKeyReplaceType[key] == 2) {
+				path_origAlias[key] = Services.dirsvc.get(key, Ci.nsIFile).path;
+			}
+			*/
+			Services.dirsvc.undefine(key);
+		}
+		Services.dirsvc.registerProvider(macStuff.overidingDirProvider);
+		//myServices.ds.unregisterProvider(dirProvider);
+		console.log('oevrrid');
+	};
+	
+	if (string_prefContents) {
+		// actually forget it, just on shutdown i should unregister the dirProvider
+		json_prefContents = JSON.parse(string_prefContents);
+		overrideSpecialPaths();
+		deferred_mac_doPathsOverride.resolve('paths overrid');
+	} else {
+		//var path_to_ThisPathsFile = OS.Path.join(Services.dirsvc.get('GreBinD', Ci.nsIFile).path, 'profilist-main-paths.json'); // because immediate children of Contents are aliased specifically the Resource dir, i can just access it like this, no matter if overrid or not, and it (GreD) is not overrid at this point		
+		var path_to_ThisPathsFile = OS.Path.join(Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.path, 'profilist-main-paths.json'); // because immediate children of Contents are aliased specifically the Resource dir, i can just access it like this, no matter if overrid or not, and it (GreD) is not overrid at this point		
+		var promise_readThisPathsFile = read_encoded(path_to_ThisPathsFile, {encoding:'utf-8'});
+		promise_readThisPathsFile.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readThisPathsFile - ', aVal);
+				// start - do stuff here - promise_readThisPathsFile
+				string_prefContents = aVal;
+				json_prefContents = JSON.parse(aVal);
+				overrideSpecialPaths(); //lets go stragiht to override, we'll right the pref afterwards, just to save a ms or two
+				Services.prefs.setCharPref('extension.Profilist@jetpack.mac-paths-fixup', aVal); // im not going to set a default on this, because if i do then on startup the pref wont exist so it would have to written first, which would require me to read the file on disk, which we want to avoid
+				deferred_mac_doPathsOverride.resolve('paths overrid');
+				// end - do stuff here - promise_readThisPathsFile
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_readThisPathsFile', aReason:aReason};
+				console.warn('Rejected - promise_readThisPathsFile - ', rejObj);
+				deferred_mac_doPathsOverride.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readThisPathsFile', aCaught:aCaught};
+				console.error('Caught - promise_readThisPathsFile - ', rejObj);
+				deferred_mac_doPathsOverride.reject(rejObj);
+			}
+		);
+	}
+	
+	return deferred_mac_doPathsOverride.promise;
+}
+
+function mac_doPathsUNoveride() {
+	if (!macStuff.overidingDirProvider) {
+		console.log('nothing to unoverride');
+		return;
+	}
+	
+	Services.dirsvc.unregisterProvider(macStuff.overidingDirProvider);
+	console.warn('ok took it out the overidingProvider');
+	
+	macStuff.UNoveridingDirProvider = {
+		getFile: function(aProp, aPersistent) {
+			aPersistent.value = true;
+			return nsIFile_origAlias[aProp];
+		},
+		QueryInterface: function(aIID) {
+			if (aIID.equals(Ci.nsIDirectoryServiceProvider) || aIID.equals(Ci.nsISupports)) {
+				return this;
+			}
+			console.error('UNoverride DirProvider error:', Cr.NS_ERROR_NO_INTERFACE, 'aIID:', aIID);
+		}
+	};
+
+	for (var key in specialKeyReplaceType) {
+		// have to try catch because if it was not referenced meaning no one did Services.dirsvc.get('blah', ...) then it never got defined
+		try {
+			Services.dirsvc.undefine(key);
+		} catch (ex) {
+			console.warn('warn on key:', key, ex);
+		}
+	}
+	Services.dirsvc.registerProvider(macStuff.UNoveridingDirProvider);
+	
+	for (var key in specialKeyReplaceType) {
+		// because will be unregistering this provider i have to run through them and get them defined, otherwise they will never get defined, and referencing them via Serv.dirvs.get('blah'...) will throw as theres no dir provider to provide it
+		var dummy = Services.dirsvc.get(key, Ci.nsIFile);
+		console.log('did unooveride on key', key, 'path:', dummy.path);
+	}
+	Services.dirsvc.unregisterProvider(macStuff.UNoveridingDirProvider);
+
+}
+//end - mac over and unover ride stuff
 function startup(aData, aReason) {
 //	console.log('in startup');
-	self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
-	PromiseWorker = Cu.import(self.chrome_path + 'modules/PromiseWorker.jsm').BasePromiseWorker;
-	ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
-	//console.log('aData', aData);
-//	//console.log('initing prof toolkit');
-	initProfToolkit();
-//	//console.log('init done');
-	//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
-	//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
-	//var cssEnc = encodeURIComponent(css);
-	var newURIParam = {
-		aURL: self.chrome_path /*self.aData.resourceURI.spec*/ + 'main.css', //'data:text/css,' + cssEnc,
-		aOriginCharset: null,
-		aBaseURI: null
-	}
-	cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
-	//myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
-	//start pref stuff more
-	myPrefListener = new PrefListener(); //init
-	console.info('myPrefListener', myPrefListener);
-	myPrefListener.register(aReason, false);
-	//end pref stuff more
-	
-	var promise_iniFirstRead = readIniAndParseObjs();
-	promise_iniFirstRead.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_iniFirstRead - ', aVal);
-			
-			windowListener.register();
-			
-			for (var o in observers) {
-				if (observers[o].preReg) { observers[o].preReg() }
-				Services.obs.addObserver(observers[o].anObserver, o, false);
-				observers[o].WAS_REGGED = true;
-				if (observers[o].postReg) { observers[o].postReg() }
+	var do_profilistStartup = function() { // wrap this so have time to do whatever os specific stuff before starting up profilist
+		self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
+		PromiseWorker = Cu.import(self.chrome_path + 'modules/PromiseWorker.jsm').BasePromiseWorker;
+		ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
+		//console.log('aData', aData);
+	//	//console.log('initing prof toolkit');
+		initProfToolkit();
+	//	//console.log('init done');
+		//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
+		//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
+		//var cssEnc = encodeURIComponent(css);
+		var newURIParam = {
+			aURL: self.chrome_path /*self.aData.resourceURI.spec*/ + 'main.css', //'data:text/css,' + cssEnc,
+			aOriginCharset: null,
+			aBaseURI: null
+		}
+		cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
+		//myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
+		
+		//start pref stuff more
+		myPrefListener = new PrefListener(); //init
+		console.info('myPrefListener', myPrefListener);
+		myPrefListener.register(aReason, false);
+		//end pref stuff more
+		
+		var promise_iniFirstRead = readIniAndParseObjs();
+		promise_iniFirstRead.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_iniFirstRead - ', aVal);
+				
+				windowListener.register();
+				
+				for (var o in observers) {
+					if (observers[o].preReg) { observers[o].preReg() }
+					Services.obs.addObserver(observers[o].anObserver, o, false);
+					observers[o].WAS_REGGED = true;
+					if (observers[o].postReg) { observers[o].postReg() }
+				}
+				//ifClientsAliveEnsure_thenEnsureListenersAlive();
+				onResponseEnsureEnabledElseDisabled();
+				//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_iniFirstRead', aReason:aReason};
+				console.error('Rejected - promise_iniFirstRead - ', rejObj);
 			}
-			//ifClientsAliveEnsure_thenEnsureListenersAlive();
-			onResponseEnsureEnabledElseDisabled();
-			//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
-		},
-		function(aReason) {
-			var rejObj = {name:'promise_iniFirstRead', aReason:aReason};
-			console.error('Rejected - promise_iniFirstRead - ', rejObj);
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_iniFirstRead - ', aCaught);
+				// throw aCaught;
+			}
+		);
+	};
+	
+	// os - mac specific stuff
+	if (OS.Constants.Sys.Name == 'Darwin') {
+		macStuff.isMac = true;
+		
+		// check if should override paths
+		if (OS.Constants.Path.libDir.indexOf('profilist_data') > -1) {
+			macStuff.isProfilistLauncher = true;
+			// need to override
+			var promise_overridePaths = mac_doPathsOverride();
+			promise_overridePaths.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_overridePaths - ', aVal);
+					// start - do stuff here - promise_overridePaths
+					do_profilistStartup();
+					// end - do stuff here - promise_overridePaths
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_overridePaths', aReason:aReason};
+					console.warn('Rejected - promise_overridePaths - ', rejObj);
+					Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_overridePaths', aCaught:aCaught};
+					console.error('Caught - promise_overridePaths - ', rejObj);
+					Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
+				}
+			);
+		} else {
+			// actually no need to create, as when first launcher is made the paths get made so ignore: `//create pathsPrefContentsJson;`
+			do_profilistStartup();
 		}
-	).catch(
-		function(aCaught) {
-			console.error('Caught - promise_iniFirstRead - ', aCaught);
-			// throw aCaught;
-		}
-	);
+		
+	} else {
+		do_profilistStartup();
+	}
+	// end - os specific stuff
 	
 }
 
@@ -6404,6 +6767,18 @@ function shutdown(aData, aReason) {
 	//end pref stuff more
 	
 	Cu.unload(self.chrome_path + 'modules/PromiseWorker.jsm');
+	
+	// start - os specific stuff
+	if (macStuff.isMac) {
+		//if ([ADDON_DOWNGRADE, ADDON_UPGRADE].indexOf(aReason) > -1 || macStuff.overidingDirProvider) { // its not bad to leave this registered so im going to leave it on disable/uninstall, but on upgrade/downgrade i unreg it so on the upgrade i can properly recognize that its a profilist launcher as opposed to main Firefox.app
+			mac_doPathsUNoveride();
+			//console.log('unregistered dir provider');
+			// old notes below:
+				// its not undefined, so it was registered
+				// in ureg because its needed so Profilist can upgrade gracefully
+		//}
+	}
+	// end - os specific stuff
 }
 
 function install() {}
@@ -6420,61 +6795,7 @@ function uninstall(aData, aReason) {
 }
 
 // start - custom to profilist helper functions
-function getImg_of_exactOrNearest_Bigger_then_Smaller(targetSize, objOfImgs) {
-	// objOfImgs should be an object with key's representing the size of the image. images are expected to be square. so size is == height == width of image
-	// objOfImgs should hvae the Image() loaded in objOfImgs[k].Image
-	// finds and returns the image which matches targetSize, if not found then it returns the image in objOfImgs that is immediately bigger, if nothing bigger, then returns what it is immediately smaller
-	
-	//objOfImgs should have key of the size of the image. the size of the img should be square. and each item should be an object of {Image:Image()}			
-	var nearestDiff;
-	var nearestKey;
-	for (var k in objOfImgs) {
-		var cDiff = k - targetSize;
-		if (cDiff === 0) {
-			nearestKey = k;
-			nearestDiff = 0;
-			break;
-		} else if (nearestKey === undefined) {
-			nearestKey = k;
-			nearestDiff = cDiff;					
-		} else if (cDiff < 0) {
-			// k.Image is smaller then targetSize
-			if (nearestDiff > 0) {
-				// already have a key of something bigger than targetSize so dont take this to holder, as k.Image a smaller
-			} else {
-				// then nearestDiff in holder is something smaller then targetSize
-				// take to holder if this is closer to 0 then nearestDiff
-				if (cDiff - targetSize < nearestDiff - targetSize) {
-					nearestDiff = cDiff;
-					nearestKey = k;
-				}
-			}
-		} else {
-			// cDiff is > 0
-			if (nearestDiff < 0) {
-				// the current in holder is a smaller then targetSize, so lets take this one as its a bigger
-				nearestDiff = cDiff;
-				nearestKey = k;
-			} else {
-				//nearestDiff is positive, and so is cDiff // being positive means that the k.thatKey is bigger then targetSize
-				//take the key of whichever is closer to target, so whichever is smaller
-				if (cDiff < nearestDiff) {
-					nearestDiff = cDiff;
-					nearestKey = k;
-				}
-			}
-			// bigger then targetSize takes priority so always take it, if its closer then nearestDiff in holder
-			if (cDiff - targetSize < nearestDiff - targetSize) {
-				nearestDiff = cDiff;
-				nearestKey = k;
-			}					
-		}
-	}
-	
-	console.log('the nearest found is of size: ', nearestKey, 'returning img:', objOfImgs[nearestKey].Image.toString());
-	
-	return objOfImgs[nearestKey].Image;
-}
+
 // end - custom to profilist helper functions
 
 // start - common helper functions

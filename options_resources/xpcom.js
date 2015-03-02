@@ -442,13 +442,15 @@ var observers = {
 		}, 400); //do in 100s because 200ms is transition time so opactiy only gets to 0.5 before i go for 1
 		setTimeout(function() {
 			loader.style.opacity = 0;
-			select.selectedIndex = 0;
-			select.removeAttribute('disabled');
+			shortcutSelect.selectedIndex = 0;
+			shortcutSelect.removeAttribute('disabled');
 		}, 700);
 	}
 	
 	function shortcutMade_failed(rsn) {
 		loader.style.opacity = 0;
+		shortcutSelect.selectedIndex = 0;
+		shortcutSelect.removeAttribute('disabled');
 		alert('Desktop Shortcut - The shortcut failed to be created, the reason was:\n\n' + rsn);
 	}
 	
