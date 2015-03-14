@@ -24,13 +24,19 @@
 	padding: 0;
 	border: 0;
 }
-
+/*
 .profilist-display-stack input {
+	pointer-events: auto;
+	opacity: 1;
 	font-size: inherit;
 	font-family: inherit;
 	outline: 1px solid hsla(210,4%,10%,.12);
+	clip: rect(-1px, -1px, 25px, -1px);
+	transition: clip 0.5s, background-color 0.4s;
+	background-color: rgba(255,255,255,1);
+	position: absolute;
 }
-
+*/
 #profilist_box > stack {
 	width:100%;
 	overflow:hidden;
@@ -99,9 +105,65 @@
 #profilist_box .profilist-tbb-box:not(.profilist-tbb-box-inactivatable):active {
 	background-color: hsla(210,4%,10%,.12);
 }
+/*
+this is kind of nice think about it
+.profilist-tbb-box .profilist-input {
+	pointer-events: none;
+	font-size: inherit;
+	font-family: inherit;
+	opacity: 0;
+	clip: rect(-1px, -1px, 25px, -1px);
+	transition: clip 0.5s ease 0.5s, background-color 0.5s, opacity 0s ease 1s;
+	background-color: rgba(255,255,255,0);
+	position: absolute;
+}
 
-.profilist-tbb-box:not(.profilist-edit) .profilist-input {
-	display: none;
+.profilist-tbb-box.profilist-edit .profilist-input {
+	pointer-events: auto;
+	opacity: 1;
+	outline: 1px solid hsla(210,4%,10%,.12);
+	transition: clip 0.5s, background-color 0.4s;
+	background-color: rgba(255,255,255,1);
+	transition: clip 0.5s, background-color 0.5s ease 0.5s, opacity 0s;
+}
+*/
+#profilist_box .profilist-tbb-box.profilist-edit .profilist-submenu {
+	/*width: 54px !important;*/
+}
+.profilist-tbb-box .toolbarbutton-text {
+	transition: opacity 0s;
+	opacity: 1;
+}
+
+.profilist-tbb-box.profilist-edit .toolbarbutton-text {
+	opacity: 0;
+	/*margin-left: 3px;*/
+	transition: opacity 0s ease 0.3s;/*, margin-left 0.2s ease 0.22s*/
+	pointer-events: none;
+}
+
+.profilist-tbb-box .profilist-input {
+	pointer-events: none;
+	font-size: inherit;
+	font-family: inherit;
+	opacity: 0;
+	margin-left: 0px;
+	clip: rect(-1px, -1px, 25px, -1px);
+	/*transition: clip 0s ease 0.2s, background-color 0.3s, opacity 0s ease 0.3s, margin-left 0.1s;*/
+	transition: clip 0s ease 0.3s, background-color 0.3s, opacity 0s ease 0.3s;
+	background-color: rgba(255,255,255,0);
+	position: absolute;
+}
+
+.profilist-tbb-box.profilist-edit .profilist-input {
+	pointer-events: auto;
+	opacity: 1;
+	background-color: rgba(255,255,255,1);
+	outline: 1px solid hsla(210,4%,10%,.12);
+	/*padding-left: 2px;*/
+	/*margin-left: 3px;*/
+	/*transition: clip 0.3s, background-color 0.2s ease 0.35s, margin-left 0.2s ease 0.22s, opacity 0s ease 0s, padding-left 0.1s ease 0.22s;*/
+	transition: clip 0.5s, background-color 0.3s ease 0.5s, opacity 0s ease 0s;
 }
 
 .profilist-tbb {
@@ -222,10 +284,11 @@
 	display: flex;
 	transition: width 300ms, opacity 150ms;
 	opacity: 0;
-	width: calc(1*18px); /* 18px is the width of the images */
+	width: /*calc(1*18px)*/ 18px; /* 18px is the width of the images */
 }
 
-.profilist-tbb-box:hover .profilist-submenu {
+.profilist-tbb-box:hover .profilist-submenu,
+.profilist-edit .profilist-submenu {
 	opacity: 1;
 }
 
@@ -255,24 +318,24 @@
 
 /*start - submenu positions when dev disabled*/
 #profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu:hover {
-	width: calc(2*18px);
+	width: /*calc((2*18px)+1)*/ 36px;
 }
 #profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
-	width: calc(3*18px);
+	width: /*calc((3*18px)+1)*/ 54px;
 }
 /*end - submenu positions when dev disabled*/
 
 /*start - submenu positions when dev enabled*/
 #profilist_box.profilist-dev-enabled .profilist-tbb-box[status=active] .profilist-submenu:hover {
-	width: calc(4*18px);
+	width: /*calc((4*18px)+1)*/ 72px;
 }
 #profilist_box.profilist-dev-enabled .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
-	width: calc(5*18px);
+	width: /*calc((5*18px)+1)*/ 90px;
 }
 /*end - submenu positions when dev enabled*/
 
 .profilist-tbb-box.profilist-tied .profilist-submenu {
-	width: calc(10px + 18px + 5px);
+	width: /*calc(10px + 18px + 5px)*/ 33px;
 }
 
 /* end submenu*/
@@ -302,7 +365,8 @@
 	pointer-events: none;
 }
 
-.profilist-submenu:hover .profilist-dots {
+.profilist-submenu:hover .profilist-dots,
+.profilist-edit .profilist-dots {
 	/*/*opacity: 0;*/
 	display: none;
 }
@@ -342,10 +406,22 @@
 	flex-shrink: 0;
 }
 
-.profilist-submenu box:not(.profilist-dots):hover {
+.profilist-submenu box:not(.profilist-dots):hover,
+#profilist_box .profilist-edit .profilist-submenu .profilist-sub-clicked {
 	opacity: 1;
 }
-.profilist-submenu box:not(.profilist-dots):not(.profilist-dev-build):hover { /*special for dev build no filter removal*/
+
+#profilist_box .profilist-edit .profilist-submenu box:not(.profilist-sub-clicked):not(.profilist-dots) {
+	opacity: 0;
+	
+	/*width: 0;*/
+	transition: width 0s ease 325ms; /* wait for width move to stop then change width, width move takes 300ms*/
+	
+	pointer-events: none;
+}
+
+.profilist-submenu box:not(.profilist-dots):not(.profilist-dev-build):hover,
+#profilist_box .profilist-edit box { /*special for dev build no filter removal*/
 	filter: none;
 }
 

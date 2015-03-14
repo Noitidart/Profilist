@@ -1212,14 +1212,28 @@ function initProfToolkit() {
 	*/
 }
 
+var panelHidUnloaders = [];
+function checkAndExecPanelHidUnloaders(cDOMWin, specificName) {
+	for (var i=0; i<panelHidUnloaders.length; i++) {
+		if (!specificName || (specificName && panelHidUnloaders[i].name == specificName)) {
+			if (panelHidUnloaders[i].view == cDOMWin) {
+				panelHidUnloaders[i].func();
+				panelHidUnloaders.splice(i, 1);
+				i--;
+			}
+		}
+	}
+}
 function updateOnPanelHid(e) {
 	// do these actions on hid because like if we dont close it, then if user goes to customize, then it remains open blah blah ya
 	console.log('execing updateOnPanelHid, e:', e);
-	if (e.target.id != 'PanelUI-popup') { return }
-	
+	if (e.originalTarget.id != 'PanelUI-popup') { return }
+
 	var DOMWin = e.view;
 	DOMWin.Profilist.PBox.style.height = collapsedheight + 'px';
 	DOMWin.Profilist.PBox.classList.remove('profilist-hovered');
+	
+	checkAndExecPanelHidUnloaders(DOMWin);
 }
 
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
@@ -1316,6 +1330,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				if (PBox.classList.contains('profilist-keep-open')) { return }
 				PBox.style.height = collapsedheight + 'px';
 				PBox.classList.remove('profilist-hovered');
+				checkAndExecPanelHidUnloaders(aDOMWindow);
 			}, false);
 	} else {
 		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
@@ -2808,6 +2823,7 @@ function tbb_box_click(e) {
 	console.log('clicked target == box it should:', box);
 	var className;
 	var classList = origTarg.classList;
+
 	
 	var classAction = {
 		'profilist-tbb-box': function() {
@@ -2853,8 +2869,50 @@ function tbb_box_click(e) {
 			console.log('wiggle for clone');
 		},
 		'profilist-inactive-del': function() {
-			var nameOfProfileToDelete = origTarg.parentNode.parentNode.getAttribute('label');
+			var nameOfProfileToDelete = box.getAttribute('label');
 			console.log('delete, prof name:', nameOfProfileToDelete);
+			
+			var cDoc = origTarg.ownerDocument;
+			var cWin = cDoc.defaultView;
+			var lblEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'toolbarbutton-text');			
+			if (box.classList.contains('profilist-edit')) {
+				// cancel it so restore it
+				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // restore self
+			} else {
+				// open it
+				origTarg.classList.add('profilist-sub-clicked');
+				var nodeNum = Array.prototype.slice.call(box.childNodes).indexOf(origTarg);
+				console.log('origTarg.parentNode:', origTarg.parentNode);
+				origTarg.parentNode.style.width = ((nodeNum+1) * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+				box.classList.add('profilist-edit');
+				lblEl.style.transition = 'opacity 250ms';
+				lblEl.style.opacity = '0';
+				cWin.setTimeout(function() {
+					lblEl.value = 'ENTER = Confirm  ESC = Cancel';
+					lblEl.style.opacity = '1';
+				}, 250);
+				
+				var restoreIt = function() {
+						origTarg.parentNode.style.width = '';
+						box.classList.remove('profilist-edit');
+						origTarg.classList.remove('profilist-sub-clicked');
+						lblEl.style.opacity = '0';
+						cWin.setTimeout(function() {
+							lblEl.value = box.getAttribute('label');
+							lblEl.style.opacity = '1';
+						}, 250);
+						cWin.setTimeout(function() {
+							lblEl.style.transition = '';
+						}, 500);
+				};
+				panelHidUnloaders.push({
+					view: cWin,
+					name: 'profilist-sub-clicked',
+					func: restoreIt
+				});
+			}
+			
+			/*
 			var promise_deleteProf = deleteProfile(0, nameOfProfileToDelete);
 			promise_deleteProf.then(
 				function() {
@@ -2864,12 +2922,90 @@ function tbb_box_click(e) {
 					console.error('deleting profile failed for aReason:', aReason);
 				}
 			);
+			*/
 		},
 		'profilist-default': function() {
-			console.log('set this profile as default');
+			console.log('set this profile as default');			
 		},
 		'profilist-rename': function() {
-			console.log('rename this one');
+			console.log('open rename this one or close');
+			var cDoc = origTarg.ownerDocument;
+			var cWin = cDoc.defaultView;
+			
+			if (box.classList.contains('profilist-edit')) {
+				//close it
+				console.log('need to close');
+				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+			} else {
+				console.log('need to open');
+				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close whatever was open
+				// open it
+
+				var PUI = cWin.PanelUI.panel;
+				var renameKeyListener = function(e) {
+					console.log('key pressed, e.keyCode = ', e.keyCode);
+					if (e.keyCode == 27) {
+						e.preventDefault();
+						e.stopPropagation();
+					} else if (e.keyCode == 13) {
+						e.preventDefault();
+						e.stopPropagation();						
+					}
+				}
+				cWin.addEventListener('keydown', renameKeyListener, true);
+				
+				//sub init
+				var inputEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'profilist-input');
+				var subBox = origTarg.parentNode;
+				inputEl.value = box.getAttribute('label');
+				var icon = origTarg;
+				var numVisIcons = (subBox.clientWidth) / 18;
+				var numIconClicked = Math.ceil(e.layerX / 18);
+				console.log('layerX:', e.layerX, 'clientWidth:', subBox.clientWidth);
+				console.log('numIconClicked:', numIconClicked, 'numVisIcons:', numVisIcons);
+				//when 3 icons visible, origTarg.parentNode (submenu box) width is 54 in fully stretched
+					// can click on 1-18 which is furthest in icon. 19-36 is 2nd. 37-54 is last
+				//end sub init
+				
+				//origTarg.parentNode is the submenu box
+				icon.classList.add('profilist-sub-clicked');
+				//subBox.style.width = (subBox.clientWidth - (numIconClicked * 18)) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+				subBox.style.width = (numIconClicked * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+				box.classList.add('profilist-edit');
+				console.log('inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
+				cWin.setTimeout(function() {
+					// this is needed for labels that are elipsiid, meaning they take the whole width, and collapsing the submenu to just one icon gave it more room
+					if (icon.classList.contains('profilist-sub-clicked')) {
+						console.log('postTimeout inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
+						inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
+						// it seems like if i modify the width while its in animation, it doesnt complete the first trans in .5s then take another .5s to do from that finished to the new one, subhanallah this is awesome! // so i just need to re-set the width before it completes
+					}
+				}, 300); // the 300 is the ms it takes for the width of subBox css to complete, from main.css
+				inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
+				inputEl.addEventListener('transitionend', function(e) {
+					//console.log('e.propertyName:', e.propertyName);
+					if (e.propertyName != 'background-color') { return }
+					//console.log('bgcolor so carrying on');
+					inputEl.removeEventListener('transitionend', arguments.callee, false);
+					//inputEl.select();
+					inputEl.focus();
+				}, false);
+				
+				var closeIt = function() {
+						//close it
+						inputEl.blur();
+						cWin.removeEventListener('keydown', renameKeyListener, true);
+						subBox.style.width = '';
+						box.classList.remove('profilist-edit');
+						inputEl.style.clip = '';
+						icon.classList.remove('profilist-sub-clicked');
+				};
+				panelHidUnloaders.push({
+					view: cWin,
+					name: 'profilist-sub-clicked',
+					func: closeIt
+				});
+			}
 		},
 		'profilist-dev-build': function() {
 			console.log('change build');
@@ -3019,6 +3155,18 @@ function tbb_box_click(e) {
 	}
 	
 	classAction[className]();
+}
+
+function iniKeyOfName(theProfileName) {
+	// given a profile name, it will get the ini key of it
+	// theProfileName is case sensitive
+	for (var p in ini) {
+		if ('num' in ini[p]) {
+			if (ini[p].props.Name == theProfileName) {
+				return p;
+			}
+		}
+	}
 }
 
 function keepPuiShowing(e) {
