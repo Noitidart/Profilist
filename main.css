@@ -138,7 +138,7 @@ this is kind of nice think about it
 .profilist-tbb-box.profilist-edit .toolbarbutton-text {
 	opacity: 0;
 	/*margin-left: 3px;*/
-	transition: opacity 0s ease 0.3s;/*, margin-left 0.2s ease 0.22s*/
+	transition: opacity 0s ease 0.8s;/*, margin-left 0.2s ease 0.22s*/
 	pointer-events: none;
 }
 
@@ -153,17 +153,19 @@ this is kind of nice think about it
 	transition: clip 0s ease 0.3s, background-color 0.3s, opacity 0s ease 0.3s;
 	background-color: rgba(255,255,255,0);
 	position: absolute;
+	color: transparent;
 }
 
 .profilist-tbb-box.profilist-edit .profilist-input {
 	pointer-events: auto;
 	opacity: 1;
+	color: inherit;
 	background-color: rgba(255,255,255,1);
 	outline: 1px solid hsla(210,4%,10%,.12);
 	/*padding-left: 2px;*/
 	/*margin-left: 3px;*/
 	/*transition: clip 0.3s, background-color 0.2s ease 0.35s, margin-left 0.2s ease 0.22s, opacity 0s ease 0s, padding-left 0.1s ease 0.22s;*/
-	transition: clip 0.5s, background-color 0.3s ease 0.5s, opacity 0s ease 0s;
+	transition: clip 0.5s, background-color 0.3s ease 0.5s, opacity 0s ease 0s, color 0s ease 0.8s;
 }
 
 .profilist-tbb {

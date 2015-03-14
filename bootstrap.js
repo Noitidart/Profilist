@@ -2940,19 +2940,6 @@ function tbb_box_click(e) {
 				console.log('need to open');
 				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close whatever was open
 				// open it
-
-				var PUI = cWin.PanelUI.panel;
-				var renameKeyListener = function(e) {
-					console.log('key pressed, e.keyCode = ', e.keyCode);
-					if (e.keyCode == 27) {
-						e.preventDefault();
-						e.stopPropagation();
-					} else if (e.keyCode == 13) {
-						e.preventDefault();
-						e.stopPropagation();						
-					}
-				}
-				cWin.addEventListener('keydown', renameKeyListener, true);
 				
 				//sub init
 				var inputEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'profilist-input');
@@ -2982,6 +2969,7 @@ function tbb_box_click(e) {
 					}
 				}, 300); // the 300 is the ms it takes for the width of subBox css to complete, from main.css
 				inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
+				
 				inputEl.addEventListener('transitionend', function(e) {
 					//console.log('e.propertyName:', e.propertyName);
 					if (e.propertyName != 'background-color') { return }
@@ -2994,6 +2982,9 @@ function tbb_box_click(e) {
 				var closeIt = function() {
 						//close it
 						inputEl.blur();
+						inputEl.value = box.getAttribute('label');
+						inputEl.selectionStart = 0;
+						inputEl.selectionEnd = 0;
 						cWin.removeEventListener('keydown', renameKeyListener, true);
 						subBox.style.width = '';
 						box.classList.remove('profilist-edit');
@@ -3005,6 +2996,21 @@ function tbb_box_click(e) {
 					name: 'profilist-sub-clicked',
 					func: closeIt
 				});
+				
+				var renameKeyListener = function(e) {
+					console.log('key pressed, e.keyCode = ', e.keyCode);
+					if (e.keyCode == 27) {
+						e.preventDefault();
+						e.stopPropagation();
+						checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+					} else if (e.keyCode == 13) {
+						box.setAttribute('label', inputEl.value);
+						checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+						e.preventDefault();
+						e.stopPropagation();						
+					}
+				}
+				cWin.addEventListener('keydown', renameKeyListener, true);
 			}
 		},
 		'profilist-dev-build': function() {
@@ -3079,6 +3085,8 @@ function tbb_box_click(e) {
 			console.log('should prevent closing of menu - change badge');
 			//e.stopPropagation();  //just need preventDefault to stop panel from closing on click
 			e.preventDefault();
+			
+			checkAndExecPanelHidUnloaders(e.view, 'profilist-sub-clicked'); // close whatever is open
 			
 			var targetedProfileName = targetedTBB.getAttribute('label');
 			targetedTBB.classList.add('profilist-in-badge-change');
