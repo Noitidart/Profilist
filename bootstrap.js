@@ -91,11 +91,13 @@ iniStr_thatAffectDOM
 watchBranches[myPrefBranch]
 current builds icon if dev mode is enabled
 */
-		var promise_readIniAndParseObjs = new Deferred();
-		var promise_iniObjFinalized = new Deferred();
-		promise_iniObjFinalized.promise.then(
+		var deferred_riapoMAIN = new Deferred();
+		var deferred_readIniAndMaybeBkp = new Deferred();		
+		deferred_readIniAndMaybeBkp.promise.then(
 			function(aVal) {
-				console.log('Success - promise_iniObjFinalized - aVal:', aVal);
+				console.log('Fullfilled - deferred_readIniAndMaybeBkp.promise - ', aVal);
+				// start - do stuff here - deferred_readIniAndMaybeBkp.promise
+				console.log('Success - deferred_readIniAndMaybeBkp - aVal:', aVal);
 				//parse objs
 				iniStr = aVal; //or can do JSON.stringify(ini);
 				//iniStr_thatAffectDOM
@@ -150,6 +152,7 @@ current builds icon if dev mode is enabled
 						//console.log('ini of name', pref_name_in_ini, 'not found in ini, now will check if the current value of the pref is the default', 'cur:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value, 'default:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default);
 						if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value != myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default) {
 							var doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni = true;
+							console.error('doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni');
 						}
 						//note:todo:11/14/14 112a: i edited in something to ini, so i should do a writeIni or mark it so that a writeIni is done sometime
 					}
@@ -244,69 +247,65 @@ current builds icon if dev mode is enabled
 					}
 					// start - im not sure if i need to writeIniAndBkpIfDiff here // edit: is needed if prefs are not all at default
 					var promise_writeIniAndBkpIfDiff = writeIniAndBkpIfDiff();
-					return promise_writeIniAndBkpIfDiff.then(
+					promise_writeIniAndBkpIfDiff.then(
 						function(aVal) {
 							console.log('Fullfilled - promise_writeIniAndBkpIfDiff - ', aVal);
-							return promise_readIniAndParseObjs.resolve('objs parsed and wroteIfDiff');
+							// start - do stuff here - promise_writeIniAndBkpIfDiff
+							deferred_riapoMAIN.resolve('objs parsed and wroteIfDiff');
+							// end - do stuff here - promise_writeIniAndBkpIfDiff
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_writeIniAndBkpIfDiff', aReason:aReason};
-							console.error('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
-							return promise_readIniAndParseObjs.resolve('objs parsed BUT wroteIfDiff failed');
+							console.warn('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
+							deferred_riapoMAIN.reject(rejObj);
 						}
 					).catch(
 						function(aCaught) {
-							console.error('Caught - promise_writeIniAndBkpIfDiff - ', aCaught);
-							// throw aCaught;
+							var rejObj = {name:'promise_writeIniAndBkpIfDiff', aCaught:aCaught};
+							console.error('Caught - promise_writeIniAndBkpIfDiff - ', rejObj);
+							deferred_riapoMAIN.reject(rejObj);
 						}
 					);
 					// end - im not sure if i need to writeIniAndBkpIfDiff here
 				} else {
-					return promise_readIniAndParseObjs.resolve('objs parsed');
+					deferred_riapoMAIN.resolve('objs parsed');
 				}
+				// end - do stuff here - deferred_readIniAndMaybeBkp.promise
 			},
 			function(aReason) {
-				var rejObj = {name:'promise_iniObjFinalized', aReason:aReason};
-				console.error('Rejected - promise_iniObjFinalized - ', rejObj);
-				return promise_readIniAndParseObjs.reject(rejObj);
-				//return Promise.reject('Rejected promise_iniObjFinalized aReason:' + aReason.message);
+				var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aReason:aReason};
+				console.warn('Rejected - deferred_readIniAndMaybeBkp.promise - ', rejObj);
+				deferred_riapoMAIN.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
-				console.error('Caught - promise_iniObjFinalized - ', aCaught);
-				// throw aCaught;
+				var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aCaught:aCaught};
+				console.error('Caught - deferred_readIniAndMaybeBkp.promise - ', rejObj);
+				deferred_riapoMAIN.reject(rejObj);
 			}
 		);
+		
+		
 		///////////
 		//start - read the ini file and if needed read the bkp to create the ini object
 	//	console.log('in read');
 	//	console.log('decoder got');
 	//	console.log('starting read');
-		if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
-			var promise_readIni = OS.File.read(profToolkit.path_iniFile); // Read the complete file as an array
-		} else {
-			var promise_readIni = OS.File.read(profToolkit.path_iniFile, {encoding:'utf-8'});
-		}
-	//	console.log('read promise started');
+		var promise_readIni = read_encoded(profToolkit.path_iniFile, {encoding:'utf-8'});
+		
 		promise_readIni.then(
 			function(aVal) {
-				console.log('Success', 'promise_readIni');
-				if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
-					if (!decoder) {
-						decoder = new TextDecoder(); // This decoder can be reused for several reads
-					}
-					var readStr = decoder.decode(aVal); // Convert this array to a text
-				} else {
-					var readStr = aVal;
-				}
+				console.log('Fullfilled - promise_readIni - ', aVal);
+				// start - do stuff here - promise_readIni
+				var readStr = aVal;
 				if (iniReadStr == readStr) {
-					promise_readIniAndParseObjs.resolve('no need to parse regex even, the readStr is same');
+					deferred_readIniAndMaybeBkp.resolve('no need to parse regex even, the readStr is same');
 					console.log('no need to parse regex even, the readStr is same');
 				} else {
 					iniReadStr = readStr;
 					//console.log('radStr:', readStr);
 					ini = {};
-					var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
+					var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //currently supports 15 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
 					var blocks = [];
 
 					var match;
@@ -340,26 +339,18 @@ current builds icon if dev mode is enabled
 					if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
 						console.log('ini object finalized via non-bkp');
 						iniStr = JSON.stringify(ini);
-						return promise_iniObjFinalized.resolve(iniStr);
+						deferred_readIniAndMaybeBkp.resolve(iniStr);
 						//return Promise.resolve('Success promise_readIni',);
 					} else {
 						console.log('ini was not touched');
 						//ini was not touched
 						//so read from bkp and update ini with properties that are missing
-						if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
-							var promise_readIniBkp = OS.File.read(profToolkit.path_iniBkpFile); // Read the complete file as an array
-						} else {
-							var promise_readIniBkp = OS.File.read(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
-						}
+						var promise_readIniBkp = read_encoded(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
 						promise_readIniBkp.then(
-							function() {
-								console.log('Success', 'promise_readIniBkp');
-								if (Services.vc.compare(Services.appinfo.version, 30) < 0) {
-									//dont need the decoder check here as already did that above
-									var readStr = decoder.decode(aVal); // Convert this array to a text
-								} else {
-									var readStr = aVal;
-								}
+							function(aVal) {
+								console.log('Fullfilled - promise_readIniBkp - ', aVal);
+								// start - do stuff here - promise_readIniBkp
+								var readStr = aVal;
 								//i dont do the iniReadStr == readStr check here, BECAUSE what if user made new profiles with the profile manager, then this backup method needs to be called. im thinking that even if backup restored stuff to ini object, and the iniReadStr is prior to backup, then on next read, if it finds iniStr is same then it wont blah blah blah im thinking no need
 								//should readStr
 								//ini is currently the untouched ini
@@ -423,19 +414,48 @@ current builds icon if dev mode is enabled
 								if (somethingRestoredFromBkpToIni) {
 									iniStr = JSON.stringify(ini);
 								}
-								//return promise_iniObjFinalized.resolve('ini object finalized via bkp'); //promise_iniObjFinalized.then.promise onFulliflled expects aVal to be iniStr
-								return promise_iniObjFinalized.resolve(iniStr);
+								//return deferred_readIniAndMaybeBkp.resolve('ini object finalized via bkp'); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
+								deferred_readIniAndMaybeBkp.resolve(iniStr);
+								// end - do stuff here - promise_readIniBkp
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_readIniBkp', aReason:aReason, extra:'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.'}; //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
+								console.warn('Rejected - promise_readIniBkp - ', rejObj);
+								
+								var deepestReason = aReason; while (deepestReason.aReason) { deepestReason = deepestReason.aReason }
+								if (deepestReason.becauseNoSuchFile) {
+									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
+									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+									console.warn('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
+									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
+								} else {
+									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
+									deferred_riapoMAIN.reject(rejObj);
+								}
+								
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_readIniBkp', aCaught:aCaught};
+								console.error('Caught - promise_readIniBkp - ', rejObj);
+								deferred_riapoMAIN.reject(rejObj);
+							}
+						);
+						promise_readIniBkp.then(
+							function() {
+								console.log('Success', 'promise_readIniBkp');
+
 							},
 							function(aReason) {
 								//console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
 								if (aReason.becauseNoSuchFile) {
 									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
-									//return promise_iniObjFinalized.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
 									console.warn('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
-									return promise_iniObjFinalized.resolve(iniStr); //promise_iniObjFinalized.then.promise onFulliflled expects aVal to be iniStr
+									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
 								} else {
 									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
-									return promise_iniObjFinalized.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message); //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
+									deferred_readIniAndMaybeBkp.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message); //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
 								}
 							}
 						).catch(
@@ -446,20 +466,23 @@ current builds icon if dev mode is enabled
 						);
 					}
 				}
+				// end - do stuff here - promise_readIni
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_readIni', aReason:aReason};
-				console.error('Rejected - promise_readIni - ', rejObj);
-				return promise_iniObjFinalized.reject(rejObj);
+				console.warn('Rejected - promise_readIni - ', rejObj);
+				deferred_riapoMAIN.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
-				console.error('Caught - promise_readIni - ', aCaught);
-				// throw aCaught;
+				var rejObj = {name:'promise_readIni', aCaught:aCaught};
+				console.error('Caught - promise_readIni - ', rejObj);
+				deferred_riapoMAIN.reject(rejObj);
 			}
 		);
+
 		//end - read the ini file and if needed read the bkp to create the ini object
-		return promise_readIniAndParseObjs.promise;
+		return deferred_riapoMAIN.promise;
 }
 
 function writeIniAndBkpIfDiff() {
@@ -1238,23 +1261,27 @@ function updateOnPanelHid(e) {
 
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	//does not fire when entering customize mode
+	console.error('entered');
+	var deferred_updateOnPanelShowing = new Deferred();
 	
 	//get aDOMWindow
 	if (!aDOMWindow) {
 		if (!e) {
-			throw new Error('no e and no aDOMWindow');
-			//return false;
-			//return Promise.reject('no e and no aDOMWindow');
+			console.error('no e and no aDOMWindow');
+			deferred_updateOnPanelShowing.reject('no e and no aDOMWindow');
+			return deferred_updateOnPanelShowing.promise;
 		} else {
 			//console.log('e on panel showing = ', e);
 			//console.log('e.view == e.target.ownerDocument.defaultView == ', e.view == e.target.ownerDocument.defaultView); //is true!! at least when popup id is PanelUI-popup
 			aDOMWindow = e.view;
 			if (e.target.id != 'PanelUI-popup') {
-				console.info('not main panel showing so dont updateProfToolkit');
-				//return false;
-				return Promise.reject('not main panel showing so dont updateProfToolkit');
+				console.warn('not main panel showing so dont updateProfToolkit');
+				deferred_updateOnPanelShowing.reject('not main panel showing so dont updateProfToolkit');
+				return deferred_updateOnPanelShowing.promise;
 			}
 		}
+	} else {
+		console.error('has aDOMWindow');
 	}
 	
 	//get panel
@@ -1263,6 +1290,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	
 	var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup
 	var PUIf = aDOMWindow.PanelUI.mainView.childNodes[1]; //PanelUI-footer //aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
+	
 	//var PUIcs = aDOMWindow.PanelUI.mainView.childNodes[0]; //PanelUI-contents-scroller
 	
 	//check if profilist is in there already and get profilist nodes
@@ -1277,27 +1305,34 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box', class:'', style:''},
 				['xul:stack', {/*key:'profilist_stack'*/},
-					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading', */disabled:'true', label:myServices.stringBundle.GetStringFromName('loading-profiles')}]
+					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading',*/ disabled:'true', label:myServices.stringBundle.GetStringFromName('loading-profiles')}]
 				]
 			];
 			var basePNodes = {}; //baseProfilistNodes
 			var PBox = jsonToDOM(profilistHBoxJSON, aDOMWindow.document, basePNodes);
+			
 			PUIf.insertBefore(PBox, PUIf.firstChild);
+			
 			PStack = PBox.childNodes[0];
-			PLoading = PStack.childNodes[0];
+			PLoading = /*basePNodes['profilist-loading']; //*/PStack.childNodes[0];
+			console.error('PLoading:', PLoading);
 			
 			aDOMWindow.Profilist.PBox = PBox; /* link 646432132158 */
 			aDOMWindow.Profilist.PStack = PStack;
 			//aDOMWindow.Profilist.PLoading = PLoading;
 			
 			if (!PUIsync_height) {
+				console.error('getComputed:', aDOMWindow.getComputedStyle(PLoading, '').height);
 				PUIsync_height = PLoading.boxObject.height;
+				console.error('PLoading.boxObject.height:', PLoading.boxObject.height);
+				
 				collapsedheight = PUIsync_height;
 				//var computedHeight = win.getComputedStyle(el, '').height;
 				//console.log('computed PUIsync_height:', computedHeight);
 				console.log('PUIsync_height determined to be = ', PUIsync_height);
 			}
 			PBox.style.height = PUIsync_height + 'px';
+			
 			//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
 			/*
 			aDOMWindow.Profilist.basePNodes = {
@@ -1305,12 +1340,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			}
 			*/
 			
-			PBox.addEventListener('mouseenter', function(e) {
-				e.stopPropagation();
+			PBox.addEventListener('mouseenter', function(e_ME) {
+				e_ME.stopPropagation();
 				expandedheight = PStack.childNodes.length * PUIsync_height;
-				PBox.addEventListener('transitionend', function(e2) {
+				PBox.addEventListener('transitionend', function(e_ETE) {
 					PBox.removeEventListener('transitionend', arguments.callee, false);
-					e2.stopPropagation();
+					e_ETE.stopPropagation();
 					console.log('PBox height transed');
 					// start test if overflowing to show custom scroll bar
 					console.info('PUI.boxObject.height:', PUI.boxObject.height);
@@ -1325,8 +1360,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 				PBox.style.height = expandedheight + 'px';
 				PBox.classList.add('profilist-hovered');
 			}, false);
-			PBox.addEventListener('mouseleave', function(e) {
-				e.stopPropagation();
+			PBox.addEventListener('mouseleave', function(e_ML) {
+				e_ML.stopPropagation();
 				if (PBox.classList.contains('profilist-keep-open')) { return }
 				PBox.style.height = collapsedheight + 'px';
 				PBox.classList.remove('profilist-hovered');
@@ -1346,15 +1381,17 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 	
 	//start read ini
 	if (dontRefreshIni) {
-		var defer_refreshIni = new Deferred();
-		var promise_refreshIni = defer_refreshIni.promise;
-		promise_refreshIni.resolve('dontRefreshIni is true so will skipped readIniAndParseObjs');
+		var deferred_uopsReadIni = new Deferred();
+		var promise_uopsReadIni = deferred_uopsReadIni.promise;
+		deferred_uopsReadIni.resolve('dontRefreshIni is true so will skipped readIniAndParseObjs');
 	} else {
-		var promise_refreshIni = readIniAndParseObjs();
+		var promise_uopsReadIni = readIniAndParseObjs();
 	}
-	return promise_refreshIni.then( /* note LINK 87318*/
+	
+	promise_uopsReadIni.then(
 		function(aVal) {
-			console.log('Fullfilled - promise_refreshIni - ', aVal);
+			console.log('Fullfilled - promise_uopsReadIni - ', aVal);
+			// start - do stuff here - promise_uopsReadIni
 			//////////////////////////////// start - do dom stuff
 			//compare aDOMWindow.Profilist.iniObj_thatAffectDOM to global iniObj_thatAffectDOM
 			
@@ -1647,10 +1684,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			} else { // close if objWin objBoot str compairson
 				console.log('no changes based on obj str comparison, so no need for dom update');
 			}
-				
+			
+			deferred_updateOnPanelShowing.resolve('dom stuff done, will do update statuses but thats not something i need to wait for, that can happen in parallell'); //maybe do this, see link5143646250 // if do go for this, then remove the deferred_uopsReadIni.reject from the failing on things in prof lock checking
+			
 			//10. update running icons
 			//var PTbbBoxes = PStack.childNodes;
-			var promiseAll_updateStatuses = [];
+			var promiseAllArr_updateStatuses = [];
 			for (var p in ini) {
 				if ('num' in ini[p]) {
 					if (p == profToolkit.selectedProfile.iniKey) { // alt to `if (ini[p].props.Name == profToolkit.selectedProfile.name) {`
@@ -1658,13 +1697,13 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 						continue;
 					}
 					var promise_profLokChk = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
-					promiseAll_updateStatuses.push(promise_profLokChk);
+					promiseAllArr_updateStatuses.push(promise_profLokChk);
 					
 					let hoisted_p = p;
 					promise_profLokChk.then(
 						function(aVal) {
-							console.log('Fullfilled - promise_profLokChk - ', aVal, 'objBoot[hoisted_p].num:', objBoot[hoisted_p].num, 'objBoot[hoisted_p].props.Name:', objBoot[hoisted_p].props.Name);
-							
+							console.log('Fullfilled - promise_profLokChk - ', aVal);
+							// start - do stuff here - promise_profLokChk
 							//aVal is TRUE if LOCKED
 							//aVal is FALSE if NOT locked
 							if (aVal) {
@@ -1677,36 +1716,43 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 								PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'inactive');
 							}
 							
-							return 'Success promise_profLokChk num: ' + objBoot[hoisted_p].num + ' and name: ' + objBoot[hoisted_p].props.Name;
-						},
+							console.log('Success promise_profLokChk num: ' + objBoot[hoisted_p].num + ' and name: ' + objBoot[hoisted_p].props.Name);
+							// end - do stuff here - promise_profLokChk
+						}/*,
 						function(aReason) {
-							var rejObj = {name:'promise_profLokChk', aReason:aReason, aExtra:objBoot[hoisted_p].num, aExtra2:objBoot[hoisted_p].props.Name};
-							console.error('Rejected - promise_profLokChk - ', rejObj);
-							throw rejObj;
-						}
-					).catch(
+							var rejObj = {name:'promise_profLokChk', aReason:aReason};
+							console.warn('Rejected - promise_profLokChk - ', rejObj);
+							//deferred_updateOnPanelShowing.reject(rejObj);
+							//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .reject will handle it
+						}*/
+					)/*.catch(
 						function(aCaught) {
-							console.error('Caught - promise_profLokChk - ', aCaught);
-							// throw aCaught;
+							var rejObj = {name:'promise_profLokChk', aCaught:aCaught};
+							console.error('Caught - promise_profLokChk - ', rejObj);
+							//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .catch will handle it
 						}
-					);
+					);*/
 				}
 			}
 			
-			return Promise.all(promiseAll_updateStatuses).then(
+			var promiseAll_updateStatuses = Promise.all(promiseAllArr_updateStatuses);			
+			promiseAll_updateStatuses.then(
 				function(aVal) {
 					console.log('Fullfilled - promiseAll_updateStatuses - ', aVal);
-					return 'all statuses updated';
+					// start - do stuff here - promiseAll_updateStatuses
+					//deferred_updateOnPanelShowing.resolve('dom stuff and status updating done'); // optional, see link5143646250
+					// end - do stuff here - promiseAll_updateStatuses
 				},
 				function(aReason) {
-					var rejObj = {name:'promiseAll_updateStatuses', aReason:aReason, aExtra:ini[p].num, aExtra2:ini[p].props.Name};
-					console.error('Rejected - promiseAll_updateStatuses - ', rejObj);
-					throw rejObj;
+					var rejObj = {name:'promiseAll_updateStatuses', aReason:aReason};
+					console.warn('Rejected - promiseAll_updateStatuses - ', rejObj);
+					//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
 				}
 			).catch(
 				function(aCaught) {
-					console.error('Caught - promiseAll_updateStatuses - ', aCaught);
-					// throw aCaught;
+					var rejObj = {name:'promiseAll_updateStatuses', aCaught:aCaught};
+					console.error('Caught - promiseAll_updateStatuses - ', rejObj);
+					//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
 				}
 			);
 			
@@ -1732,19 +1778,25 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			// end - im not sure if i need to writeIniAndBkpIfDiff here
 			*/
 			//////////////////////////////// end - do dom stuff
+			
+			// end - do stuff here - promise_uopsReadIni
 		},
 		function(aReason) {
-			var rejObj = {name:'promise_refreshIni', aReason:aReason};
-			console.error('Rejected - promise_refreshIni - ', rejObj);
+			var rejObj = {name:'promise_uopsReadIni', aReason:aReason};
+			console.warn('Rejected - promise_uopsReadIni - ', rejObj);
+			deferred_updateOnPanelShowing.reject(rejObj);
 		}
 	).catch(
 		function(aCaught) {
-			console.error('Caught - promise_refreshIni - ', aCaught);
-			// throw aCaught;
+			var rejObj = {name:'promise_uopsReadIni', aCaught:aCaught};
+			console.error('Caught - promise_uopsReadIni - ', rejObj);
+			deferred_updateOnPanelShowing.reject(rejObj);
 		}
 	);
-
 	//end read ini
+	
+	console.error('returning the upos deferred.promise');
+	return deferred_updateOnPanelShowing.promise;
 	
 	//////////////////////////// start - old stuff
 	/* old stuff
@@ -3365,11 +3417,81 @@ function beforecustomization(e) {
 	//var stack = doc.getElementById('profilist_box');
 	//var active = stack.querySelector('[status=active]');
 	//active.setAttribute('disabled', true);
-	
+	console.log('loc:', e);
 	var aDOMWindow = doc.defaultView;
-	console.info('aDOMWindow.Profilist:', aDOMWindow.Profilist); //if aDOMWindow.Profilist is undefined then it hasnt been built yet
-	updateOnPanelShowing(null, aDOMWindow); //builds it if its not there
-	aDOMWindow.Profilist.PBox.setAttribute('disabled', true);
+	//console.error('aDOMWindow:', aDOMWindow.location);
+	//console.info('aDOMWindow.Profilist:', aDOMWindow.Profilist); //if aDOMWindow.Profilist is undefined then it hasnt been built yet
+	//aDOMWindow.setTimeout(function() { //if i dont do this setTimeout, and profilist menu wasnt built, and user goes to customize first, then PLoading.boxObject and computed height is 0, i have no idea why, so have to use this setTimeout of 0ms thing, i have noooo idea why this works
+	// find the 'about:customizing' tab and wait for it to finish loading
+	//e10s safe?
+	/*
+	var tabs = aDOMWindow.gBrowser.tabContainer.childNodes;
+	var customizeTabI;
+	for (var i=0; i<tabs.length; i++) {
+		if (tabs[i].getAttribute('image').indexOf('/skin/customizableui/')) {
+			customizeTabI = i;
+			break;
+		}
+	}
+	let tab = tabs[customizeTabI];
+	if (customizeTabI === undefined) {
+		throw new Error('could not find the customize tab');
+	}
+	*/
+	var holder = doc.getElementById('customization-panelHolder');
+	
+	var mobs = new aDOMWindow.MutationObserver(function(mutations) {
+	  mutations.forEach(function(mutation) {          
+		console.log(mutation.type, mutation);
+		/*
+		if (mutation.attributeName == 'progress' && tab.getAttribute('progress') == '') {
+		  //alert('tab done loading');
+		  init();
+		  mobs.disconnect();
+		}
+		*/
+			if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+				console.log('target:', mutation.target);
+				if (mutation.target.id == 'customization-panelHolder') {
+					console.log('target:', mutation.target, mutation);
+					mobs.disconnect()
+					// do it
+					console.error('customize tab done loading');
+					var promise_doUp = updateOnPanelShowing(null, aDOMWindow); //builds it if its not there, if alrady built, this ensures dom data is up to date
+					promise_doUp.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_doUp - ', aVal);
+							// start - do stuff here - promise_doUp
+							aDOMWindow.Profilist.PBox.setAttribute('disabled', true);
+							// end - do stuff here - promise_doUp
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_doUp', aReason:aReason};
+							console.error('Rejected - promise_doUp - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_doUp', aCaught:aCaught};
+							console.error('Caught - promise_doUp - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					);
+					// end do it
+				}
+				
+			}
+
+	  });
+	});
+	mobs.observe(holder, {childList:true, subtree:true});
+	
+	console.log('holder:', holder);
+	console.log('aDOMWindow.PanelUI._initialized:', aDOMWindow.PanelUI.contents.parentNode.parentNode.parentNode);
+	// when panel moved into customize its `PanelUI.contents.parentNode.parentNode.parentNode` is `<hbox id="customization-panelHolder">` otherwise its `<xul:vbox anonid="mainViewContainer" class="panel-mainview" panelid="PanelUI-popup">`
+	
+
+	//}, 1000);
 }
 
 function customizationending(e) {
@@ -3383,7 +3505,7 @@ function customizationending(e) {
 	*/
 	var doc = e.target.ownerDocument;
 	var aDOMWindow = doc.defaultView;
-	aDOMWindow.Profilist.PBox.removetAttribute('disabled');
+	aDOMWindow.Profilist.PBox.removeAttribute('disabled');
 }
 
 var lastMaxStackHeight = 0;
@@ -3467,8 +3589,8 @@ var windowListener = {
 			
 			pnl.addEventListener('popupshowing', updateOnPanelShowing, false);
 			pnl.addEventListener('popuphidden', updateOnPanelHid, false);
-			aDOMWindow.gNavToolbox.addEventListener('beforecustomization', beforecustomization, false);
-			aDOMWindow.gNavToolbox.addEventListener('customizationending', customizationending, false);
+			aDOMWindow.addEventListener('beforecustomization', beforecustomization, false);
+			aDOMWindow.addEventListener('customizationending', customizationending, false);
 //			console.log('aDOMWindow.gNavToolbox', aDOMWindow.gNavToolbox);
 
 			if ((pnl.state == 'open' || pnl.state == 'showing') || aDOMWindow.document.documentElement.hasAttribute('customizing')) { //or if in customize mode
@@ -3491,8 +3613,8 @@ var windowListener = {
 			var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup 
 			PUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
 			PUI.removeEventListener('popuphiding', prevHide, false);
-			aDOMWindow.gNavToolbox.removeEventListener('beforecustomization', beforecustomization, false);
-			aDOMWindow.gNavToolbox.removeEventListener('customizationending', customizationending, false);
+			aDOMWindow.removeEventListener('beforecustomization', beforecustomization, false);
+			aDOMWindow.removeEventListener('customizationending', customizationending, false);
 			
 			if (aDOMWindow.Profilist !== null) {
 				//note: as soon as Profilist is initated as object it should come with PBox, thats why i can just check for null here /* link 646432132158 */
