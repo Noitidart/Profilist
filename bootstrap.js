@@ -1259,7 +1259,7 @@ function updateOnPanelHid(e) {
 	checkAndExecPanelHidUnloaders(DOMWin);
 }
 
-function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
+function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTabInsertItDisabled) { //returns promise
 	//does not fire when entering customize mode
 	console.error('entered');
 	var deferred_updateOnPanelShowing = new Deferred();
@@ -1341,6 +1341,9 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 			*/
 			
 			PBox.addEventListener('mouseenter', function(e_ME) {
+				if (PStack.lastChild.hasAttribute('disabled')) {
+					return;
+				}
 				e_ME.stopPropagation();
 				expandedheight = PStack.childNodes.length * PUIsync_height;
 				PBox.addEventListener('transitionend', function(e_ETE) {
@@ -1421,10 +1424,14 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni) { //returns promise
 					, {}
 				);
 				*/
-				////// copy/modification/strips of block 8752123154
+				////// copy/modification/strips of block 8752123154 //except for the he forCustomizationTabInsertItDisabled
 				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile'], status:'active', style:['margin-top:0'], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
 				if (sIniKey) {
+					if (forCustomizationTabInsertItDisabled) {
+						elJson[1].disabled = 'true';
+						PStack.style.pointerEvents = 'none';
+					}
 					elJson[1].label = ini[sIniKey].props.Name;
 					if ('Default' in ini[sIniKey].props && ini[sIniKey].props.Default == '1') {
 						elJson[1].isdefault = true;
@@ -3438,6 +3445,11 @@ function beforecustomization(e) {
 		throw new Error('could not find the customize tab');
 	}
 	*/
+	if ('Profilist' in aDOMWindow && aDOMWindow.Profilist !== null) {
+		var alreadyDisabled = true;
+		aDOMWindow.Profilist.PStack.style.pointerEvents = 'none';
+		aDOMWindow.Profilist.PStack.lastChild.setAttribute('disabled', true); //if its already built, so then i dont wait for the promise
+	}
 	var holder = doc.getElementById('customization-panelHolder');
 	
 	var mobs = new aDOMWindow.MutationObserver(function(mutations) {
@@ -3457,12 +3469,14 @@ function beforecustomization(e) {
 					mobs.disconnect()
 					// do it
 					console.error('customize tab done loading');
-					var promise_doUp = updateOnPanelShowing(null, aDOMWindow); //builds it if its not there, if alrady built, this ensures dom data is up to date
+					var promise_doUp = updateOnPanelShowing(null, aDOMWindow, null, true); //builds it if its not there, if alrady built, this ensures dom data is up to date
 					promise_doUp.then(
 						function(aVal) {
 							console.log('Fullfilled - promise_doUp - ', aVal);
 							// start - do stuff here - promise_doUp
-							aDOMWindow.Profilist.PBox.setAttribute('disabled', true);
+							if (!alreadyDisabled) {
+								aDOMWindow.Profilist.PStack.lastChild.setAttribute('disabled', true);
+							}
 							// end - do stuff here - promise_doUp
 						},
 						function(aReason) {
@@ -3505,7 +3519,8 @@ function customizationending(e) {
 	*/
 	var doc = e.target.ownerDocument;
 	var aDOMWindow = doc.defaultView;
-	aDOMWindow.Profilist.PBox.removeAttribute('disabled');
+	aDOMWindow.Profilist.PStack.style.pointerEvents = '';
+	aDOMWindow.Profilist.PStack.lastChild.removeAttribute('disabled');
 }
 
 var lastMaxStackHeight = 0;

@@ -493,3 +493,19 @@ this is kind of nice think about it
 #profilistLoading .profilist-tbb {
 	list-style-image: url(chrome://profilist/content/icon16.png);
 }
+
+/* start - when in customization mode and is disabled */
+.profilist-tbb-box[disabled] .toolbarbutton-icon,
+.profilist-tbb-box[disabled] .profilist-badge {
+  opacity: 0.4 !important;
+}
+
+.profilist-tbb-box[disabled] .profilist-badge {
+	/*filter: url(filters.svg#grayscale);*/ /*this doesnt work on image, its so weird, its making it a square weirrrrd, also tried: `filter:grayscale(100%)`*/
+}
+
+.profilist-tbb-box[disabled] .toolbarbutton-text {
+	color: graytext;
+	text-shadow: none;
+}
+/* end - when in customization mode and is disabled */
