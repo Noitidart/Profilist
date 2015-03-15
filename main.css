@@ -495,9 +495,15 @@ this is kind of nice think about it
 }
 
 /* start - when in customization mode and is disabled */
-.profilist-tbb-box[disabled] .toolbarbutton-icon,
-.profilist-tbb-box[disabled] .profilist-badge {
+.profilist-tbb-box[disabled] .profilist-tbb {
+	filter: url(filters.svg#grayscale);
+}
+.profilist-tbb-box[disabled] .toolbarbutton-icon {
   opacity: 0.4 !important;
+}
+
+.profilist-tbb-box[disabled] .profilist-badge {
+	opacity: 0.8 !important;
 }
 
 .profilist-tbb-box[disabled] .profilist-badge {
