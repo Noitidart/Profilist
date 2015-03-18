@@ -29,6 +29,21 @@ var currentThisBuildsIconPath = '';
 
 var macStuff = {};
 
+const iconsetSizes_OS = {
+	Darwin: [16, 32, 64, 128, 256, 512, 1024],
+	Linux: [16, 24, 48, 96],
+	//WINNT: [16, 32, 48] // XP
+	//WINNT: [16, 32, 48, 64] // Vista
+	WINNT: [16, 32, 48, 256] // 7 and 8
+};
+const iconsetSizes_Profilist = {
+	Darwin: [10, 16, 32, 64, 128, 256, 512, 1024],
+	Linux: [10, 16, 24, 48, 96],
+	//WINNT: [10, 16, 32, 48] // XP
+	//WINNT: [10, 16, 32, 48, 64] // Vista
+	WINNT: [10, 16, 32, 48, 256] // 7 and 8
+};
+
 //var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 //var pathProfilesIniBkp = profToolkit.path_iniFile + '.profilist.bkp';
 
@@ -422,7 +437,7 @@ current builds icon if dev mode is enabled
 								var rejObj = {name:'promise_readIniBkp', aReason:aReason, extra:'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.'}; //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
 								console.warn('Rejected - promise_readIniBkp - ', rejObj);
 								
-								var deepestReason = aReason; while (deepestReason.aReason) { deepestReason = deepestReason.aReason }
+								var deepestReason = aReasonMax(aReason);
 								if (deepestReason.becauseNoSuchFile) {
 									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
 									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
@@ -652,7 +667,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			}
 			
 			// generate folder path to create based on theProfileName
-			var theDirName = saltName(theProfileName.replace(/([\\*:?<>|\/\"])/g, '%')); // ensure the folder name generated based on theProfileName works on the os file directory system
+			var theDirName = saltName(theProfileName.replace(/([\\*:?<>|\/\"])/g, '-')); // ensure the folder name generated based on theProfileName works on the os file directory system
 			var theRootPath;
 			var theLocalPath;
 			if (!absolutProfile_pathToParentDir) {
@@ -1173,7 +1188,6 @@ function initProfToolkit() {
 	
 	profToolkit.path_iniDir = OS.Constants.Path.userApplicationDataDir;
 	profToolkit.path_iniFile = OS.Path.join(profToolkit.path_iniDir, 'profiles.ini');
-	profToolkit.path_iniBkpFile = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profiles.ini.profilist.bkp'); // profToolkit.path_iniFile + '.profilist.bkp';
 	
 	profToolkit.nsIFile_iniDir = new FileUtils.File(profToolkit.path_iniDir); //for getRelativeDescriptor use
 	
@@ -1189,6 +1203,15 @@ function initProfToolkit() {
 	profToolkit.selectedProfile.iniKey = undefined; //note: i set it to undefined meaning it hasnt been verified yet, i set it to null for temp profile meaning name not found, i set it to string once it was verified
 	
 	profToolkit.PrfDef = Services.dirsvc.get('PrfDef', Ci.nsIFile).path;
+	
+	
+	// start - define profilist_data structure and paths
+	profToolkit.path_profilistData_root = OS.Path.join(profToolkit.path_iniDir, 'profilist_data');
+	profToolkit.path_iniBkpFile = OS.Path.join(profToolkit.path_profilistData_root, 'profiles.ini.profilist.bkp'); // profToolkit.path_iniFile + '.profilist.bkp'; // path_iniBkpFile is located in this root folder at least per my decision as of now
+	profToolkit.path_profilistData_iconsets = OS.Path.join(profToolkit.path_profilistData_root, 'iconsets');
+	profToolkit.path_profilistData_launcher_icons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
+	profToolkit.path_profilistData_launcher_exes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
+	// end - define profilist_data structure and paths
 	
 	//get relative path
 	//this way too slow dont do it: var IniPathStr = FileUtils.getFile('DefProfRt', ['name of folder you want in profiles folder']); //3.32ms
@@ -1651,7 +1674,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 									}
 								}
 								if ('Profilist.badge' in objBoot[pb].props) {
-									elJson[1].badge = getPathToBadge(objBoot[pb].props['Profilist.badge'], 16);
+									elJson[1].badge = getPathToBadge(objBoot[pb].props['Profilist.badge'], '16');
 								}
 								if (profToolkit.selectedProfile.iniKey && pb == profToolkit.selectedProfile.iniKey) { // updated after revisit, was doing this before revisit: if (objBoot[pb].props.Name == profToolkit.selectedProfile.name) { //note: revisit as i should be able to just see if pb is the selected key rather then compare names
 									elJson.status = 'active';
@@ -3148,6 +3171,100 @@ function tbb_box_click(e) {
 			checkAndExecPanelHidUnloaders(e.view, 'profilist-sub-clicked'); // close whatever is open
 			
 			var targetedProfileName = targetedTBB.getAttribute('label');
+			console.info('targetedProfileName:', targetedProfileName);
+			var targetedProfileIniKey = getIniKeyOfProfileName(targetedProfileName);
+			
+			if (targetedProfileIniKey === null) {
+				throw new Error('could not find key for this profile name, this should never happen');
+			}
+			
+			if ('Profilist.badge' in ini[targetedProfileIniKey].props) {
+				// has badge already applied
+				
+				// morph to say Enter = Remove Esc = Cancel
+				// with thrid option "Del = Remove & Delete" , IF no other profile uses that badge, ask if want to "remove AND delete badge from hard drive"
+				
+				
+			} else {
+				// does not have badge applied
+				var cDoc = origTarg.ownerDocument;
+				var cWin = cDoc.defaultView;
+				var promise_pickerProcess = pickerIconset(cWin);
+				promise_pickerProcess.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_pickerProcess - ', aVal);
+						// start - do stuff here - promise_pickerProcess
+						Services.prompt.alert(null, 'profilist', 'badge applied');
+						
+						targetedTBB.setAttribute('badge', aVal['16'].FileURI);
+						var iconsetId = OS.Path.split(aVal['16'].OSPath).components;
+						iconsetId = iconsetId[iconsetId.length-2];
+						
+						console.info('iconsetId from post promise:', iconsetId);
+						/*
+						ini[targetedProfileIniKey].props.badge = iconsetId;
+						writeIniAndBkp();
+						// updateIconToWindows()
+						// updateIconToLauncher()
+						// updateIconToDesktopShortcutsIfExist()
+						*/
+						// end - do stuff here - promise_pickerProcess
+					},
+					function(aReason) {
+						Services.prompt.alert(null, 'profilist', 'in rejection');
+						var rejObj = {name:'promise_pickerProcess', aReason:aReason};
+						console.warn('Rejected - promise_pickerProcess - ', rejObj);
+						var deepestReason = aReasonMax(aReason);
+						console.info('deepestReason:', deepestReason);
+						if (Object.prototype.toString.call(deepestReason) === '[object Array]') {
+							/*
+							switch (deepestReason[0]) {
+								case 'non-square':
+									break;
+								default:
+									console.error('should never get here, only if aCaught, which is programmer problem');
+									return; //to prevent deeper exec
+							}
+							*/
+							try {
+								var errorTxt = myServices.stringBundle.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+							} catch(ex if ex.result == Cr.NS_ERROR_FAILURE) {
+								console.warn('GetStringFromName/formatStringFromName - the `name` on id of `' + 'iconset-picker-error-txt-' + deepestReason[0] + '` doesnt exist');
+							}
+							if (errorTxt) {
+								Services.prompt.alert(
+									cWin,
+									myServices.stringBundle.GetStringFromName('iconset-picker-error-title'),
+									myServices.stringBundle.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+								);
+								return; //prevent deeper execution
+							}
+						}
+						
+						switch (deepestReason) {
+							case 'canceled picker':
+								// no user notification, as its obvious, user knows when they cancelled the picker
+								console.log('user cancled picker, dont alert');
+								break;
+							default:
+								Services.prompt.alert(
+									cWin,
+									myServices.stringBundle.GetStringFromName('profilist-error-title'),
+									myServices.stringBundle.formatStringFromName('profilist-error-txt-something', [JSON.stringify(deepestReason)], 1)
+								);
+						}
+					}
+				).catch(
+					function(aCaught) {
+						Services.prompt.alert(null, 'profilist', 'in catching');
+						var rejObj = {name:'promise_pickerProcess', aCaught:aCaught};
+						console.error('Caught - promise_pickerProcess - ', rejObj);
+						console.error(rejObj);
+					}
+				);
+			}
+			
+			/*
 			targetedTBB.classList.add('profilist-in-badge-change');
 			console.log('targetedProfileName:', targetedProfileName);
 			
@@ -3194,6 +3311,7 @@ function tbb_box_click(e) {
 					postPromise();
 				}
 			);
+			*/
 		}
 	};
 	
@@ -5332,7 +5450,7 @@ function makeDesktopShortcut(for_ini_key) {
 		if (OS.Constants.Sys.Name == 'Darwin') { //note:debug added in winnt
 			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 			/*
-			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '%')"
+			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '-')"
 				// if its avail, then `ini[for_ini_key].props['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key].props['Profilist.launcher-basename']`
 		
 			//now whenever profile is renamed, then check if launcher
@@ -5436,7 +5554,7 @@ function makeDesktopShortcut(for_ini_key) {
 					},
 					function(aReason) {
 						console.error('THIS SHOULD NEVER HAPPEN, as if Profilist.launcher is ini, then launcher should exist. launcher does not exist even though Profilist.launcher is in ini for this key, so makeLauncher then try makeAlias again');
-						var deepestReason = aReason; while (deepestReason.aReason) { deepestReason = deepestReason.aReason }
+						var deepestReason = aReasonMax(aReason);
 						if (deepestReason.becauseNoSuchFile) {
 							makeLauncherThenAlias();
 						} else {
@@ -5502,7 +5620,7 @@ function makeDesktopShortcut(for_ini_key) {
 function getLauncherName(for_ini_key, theChName) {
 	var theProfName_safedForPath;
 	if (OS.Constants.Sys.Name == 'WINNT') {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '%')
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '-')
 	} else {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' '); //for mac and nix
 	}
@@ -5568,6 +5686,532 @@ function getImg_of_exactOrNearest_Bigger_then_Smaller(targetSize, objOfImgs) {
 	return objOfImgs[nearestKey].Image;
 }
 // end - helper functions for makeIcon
+// start - loadImagesOfIconset
+function loadImagesOfIconset(arrOfOsPaths, doc) {
+	// need to make all rejection 1st arr el be hyphenated for localization see link3632035, after clicking on badge the promise reject handles showing alert localized
+	// arrOfOsPaths is os paths OR chrome:// paths
+	// returns promise
+	// resolves to:
+		// object with keys as the size of icon (aVal == { 16: {Image:HTMLImage, OSPath:os_path_loaded_from FileURI:blah} })
+	// this function loads images, it rejects if
+		// found icon is not square (meaning width == height) (aReason == ['non-square', osPathOfFailed])
+		// image fails to load (aReason == ['load failed', osPathOfFailed])
+		// if found image that has duplicate size (size was already found in obj of loadeds) (aReason == ['duplicate size', osPathOfFoundDuplicate, osPathOfImageThatHadSameSize])
+		// if duplicate os path found (aReason == ['duplicate path', pathFoundThatsADupe]
+		// load aborts (aReason == ['load aborted', pathOfImageThatAborted])
+		// file is probably not an image (aReason == ['corrupt', pathOfErroedImg])
+		
+	var deferredMain_loadImagesOfIconset = new Deferred();
+	if (!doc) {
+		doc = Services.appShell.hiddenDOMWindow.document;
+	}
+	
+	var imgsObj = {};
+	var OSPathToFileURI = {}; //keys are ospath, values are fileuri
+	var FileURIToOSPath = {};
+	for (var i=0; i<arrOfOsPaths.length; i++) {
+		if (arrOfOsPaths[i] in OSPathToFileURI) {
+			deferredMain_loadImagesOfIconset.reject([
+				'duplicate-path',
+				arrOfOsPaths[i]
+			]);
+			return deferredMain_loadImagesOfIconset.promise;
+		} else {
+			if (arrOfOsPaths[i].substr(0, 9) == 'chrome://') {
+				OSPathToFileURI[arrOfOsPaths[i]] = arrOfOsPaths[i];
+			} else {
+				OSPathToFileURI[arrOfOsPaths[i]] = OS.Path.toFileURI(arrOfOsPaths[i]);
+			}
+			FileURIToOSPath[OSPathToFileURI[arrOfOsPaths[i]]] = arrOfOsPaths[i];					
+		}
+	}
+	
+	var promiseAllArr_loadImgs = [];
+	
+	var handleImgLoad = function(refDeferred) {
+		var theImg = this;
+		console.log('Success on load of path: "' + theImg.src + '"');
+		if (theImg.naturalHeight != theImg.naturalWidth) {
+			console.warn('Unsquare image on path: "' + theImg.src + '"');
+			refDeferred.reject('Unsquare image on paths: "' + theImg.src + '"');
+			deferredMain_loadImagesOfIconset.reject([
+				'non-square',
+				theImg.naturalHeight,	
+				theImg.naturalWidth,
+				FileURIToOSPath[theImg.src]
+			]);
+		} else if (theImg.naturalHeight in imgsObj) {
+			console.warn('Multiple images with same size on path: "' + theImg.src + '"');
+			refDeferred.reject('Multiple images with same size on path: "' + theImg.src + '"');
+			deferredMain_loadImagesOfIconset.reject([
+				'duplicate-size',
+				FileURIToOSPath[theImg.src],
+				imgsObj[theImg.naturalHeight].OSPath
+			]);
+		} else {
+			imgsObj[theImg.naturalHeight] = {
+				Image:theImg,
+				OSPath: FileURIToOSPath[theImg.src],
+				FileURI: theImg.src
+			};
+			refDeferred.resolve('Success on load of path: "' + theImg.src + '"');
+		}
+	};
+	
+	var handleImgAbort = function(refDeferred) {
+		var theImg = this;
+		console.warn('Abortion on load of path: "' + theImg.src + '"');
+		refDeferred.reject('Abortion on load of path: "' + theImg.src + '"');
+		deferredMain_loadImagesOfIconset.reject([
+			'load-aborted',
+			FileURIToOSPath[theImg.src]
+		]);
+	};
+	
+	var handleImgError = function(refDeferred) {
+		var theImg = this;
+		console.warn('Error on load of path: "' + theImg.src + '"');
+		refDeferred.reject('Error on load of path: "' + theImg.src + '"');
+		deferredMain_loadImagesOfIconset.reject([
+			'corrupt-img',
+			FileURIToOSPath[theImg.src]
+		]);
+	};
+	
+	for (var i=0; i<arrOfOsPaths.length; i++) {
+		var deferred_loadImg = new Deferred();
+		promiseAllArr_loadImgs.push(deferred_loadImg.promise);
+		
+		var img = new doc.defaultView.Image();
+		img.onload = handleImgLoad.bind(img, deferred_loadImg);
+		img.onabort = handleImgAbort.bind(img, deferred_loadImg);
+		img.onerror = handleImgError.bind(img, deferred_loadImg);
+		
+		if (arrOfOsPaths[i].substr(0, 9) == 'chrome://') {
+			console.info('img.src is chrome path so use as is:', arrOfOsPaths[i]);
+			img.src = arrOfOsPaths[i];
+		} else {
+			console.info('img.src was os path so making file uri:', OSPathToFileURI[arrOfOsPaths[i]]);
+			img.src = OSPathToFileURI[arrOfOsPaths[i]];
+		}
+	}
+	
+	//console.info('paths_concatenated:', paths_concatenated);
+	//console.info('deferreds_loadImgs:', deferreds_loadImgs);
+	
+	var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
+	promiseAll_loadImgs.then(
+		function(aVal) {
+			console.log('Fullfilled - promiseAll_loadImgs - ', aVal);
+			// start - do stuff here - promiseAll_loadImgs
+			deferredMain_loadImagesOfIconset.resolve(imgsObj);
+			// end - do stuff here - promiseAll_loadImgs
+		},
+		function(aReason) {
+			var rejObj = {name:'promiseAll_loadImgs', aReason:aReason};
+			console.warn('Rejected - promiseAll_loadImgs - ', rejObj);
+			//deferredMain_loadImagesOfIconset.reject(rejObj);
+			// i dont reject main here because i plan to make the individual promise in promiseAllArr_loadImgs to have a .then and its reject should reject main
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promiseAll_loadImgs', aCaught:aCaught};
+			console.error('Caught - promiseAll_loadImgs - ', rejObj);
+			deferredMain_loadImagesOfIconset.reject(rejObj);
+		}
+	);
+		
+	return deferredMain_loadImagesOfIconset.promise;
+}
+// end - loadImagesOfIconset
+// start - a helper
+function getIniKeyOfProfileName(aProfileName) {
+	// returns string on success
+	// returns null if key not found
+	
+	// case sensitive
+	//var aProfileNameLOWER = aProfileName.toLowerCase();
+	for (var k in ini) {
+		if ('num' in ini[k] && ini[k].props.Name == aProfileName) {
+			return k;
+		}
+	}
+	
+	return null; // key not found
+}
+// end - a helper
+// start - pickerIconset
+function pickerIconset(tWin) {
+	// need to make all rejection 1st arr el be hyphenated for localization see link3632035, after clicking on badge the promise reject handles showing alert localized
+	// returns promise
+		// on success resolves with object of fileURI paths and also OS paths with key as size of image (if not selected from profilist_data/iconsets/ then it also has the images)
+		// on reject, string message indicating reason of failure, so far: `os-unsupported`, `canceled picker`, `no files selected in picker`
+		
+	// these iconsets can be used for base OR badge
+	// makes the target window (tWin) modal during this time
+	// this function tells users the icon sizes needed for an iconset per their os
+	// they can multi pick sizes
+	// the common name is taken from the files picked, if its a number, then i take the folder name, then i check if this a folder with this name exists in profilist_data/iconsets/ if it does then i append `-#` until i find one available
+	// if they pick an icon images that are in profilist_data/iconsets/ then i dont copy, but just return all images from that folder
+	// , whatever sizes are not picked, are resized and saved as with append to file name `-AutoScaled`
+	// the sized images are copied to profilist_data folder
+	var deferredMain_pickerIconset = new Deferred();
+	
+	// start - define callbacks
+	// start - globals for callbacks
+	var iconsetId; //string
+	var path_iconsetDir; //string - os path
+	
+	var path_selectedIcons = []; //array of strings - os path
+	var data_selectedIcons = []; //populated by doLoadImages
+	var nsifiles_selectedIcons = []; //array of nsIFile'sIniKey
+	var loaded_imgObj = {}; //populated by doLoadImages
+	
+	var iconSizesNeeded;
+	var collection_selectedImagesAndPaths = {}; //colllection obj, keys are size of images, holds .Image as new Image(), .OSPath and .FileURI
+	
+	var cOS = OS.Constants.Sys.Name;
+	
+	// end - globals for callbacks
+	// start - setup writeBlob
+	var writeBlobCallback = function(path_to_save_at, refDeferred, blob) {
+        var reader = Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader); //new FileReader();
+        reader.onloadend = function() {
+            // reader.result contains the ArrayBuffer.			
+			var arrview = new Uint8Array(reader.result);
+			
+			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp', encoding:'utf-8'}], profToolkit.path_iniDir);
+
+			promise_writeArrView.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAllArr_writePngs - ', aVal);
+					// start - do stuff here - promiseAllArr_writePngs
+					refDeferred.resolve('Saved blob to png: "' + OS.Path.basename(path_to_save_at) + '"');
+					// end - do stuff here - promiseAllArr_writePngs
+				},
+				function(aReason) {
+					var rejObj = {name:'promiseAllArr_writePngs.promise', aReason:aReason};
+					console.warn('Rejected - promiseAllArr_writePngs - ', rejObj);
+					refDeferred.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promiseAllArr_writePngs', aCaught:aCaught};
+					console.error('Caught - promiseAllArr_writePngs - ', rejObj);
+					refDeferred.reject(rejObj);
+				}
+			);
+        };
+		reader.onabort = function() {
+			refDeferred.reject('Abortion on nsIDOMFileReader, failed reading blob for saving: "' + OS.Path.basename(path_to_save_at) + '"');
+		};
+		reader.onerror = function() {
+			refDeferred.reject('Error on nsIDOMFileReader, failed reading blob for saving: "' + OS.Path.basename(path_to_save_at) + '"');
+		};
+        reader.readAsArrayBuffer(blob);
+	};
+	// end - setup writeBlob
+	
+	// start - scaleAndWrite
+	var scaleAndWrite = function() {
+		// goes through images loaded
+			// if it finds a size thats needed, it (DOES NOT COPY IT, as it may not be .png), it draws it and writes it
+			// if it doesnt find a size thats needed, it finds the next biggest size and scales it down then starts write
+		/////////////
+		var promiseAllArr_scaleAndWriteAll = [];
+		//var destPathBase = OS.Path.join(profToolkit.path_iconsetDir, iconsetId, 'iconsetId-');
+		var collection_drawnImagesAndPaths = getPathsInIconset(iconsetId);
+		console.info('collection_drawnImagesAndPaths:', collection_drawnImagesAndPaths);
+		
+		for (var i=0; i<iconSizesNeeded.length; i++) {
+			var canvas = Services.appShell.hiddenDOMWindow.document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+			var ctx = canvas.getContext('2d');
+			canvas.width = iconSizesNeeded[i];
+			canvas.height = iconSizesNeeded[i];
+			//ctx.clearRect(0, 0, iconSizesNeeded[i], iconSizesNeeded[i]);
+			
+			var destPath = collection_drawnImagesAndPaths[iconSizesNeeded[i]].OSPath; //destPathBase + iconSizesNeeded[i] + '.png';
+			
+			var nearestImg = getImg_of_exactOrNearest_Bigger_then_Smaller(iconSizesNeeded[i], collection_selectedImagesAndPaths);
+			if (nearestImg.naturalHeight == iconSizesNeeded[i]) {
+				console.log('nearest found is exact of required size, so no need for scalling. just OS.File.copy this image. required size:', iconSizesNeeded[i], 'nearest size:', nearestImg.naturalHeight);
+				//promiseAllArr_scaleAndWriteAll.push(tryOsFile_ifDirsNoExistMakeThenRetry('copy', [fileUri_to_platformPath[nearestImg.src], destPath, {tmpPath:destPath+'.tmp', encoding:'utf-8'}], fromPathBase));
+				// i dont do the copy anymore, as the file may not be a png, we want to draw and save it as a png
+				ctx.drawImage(nearestImg, 0, 0);
+				collection_drawnImagesAndPaths.Image = collection_selectedImagesAndPaths[iconSizesNeeded[i]].Image;
+			} else {
+				console.log('nearest found is not exact of required size, so scalling. required size:', iconSizesNeeded[i], 'nearest size:', nearestImg.naturalHeight);
+				ctx.drawImage(nearestImg, 0, 0, iconSizesNeeded[i], iconSizesNeeded[i]);
+				collection_drawnImagesAndPaths.Image = canvas;
+				// note: .Image has to be something that can be drawing with ctx.drawImage, i usually set it to HTMLImageElement, but here i set it to HTMLCanvasElement, which also works
+				//msgsToUser.push('Exact match for size of ' + iconSizesNeeded[i] + ' was not available among files you selected, therefore the image for this size was scaled from "' + OS.Path.basename(fileUri_to_platformPath[nearestImg.src]) + '" which was had a size of ' + nearestImg.naturalHeight + 'px');
+			}			
+			var deferred_blobAndWriteScaled = new Deferred();
+			promiseAllArr_scaleAndWriteAll.push(deferred_blobAndWriteScaled.promise);
+			(canvas.toBlobHD || canvas.toBlob).call(canvas, writeBlobCallback.bind(null, destPath, deferred_blobAndWriteScaled), 'image/png');						
+		}
+		
+		var promiseAll_scaleAndWriteAll = Promise.all(promiseAllArr_scaleAndWriteAll);
+		promiseAll_scaleAndWriteAll.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_scaleAndWriteAll - ', aVal);
+				// start - do stuff here - promiseAll_scaleAndWriteAll
+				//msgsToUser.splice(0, 0, 'Successfully created iconset of this badge!\n');
+				deferredMain_pickerIconset.resolve(collection_drawnImagesAndPaths);
+				// end - do stuff here - promiseAll_scaleAndWriteAll
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_scaleAndWriteAll', aReason:aReason};
+				console.warn('Rejected - promiseAll_scaleAndWriteAll - ', rejObj);
+				deferredMain_pickerIconset.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_scaleAndWriteAll', aCaught:aCaught};
+				console.error('Caught - promiseAll_scaleAndWriteAll - ', rejObj);
+				deferredMain_pickerIconset.reject(rejObj);
+			}
+		);
+		//////////////
+	};
+	// end - scaleAndWrite
+	// start - ensureNameAvailable
+	var ensureNameAvailable = function() {
+		// goes through all folders in profilist_data/iconset/ and checks if name is available, if its not it will append `-#` until it finds one available
+		// once finds availabie it makes the dir
+		// on success goes to copy_or_writeIfScaled
+		// rejects main on promise catch or promise rejected due to something other then becauseExists
+
+		path_iconsetDir = OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId);
+		
+		var promise_makeIconsetDir = tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [path_iconsetDir, {ignoreExisting:false}], profToolkit.path_iniDir);
+		promise_makeIconsetDir.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_makeIconsetDir - ', aVal);
+				// start - do stuff here - promise_makeIconsetDir
+				scaleAndWrite();
+				// end - do stuff here - promise_makeIconsetDir
+			},
+			function(aReason) {
+				var deepestReason = aReasonMax(aReason);
+				if (/*aReason.aReason.becauseExists*/deepestReason.becauseExists) {
+					// append and/or increment `-#`
+					var matchTest = iconsetId.match(/(.*)-(\d)$/m);
+					if (matchTest) {
+						iconsetId = matchTest[1] + '-' + (parseInt(matchTest[2]) + 1);
+					} else {
+						iconsetId += '-1';
+					}
+					ensureNameAvailable();
+				} else {
+					var rejObj = {name:'promise_makeIconsetDir', aReason:aReason};
+					console.warn('Rejected - promise_makeIconsetDir - ', rejObj);
+					deferredMain_pickerIconset.reject(rejObj);
+				}
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_makeIconsetDir', aCaught:aCaught};
+				console.error('Caught - promise_makeIconsetDir - ', rejObj);
+				deferredMain_pickerIconset.reject(rejObj);
+			}
+		);
+	};
+	// end - ensureNameAvailable
+	
+	// start - doLoadImages
+	var doLoadImages = function(selectedFromProfilistDataDir) {
+		// loads all images and determines sizes available
+		// if selectedFromProfilistDataDir is false, it then determines a common name from the file names selected
+		// saves to dir
+		// rejects main
+			// if any of the files failed to load, telling the user
+			// if any of the loaded images is not square (width == height)
+			// if duplicate size found, then it rejects telling user
+		// on success - sends to:
+			// if selectedFromProfilistDataDir is true, then resolves main with file paths and sizes
+			// if selectedFromProfilistDataDir is false, then sends to ensureNameAvailable
+			
+		var promise_doImgLoads = loadImagesOfIconset(path_selectedIcons);
+		promise_doImgLoads.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_doImgLoads - ', aVal);
+				// start - do stuff here - promise_doImgLoads
+				loaded_imgObj = aVal;
+				if (selectedFromProfilistDataDir) {
+					// then resolves main with file paths and sizes
+					Services.prompt.alert(tWin, 'profilist', 'img loading complete, resolve as from data dir');
+					// user may not have selected all the icons in the dir
+					var collection_selectedPathsInIconset = getPathsInIconset(iconsetId);
+					// should i put .Image into collection_selectedPathsInIconset, i think i should, take whatever .Image from selected is available. then load the remaining, in case user did not select all of the images from the profilist-data/iconsets/iconsetId/ folder
+					var keysInCollSeldPathsInIconset_missingImage = {};
+					for (var imgSizeInIconset in collection_selectedPathsInIconset) {
+						keysInCollSeldPathsInIconset_missingImage[imgSizeInIconset] = 1;
+					}
+					var sizesSelected = [];
+					for (var imgSize in aVal) {
+						if (imgSize in collection_selectedPathsInIconset) {
+							collection_selectedPathsInIconset[imgSize].Image = aVal[imgSize].Image;
+							delete keysInCollSeldPathsInIconset_missingImage[imgSize];
+							sizesSelected.push(imgSize);
+						}
+					}
+					var sizesInIconsetNeedingImage = Object.keys(keysInCollSeldPathsInIconset_missingImage);
+					if (sizesInIconsetNeedingImage.length > 0) {
+						deferredMain_pickerIconset.reject([
+							'datadir-incomplete-sel',
+							sizesSelected.join('px, ') + 'px',
+							sizesInIconsetNeedingImage.join('px, ') + 'px'
+						]);
+					} else {
+						deferredMain_pickerIconset.resolve(collection_selectedPathsInIconset);
+					}
+				} else {
+					// determine a common name from the file names selected
+					Services.prompt.alert(tWin, 'profilist', 'img loading complete, find common name then send to ensureNameAvailable');
+						
+					// start - determine common name part
+					var patt_winSafe = /([\\*:?<>|\/\"])/g;
+					var patt_trimLeadingTrailingNonWord = /\w.*\w/;
+					var leafNames = {};
+					for (var size in loaded_imgObj) {
+						var thisLeafName = OS.Path.basename(loaded_imgObj[size].OSPath);
+						thisLeafName = thisLeafName.substr(0, thisLeafName.lastIndexOf('.'));
+						thisLeafName = thisLeafName.replace(new RegExp(size, 'g'), '');
+						thisLeafName = thisLeafName.replace(patt_winSafe, '-'); //note: possible issue, i should replace special chars, as in mac and nix can use all chars, but in windows it cant, so this reduces portability, but replacing \W should fix this // use this `.replace(/([\\*:?<>|\/\"])/g, '-')` to make windows file name safe// make windows safe
+						thisLeafName = patt_trimLeadingTrailingNonWord.exec(thisLeafName);// trim trailing and leading non word characters
+
+						if (thisLeafName === null) { continue } // its null if thisLeafName pre exec was empty string, or a string of all non word characters
+						leafNames[thisLeafName[0]] = 0;
+					}
+					var leafNames = Object.keys(leafNames);
+					console.info('leafNames:', leafNames);
+					
+					var longestCommonSubstring = longestInCommon(leafNames);
+					console.info('longestCommonSubstring:', longestCommonSubstring);
+					
+					if (longestCommonSubstring.length > 1) { // i want at least 2 characters for name
+						iconsetId = longestCommonSubstring;
+					} else {
+						//set iconetsetId to the folder name
+						iconsetId = nsifiles_selectedIcons[0].parent.leafName; //note:assuming all image multi selected image files have to come from same folder
+					}
+					
+					console.info('common name determined:', iconsetId);
+					// start - determine common name part
+					
+					collection_selectedImagesAndPaths = aVal;
+					// then sends to ensureNameAvailable
+					ensureNameAvailable();
+				}
+				// end - do stuff here - promise_doImgLoads
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_doImgLoads', aReason:aReason};
+				console.warn('Rejected - promise_doImgLoads - ', rejObj);
+				deferredMain_pickerIconset.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_doImgLoads', aCaught:aCaught};
+				console.error('Caught - promise_doImgLoads - ', rejObj);
+				deferredMain_pickerIconset.reject(rejObj);
+			}
+		);
+	};
+	// end - doLoadImages
+
+	// start - doPicker
+	var doPicker = function() {
+		// shows picker, tell them about the process
+		// success
+			// sends to doLoadImages which THEN will find a common name if icons not picked from a directory in path_profilistData_iconsets
+			// if icons were picked from a directory in path_profilistData_iconsets then sends to doLoadImages(true) to find out sizes, i shouldnt rely on file name as users may edit (even though i warn them not to)
+		// rejects main if cancelled or no files selected
+		
+		var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
+		fp.init(tWin, myServices.stringBundle.GetStringFromName('iconset-picker-title'), Ci.nsIFilePicker.modeOpenMultiple);
+		fp.appendFilters(Ci.nsIFilePicker.filterImages);
+
+		var startDir = Services.dirsvc.get('UAppData', Ci.nsIFile); // same as OS.Constants.Path.userApplicationDataDir
+		startDir.append('profilist_data');
+		startDir.append('iconsets'); //OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'iconsets');
+		//console.log('the path:', startDir.path, startDir.exists());
+		fp.displayDirectory = startDir;
+
+		var rv = fp.show();
+		if (rv == Ci.nsIFilePicker.returnOK) {
+			
+			var files = fp.files;
+			console.log('files:', files);
+			
+			while (files.hasMoreElements()) {
+				var aFile = files.getNext().QueryInterface(Ci.nsIFile);
+				//console.log('aFile:', aFile.path);
+
+				nsifiles_selectedIcons.push(aFile);
+				path_selectedIcons.push(aFile.path);
+			}
+			
+			if (path_selectedIcons.length == 0) {
+				deferredMain_pickerIconset.reject('no-files-selected');
+				return; // to stop deeper execution
+			}
+			
+			// test to see if they selected icons from profilistData dir
+			// assuming if first path contains path_profilistData_iconsets then rest are same, as multi select can only happen from one directory im pretty sure
+			var normalized_dataDirPath = OS.Path.normalize(profToolkit.path_profilistData_iconsets).toLowerCase();
+			var normalized_selectedIconPath = OS.Path.normalize(path_selectedIcons[0]).toLowerCase();
+			if (normalized_selectedIconPath.indexOf(normalized_dataDirPath) > -1) {
+				iconsetId = OS.Path.basename(nsifiles_selectedIcons[0].parent.path);
+				console.info('from profilistData iconsetId:', iconsetId);
+				doLoadImages(true);
+			} else {				
+				doLoadImages();
+			}
+		} else {
+			deferredMain_pickerIconset.reject('canceled picker'); // no need for hyphen here, can use space, as there is no localization for this
+		}
+	};
+	// end - doPicker
+	
+	// start - doInform
+	var doInform = function() {		
+		switch (cOS) {
+			case 'WINNT':
+				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
+				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-win');
+				break;
+			
+			case 'Linux':
+				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
+				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-linux');
+				break;
+			
+			case 'Darwin':
+				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
+				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-mac');
+				break;
+				
+			default:
+				deferredMain_pickerIconset.reject(['os-unsupported', cOS]);
+				return;
+		}
+		
+		iconSizesNeeded = iconsetSizes_Profilist[cOS];
+		Services.prompt.alert(tWin, title, msg);
+		doPicker();
+	};
+	// end - doInform
+	// end - define callbacks
+	
+	// start - main
+	doInform();
+	// end - main
+	
+	return deferredMain_pickerIconset.promise;
+}
+// end - pickerIconset
 function makeIcon(for_ini_key) {
 	// returns promise
 	var deferred_makeIcon = new Deferred();
@@ -6284,7 +6928,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 				function(aReason) {
 					var rejObj = {name:'promise_makeRequestedCut', aReason:aReason};
 					console.warn('Rejected - promise_makeRequestedCut - ', rejObj);
-					var deepestReason = aReason; while (deepestReason.aReason || deepestReason.aCaught) { deepestReason = (deepestReason.aReason || deepestReason.aCaught) }
+					var deepestReason = aReasonMax(aReason);
 					var responseJson = {
 						clientId: incomingJson.clientId,
 						status: 0,
@@ -6296,7 +6940,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 				function(aCaught) {
 					var rejObj = {name:'promise_makeRequestedCut', aCaught:aCaught};
 					console.error('Caught - promise_makeRequestedCut - ', rejObj);
-					var deepestReason = aCaught; while (deepestReason.aReason || deepestReason.aCaught) { deepestReason = (deepestReason.aReason || deepestReason.aCaught) }
+					var deepestReason = aReasonMax(aCaught);
 					var responseJson = {
 						clientId: incomingJson.clientId,
 						status: 0,
@@ -6473,22 +7117,41 @@ function cpClientListener(aSubject, aTopic, aData) {
 /* end - control panel server/client communication */
 
 // start - file picker for changing badge
-var getPathToBadge_templateFileUri;
-var getPathToBadge_templatePlatformPath;
-var getPathToBadge_seperator;
-function getPathToBadge(uniqueName, size, pathType) {
-	if (!getPathToBadge_templatePlatformPath) {
-		getPathToBadge_templatePlatformPath = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', 'UNIQUE____NAME', 'UNIQUE____NAME');
-		getPathToBadge_templateFileUri = OS.Path.toFileURI(getPathToBadge_templatePlatformPath);
+function getPathsInIconset(iconsetId) {
+	// does not check for file existence, assumes they exist
+	// returns null if os is not supported
+	// default, it returns OSPath, set FileURIPath to true to ALSO get FileURI
+	// returns obj with keys as size, and .OSPath and .FileURI
+	
+	var cOS = OS.Constants.Sys.Name;
+	
+	var arryOfSizes = [];
+	if (['WINNT', 'Linux', 'Darwin'].indexOf(cOS) == -1) {
+		return null;
 	}
-	if (!pathType) {
-		//return fileuri
-		return getPathToBadge_templateFileUri.replace(/UNIQUE____NAME/g, uniqueName) + '_' + size + '.png';
+	
+	var pathBase_OSPath = OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId);
+	var pathBase_FileURI = OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId));
+	var imgObj = {};
+	for (var i=0; i<iconsetSizes_Profilist[cOS].length; i++) {
+		imgObj[iconsetSizes_Profilist[cOS][i]] = {
+			OSPath: pathBase_OSPath + '_' + iconsetSizes_Profilist[cOS][i] + '.png',
+			FileURI: pathBase_FileURI + '_' + iconsetSizes_Profilist[cOS][i] + '.png'
+		};
+	}
+	
+	return imgObj;
+}
+function getPathToBadge(iconsetId, size, OSPath) {
+	// default OSPath is false, so returns FileURI, set it to `true` to get OSPath
+	//does not check for file existence, assumes they exist
+	if (OSPath) {
+		return OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId + '_' + size + '.png');
 	} else {
-		//return platform path
-		return getPathToBadge_templatePlatformPath.replace(/UNIQUE____NAME/g, uniqueName) + '_' + size + '.png';
+		return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId + '_' + size + '.png'));
 	}
 }
+
 function showPick4Badging(win) {
 	// returns promise
 	// if badge succesfully made, it resolves to the uniqueName, get a path to it like this: OS.Path.toFileURI(OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'badge_iconsets', aVal, aVal + '_16.png')) NO LONGER THIS: `with the platform path without ext or size. so to use it append a _SIZE.png`
@@ -7133,7 +7796,8 @@ function makeDir_Bug934283(path, options) {
 	// pre FF31, using the `from` option would not work, so this fixes that so users on FF 29 and 30 can still use my addon
 	// the `from` option should be a string of a folder that you know exists for sure. then the dirs after that, in path will be created
 	// for example: path should be: `OS.Path.join('C:', 'thisDirExistsForSure', 'may exist', 'may exist2')`, and `from` should be `OS.Path.join('C:', 'thisDirExistsForSure')`
-
+	// options of like ignoreExisting is exercised on final dir
+	
 	if (!('from' in options)) {
 		console.error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
 		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
@@ -7157,7 +7821,7 @@ function makeDir_Bug934283(path, options) {
 	var makeDirRecurse = function() {
 		pathExistsForCertain = OS.Path.join(pathExistsForCertain, dirsToMake[0]);
 		dirsToMake.splice(0, 1);
-		var promise_makeDir = OS.File.makeDir(pathExistsForCertain);
+		var promise_makeDir = OS.File.makeDir(pathExistsForCertain, options);
 		promise_makeDir.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_makeDir - ', 'ensured/just made:', pathExistsForCertain, aVal);
@@ -7193,11 +7857,12 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 	// i use this with writeAtomic, copy, i havent tested with other things
 	// argsOfOsFileFunc is array of args
 	// will execute nameOfOsFileFunc with argsOfOsFileFunc, if rejected and reason is directories dont exist, then dirs are made then rexecute the nameOfOsFileFunc
+	// i added makeDir as i may want to create a dir with ignoreExisting on final dir as was the case in pickerIconset()
 	// returns promise
 	
 	var deferred_tryOsFile_ifDirsNoExistMakeThenRetry = new Deferred();
 	
-	if (['writeAtomic', 'copy'].indexOf(nameOfOsFileFunc) == -1) {
+	if (['writeAtomic', 'copy', 'makeDir'].indexOf(nameOfOsFileFunc) == -1) {
 		deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
 		// not supported because i need to know the source path so i can get the toDir for makeDir on it
 		return deferred_tryOsFile_ifDirsNoExistMakeThenRetry.promise; //just to exit further execution
@@ -7235,6 +7900,10 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 				
 			case 'copy':
 				toDir = OS.Path.dirname(argsOfOsFileFunc[1]);
+				break;
+
+			case 'makeDir':
+				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
 				break;
 				
 			default:
@@ -7386,4 +8055,42 @@ function immediateChildPaths(path_dir) {
 	
 	return deferred_immediateChildPaths.promise;
 }
+function aReasonMax(aReason) {
+	var deepestReason = aReason;
+	while (deepestReason.hasOwnProperty('aReason') || deepestReason.hasOwnProperty()) {
+		if (deepestReason.hasOwnProperty('aReason')) {
+			deepestReason = deepestReason.aReason;
+		} else if (deepestReason.hasOwnProperty('aCaught')) {
+			deepestReason = deepestReason.aCaught;
+		}
+	}
+	return deepestReason;
+}
+function longestInCommon(candidates, index) {
+	//my mods
+  if (!index) {
+    index = 0;
+  }
+  if (candidates.length == 0) {
+    return '';
+  }
+  //end my mods
+// source: http://stackoverflow.com/a/1897480/1828637
+// finds the longest common substring in the given data set.
+// takes an array of strings and a starting index
+  var i, ch, memo
+  do {
+    memo = null
+    for (i=0; i < candidates.length; i++) {
+      ch = candidates[i].charAt(index)
+      if (!ch) break
+      if (!memo) memo = ch
+      else if (ch != memo) break
+    }
+  } while (i == candidates.length && ++index)
+
+  return candidates[0].slice(0, index)
+}
+
+
 // end - common helper functions
