@@ -1074,16 +1074,16 @@ function deleteProfile(theProfileName, refreshIni) {
 		
 		promise_profLokChk.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_profLokChk - ', aVal, 'objBoot[hoisted_p].num:', objBoot[hoisted_p].num, 'objBoot[hoisted_p].props.Name:', objBoot[hoisted_p].props.Name);
+				//console.log('Fullfilled - promise_profLokChk - ', aVal, 'objBoot[hoisted_p].num:', objBoot[hoisted_p].num, 'objBoot[hoisted_p].props.Name:', objBoot[hoisted_p].props.Name);
 				
 				//aVal is TRUE if LOCKED
 				//aVal is FALSE if NOT locked
 				if (aVal) {
-					console.info('profile', objBoot[hoisted_p].props.Name, 'is IN USE');
+					//console.info('profile', objBoot[hoisted_p].props.Name, 'is IN USE');
 					//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
 					PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'active');
 				} else {
-					console.info('profile', objBoot[hoisted_p].props.Name, 'is NOT in use');
+					//console.info('profile', objBoot[hoisted_p].props.Name, 'is NOT in use');
 					//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
 					PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'inactive');
 				}
@@ -3178,32 +3178,57 @@ function tbb_box_click(e) {
 				throw new Error('could not find key for this profile name, this should never happen');
 			}
 			
+			var cDoc = origTarg.ownerDocument;
+			var cWin = cDoc.defaultView;
+			
+			// start - keep panel open
+			var makePanelStay = function() {
+				targetedTBB.classList.add('profilist-in-badge-change');
+				console.log('targetedProfileName:', targetedProfileName);
+				
+				var PUI = cWin.PanelUI.panel;
+				PUI.addEventListener('popuphiding', keepPuiShowing, false);
+				
+				cWin.Profilist.PBox.classList.add('profilist-keep-open');
+			}
+			// end - keep panel open
+			
+			var makePanelClosableOnBlur_doCompleteAnimation = function() {
+				cWin.Profilist.PBox.classList.remove('profilist-keep-open');
+				PUI.removeEventListener('popuphiding', keepPuiShowing, false);
+				//targetedTBB.classList.add('profilist-POST-badge-change'); //experimental
+				targetedTBB.classList.remove('profilist-in-badge-change');
+			};
+			
 			if ('Profilist.badge' in ini[targetedProfileIniKey].props) {
 				// has badge already applied
 				
+				console.log('morph for remove');
 				// morph to say Enter = Remove Esc = Cancel
 				// with thrid option "Del = Remove & Delete" , IF no other profile uses that badge, ask if want to "remove AND delete badge from hard drive"
 				
 				
 			} else {
 				// does not have badge applied
-				var cDoc = origTarg.ownerDocument;
-				var cWin = cDoc.defaultView;
+				makePanelStay();
 				var promise_pickerProcess = pickerIconset(cWin);
 				promise_pickerProcess.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_pickerProcess - ', aVal);
 						// start - do stuff here - promise_pickerProcess
-						Services.prompt.alert(null, 'profilist', 'badge applied');
+						console.log('badge applied');
 						
 						targetedTBB.setAttribute('badge', aVal['16'].FileURI);
 						var iconsetId = OS.Path.split(aVal['16'].OSPath).components;
 						iconsetId = iconsetId[iconsetId.length-2];
 						
 						console.info('iconsetId from post promise:', iconsetId);
-						/*
-						ini[targetedProfileIniKey].props.badge = iconsetId;
+						
+						cWin.setTimeout(makePanelClosableOnBlur_doCompleteAnimation, 500);
+						
+						ini[targetedProfileIniKey].props['Profilist.badge'] = iconsetId;
 						writeIniAndBkp();
+						/*
 						// updateIconToWindows()
 						// updateIconToLauncher()
 						// updateIconToDesktopShortcutsIfExist()
@@ -3211,7 +3236,6 @@ function tbb_box_click(e) {
 						// end - do stuff here - promise_pickerProcess
 					},
 					function(aReason) {
-						Services.prompt.alert(null, 'profilist', 'in rejection');
 						var rejObj = {name:'promise_pickerProcess', aReason:aReason};
 						console.warn('Rejected - promise_pickerProcess - ', rejObj);
 						var deepestReason = aReasonMax(aReason);
@@ -3237,6 +3261,7 @@ function tbb_box_click(e) {
 									myServices.stringBundle.GetStringFromName('iconset-picker-error-title'),
 									myServices.stringBundle.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
 								);
+								makePanelClosableOnBlur_doCompleteAnimation();
 								return; //prevent deeper execution
 							}
 						}
@@ -3253,6 +3278,8 @@ function tbb_box_click(e) {
 									myServices.stringBundle.formatStringFromName('profilist-error-txt-something', [JSON.stringify(deepestReason)], 1)
 								);
 						}
+						
+						makePanelClosableOnBlur_doCompleteAnimation();
 					}
 				).catch(
 					function(aCaught) {
@@ -6040,7 +6067,7 @@ function pickerIconset(tWin) {
 				loaded_imgObj = aVal;
 				if (selectedFromProfilistDataDir) {
 					// then resolves main with file paths and sizes
-					Services.prompt.alert(tWin, 'profilist', 'img loading complete, resolve as from data dir');
+					//Services.prompt.alert(tWin, 'profilist', 'img loading complete, resolve as from data dir');
 					// user may not have selected all the icons in the dir
 					var collection_selectedPathsInIconset = getPathsInIconset(iconsetId);
 					// should i put .Image into collection_selectedPathsInIconset, i think i should, take whatever .Image from selected is available. then load the remaining, in case user did not select all of the images from the profilist-data/iconsets/iconsetId/ folder
@@ -6068,7 +6095,7 @@ function pickerIconset(tWin) {
 					}
 				} else {
 					// determine a common name from the file names selected
-					Services.prompt.alert(tWin, 'profilist', 'img loading complete, find common name then send to ensureNameAvailable');
+					//Services.prompt.alert(tWin, 'profilist', 'img loading complete, find common name then send to ensureNameAvailable');
 						
 					// start - determine common name part
 					var patt_winSafe = /([\\*:?<>|\/\"])/g;
