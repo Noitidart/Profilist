@@ -27,7 +27,9 @@ var PUIsync;
 var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instead of dom as im thinking of making it not update all windows, just update the current window on menu panel show
 var currentThisBuildsIconPath = '';
 
+var cOS = OS.Constants.Sys.Name;
 var macStuff = {};
+var updateLauncherAndCutIconsOnBrowserShutdown; // set this to a function if this profiles build tie was changed while it was running, it will update the icon on browser shutdown
 
 const iconsetSizes_OS = {
 	Darwin: [16, 32, 64, 128, 256, 512, 1024],
@@ -3229,9 +3231,35 @@ function tbb_box_click(e) {
 						ini[targetedProfileIniKey].props['Profilist.badge'] = iconsetId;
 						writeIniAndBkp();
 						/*
-						// updateIconToWindows()
-						// updateIconToLauncher()
-						// updateIconToDesktopShortcutsIfExist()
+						// makeIcon(targetedProfileIniKey); // resolves with icon name it should be
+						// makeIcon.then(
+							function(aVal) {
+								// aVal is object: {iconNameShouldBe: string, alreadySetOnLauncher: bool} the icon name it should be updated to
+								
+								
+								//// do not update launcher and deskcut icon if user changed build of profile while that profile was running (in another build), instead setup icon update to happen on shutdown of browser
+									// check if profile is running, if it is, figure out its current build/channel its actually running in
+										// if it is running then now figure out if it is TIED to another build/channel, if it is then
+										if (aProfilePath_currentlyRunningChannel != aProfilePath_tiedChannel) {
+											updateLauncherAndCutIconsOnBrowserShutdown = function() {
+												// must use nsIFile so as to keep browser shutdown going until the applying completes, it should be as simple and quick as possible in shutdown, so like keep file data ready to be copied
+												// maybe consider: no need to updateIconToWindows as browser is shutting down? //updateIconToWindows();
+												updateIconToLauncher();
+												updateIconToDesktCut();
+											};
+										} else {
+											updateIconToWindows();
+											updateIconToLauncher();
+											updateIconToDesktCut();									
+										}
+								// updateIconToWindows(null; // update all windows
+								// updateIconToLauncher();
+								// updateIconToDesktCut();
+							},
+							function(aReason) {
+								
+							}
+						); // end makeIcon.then
 						*/
 						// end - do stuff here - promise_pickerProcess
 					},
@@ -3368,6 +3396,35 @@ function tbb_box_click(e) {
 	
 	classAction[className]();
 }
+
+// start - functions to update icons at various locations
+function updateIconToWindows(aDOMWin, aProfilePath) {
+	// if aDOMWin is passed
+		// if aProfilePath is not supplied, it will figure out what profile that aDOMWin belongs to and update its icon accordingly
+		// if aProfilePath is supplid, then it will not figure out what profile it belongs to and just go for it
+	// if aDOMWin is null, it updates all windows of current profile, no need for aProfilePath (aProfilePath is ignored), its very simple to figure out current profile
+		
+}
+
+function updateIconToLauncher(aProfilePath) {
+	// if launcher exists
+		// first reads what build it was last used at by getting Profilist.tie, if it doesnt have Profilist.tie then it gets last used build by reading icon CHANNEL-REF
+				// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
+				// then using that TIE-ID or CHANNEL-REF it uses that as base (has to has one of the two)
+				// if it has correct stuff then it doesnt update
+}
+
+function updateIconToDesktCut(aProfilePath) {
+	// get all files on desktop
+	// check if the path of shortcut (windows) or symlink (nix/mac) point to launcher file path
+		// check if launcher exists
+			// if does NOT exist, then delete deskCut
+			// if it does EXIST then
+				// first reads what build it was last used at by getting Profilist.tie, if it doesnt have Profilist.tie then it gets last used build by reading icon CHANNEL-REF
+				// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
+				// if it has correct stuff then it doesnt update
+}
+// end - functions to update icons at various locations
 
 function iniKeyOfName(theProfileName) {
 	// given a profile name, it will get the ini key of it
@@ -4495,7 +4552,7 @@ function getChannelNameOfProfile(for_ini_key) {
 		} else {
 			buildPath = profToolkit.exePath;
 		}
-		if (OS.Constants.Sys.Name != 'Darwin') {
+		if (cOS != 'Darwin') {
 			path_channelName = OS.Path.join(OS.Path.dirname(buildPath), 'defaults', 'pref', 'channel-prefs.js');
 		} else {
 			path_channelName = OS.Path.join(buildPath.substr(0, buildPath.toLowerCase().indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
@@ -5371,7 +5428,7 @@ function makeLauncher(for_ini_key, ch_name) {
 				// start - do stuff here - promise_getChName
 				theChName = aVal;
 	
-				if (OS.Constants.Sys.Name == 'Darwin') {
+				if (cOS == 'Darwin') {
 					makeMac();		
 				} else {
 					//throw new Error('OS not supported for makeLauncher');
@@ -5474,7 +5531,7 @@ function makeDesktopShortcut(for_ini_key) {
 		
 		var deferred_makeCut = new Deferred();
 		
-		if (OS.Constants.Sys.Name == 'Darwin') { //note:debug added in winnt
+		if (cOS == 'Darwin') { //note:debug added in winnt
 			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 			/*
 			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '-')"
@@ -5601,7 +5658,7 @@ function makeDesktopShortcut(for_ini_key) {
 				//make launcher then makeDeskAlias
 				makeLauncherThenAlias();
 			}
-		} else if (OS.Constants.Sys.Name == 'asdflaksdfj') {
+		} else if (cOS == 'asdflaksdfj') {
 			
 		} else {
 			deferred_makeDesktopShortcut.reject('Profilist only supports desktop shortcut creation for the following operating systems: Darwin(MacOS X)');
@@ -5646,7 +5703,7 @@ function makeDesktopShortcut(for_ini_key) {
 }
 function getLauncherName(for_ini_key, theChName) {
 	var theProfName_safedForPath;
-	if (OS.Constants.Sys.Name == 'WINNT') {
+	if (cOS == 'WINNT') {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '-')
 	} else {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' '); //for mac and nix
@@ -5896,8 +5953,6 @@ function pickerIconset(tWin) {
 	
 	var iconSizesNeeded;
 	var collection_selectedImagesAndPaths = {}; //colllection obj, keys are size of images, holds .Image as new Image(), .OSPath and .FileURI
-	
-	var cOS = OS.Constants.Sys.Name;
 	
 	// end - globals for callbacks
 	// start - setup writeBlob
@@ -6241,11 +6296,27 @@ function pickerIconset(tWin) {
 // end - pickerIconset
 function makeIcon(for_ini_key) {
 	// returns promise
+	// resolves with:
+		// {iconNameShouldBe: string, alreadySetOnLauncher: bool} 
+	
+	// check if icon exists in profilist_data/launcher_icons profToolkit.path_profilistData_launcher_icons with 
+		// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
+	
+		// calc BADGE-ID
+		// calc TIE-ID/CHANNEL-REF should be
+			// if not tied, then calc CHANNEL-REF:
+				// use current profiles build (needed when launching for_ini_key profile from current profile
+				// use launchers base
+					// launcher base can be
+						// last used build - if profile for_ini_key is currently running use whtever channel its running in (which should be the last build in the launcher << no this is not true, thinking: if user changes tie of build while its running {im thinking in this case update launcher right away when user ties while running, but dont update dock/taskbar?} << well actually on further thought it is true, because its not tied obviously at this point of my logic so then yes this should be the current running channel),  OR if default browser is not a firefox
+						// default build - if not running then use default browser channel (BUT) if default browser is not firefox/beta/dev/release then use the icon build path currently in the launcher [and if the launcher doesnt exit then use the icon of the build from which we are currently executing this function]
+			// if tied, use TIE-ID iconset for base
+			
 	var deferred_makeIcon = new Deferred();
 	
 	// start - os support check
 	var platformSupported;
-	if (OS.Constants.Sys.Name == 'Darwin') { // this if block should similar 67864810
+	if (cOS == 'Darwin') { // this if block should similar 67864810
 		var userAgent = Cc['@mozilla.org/network/protocol;1?name=http'].getService(Ci.nsIHttpProtocolHandler).userAgent;
 		console.info('userAgent:', userAgent);
 		var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
@@ -6272,7 +6343,7 @@ function makeIcon(for_ini_key) {
 				platformSupported = false; //its already false
 			}
 		}
-	} else if (OS.Constants.Sys.Name == 'WINNT') {
+	} else if (cOS == 'WINNT') {
 		platformSupported = true;
 	}
 	if (!platformSupported) {
@@ -6299,7 +6370,7 @@ function makeIcon(for_ini_key) {
 	// start - do_initializeMakeProc
 	var do_initializeMakeProc = function() { // this is where the platform selection comes in
 		// this if block should similar 67864810
-		if (OS.Constants.Sys.Name == 'Darwin' || OS.Constants.Sys.Name == 'WINNT') { //note:debug remove winnt
+		if (cOS == 'Darwin' || cOS == 'WINNT') { //note:debug remove winnt
 			var deferred_makeIcnsOfPaths = new Deferred();
 			deferred_makeIcnsOfPaths.promise.then(
 				function(aVal) {
@@ -7144,13 +7215,14 @@ function cpClientListener(aSubject, aTopic, aData) {
 /* end - control panel server/client communication */
 
 // start - file picker for changing badge
-function getPathsInIconset(iconsetId) {
+function getPathsInIconset(iconsetId, liveFetch) {
 	// does not check for file existence, assumes they exist
 	// returns null if os is not supported
 	// default, it returns OSPath, set FileURIPath to true to ALSO get FileURI
 	// returns obj with keys as size, and .OSPath and .FileURI
 	
-	var cOS = OS.Constants.Sys.Name;
+	// if liveFetch is done, then it actually goes the foldre named iconsetId in profilist-data/iconsets/ and fetches all file paths
+		// NOT YET IMPLEMENTED
 	
 	var arryOfSizes = [];
 	if (['WINNT', 'Linux', 'Darwin'].indexOf(cOS) == -1) {
@@ -7676,7 +7748,7 @@ function startup(aData, aReason) {
 	};
 	
 	// os - mac specific stuff
-	if (OS.Constants.Sys.Name == 'Darwin') {
+	if (cOS == 'Darwin') {
 		macStuff.isMac = true;
 		
 		// check if should override paths
@@ -7716,8 +7788,12 @@ function startup(aData, aReason) {
 }
 
 function shutdown(aData, aReason) {
-	if (aReason == APP_SHUTDOWN) return;
-		
+	if (aReason == APP_SHUTDOWN) {
+		if (updateLauncherAndCutIconsOnBrowserShutdown) {
+			updateLauncherAndCutIconsOnBrowserShutdown();
+		}
+		return;
+	}
 	//myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
