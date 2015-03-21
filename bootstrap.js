@@ -6959,14 +6959,43 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			//return buffer;
 			// end - put imageDataArr to ico container, as buffer
 			
+			
+			// start - this is done after save to disk
+			// cuz if same badge-id and channel-ref/tie-id combo existed before, it uses the old one
+			var refreshIconAtPath = function() {
+				var promise_refIco = ProfilistWorker.post('refreshIconAtPath', [resolveObj.OSPath]);
+				promise_refIco.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_refIco - ', aVal);
+						// start - do stuff here - promise_refIco
+						deferredMain_makeIcon.resolve(resolveObj);
+						// end - do stuff here - promise_refIco
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_refIco', aReason:aReason};
+						console.warn('Rejected - promise_refIco - ', rejObj);
+						deferredMain_makeIcon.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_refIco', aCaught:aCaught};
+						console.error('Caught - promise_refIco - ', rejObj);
+						deferredMain_makeIcon.reject(rejObj);
+					}
+				);
+			}
+			// end - this is done after save to disk
+			
 			// start - save it to disk
 			// note: i use here `resolveObj.OSPath` which is set in the promise_iconPrexists, for WINNT and Darwin
+			// IMPORTANT TODO: if a iconsetId from profilist_data/iconsets gets deleted DELETE icon files associated with it. i discovered this in windows. it makes sense for all os though. as user may bring back the same iconsetId but with a different image/art/drawing. so just checking if path exists will return true, but the art/drawing work inside the icon is different
 			var promise_writeIco = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [resolveObj.OSPath, new Uint8Array(buffer), {tmpPath:resolveObj.OSPath + '.tmp'}], profToolkit.path_iniDir);
 			promise_writeIco.then(
 				function(aVal) {
 					console.log('Fullfilled - promise_writeIco - ', aVal);
 					// start - do stuff here - promise_writeIco
-					deferredMain_makeIcon.resolve(resolveObj);
+					//deferredMain_makeIcon.resolve(resolveObj);
+					refreshIconAtPath();
 					// end - do stuff here - promise_writeIco
 				},
 				function(aReason) {

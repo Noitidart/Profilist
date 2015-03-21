@@ -1252,3 +1252,34 @@ function debugOutWRITE(dontClear) {
 		debugOutCLEAR();
 	}
 }
+
+/**************** START - WINDOWS STUFF *******************/
+function refreshIconAtPath(icoPath) {
+	//todo get this working with path
+	
+	var shell32 = ctypes.open('shell32.dll');
+
+	/* https://msdn.microsoft.com/en-us/library/windows/desktop/bb762118%28v=vs.85%29.aspx
+	 * void SHChangeNotify(
+	 *   __in_		LONG wEventId,
+	 *   __in_		UINT uFlags,
+	 *   __in_opt_	LPCVOID dwItem1,
+	 *   __in_opt_	LPCVOID dwItem2
+	 * );
+	 */
+	var SHChangeNotify = shell32.declare('SHChangeNotify', ctypes.winapi_abi,
+		ctypes.void_t,			// return
+		ctypes.long,			//wEventId
+		ctypes.unsigned_int,	//uFlags
+		ctypes.voidptr_t,		//dwItem1
+		ctypes.voidptr_t		//dwItem2
+	);
+	
+	var SHCNE_UPDATEITEM = 0x02000;
+	var SHCNE_ASSOCCHANGED = 0x8000000;
+	var SHCNF_IDLIST = 0x0000;
+	SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, null, null); //updates all
+	
+	return 'void';
+}
+/**************** END - WINDOWS STUFF *******************/
