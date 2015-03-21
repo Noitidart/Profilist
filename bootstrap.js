@@ -4546,7 +4546,7 @@ function getChannelNameOfExePath(aExePath) {
 					deferredMain_getChannelNameOfExePath.reject('regex match failed');
 				} else {
 					chanVal = chanVal[1];
-					getChannelNameOfProfile_cache_perBuild[path_channelName] = chanVal;
+					_cache_getChannelNameOfExePath[aExePath] = chanVal;
 					deferredMain_getChannelNameOfExePath.resolve(chanVal);
 				}
 				// end - do stuff here - promise_readChanPref
@@ -5547,21 +5547,29 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		isRunning: null // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
 	};
 	
-	if (!(for_ini_key in ini)) {
+	if (!(aProfilePath in ini)) {
 		deferredMain_getProfileSpecs.reject('key not found in ini');
 		return deferredMain_getProfileSpecs.promise;
 	}
 	
-	var props = ini[for_ini_key].props;
-	var iconNameArr = [];
-
+	var props = ini[aProfilePath].props;
+	var iconNameObj = {};	
+	
 	if ('Profilist.badge' in props) {
 		specObj.iconsetId_badge = props['Profilist.badge'];
-		iconNameArr.push('BADGE-ID_' + specObj.iconsetId_badge);
+		iconNameObj['BADGE-ID'] = specObj.iconsetId_badge;
 	}
 	
 	var makeIconName = function() {
-		specObj.iconName = iconNameArr.join('__');
+		var comps = {};
+		var iconNameArr = [];
+		for (var k in iconNameObj) {
+			iconNameArr.push(k + '_' + iconNameObj[k]);
+		}
+		specObj.iconName = {
+			str: iconNameArr.join('__'),
+			components: iconNameObj
+		}
 	};
 	
 	var getChannelToExePath = function() {
@@ -5577,7 +5585,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 					specObj.channel_exeForProfile = aVal;
 					if (!specObj.iconsetId_base) {
 						specObj.iconsetId_base = aVal;
-						iconNameArr.push('CHANNEL-REF_' + specObj.iconsetId_base);
+						iconNameObj['CHANNEL-REF'] = specObj.iconsetId_base;
 					}
 					makeIconName();
 					deferredMain_getProfileSpecs.resolve(specObj);
@@ -5607,10 +5615,11 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			function(aVal) {
 				console.log('Fullfilled - promise_readCompatIni - ', aVal);
 				// start - do stuff here - promise_readCompatIni
-				var path_aProfileLastPlatformDir = /^LastPlatformDir=(.*?)$"/.exec(aVal); //aVal.substr(aVal.indexOf(''), aVal.indexOf(// equivalent of Services.dirsvc.get('SrchPlugns', Ci.nsIFile) from within that running profile
+				var path_aProfileLastPlatformDir = /^LastPlatformDir=(.*?)$/m.exec(aVal); //aVal.substr(aVal.indexOf(''), aVal.indexOf(// equivalent of Services.dirsvc.get('SrchPlugns', Ci.nsIFile) from within that running profile
 				if (!path_aProfileLastPlatformDir) {
 					deferredMain_getProfileSpecs.reject('regex failed to extract path_aProfileLastPlatformDir');
 				} else {
+					path_aProfileLastPlatformDir = path_aProfileLastPlatformDir[1];
 					if (cOS == 'Darwin') {
 						if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
 							var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
@@ -5668,7 +5677,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			} else {
 				specObj.path_exeForProfile = getPathToBuildByTie(specObj.tieId);
 				specObj.iconsetId_base = getIconsetIdByTie(specObj.tieId);
-				iconNameArr.push('TIE-ID_' + specObj.iconsetId_base);
+				iconNameObj['TIE-ID'] = specObj.iconsetId_base;
 				getChannelToExePath(); // maybe no need for getting channel, as we need channel to determine iconsetId_base, but here we already have it
 			}
 		} else {
