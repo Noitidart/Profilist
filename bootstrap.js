@@ -67,6 +67,7 @@ var PromiseWorker;
 var ProfilistWorker;
 
 var ini = {UnInitialized:true};
+var devBuilds;
 var iniStr = ''; //str of ini on last read // for detection for if should write if diff
 var iniReadStr = ''; //same like iniStr but no JSON'ing for detection if should continue parsing obj on read
 var iniStr_thatAffectsDOM = ''; //str of ini on last read (but just the props that affect dom) (so like properties like Profilist.launch_on_create doesnt affect dom as the function creatProfile checks this Profilist.launch_on_create property when deciding to launch or not
@@ -180,7 +181,7 @@ current builds icon if dev mode is enabled
 				
 				
 					//start the generic-ish check stuff
-					var devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']); //can instead use `JSON.parse(ini.General.props['Profilist.dev-builds'])` here
+					devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']); //can instead use `JSON.parse(ini.General.props['Profilist.dev-builds'])` here
 					//var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
 					//start - figure out from dev_builds_str what icon path should be
 					try {
@@ -1072,37 +1073,6 @@ function deleteProfile(theProfileName, refreshIni) {
 				deferred_deleteProfile.reject(rejObj);
 			}
 		);
-		
-		
-		promise_profLokChk.then(
-			function(aVal) {
-				//console.log('Fullfilled - promise_profLokChk - ', aVal, 'objBoot[hoisted_p].num:', objBoot[hoisted_p].num, 'objBoot[hoisted_p].props.Name:', objBoot[hoisted_p].props.Name);
-				
-				//aVal is TRUE if LOCKED
-				//aVal is FALSE if NOT locked
-				if (aVal) {
-					//console.info('profile', objBoot[hoisted_p].props.Name, 'is IN USE');
-					//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
-					PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'active');
-				} else {
-					//console.info('profile', objBoot[hoisted_p].props.Name, 'is NOT in use');
-					//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
-					PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'inactive');
-				}
-				
-				return 'Success promise_profLokChk num: ' + objBoot[hoisted_p].num + ' and name: ' + objBoot[hoisted_p].props.Name;
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_profLokChk', aReason:aReason, aExtra:objBoot[hoisted_p].num, aExtra2:objBoot[hoisted_p].props.Name};
-				console.error('Rejected - promise_profLokChk - ', rejObj);
-				throw rejObj;
-			}
-		).catch(
-			function(aCaught) {
-				console.error('Caught - promise_profLokChk - ', aCaught);
-				// throw aCaught;
-			}
-		);		
 	}
 	// end setup postRefreshIni
 	
@@ -1174,6 +1144,7 @@ function initProfToolkit() {
 	
 	profToolkit.exePath = Services.dirsvc.get('XREExeF', Ci.nsIFile).path;
 	profToolkit.exePathLower = profToolkit.exePath.toLowerCase();
+	profToolkit.path_exeCur = profToolkit.exePath; //currently running channels exe
 	profToolkit.rootPathDefault =  Services.dirsvc.get('DefProfRt', Ci.nsIFile).path; //FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
 //	console.log('initProfToolkit 1');
 	profToolkit.localPathDefault = Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path //FileUtils.getFile('DefProfLRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.profileDir);
@@ -1213,6 +1184,8 @@ function initProfToolkit() {
 	profToolkit.path_profilistData_iconsets = OS.Path.join(profToolkit.path_profilistData_root, 'iconsets');
 	profToolkit.path_profilistData_launcher_icons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
 	profToolkit.path_profilistData_launcher_exes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
+	
+	profToolkit.path_lastExeUsed = OS.Path.join(profToolkit.path_profilistData_root, 'lastExeUsed.ini');
 	// end - define profilist_data structure and paths
 	
 	//get relative path
@@ -4531,6 +4504,55 @@ function channelNameTo_refName(ch_name) {
 	}
 }
 
+var _cache_getChannelNameOfExePath = {}; //{exePath: channelName, exePath2: channelName}
+function getChannelNameOfExePath(aExePath) {
+	// assuming case sensitivity is right
+	var deferredMain_getChannelNameOfExePath = new Deferred();
+	
+	if (_cache_getChannelNameOfExePath[aExePath]) {
+		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]); // note:important: requires tie id to have proper cassing on tie paths
+	} else {
+		var path_channelName;
+		if (cOS != 'Darwin') {
+			path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
+		} else {
+			path_channelName = OS.Path.join(aExePath.substr(0, aExePath.search(/\.app/i)/*.toLowerCase().indexOf('.app')*/ + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
+		}
+
+		var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
+		promise_readChanPref.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readChanPref - ', aVal);
+				// start - do stuff here - promise_readChanPref
+				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
+				if (!chanVal) {
+					var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
+					deferredMain_getChannelNameOfExePath.reject('regex match failed');
+				} else {
+					chanVal = chanVal[1];
+					getChannelNameOfProfile_cache_perBuild[path_channelName] = chanVal;
+					deferredMain_getChannelNameOfExePath.resolve(chanVal);
+				}
+				// end - do stuff here - promise_readChanPref
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_readChanPref', aReason:aReason};
+				console.warn('Rejected - promise_readChanPref - ', rejObj);
+				deferredMain_getChannelNameOfExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
+				console.error('Caught - promise_readChanPref - ', rejObj);
+				deferredMain_getChannelNameOfExePath.reject(rejObj);
+			}
+		);
+	
+	}
+	
+	return deferredMain_getChannelNameOfExePath.promise;
+}
+
 var getChannelNameOfProfile_cache_perBuild = {}; // [buildPath] = chan
 function getChannelNameOfProfile(for_ini_key) {
 	// can pass `null` for `for_ini_key` and if this is temp profile it will give that else will give regular error of not found
@@ -4539,9 +4561,10 @@ function getChannelNameOfProfile(for_ini_key) {
 	
 	var deferred_getChannelNameOfProfile = new Deferred();
 	
-	getChannelNameOfProfile_cache_perBuild[profToolkit.exePath] = Services.prefs.getCharPref('app.update.channel')
+	getChannelNameOfProfile_cache_perBuild[profToolkit.exePath] = Services.prefs.getCharPref('app.update.channel');
 	
-	if (for_ini_key == profToolkit.selectedProfile.iniKey) {
+	if (!for_ini_key || for_ini_key == profToolkit.selectedProfile.iniKey) {
+		// either temp profile, or current profile, so return whatever is the current profiles build
 		deferred_getChannelNameOfProfile.resolve(getChannelNameOfProfile_cache_perBuild[profToolkit.exePath]);
 	} else {
 		var path_channelName;
@@ -4550,7 +4573,8 @@ function getChannelNameOfProfile(for_ini_key) {
 		if ('Profilist.tie' in ini[for_ini_key]) {
 			buildPath = getPathToBuildByTie(ini[for_ini_key]['Profilist.tie']);
 		} else {
-			buildPath = profToolkit.exePath;
+			buildPath = profToolkit.exePath; // todo: this is incorrect!!! 032015 1207p
+			asfsadfd(); // put here as it brings attention to me so i fix this
 		}
 		if (cOS != 'Darwin') {
 			path_channelName = OS.Path.join(OS.Path.dirname(buildPath), 'defaults', 'pref', 'channel-prefs.js');
@@ -5461,6 +5485,308 @@ function makeLauncher(for_ini_key, ch_name) {
 	return deferred_makeLauncher.promise;
 }
 
+function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipChannelForProfile) {
+	// note: as of now 032015 1235p - expects a launcher existing if a profile is running ACTUALLY no more, i use lastExeUsed.ini now
+	// set ifRunningThenTakeThat
+		// to 0 to get what it should be (regardless of if its running or not)
+		// to 1 to get what it is in currently running (if its not running then it gets shouldBe)
+		
+	// set launching to true, if running this right before launching a launcher exe from profilist menu
+	// if do skipChannelForProfile, may not get iconetsetId_base
+	
+	// replacement for getIconName probably AND also getChannelNameOfProfile probably
+	// i need to change getChannelNameOfProfile to be getChannelNameOfExePath
+	// resolves
+		/*
+		{
+			iconsetId_badge: string,
+			iconsetId_base: string,
+			tieId: string,
+			path_exeForProfile: string, // the buildPath to use for aProfilePath, due to either being tied, or other
+			channel_exeForProfile: string, // channel of the path_exeForProfile
+			iconName: string
+			isRunning: bool // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
+		}
+		*/
+	// 
+
+		// calc BADGE-ID
+		// calc TIE-ID/CHANNEL-REF should be
+			// if not tied, then calc CHANNEL-REF:
+				// use current profiles build (needed when launching for_ini_key profile from current profile
+				// use launchers base
+					// launcher base can be
+						// last used build - if profile for_ini_key is currently running use whtever channel its running in (which should be the last build in the launcher << no this is not true, thinking: if user changes tie of build while its running {im thinking in this case update launcher right away when user ties while running, but dont update dock/taskbar?} << well actually on further thought it is true, because its not tied obviously at this point of my logic so then yes this should be the current running channel),  OR if default browser is not a firefox
+						// default build - if not running then use default browser channel (BUT) if default browser is not firefox/beta/dev/release then use the icon build path currently in the launcher [and if the launcher doesnt exit then use the icon of the build from which we are currently executing this function]
+			// if tied, use TIE-ID iconset for base
+	
+	var deferredMain_getProfileSpecs = new Deferred();
+	
+	var specObj = {
+		iconsetId_badge: null,
+		iconsetId_base: null,
+		iconName: null,
+		tieId: null,
+		path_exeForProfile: null, // the buildPath to use for aProfilePath, due to either being tied, or other
+		channel_exeForProfile: null, // channel of the path_exeForProfile
+		iconName: null
+		isRunning: null // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
+	};
+	
+	if (!(for_ini_key in ini)) {
+		deferredMain_getProfileSpecs.reject('key not found in ini');
+		return deferredMain_getProfileSpecs.promise;
+	}
+	
+	var props = ini[for_ini_key].props;
+
+	if ('Profilist.badge' in props) {
+		specObj.iconsetId_badge = props['Profilist.badge'];
+		iconNameArr.push('BADGE-ID_' + iconsetId_badge);
+	}
+	
+	var getChannelToExePath = function() {
+		if (skipChannelForProfile) {
+			deferredMain_getProfileSpecs.resolve(specObj);
+		} else {
+			var promise_channelForExe = getChannelNameOfExePath(path_exeForProfile);
+			promise_channelForExe.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_channelForExe - ', aVal);
+					// start - do stuff here - promise_channelForExe
+					specObj.channel_exeForProfile = aVal;
+					if (!specObj.iconsetId_base) {
+						specObj.iconsetId_base = aVal;
+					}
+					deferredMain_getProfileSpecs.resolve(specObj);
+					// end - do stuff here - promise_channelForExe
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_channelForExe', aReason:aReason};
+					console.warn('Rejected - promise_channelForExe - ', rejObj);
+					deferredMain_getProfileSpecs.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_channelForExe', aCaught:aCaught};
+					console.error('Caught - promise_channelForExe - ', rejObj);
+					deferredMain_getProfileSpecs.reject(rejObj);
+				}
+			);
+		}
+	};
+	
+	var useForExePath_DefaultBrowser_else_Cur = function() {
+		// todo: get path to default browser
+			// if its firefox, then use that as exe path, then send to getChannelToExePath()
+			// else if its not firefox then use cur exe path then send to getChannelToExePath();
+		var path_exeDefaultBrowser = null;
+		if (!path_exeDefaultBrowser || path_exeDefaultBrowser != 'esr|release|beta|aurora|dev|nightly' /*todo:*/) {
+			useCurPath();
+		}
+	}
+	
+	var getPathToExeFromRunning = function() {
+		var promise_getRunningExePaths = read_encoded(profToolkit.path_lastExeUsed, {encoding:'utf-8'});
+		promise_getRunningExePaths.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getRunningExePaths - ', aVal);
+				// start - do stuff here - promise_getRunningExePaths
+				var json_lastExeUsed = JSON.parse(aVal);
+				specObj.path_exeForProfile = json_lastExeUsed[aProfilePath];
+				if (!specObj.path_exeForProfile) { // this doesnt play a role for if its actually running WITH profilist, this happens if running WITHOUT profilist OR if the profile hasnt been run yet
+					useForExePath_DefaultBrowser_else_Cur();
+				}
+				getChannelToExePath();
+				// end - do stuff here - promise_getRunningExePaths
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getRunningExePaths', aReason:aReason};
+				console.warn('Rejected - promise_getRunningExePaths - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getRunningExePaths', aCaught:aCaught};
+				console.error('Caught - promise_getRunningExePaths - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		);
+	};
+	
+	var useCurPath = function() {
+		specObj.path_exeForProfile = profToolkit.path_exeCur; // current build, of the one executing this func
+	}
+	
+	var useLastUsedExePath = function() {
+		// last used exe path regardless of profilist installed
+		path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfilePath), 'compatibility.ini');
+		var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
+		
+		promise_readCompatIni.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readCompatIni - ', aVal);
+				// start - do stuff here - promise_readCompatIni
+				var path_aProfileLastPlatformDir = /^LastPlatformDir=(.*?)$"/.exec(aVal); //aVal.substr(aVal.indexOf(''), aVal.indexOf(// equivalent of Services.dirsvc.get('SrchPlugns', Ci.nsIFile) from within that running profile
+				if (!path_aProfileLastPlatformDir) {
+					deferredMain_getProfileSpecs.reject('regex failed to extract path_aProfileLastPlatformDir');
+				} else {
+					if (cOS == 'Darwin') {
+						if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
+							var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
+							path_aProfileLastPlatformDir = nsifile_aProfileLastPlatformDir.target;
+						}	
+						var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
+						var endingArr_exeCur = split_exeCur.slice(split_exeCur.indexOf('MacOS'));
+						var endingStr_exeCur = OS.Path.join.apply(OS.File, endingArr_exeCur);
+						
+						var split_aProfileLastPlatformDir = OS.Path.split(path_aProfileLastPlatformDir).components;
+						var startArr_aProfileLastPlatformDir = split_aProfileLastPlatformDir.slice(0, split_aProfileLastPlatformDir.indexOf('Contents') + 1);
+						var startStr_aProfileLastPlatformDir = OS.Path.join.apply(OS.File, startArr_aProfileLastPlatformDir);
+						specObj.path_exeForProfile = OS.Path.join(startStr_aProfileLastPlatformDir, endingStr_exeCur);
+						console.info('darwin specObj.path_exeForProfile:', specObj.path_exeForProfile);						
+					} else {
+						var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
+						var endingStr_exeCur = split_exeCur[split_exeCur.length-1];
+						specObj.path_exeForProfile = OS.Path.join(path_aProfileLastPlatformDir, endingStr_exeCur);
+					}
+					getChannelToExePath();
+				}
+				// end - do stuff here - promise_readCompatIni
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_readCompatIni', aReason:aReason};
+				console.warn('Rejected - promise_readCompatIni - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readCompatIni', aCaught:aCaught};
+				console.error('Caught - promise_readCompatIni - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		);
+	};
+	
+	var postRunCheck = function() {
+		if ('Profilist.tie' in props) {
+			specObj.tieId = props['Profilist.tie']; //so if tied, but getting running info, the tieId will still get delievered to specObj
+			if (ifRunningThenTakeThat && specObj.isRunning) {
+				// if aProfilePath is currently running, and user changed tie, then to get the build it currently is in i should read from iconFile of launcher
+				// last used exe ini file holds current running exe path for this profile as it is currently running
+				getPathToExeFromRunning(); //if running but not with profilist, then it will not get correct exe path
+			} else {
+				specObj.path_exeForProfile = getPathToBuildByTie(tieId);
+				specObj.iconsetId_base = getIconsetIdByTie(tieId);
+				getChannelToExePath();
+			}
+		} else {
+			// goal here is to get
+				// path_exeForProfile
+				// iconsetId_base
+				
+				// must not read path but must read icon, BECAUSE, if user had tied build, but then untied it. the exe is updated to be that of what it should launch into after untie. if currently running though, the icon is left unchanged.
+			
+			// if aProfilePath is currently running
+			
+			if (launching) {
+				// if it is not running, then it should be set to the channel of launching profile, the current. ifRunningThenTakeThat should be set to 1
+				if (!ifRunningThenTakeThat) {
+					console.warn('getProfileSpecs when launching, should have set ifRunningThenTakeThat to 0, as should not ever supply launching unless am really launching and i do do that. i test if its running and in that case i switch to its window, else i launch');
+				}
+				specObj.path_exeForProfile = profToolkit.path_exeCur;
+				specObj.channel_exeForProfile = getChannelNameOfProfile(profToolkit.selectedProfile.iniKey); // supports temp profile as iniKey will be null
+				specObj.iconsetId_base = channel_exeForProfile;
+				getChannelToExePath();
+			} else {
+				if (!specObj.isRunning) {
+					// profile is NOT running
+					
+					// check if has launcher
+					
+					// use default browser IF FAIL then use current
+					
+					// if launcher exists, figure current base by reading its icon path
+					
+
+					
+					if (launcherExists) {
+						// read iconName of iconpath of launcher figure out current base by reading its icon path
+						// figure out build by the CHANNEL-REF
+							// if no CHANNEL-REF then it was tied but now is untied {
+								// if (defaultBrowser == esr/release/beta/auroa/dev/nightly) {
+									// use its buildPath and its base
+								// }
+							// } else {
+								// channel_exeForProfile = iconName.match(/CHANNEL-REF_(.*?)(?:__|$)/)[1];
+							// }
+					} else {
+						
+					}
+				} else {
+					// profile is running
+					// regardless of ifRunningThenTakeThat, in this situation i want it to always take the running exe path
+					getPathToExeFromRunning(); //if not running with profilist, this will get wrong exe path
+				}
+				switch (cOS) {
+					case 'WINNT':
+						// read shortcut file in path_profilistData_launcher_exes
+							// for path_exeForProfile, from this i can get CHANNEL-REF
+							// OR i can get icon name and get CHANNEL-REF
+						break;
+					
+					case 'Linux':
+						// read desktop file in path_profilistData_launcher_exes
+							// for path_exeForProfile, from this i can get CHANNEL-REF
+							// OR i can get icon name and get CHANNEL-REF
+						break;
+					
+					case 'Darwin':
+						// read scpt file in path_profilistData_launcher_exes
+							// for path_exeForProfile, from this i can get CHANNEL-REF
+							// OR i can get icon name and get CHANNEL-REF
+						break;
+						
+					default:
+						deferredMain_getProfileSpecs.reject('os-unsupported');
+						return;
+				}	
+			}
+		}
+	};
+	
+	if ((!ifRunningThenTakeThat && 'Profilist.tie' in props) || launching) { // reasons for not to check if aProfilePath is running
+		// i added launching as reason to not check, i should never try to do launching when profile is running, i dont think i will so i added that as a reason to skip test if running
+		var deferred_skipRunningCheck = new Deferred();
+		var promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
+		deferred_skipRunningCheck.resolve(null);
+	} else {
+		var promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [ini[iniIdentifier].props.IsRelative, ini[iniIdentifier].props.Path, profToolkit.rootPathDefault]);
+	}
+	promise_testAProfilePathRunning.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
+			// start - do stuff here - promise_testAProfilePathRunning
+			specObj.isRunning = aVal;
+			postRunCheck();
+			// end - do stuff here - promise_testAProfilePathRunning
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
+			console.warn('Rejected - promise_testAProfilePathRunning - ', rejObj);
+			deferred_createProfile.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_testAProfilePathRunning', aCaught:aCaught};
+			console.error('Caught - promise_testAProfilePathRunning - ', rejObj);
+			deferred_createProfile.reject(rejObj);
+		}
+	);
+	
+	return deferredMain_getProfileSpecs.promise;
+}
+
 function getIconName(for_ini_key, ch_name) {
 	var nameArr_launcherIcns = [];
 	if ('Profilist.badge' in ini[for_ini_key].props) {
@@ -5479,8 +5805,26 @@ function getIconName(for_ini_key, ch_name) {
 	return name_launcherIcns;	
 }
 
+
+//note: so i have to make Profilist.dev-builds hold json stringify of {tieId1:[iconsetId,buildPath], tieId2:[iconsetId,buildPath]}
+var devBuildsArrIndex = {
+	iconsetId: 1,
+	buildPath: 0
+};
+function getIconsetIdByTie(tie_id) {
+	if (!(tie_id in devBuilds)) {
+		return null;
+	} else {
+		return devBuilds[tie_id][devBuildsArrIndex.iconsetId];
+	}
+}
+
 function getPathToBuildByTie(tie_id) {
-	return 'blah'; // note: todo
+	if (!(tie_id in devBuilds)) {
+		return null;
+	} else {
+		return devBuilds[tie_id][devBuildsArrIndex.buildPath];
+	}
 }
 
 function getPathToProfileDir(for_ini_key) {
@@ -6064,6 +6408,10 @@ function pickerIconset(tWin) {
 		// on success goes to copy_or_writeIfScaled
 		// rejects main on promise catch or promise rejected due to something other then becauseExists
 
+		if (['esr', 'release', 'beta', 'aurora', 'dev', 'nightly'].indexOf(iconsetId) > -1) {
+			//check if its a reserved word
+			iconsetId += '-1';
+		}
 		path_iconsetDir = OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId);
 		
 		var promise_makeIconsetDir = tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [path_iconsetDir, {ignoreExisting:false}], profToolkit.path_iniDir);
@@ -6311,7 +6659,9 @@ function makeIcon(for_ini_key) {
 						// last used build - if profile for_ini_key is currently running use whtever channel its running in (which should be the last build in the launcher << no this is not true, thinking: if user changes tie of build while its running {im thinking in this case update launcher right away when user ties while running, but dont update dock/taskbar?} << well actually on further thought it is true, because its not tied obviously at this point of my logic so then yes this should be the current running channel),  OR if default browser is not a firefox
 						// default build - if not running then use default browser channel (BUT) if default browser is not firefox/beta/dev/release then use the icon build path currently in the launcher [and if the launcher doesnt exit then use the icon of the build from which we are currently executing this function]
 			// if tied, use TIE-ID iconset for base
-			
+	var deferredMain_makeIcon = new Deferred();
+
+	
 	var deferred_makeIcon = new Deferred();
 	
 	// start - os support check
@@ -7690,8 +8040,74 @@ function mac_doPathsUNoveride() {
 
 }
 //end - mac over and unover ride stuff
+
+function writeLastExeUsed() {
+	// returns nothing
+	// reports promise error within here
+	
+	if (!profToolkit.selectedProfile.iniKey) {
+		// is temp profile
+		return;
+	}
+	
+	var json_lastExeUsed;
+	
+	var updateLastUsed = function() {
+		json_lastExeUsed[profToolkit.selectedProfile.iniKey] = profToolkit.path_exeCur;
+		var stringify_lastExeUsed = JSON.stringify(json_lastExeUsed);
+		var promise_writeLastUsed = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [profToolkit.path_lastExeUsed, stringify_lastExeUsed, {tmpPath:profToolkit.path_lastExeUsed+'.tmp', encoding:'utf-8'}], profToolkit.path_iniDir)
+		promise_writeLastUsed.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_writeLastUsed - ', aVal);
+				// start - do stuff here - promise_writeLastUsed
+				// end - do stuff here - promise_writeLastUsed
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_writeLastUsed', aReason:aReason};
+				console.error('Rejected - promise_writeLastUsed - ', rejObj);
+				//deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_writeLastUsed', aCaught:aCaught};
+				console.error('Caught - promise_writeLastUsed - ', rejObj);
+				//deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var promise_readLastUsed = read_encoded(profToolkit.path_lastExeUsed, {encoding:'utf-8'});
+	promise_readLastUsed.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_readLastUsed - ', aVal);
+			// start - do stuff here - promise_readLastUsed
+			json_lastExeUsed = JSON.parse(aVal);
+			// end - do stuff here - promise_readLastUsed
+		},
+		function(aReason) {
+			var deepestReason = aReasonMax(aReason);
+			if (deepestReason.becauseNoSuchFile) {
+				updateLastUsed();
+			} else {
+				var rejObj = {name:'promise_readLastUsed', aReason:aReason};
+				console.error('Rejected - promise_readLastUsed - ', rejObj);
+				//deferred_createProfile.reject(rejObj);
+			}
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_readLastUsed', aCaught:aCaught};
+			console.error('Caught - promise_readLastUsed - ', rejObj);
+			//deferred_createProfile.reject(rejObj);
+		}
+	);
+}
+
 function startup(aData, aReason) {
 //	console.log('in startup');
+	// todo: check tie path, if current path does not match tie path then restart at that path (MAYBE)
+	// todo: if build path is correct then ensure proper icon is applied
+	// todo: maybe ensure/make launcher exist right away as getProfileSpecs expects a launcher existing if a profile is running ACTUALLY instead of this im going to just write to a lastBuildUsed.ini
 	
 	var do_profilistStartup = function() { // wrap this so have time to do whatever os specific stuff before starting up profilist
 		self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
@@ -7700,6 +8116,7 @@ function startup(aData, aReason) {
 		//console.log('aData', aData);
 	//	//console.log('initing prof toolkit');
 		initProfToolkit();
+		writeLastExeUsed();
 	//	//console.log('init done');
 		//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 		//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
