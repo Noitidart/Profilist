@@ -3453,6 +3453,11 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 	
 	// useIconNameStr should be string of path
 	
+	// resolves
+		// true if done	
+		// false if not needed
+		
+	
 	console.log('in updateIconToAllWindows');
 	
 	var deferredMain_updateIconToAllWindows = new Deferred();
@@ -3462,6 +3467,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 	}
 	
 	var do_getIconName = function() {
+		/*
 		var promise_getIconName = getProfileSpecs(aProfilePath);
 		promise_getIconName.then(
 			function(aVal) {
@@ -3483,48 +3489,141 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 				deferredMain_updateIconToAllWindows.reject(rejObj);
 			}
 		);
+		*/
+		// have to do makeIcon because icon may not exist
+		var promise_getIconName = makeIcon(aProfilePath);
+		promise_getIconName.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getIconName - ', aVal);
+				// start - do stuff here - promise_getIconName
+				useIconNameStr = aVal.profSpecs.iconNameObj.str;
+				do_applyIcon();
+				// end - do stuff here - promise_getIconName
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getIconName', aReason:aReason};
+				console.error('Rejected - promise_getIconName - ', rejObj);
+				deferredMain_updateIconToAllWindows.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
+				console.error('Caught - promise_getIconName - ', rejObj);
+				deferredMain_updateIconToAllWindows.reject(rejObj);
+			}
+		);
 	}
 
 	var do_applyIcon = function() {
 		switch (cOS) {
 			case 'winnt':
-				if (!aDOMWin) {
-					aDOMWin = Services.wm.getMostRecentWindow(null);
-				}
-				var cBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
-									  .getInterface(Ci.nsIWebNavigation)
-									  .QueryInterface(Ci.nsIDocShellTreeItem)
-									  .treeOwner
-									  .QueryInterface(Ci.nsIInterfaceRequestor)
-									  .getInterface(Ci.nsIBaseWindow);
-				var cWinHandlePtrStr = cBaseWin.nativeHandle;
+				var cWinHandlePtrStr;
+				var do_theApply = function() {					
+					console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
+					useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
+					console.info('will apply this icon:', useIconNameStr);
+					var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
+						useIconNameStr,		// iconPath
+						[cWinHandlePtrStr]	// arrWinHandlePtrStrs
+					]);
+					promise_changeIconForWindows.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_changeIconForWindows - ', aVal);
+							// start - do stuff here - promise_changeIconForWindows
+							deferredMain_updateIconToAllWindows.resolve(true);
+							// end - do stuff here - promise_changeIconForWindows
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
+							console.warn('Rejected - promise_changeIconForWindows - ', rejObj);
+							deferredMain_updateIconToAllWindows.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_changeIconForWindows', aCaught:aCaught};
+							console.error('Caught - promise_changeIconForWindows - ', rejObj);
+							deferredMain_updateIconToAllWindows.reject(rejObj);
+						}
+					);
+				};
 				
-				console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
-				useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
-				console.info('will apply this icon:', useIconNameStr);
-				var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
-					useIconNameStr,		// iconPath
-					[cWinHandlePtrStr]	// arrWinHandlePtrStrs
-				]);
-				promise_changeIconForWindows.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_changeIconForWindows - ', aVal);
-						// start - do stuff here - promise_changeIconForWindows
-						deferredMain_updateIconToAllWindows.resolve(true);
-						// end - do stuff here - promise_changeIconForWindows
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
-						console.warn('Rejected - promise_changeIconForWindows - ', rejObj);
-						deferredMain_updateIconToAllWindows.reject(rejObj);
+				if (!aDOMWin) {
+					if (aProfilePath == profToolkit.selectedProfile.iniKey) {
+						aDOMWin = Services.wm.getMostRecentWindow(null);
+						var cBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
+											  .getInterface(Ci.nsIWebNavigation)
+											  .QueryInterface(Ci.nsIDocShellTreeItem)
+											  .treeOwner
+											  .QueryInterface(Ci.nsIInterfaceRequestor)
+											  .getInterface(Ci.nsIBaseWindow);
+						cWinHandlePtrStr = cBaseWin.nativeHandle;
+						
+						do_theApply();
+					} else {
+						// test if profile at aProfilePath is running
+							// if it isnt then resolve
+							// if it is then continue to badge apply after getting handle for one of its windows
+						var do_getProfPid = function() {
+							var promise_pidOfProfile = ProfilistWorker.post('getPidForRunningProfile', [ini[aProfilePath].props.IsRelative, aProfilePath, profToolkit.rootPathDefault]);
+							promise_pidOfProfile.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_pidOfProfile - ', aVal);
+									// start - do stuff here - promise_pidOfProfile
+									if (aVal > 0) {
+										do_getWinHandleForPid(aVal);
+									} else {
+										// not running
+										deferredMain_updateIconToAllWindows.resolve(false);
+									}
+									// end - do stuff here - promise_pidOfProfile
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_pidOfProfile', aReason:aReason};
+									console.warn('Rejected - promise_pidOfProfile - ', rejObj);
+									deferredMain_updateIconToAllWindows.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_pidOfProfile', aCaught:aCaught};
+									console.error('Caught - promise_pidOfProfile - ', rejObj);
+									deferredMain_updateIconToAllWindows.reject(rejObj);
+								}
+							);
+						};
+						
+						var do_getWinHandleForPid = function(aProfPID) {
+							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID]);
+							promise_getWinHandleForPid.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
+									// start - do stuff here - promise_getWinHandleForPid
+									// aVal is a string to pointer on success, else it is 0
+									if (aVal !== 0) {
+										// no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`
+										deferredMain_updateIconToAllWindows.resolve(false);
+									} else {
+										cWinHandlePtrStr = aVal;
+										do_theApply();
+									}
+									// end - do stuff here - promise_getWinHandleForPid
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
+									console.warn('Rejected - promise_getWinHandleForPid - ', rejObj);
+									deferredMain_updateIconToAllWindows.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_getWinHandleForPid', aCaught:aCaught};
+									console.error('Caught - promise_getWinHandleForPid - ', rejObj);
+									deferredMain_updateIconToAllWindows.reject(rejObj);
+								}
+							);
+						}
+						
+						do_getProfPid();
 					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_changeIconForWindows', aCaught:aCaught};
-						console.error('Caught - promise_changeIconForWindows - ', rejObj);
-						deferredMain_updateIconToAllWindows.reject(rejObj);
-					}
-				);
+				}
 				break;
 			
 			case 'linux':
@@ -3554,8 +3653,10 @@ function updateIconToLauncher(aProfilePath) {
 				// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
 				// then using that TIE-ID or CHANNEL-REF it uses that as base (has to has one of the two)
 				// if it has correct stuff then it doesnt update
-				
+	
 	console.log('updateIconToLauncher run - not yet implemented');
+	
+	// todo: for windows, make sure to check for pinned shortcuts and update those as well
 }
 
 function updateIconToDesktcut(aProfilePath) {
@@ -7142,8 +7243,12 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 				console.log('Fullfilled - promise_iconPrexists - ', aVal);
 				// start - do stuff here - promise_iconPrexists
 				resolveObj.OSPath = path_prexistanceIconOSPath;
-				resolveObj.alreadyExisted = true;
-				deferredMain_makeIcon.resolve(resolveObj);
+				if (aVal) {
+					resolveObj.alreadyExisted = true;
+					deferredMain_makeIcon.resolve(resolveObj);
+				} else {
+					// does not prexist, go forth making the icon
+				}
 				deferred_notPrexisting.resolve({prexists:aVal});
 				// end - do stuff here - promise_iconPrexists
 			},
@@ -7201,7 +7306,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 					console.log('Fullfilled - promise_profSpecsToGetIconNameObj - ', aVal);
 					// start - do stuff here - promise_profSpecsToGetIconNameObj
 					resolveObj.profSpecs = aVal;
-					iconNameObj = aVal;
+					iconNameObj = aVal.iconNameObj;
 					do_checkIfPreExisting_and_loadBadgeAndBaseSets();
 					// end - do stuff here - promise_profSpecsToGetIconNameObj
 				},
@@ -8166,6 +8271,22 @@ function startup(aData, aReason) {
 				//ifClientsAliveEnsure_thenEnsureListenersAlive();
 				onResponseEnsureEnabledElseDisabled();
 				//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
+				
+				// start - os specific post-startup stuff
+				switch (cOS) {
+					case 'winnt':
+					case 'winmo':
+					case 'wince':
+				
+						// apply icon to windows
+						updateIconToAllWindows(profToolkit.selectedProfile.iniKey);
+						break;
+					
+					default:
+						// do nothing
+				}
+				// end - os specific post-startup stuff
+				
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_iniFirstRead', aReason:aReason};
@@ -8179,7 +8300,7 @@ function startup(aData, aReason) {
 		);
 	};
 	
-	// os - mac specific stuff
+	// start - os specific pre-startup stuff
 	if (cOS == 'darwin') {
 		macStuff.isMac = true;
 		
@@ -8215,7 +8336,7 @@ function startup(aData, aReason) {
 	} else {
 		do_profilistStartup();
 	}
-	// end - os specific stuff
+	// end - os specific pre-startup stuff
 	
 }
 

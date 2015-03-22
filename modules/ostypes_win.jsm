@@ -1,3 +1,6 @@
+//todo: figure out if for 64bit the abis are different as done here: https://gist.github.com/Noitidart/1f9d574451b8aaaef219#file-_ff-addon-snippet-winapi_getrunningpids-js-L16
+//todo: work on jscGetDeepest, in EnuMWindows it goes berserk but doesnt error, good place to experiemnt
+
 var EXPORTED_SYMBOLS = ['ostypes'];
 //const {utils: Cu} = Components;
 //Cu.import('resource://gre/modules/ctypes.jsm');
@@ -52,7 +55,6 @@ var winTypes = function() {
 	this.LPCSTR = ctypes.char.ptr;
 	this.LPTSTR = ctypes.jschar.ptr; // UNICODE
 	this.LPCTSTR = ctypes.jschar.ptr;
-	this.LPCWSTR = ctypes.jschar.ptr;
 	this.LPWSTR = ctypes.jschar.ptr; // WCHAR
 	this.LRESULT = this.LONG_PTR;
 	this.WPARAM = this.UINT_PTR;
@@ -63,11 +65,17 @@ var winTypes = function() {
 	
 	
 	this.LPCVOID = ctypes.voidptr_t;
+	this.RM_APP_TYPE = ctypes.unsigned_int;
 	this.VOID = ctypes.void_t;
+	this.WCHAR = ctypes.jschar;
 	
 	// ADVANCED TYPES
 	this.NTSTATUS = this.LONG;
 	this.SYSTEM_INFORMATION_CLASS = this.INT;
+	this.WNDENUMPROC = ctypes.FunctionType(ctypes.default_abi, this.BOOL, [this.HWND, this.LPARAM]);
+	
+	this.PCWSTR = new ctypes.PointerType(this.WCHAR);
+	this.LPCWSTR = this.PCWSTR;
 	
 	if (ctypes.size_t.size == 8) {
 	  this.CallBackABI = ctypes.default_abi;
@@ -120,6 +128,71 @@ var winTypes = function() {
 		{'Handles': ctypes.ArrayType(this.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX, 1)}
 		//{'Handles': this.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.ptr.array()}
 	]);
+	
+	// start - structures used by Rstrtmgr.dll
+	/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms724284%28v=vs.85%29.aspx
+	 * typedef struct _FILETIME {
+	 *   DWORD dwLowDateTime;
+	 *   DWORD dwHighDateTime;
+	 * } FILETIME, *PFILETIME;
+	 */
+	this.FILETIME = ctypes.StructType('_FILETIME', [
+	  { 'dwLowDateTime': this.DWORD },
+	  { 'dwHighDateTime': this.DWORD }
+	]);
+	this.PFILETIME = this.FILETIME.ptr;
+	
+	/* http://msdn.microsoft.com/en-us/library/windows/desktop/aa373677%28v=vs.85%29.aspx
+	 * typedef struct {
+	 *   DWORD    dwProcessId;
+	 *   FILETIME ProcessStartTime;
+	 * } RM_UNIQUE_PROCESS, *PRM_UNIQUE_PROCESS;
+	*/
+	this.RM_UNIQUE_PROCESS = ctypes.StructType('RM_UNIQUE_PROCESS', [
+	  { 'dwProcessId': this.DWORD },
+	  { 'ProcessStartTime': this.FILETIME }
+	]);
+	this.PRM_UNIQUE_PROCESS = this.RM_UNIQUE_PROCESS.ptr;
+	
+	this.CCH_RM_MAX_APP_NAME = 255; // should be in CONST section but needed for defining RM_PROCESS_INFO, so i put them there as well
+	this.CCH_RM_MAX_SVC_NAME = 63; // should be in CONST section but needed for defining RM_PROCESS_INFO, so i put them there as well
+	/* http://msdn.microsoft.com/en-us/library/windows/desktop/aa373674%28v=vs.85%29.aspx
+	 * typedef struct {
+	 *   RM_UNIQUE_PROCESS Process;
+	 *   WCHAR             strAppName[CCH_RM_MAX_APP_NAME+1];
+	 *   WCHAR             strServiceShortName[CCH_RM_MAX_SVC_NAME+1];
+	 *   RM_APP_TYPE       ApplicationType;
+	 *   ULONG             AppStatus;
+	 *   DWORD             TSSessionId;
+	 *   BOOL              bRestartable;
+	 * } RM_PROCESS_INFO;
+	 */
+	this.RM_PROCESS_INFO = ctypes.StructType('RM_PROCESS_INFO', [
+	  { 'Process': this.RM_UNIQUE_PROCESS },
+	  { 'strAppName': this.WCHAR.array(this.CCH_RM_MAX_APP_NAME + 1) }, // WCHAR of size [CCH_RM_MAX_APP_NAME+1]
+	  { 'strServiceShortName': this.WCHAR.array(this.CCH_RM_MAX_SVC_NAME + 1) }, // WCHAR of size [CCH_RM_MAX_SVC_NAME+1]
+	  { 'ApplicationType': this.RM_APP_TYPE }, // integer of RM_APP_TYPE
+	  { 'AppStatus': this.ULONG }, // ULONG
+	  { 'TSSessionId': this.DWORD }, // DWORD
+	  { 'bRestartable': this.BOOL } // BOOL
+	]);
+
+	/* http://msdn.microsoft.com/en-us/library/ff718266.aspx
+	 * typedef struct {
+	 *   unsigned long Data1;
+	 *   unsigned short Data2;
+	 *   unsigned short Data3;
+	 *   byte Data4[8];
+	 * } GUID, UUID, *PGUID;
+	 */
+	this.GUID = ctypes.StructType('GUID', [
+	  { 'Data1': this.ULONG },
+	  { 'Data2': this.USHORT },
+	  { 'Data3': this.USHORT },
+	  { 'Data4': this.BYTE.array(8) }
+	]);
+	this.PGUID = this.GUID.ptr;
+	// end - structures used by Rstrtmgr.dll
 }
 
 var winInit = function() {
@@ -131,12 +204,32 @@ var winInit = function() {
 
 	// CONSTANTS
 	this.CONST = {
+		// GetAncestor
+		GA_PARENT: 1,
+		GA_ROOT: 2,
+		GA_ROOTOWNER: 3, //same as if calling with GetParent
+
 		// GetWindow
 		GW_OWNER: 4,
 		
 		// LoadImage
 		IMAGE_ICON: 1,
 		LR_LOADFROMFILE: 16,
+		
+		// Rstrtmgr.dll
+		CCH_RM_MAX_APP_NAME: 255, // this is also in TYPES because I needed it to define a struct
+		CCH_RM_MAX_SVC_NAME: 63, // this is also in TYPES because I needed it to define a struct
+		ERROR_SUCCESS: 0,
+		ERROR_MORE_DATA: 234,
+		RM_SESSION_KEY_LEN: self.TYPE.GUID.size, //https://github.com/wine-mirror/wine/blob/c87901d3f8cebfb7d28b42718c1c78035730d6ce/include/restartmanager.h#L26
+		CCH_RM_SESSION_KEY: /*this.RM_SESSION_KEY_LEN*/self.TYPE.GUID.size * 2, //https://github.com/wine-mirror/wine/blob/c87901d3f8cebfb7d28b42718c1c78035730d6ce/include/restartmanager.h#L27
+		RmUnknownApp: 0,
+		RmMainWindow: 1,
+		RmOtherWindow: 2,
+		RmService: 3,
+		RmExplorer: 4,
+		RmConsole: 5,
+		RmCritical: 1000,
 		
 		// SendMessage
 		ICON_SMALL: 0,
@@ -219,6 +312,32 @@ var winInit = function() {
 				self.TYPE.HICON		// hIcon
 			);
 		},
+		EnumWindows: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633497%28v=vs.85%29.aspx
+			 * BOOL WINAPI EnumWindows(
+			 *   __in_  WNDENUMPROC lpEnumFunc,
+			 *   __in_  LPARAM lParam
+			 * );
+			 */
+			return lib('user32').declare('EnumWindows', ctypes.winapi_abi,
+				self.TYPE.BOOL,				// return
+				self.TYPE.WNDENUMPROC.ptr,	// lpEnumFunc
+				self.TYPE.LPARAM			// lParam
+			);
+		},
+		GetAncestor: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633502%28v=vs.85%29.aspx
+			 * HWND WINAPI GetAncestor(
+			 * __in_  HWND hwnd,
+			 * __in_  UINT gaFlags
+			 * );
+			 */
+			return lib('user32').declare('GetAncestor', ctypes.winapi_abi,
+				self.TYPE.HWND,	// return
+				self.TYPE.HWND,	// hwnd
+				self.TYPE.UINT	// gaFlags
+			);
+		},
 		GetWindow: function() {
 			/* http://msdn.microsoft.com/en-us/library/ms633515%28v=vs.85%29.aspx
 			 * HWND WINAPI GetWindow(
@@ -230,6 +349,19 @@ var winInit = function() {
 				self.TYPE.HWND,	// return
 				self.TYPE.HWND,	// hWnd
 				self.TYPE.UINT	// wCmd
+			);
+		},
+		GetWindowThreadProcessId: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633522%28v=vs.85%29.aspx
+			 * DWORD WINAPI GetWindowThreadProcessId(
+			 *   __in_		HWND hWnd,
+			 *   __out_opt_	LPDWORD lpdwProcessId
+			 * );
+			 */
+			return lib('user32').declare('GetWindowThreadProcessId', ctypes.winapi_abi,
+				self.TYPE.DWORD,	// return
+				self.TYPE.HWND,		// hWnd
+				self.TYPE.LPDWORD	// lpdwProcessId
 			);
 		},
 		LoadImage: function() {
@@ -385,12 +517,16 @@ var winInit = function() {
 	
 	this.HELPER = {
 		jscGetDeepest: function(obj) {
+			try {
+				console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj, obj.toString());
+			} catch(ignore) {}
 			// used to get the deepest .contents .value and so on. expecting a number object
-			//console.info('start jscGetDeepest:', obj.toString());
-			//while (/*isNaN(obj) && */('contents' in obj || 'value' in obj)) {
-			while (obj.hasOwnProperty && (obj.hasOwnProperty('contents') || obj.hasOwnProperty('value'))) {
+			//while (isNaN(obj) && ('contents' in obj || 'value' in obj)) {
+			while (obj && obj.hasOwnProperty && (obj.hasOwnProperty('contents') || obj.hasOwnProperty('value'))) {
+				//if ('contents' in obj) {
 				if (obj.hasOwnProperty('contents')) {
 					obj = obj.contents;
+				//} else if ('value' in obj) {
 				} else if (obj.hasOwnProperty('value')) {
 					obj = obj.value;
 				} else {
@@ -400,9 +536,10 @@ var winInit = function() {
 			}
 			//console.info('pre final jscGetDeepest:', obj.toString());
 			//if (!isNaN(obj)) {
+			if (obj || obj === 0) {
 				obj = obj.toString();
-			//}
-			//console.info('finaled jscGetDeepest:', obj.toString());
+			}
+			console.info('finaled jscGetDeepest:', obj);
 			return obj;
 		},
 		jscEqual: function(obj1, obj2) {
@@ -421,6 +558,65 @@ var winInit = function() {
 				return true;
 			} else {
 				return false;
+			}
+		},
+		memset: function memset(array, val, size) {
+			/* http://stackoverflow.com/questions/24466228/memset-has-no-dll-so-how-ctype-it
+			 * https://gist.github.com/nmaier/ab4bfe59e8c8fcdc5b90
+			 * https://gist.github.com/Noitidart/2d9b44b18493f9339629
+			 * Note that size is the number of array elements to set, not the number of bytes.
+			 */
+			for (var i = 0; i < size; ++i) {
+				array[i] = val;
+			}
+		},
+		readAsChar8ThenAsChar16: function(stringPtr, known_len, jschar) {
+			// when reading as jschar it assumes max length of 500
+
+			// stringPtr is either char or jschar, if you know its jschar for sure, pass 2nd arg as true
+			// if known_len is passed, then assumption is not made, at the known_len position in array we will see a null char
+			// i tried getting known_len from stringPtr but its not possible, it has be known, i tried this:
+				//"stringPtr.contents.toString()" "95"
+				//"stringPtr.toString()" "ctypes.unsigned_char.ptr(ctypes.UInt64("0x7f73d5c87650"))"
+				// so as we see neither of these is 77, this is for the example of "_scratchpad/EnTeHandle.js at master · Noitidart/_scratchpad - Mozilla Firefox"
+
+			// tries to do read string on stringPtr, if it fails then it falls to read as jschar
+
+			var readJSCharString = function() {
+				var assumption_max_len = known_len ? known_len : 500;
+				var ptrAsArr = ctypes.cast(stringPtr, ctypes.unsigned_char.array(assumption_max_len).ptr).contents; // MUST cast to unsigned char (not ctypes.jschar, or ctypes.char) as otherwise i dont get foreign characters, as they are got as negative values, and i should read till i find a 0 which is null terminator which will have unsigned_char code of 0 // can test this by reading a string like this: "_scratchpad/EnTeHandle.js at master · Noitidart/_scratchpad - Mozilla Firefox" at js array position 36 (so 37 if count from 1), we see 183, and at 77 we see char code of 0 IF casted to unsigned_char, if casted to char we see -73 at pos 36 but pos 77 still 0, if casted to jschar we see chineese characters in all spots expect spaces even null terminator is a chineese character
+				//console.info('ptrAsArr.length:', ptrAsArr.length);
+				//console.log('debug-msg :: dataCasted:', dataCasted, uneval(dataCasted), dataCasted.toString());
+				var charCode = [];
+				var fromCharCode = []
+				for (var i=0; i<ptrAsArr.length; i++) { //if known_len is correct, then will not hit null terminator so like in example of "_scratchpad/EnTeHandle.js at master · Noitidart/_scratchpad - Mozilla Firefox" if you pass length of 77, then null term will not get hit by this loop as null term is at pos 77 and we go till `< known_len`
+					var thisUnsignedCharCode = ptrAsArr.addressOfElement(i).contents;
+					if (thisUnsignedCharCode == 0) {
+						// reached null terminator, break
+						//console.log('reached null terminator, at pos: ', i);
+						break;
+					}
+					charCode.push(thisUnsignedCharCode);
+					fromCharCode.push(String.fromCharCode(thisUnsignedCharCode));
+				}
+				//console.info('charCode:', charCode);
+				//console.info('fromCharCode:', fromCharCode);
+				var char16_val = fromCharCode.join('');
+				//console.info('char16_val:', char16_val);
+				return char16_val;
+			}
+
+			if (!jschar) {
+				try {
+					var char8_val = stringPtr.readString();
+					//console.info('stringPtr.readString():', char8_val);
+					return char8_val;
+				} catch (ex if ex.message.indexOf('malformed UTF-8 character sequence at offset ') == 0) {
+					//console.warn('ex of offset utf8 read error when trying to do readString so using alternative method, ex:', ex);
+					return readJSCharString();
+				}
+			} else {
+				return readJSCharString();
 			}
 		}
 	};

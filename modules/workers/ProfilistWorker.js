@@ -173,9 +173,11 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 			debugOut.push(['ostypes.CONST.IMAGE_ICON: ', ostypes.CONST.IMAGE_ICON.toString(), ostypes.CONST.IMAGE_ICON].join(' '));
 			debugOut.push(['ostypes.CONST.LR_LOADFROMFILE: ', ostypes.CONST.LR_LOADFROMFILE.toString(), ostypes.CONST.LR_LOADFROMFILE].join(' '));
 			
-			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE);
+			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 			var hIconSmall_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
 			// LoadImage was returning null because i had declared LoadImageA but then i defeined LPCTSTR as ctypes.jschar. i had to use LoadImageW to use with ctypes.jschar. I didnt test but i guess to use with LoadImageA you have to use ctypes.char
+			
+			// todo: ask if LoadImage is really taking the right size from the the ico CONTAINER, as im supplying containers
 			
 			debugOut.push('hIconBig_HANDLE: ' + hIconBig_HANDLE.toString());
 			debugOut.push('hIconSmall_HANDLE: ' + hIconSmall_HANDLE.toString());
@@ -237,11 +239,14 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 				debugOut.push('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
 			}
 			
+			//todo: maybe there is a way to tell if application was successful or not?
+			
 			debugOut.push(['oldBigIcon: ', oldBigIcon, oldBigIcon.toString()].join(' '));
 			debugOut.push(['oldSmallIcon: ', oldSmallIcon, oldSmallIcon.toString()].join(' '));
-				
+			
 			
 			/*
+			// todo: check if i need to destroy/release these icons, and when
 			var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig_HANDLE);
 			var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall_HANDLE);
 			
@@ -257,5 +262,205 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 		default:
 			throw new Error('os-unsupported');
 	}
+	
+}
+
+function getPtrStrToWinOfProf(aProfilePID) {
+	// have to use one of the profile PID obtaining methods before using this function (on nix/max can use queryProfileLocked) (windows has to use getPidForProfile)
+	// dont be an idiot, dont run this function when not running, but if you do this it will go through everything and find no window and return null, but be smart, its much better perf to use the isRunning function (queryProfileLocked) first, especially on windows
+	
+	// resolves to string of ptr of window handle
+	// aProfilePID should be jsInt
+	
+	debugOutCLEAR();
+	debugOut.push(['aProfilePID: ', aProfilePID, aProfilePID.toString()].join(' '));
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// find first window that has aProfilePID
+			
+			// https://gist.github.com/Noitidart/1f9d574451b8aaaef219#file-_ff-addon-snippet-winapi_getrunningpids-js-L47
+			
+			var PID = ostypes.TYPE.DWORD();
+			
+			var foundMatchingHwnd = 0;
+			var SearchPD = function(hwnd, lparam) {
+				var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
+				debugOut.push(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
+				if (PID.value == aProfilePID) {
+					foundMatchingHwnd = hwnd;
+					return false;
+				} else {
+					return true;
+				}
+			}
+			var SearchPD_ptr = ostypes.TYPE.WNDENUMPROC.ptr(SearchPD);
+			var wnd = ostypes.TYPE.LPARAM(0);
+			var rez_EnuMWindows = ostypes.API('EnumWindows')(SearchPD_ptr, wnd);
+			debugOutWRITE();
+			
+			if (foundMatchingHwnd) {
+				console.info('found this:', foundMatchingHwnd.toString());
+				var ancestor = ostypes.API('GetAncestor')(foundMatchingHwnd, ostypes.CONST.GA_PARENT);
+				console.info('ancestor:', ancestor.toString());
+				var ptrStr = ancestor.toString();
+				ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
+				return ptrStr;
+			}
+			return foundMatchingHwnd;
+			break;
+			
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
+	// todo: for nix/mac just redir to queryProfileLocked
+	// todo: add in xp support
+	
+	// this function is for windows only, nix/mac should use queryProfileLocked (windows can use queryProfileLocked before this and its not a big deal for perf, as queryProfileLocked is a simple OS.File.open)
+	// IsRelative is the value from profiles.ini for the profile you want to target
+	// Path is the value from profiles.ini for the profile you want to target
+	// path_DefProfRt is Services.dirsvc.get('DefProfRt', Ci.nsIFile).path - ChromeWorker's don't have access to it so has to be passed in
+	
+	// resolves to jsInt 0 if not running, resolves to jsStr > 0 if found
+	debugOutCLEAR();
+	var rezMain;
+	if (IsRelative == '1') {
+		var cProfileDirName = OS.Path.basename(OS.Path.normalize(Path));
+		var path_cProfRootDir = OS.Path.join(path_DefProfRt, cProfileDirName);
+	} else {
+		var path_cProfRootDir = Path;
+	}
+	
+	//note: im missing vms: http://mxr.mozilla.org/mozilla-release/source/profile/dirserviceprovider/src/nsProfileLock.cpp#581
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// returns
+				// if LOCKED - 1
+				// if NOT locked - 0
+			
+			var path_lock = OS.Path.join(path_cProfRootDir, 'parent.lock');
+			
+			try { // using try-finally just for the finally
+				var dwSession;
+				rezMain = function() {
+					// START SESSION
+					dwSession = new ostypes.TYPE.DWORD();
+					var szSessionKey = ostypes.TYPE.WCHAR.array(ostypes.CONST.CCH_RM_SESSION_KEY + 1)(); //this is a buffer
+					ostypes.HELPER.memset(szSessionKey, '0', ostypes.CONST.CCH_RM_SESSION_KEY ); // remove + 1 as we want null terminated // can do memset(szSessionKey, ostypes.WCHAR('0'), ostypes.CCH_RM_SESSION_KEY + 1); // js-ctypes initializes at 0 filled: ctypes.char16_t.array(33)(["\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00"])"
+					
+					var rez_RmStartSession = ostypes.API('RmStartSession')(dwSession.address(), 0, szSessionKey);
+					if (!ostypes.HELPER.jscEqual(rez_RmStartSession, ostypes.CONST.ERROR_SUCCESS)) {
+						throw new Error('RmEndSession Failed with error code:' + rez_RmStartSession);
+					}
+					
+					// REGISTER RESOURCES
+					var jsStr_pszFilepath1 = path_lock; //path to file name
+					var pszFilepath1 = ostypes.TYPE.WCHAR.array()(jsStr_pszFilepath1); //creates null terminated c string, null terminated string is required for RmRegisterResources
+					//console.info('pszFilepath1:', pszFilepath1, pszFilepath1.toString(), uneval(pszFilepath1));
+					
+					var jsArr = [pszFilepath1];
+					var pszFilepathsArr = ostypes.TYPE.PCWSTR.array(/*no need, but can have it*//*jsArr.length*/)(jsArr); // when 2 it is: [ctypes.char16_t.ptr(ctypes.UInt64("0x0")), ctypes.char16_t.ptr(ctypes.UInt64("0x0"))]
+					//console.info('pszFilepathsArr:', pszFilepathsArr, pszFilepathsArr.toString(), uneval(pszFilepathsArr));
+					
+					var rez_RmRegisterResources = ostypes.API('RmRegisterResources')(dwSession, jsArr.length, pszFilepathsArr, 0, null, 0, null);
+					//console.info('rez_RmRegisterResources:', rez_RmRegisterResources, rez_RmRegisterResources.toString(), uneval(rez_RmRegisterResources));
+					
+					if (!ostypes.HELPER.jscEqual(rez_RmRegisterResources, ostypes.CONST.ERROR_SUCCESS)) {
+						throw new Error('RmRegisterResources Failed with error code:', rez_RmRegisterResources);
+					}
+
+					var nProcInfoNeeded = ostypes.TYPE.UINT(0); // 0 to fetch
+					var rgpi = null;
+					var nProcInfo = ostypes.TYPE.UINT(0); // this here is us telling how many array elements to fill, we initially provide null as rgpi so it has to be 0, otherwise it will probably crash asit will try to fill this number into null. after RmGetlist, it gets set to how many were actually filled
+					var dwReason = ostypes.TYPE.DWORD(0);
+					
+					//console.info('INIT nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+					//console.info('INIT nProcInfo:', nProcInfo, nProcInfo.toString());
+					
+					var rez_RmGetList_Query = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
+					//console.info('rez_RmGetList_Query:', rez_RmGetList_Query, rez_RmGetList_Query.toString(), uneval(rez_RmGetList_Query));	
+					if (ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.ERROR_SUCCESS)) {
+						//console.log('RmGetList succeeded but there are no processes on this so return as I had capped it to 0, so it should return ERROR_MORE_DATA if there was more than 0, rez_RmGetList_Query:', rez_RmGetList_Query);
+						return 0;
+					} else if (!ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
+						throw new Error('RmGetList failed, rez_RmGetList_Query:' + rez_RmGetList_Query);
+					}
+					
+					//console.info('POST nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+					//console.info('POST nProcInfo:', nProcInfo, nProcInfo.toString());
+					//console.info('POST dwReason:', dwReason, dwReason.toString());
+					
+					rgpi = ostypes.TYPE.RM_PROCESS_INFO.array(nProcInfoNeeded.value)(); //alrady ptr so dont need to pass rgpi.ptr to RmGetList
+					nProcInfo = ostypes.TYPE.UINT(rgpi.length);
+					
+					console.info('RE-INIT nProcInfo:', nProcInfo, nProcInfo.toString());
+					
+					var rez_RmGetList_Fetch = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
+					console.info('rez_RmGetList_Fetch:', rez_RmGetList_Fetch, rez_RmGetList_Fetch.toString(), uneval(rez_RmGetList_Fetch));	
+									
+					if (!ostypes.HELPER.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_SUCCESS)) {
+						if (ostypes.HELPER.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_MORE_DATA)) {
+							//console.warn('RmGetList found that since last RmGetList there is now new/more processes available, so you can opt to run again but I dont need to as I want the first process which opened it, which should be Firefox profile');
+						} else {
+							throw new Error('RmGetList Failed with error code:' + rez_RmGetList_Fetch);
+						}
+					}
+					
+					//console.info('FINAL nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+					//console.info('FINAL nProcInfo:', nProcInfo, nProcInfo.toString());
+					//console.info('FINAL dwReason:', dwReason, dwReason.toString());
+					//console.info('FINAL rgpi:', rgpi, rgpi.toString());
+					
+					rezMain = [];
+					for (var i=0; i<rgpi.length; i++) {
+						rezMain.push({
+							pid: ostypes.HELPER.jscGetDeepest(rgpi[i].Process.dwProcessId),
+							appName: ostypes.HELPER.readAsChar8ThenAsChar16(rgpi[i].strAppName),
+							dwLowDateTime: parseInt(ostypes.HELPER.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwLowDateTime)),
+							dwHighDateTime: parseInt(ostypes.HELPER.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwHighDateTime))
+						});
+						//console.log('PROCESS ' + i + ' DETAILS', 'PID:', rgpi[i].Process.dwProcessId, 'Application Name:', rgpi[i].strAppName.readStringReplaceMalformed());
+					}
+					
+					if (rezMain.length > 1) {
+						rezMain.sort(function(a,b) {
+							return a.dwLowDateTime > b.dwLowDateTime; // sort asc
+						});
+					}
+					
+					return parseInt(rezMain[0].pid);
+					// END SESSION // in finally so it will happen right after this line
+				}();
+			} /*catch(mainEx) { // if do catch it wont reject promise
+				
+			} */finally {
+				if (dwSession && dwSession.value != 0) { // dwSession is new ostypes.DWORD so `if (dwSession)` will always be true, need to fix this here: https://gist.github.com/Noitidart/6203ba1b410b7bacaa82#file-_ff-addon-snippet-winapi_rstrtmgr-js-L234
+					var rez_RmEndSession = ostypes.API('RmEndSession')(dwSession);
+					console.info('rez_RmEndSession:', rez_RmEndSession, rez_RmEndSession.toString(), uneval(rez_RmEndSession));
+					if (!ostypes.HELPER.jscEqual(rez_RmEndSession, ostypes.CONST.ERROR_SUCCESS)) {
+						//console.error('RmEndSession Failed with error code:', rez_RmEndSession);
+						debugOut.push('failed to end session');
+					} else {
+						debugOut.push('succesfully ended session');
+					}
+				} else {
+					debugOut.push('NO NEED to end session');
+				}
+				debugOutWRITE();
+				// with or without catch, the finally does run. without catch, it even rejects the promise. this is good and expected!!
+			}
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+
+	return rezMain;
 	
 }
