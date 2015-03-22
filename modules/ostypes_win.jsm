@@ -243,10 +243,10 @@ var winInit = function() {
 			 *   __in_      UINT fuLoad
 			 * );
 			 */
-			return lib('user32').declare('LoadImageA', ctypes.winapi_abi,
+			return lib('user32').declare('LoadImageW', ctypes.winapi_abi,
 				self.TYPE.HANDLE,		// return
 				self.TYPE.HINSTANCE,	// hinst
-				self.TYPE.LPCTSTR,		// uType		// ctypes.char.ptr
+				self.TYPE.LPCTSTR,		// lpszName		// ctypes.char.ptr
 				self.TYPE.UINT,			// uType
 				self.TYPE.INT,			// cxDesired
 				self.TYPE.INT,			// cyDesired
@@ -332,6 +332,7 @@ var winInit = function() {
 			 */
 			return lib('user32').declare('SendMessageW', ctypes.winapi_abi,
 				self.TYPE.LRESULT,		// return		// ctypes.uintptr_t
+				self.TYPE.HWND,			// hWnd
 				self.TYPE.UINT,			// Msg
 				self.TYPE.WPARAM,		// wParam		// ctypes.int32_t
 				self.TYPE.LPARAM		// lParam		// ctypes.voidptr_t
@@ -339,17 +340,26 @@ var winInit = function() {
 		},
 		SetClassLong: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633589%28v=vs.85%29.aspx
+			 * I tried SetClassLongW on 32bit, and it gave me the symbol not found error
 			 * ULONG_PTR WINAPI SetClassLongPtr(
 			 *   __in_  HWND hWnd,
 			 *   __in_  int nIndex,
 			 *   __in_  LONG_PTR dwNewLong
 			 * );
 			 */
+			 /* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633588%28v=vs.85%29.aspx
+			 * I tried SetClassLongW on 32bit, and it gave me the symbol not found error
+			 * DWORD WINAPI SetClassLong(
+			 *   __in_  HWND hWnd,
+			 *   __in_  int nIndex,
+			 *   __in_  LONG dwNewLong
+			 * );
+			 */
 			return lib('user32').declare(self.IS64BIT ? 'SetClassLongPtrW' : 'SetClassLongW', ctypes.winapi_abi,
-				self.TYPE.ULONG_PTR,	// return
-				self.TYPE.HWND,			// hWnd
-				self.TYPE.INT,			// nIndex
-				self.TYPE.ULONG_PTR		// dwNewLong
+				self.IS64BIT ? self.TYPE.ULONG_PTR : self.TYPE.DWORD,	// return
+				self.TYPE.HWND,											// hWnd
+				self.TYPE.INT,											// nIndex
+				self.IS64BIT ? self.TYPE.LONG_PTR : self.TYPE.LONG		// dwNewLong
 			);
 		},
 		SHChangeNotify: function() {
@@ -374,8 +384,44 @@ var winInit = function() {
 	// end - function declares
 	
 	this.HELPER = {
-		blah: function() {
-			// this is a helper function
+		jscGetDeepest: function(obj) {
+			// used to get the deepest .contents .value and so on. expecting a number object
+			//console.info('start jscGetDeepest:', obj.toString());
+			//while (/*isNaN(obj) && */('contents' in obj || 'value' in obj)) {
+			while (obj.hasOwnProperty && (obj.hasOwnProperty('contents') || obj.hasOwnProperty('value'))) {
+				if (obj.hasOwnProperty('contents')) {
+					obj = obj.contents;
+				} else if (obj.hasOwnProperty('value')) {
+					obj = obj.value;
+				} else {
+					throw new Error('huh, isNaN, but no contents or value in obj, obj: ' +  obj + ', ' + obj.toString());
+				}
+				//console.info('loop jscGetDeepest:', obj.toString());
+			}
+			//console.info('pre final jscGetDeepest:', obj.toString());
+			//if (!isNaN(obj)) {
+				obj = obj.toString();
+			//}
+			//console.info('finaled jscGetDeepest:', obj.toString());
+			return obj;
+		},
+		jscEqual: function(obj1, obj2) {
+			// ctypes numbers equal
+			// compares obj1 and obj2
+			// if equal returns true, else returns false
+			
+			// check if equal first
+			var str1 = obj1;
+			var str2 = obj2;
+			
+			var str1 = self.HELPER.jscGetDeepest(str1); //cuz apparently its not passing by reference
+			var str2 = self.HELPER.jscGetDeepest(str2); //cuz apparently its not passing by reference
+			
+			if (str1 == str2) {
+				return true;
+			} else {
+				return false;
+			}
 		}
 	};
 }

@@ -3246,14 +3246,12 @@ function tbb_box_click(e) {
 							);
 						};
 						
-						var path_iconToUse;
 						var pickerProcess_makeIcon = function() {
 							var promise_pickerProcess_makeIcon = makeIcon(targetedProfileIniKey, targetedProfSpecs.iconNameObj);
 							promise_pickerProcess_makeIcon.then(
 								function(aVal) {
 									console.log('Fullfilled - promise_pickerProcess_makeIcon - ', aVal);
 									// start - do stuff here - promise_pickerProcess_makeIcon
-									path_iconToUse = aVal;
 									pickerProcess_updateWindowsLauncherDeskcut();
 									// end - do stuff here - promise_pickerProcess_makeIcon
 								},
@@ -3272,9 +3270,10 @@ function tbb_box_click(e) {
 						};
 						
 						var pickerProcess_updateWindowsLauncherDeskcut = function() {
-							updateIconToAllWindows(targetedProfileIniKey, path_iconToUse);
-							updateIconToLauncher(targetedProfileIniKey, path_iconToUse);
-							updateIconToDesktcut(targetedProfileIniKey, path_iconToUse);
+							var name_iconToUse = targetedProfSpecs.iconNameObj.str;
+							updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
+							updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
+							updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
 						};
 						/*
 						// makeIcon(targetedProfileIniKey); // resolves with icon name it should be
@@ -3454,6 +3453,8 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 	
 	// useIconNameStr should be string of path
 	
+	console.log('in updateIconToAllWindows');
+	
 	var deferredMain_updateIconToAllWindows = new Deferred();
 	
 	if (['winnt','linux'].indexOf(cOS) == -1) {
@@ -3496,13 +3497,14 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 									  .treeOwner
 									  .QueryInterface(Ci.nsIInterfaceRequestor)
 									  .getInterface(Ci.nsIBaseWindow);
-				var cWinHandlePtrStr = cBaseWin.nativehandle;
+				var cWinHandlePtrStr = cBaseWin.nativeHandle;
 				
+				console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
 				useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
 				console.info('will apply this icon:', useIconNameStr);
 				var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
 					useIconNameStr,		// iconPath
-					cWinHandlePtrStr	// arrWinHandlePtrStrs
+					[cWinHandlePtrStr]	// arrWinHandlePtrStrs
 				]);
 				promise_changeIconForWindows.then(
 					function(aVal) {
