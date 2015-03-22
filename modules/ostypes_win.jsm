@@ -520,23 +520,22 @@ var winInit = function() {
 			try {
 				console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj, obj.toString());
 			} catch(ignore) {}
-			// used to get the deepest .contents .value and so on. expecting a number object
-			//while (isNaN(obj) && ('contents' in obj || 'value' in obj)) {
-			while (obj && obj.hasOwnProperty && (obj.hasOwnProperty('contents') || obj.hasOwnProperty('value'))) {
-				//if ('contents' in obj) {
-				if (obj.hasOwnProperty('contents')) {
-					obj = obj.contents;
-				//} else if ('value' in obj) {
-				} else if (obj.hasOwnProperty('value')) {
+
+			while (typeof obj === 'object' && obj !== null && ('contents' in obj || 'value' in obj)) {
+				if ('contents' in obj) {
+					try {
+						obj = obj.contents;
+					} catch (ex if ex.message == 'cannot get contents of undefined size') {
+						console.error('breaking as got tha contents size undef error, so obj is now:', obj.toString(), obj);
+						break;
+					}
+				} else if ('value' in obj) {
 					obj = obj.value;
-				} else {
-					throw new Error('huh, isNaN, but no contents or value in obj, obj: ' +  obj + ', ' + obj.toString());
 				}
 				//console.info('loop jscGetDeepest:', obj.toString());
 			}
-			//console.info('pre final jscGetDeepest:', obj.toString());
-			//if (!isNaN(obj)) {
-			if (obj || obj === 0) {
+			
+			if (obj !== null && typeof obj != 'undefined') {
 				obj = obj.toString();
 			}
 			console.info('finaled jscGetDeepest:', obj);
