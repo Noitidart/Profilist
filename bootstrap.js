@@ -44,24 +44,24 @@ var PUIsync;
 var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instead of dom as im thinking of making it not update all windows, just update the current window on menu panel show
 var currentThisBuildsIconPath = '';
 
-var cOS = OS.Constants.Sys.Name;
+var cOS = OS.Constants.Sys.Name.toLowerCase();
 var macStuff = {};
 var updateLauncherAndCutIconsOnBrowserShutdown; // set this to a function if this profiles build tie was changed while it was running, it will update the icon on browser shutdown
 
 const iconsetSizes_OS = {
-	Darwin: [16, 32, 64, 128, 256, 512, 1024],
-	Linux: [16, 24, 48, 96],
-	//WINNT: [16, 32, 48] // XP
-	//WINNT: [16, 32, 48, 64] // Vista
-	WINNT: [16, 32, 48, 256] // 7 and 8
+	darwin: [16, 32, 64, 128, 256, 512, 1024],
+	linux: [16, 24, 48, 96],
+	//winnt: [16, 32, 48] // XP
+	//winnt: [16, 32, 48, 64] // Vista
+	winnt: [16, 32, 48, 256] // 7 and 8
 };
 const iconsetSizes_Profilist = {
-	Darwin: [10/*badge*/, 16, 32, 64, 128, 256, 512, 1024],
-	Linux: [10/*badge*/, 12/*badge*/, 16, 24, 48, 96],
-	//WINNT: [10, 16, 32, 48] // XP
-	//WINNT: [10, 16, 32, 48, 64] // Vista
-	//WINNT: [10/*badge*/, 16, 24/*badge*/, 32, 48, 128/*badge*/, 256] // 7 and 8
-	WINNT: [16, 32, 48, 256] // 7 and 8
+	darwin: [10/*badge*/, 16, 32, 64, 128, 256, 512, 1024],
+	linux: [10/*badge*/, 12/*badge*/, 16, 24, 48, 96],
+	//winnt: [10, 16, 32, 48] // XP
+	//winnt: [10, 16, 32, 48, 64] // Vista
+	//winnt: [10/*badge*/, 16, 24/*badge*/, 32, 48, 128/*badge*/, 256] // 7 and 8
+	winnt: [16, 32, 48, 256] // 7 and 8
 };
 
 //var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
@@ -1265,7 +1265,7 @@ function checkAndExecPanelHidUnloaders(cDOMWin, specificName) {
 }
 function updateOnPanelHid(e) {
 	// do these actions on hid because like if we dont close it, then if user goes to customize, then it remains open blah blah ya
-	console.log('execing updateOnPanelHid, e:', e);
+	//console.log('execing updateOnPanelHid, e:', e); //todo: figure out why its called so much
 	if (e.originalTarget.id != 'PanelUI-popup') { return }
 
 	var DOMWin = e.view;
@@ -3260,19 +3260,19 @@ function tbb_box_click(e) {
 								function(aReason) {
 									var rejObj = {name:'promise_pickerProcess_makeIcon', aReason:aReason};
 									console.warn('Rejected - promise_pickerProcess_makeIcon - ', rejObj);
-									deferred_createProfile.reject(rejObj);
+									//deferred_createProfile.reject(rejObj);
 								}
 							).catch(
 								function(aCaught) {
 									var rejObj = {name:'promise_pickerProcess_makeIcon', aCaught:aCaught};
 									console.error('Caught - promise_pickerProcess_makeIcon - ', rejObj);
-									deferred_createProfile.reject(rejObj);
+									//deferred_createProfile.reject(rejObj);
 								}
 							);
 						};
 						
 						var pickerProcess_updateWindowsLauncherDeskcut = function() {
-							updateIconToWindows(targetedProfileIniKey, path_iconToUse);
+							updateIconToAllWindows(targetedProfileIniKey, path_iconToUse);
 							updateIconToLauncher(targetedProfileIniKey, path_iconToUse);
 							updateIconToDesktcut(targetedProfileIniKey, path_iconToUse);
 						};
@@ -3446,13 +3446,104 @@ function tbb_box_click(e) {
 }
 
 // start - functions to update icons at various locations
-function updateIconToWindows(aDOMWin, aProfilePath) {
+function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 	// if aDOMWin is passed
 		// if aProfilePath is not supplied, it will figure out what profile that aDOMWin belongs to and update its icon accordingly
 		// if aProfilePath is supplid, then it will not figure out what profile it belongs to and just go for it
 	// if aDOMWin is null, it updates all windows of current profile, no need for aProfilePath (aProfilePath is ignored), its very simple to figure out current profile
 	
-	console.log('updateIconToWindows run - not yet implemented');
+	// useIconNameStr should be string of path
+	
+	var deferredMain_updateIconToAllWindows = new Deferred();
+	
+	if (['winnt','linux'].indexOf(cOS) == -1) {
+		deferredMain_getProfileSpecs.reject('os-unsupported');
+	}
+	
+	var do_getIconName = function() {
+		var promise_getIconName = getProfileSpecs(aProfilePath);
+		promise_getIconName.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getIconName - ', aVal);
+				// start - do stuff here - promise_getIconName
+				useIconNameStr = aVal.iconNameObj.str;
+				do_applyIcon();
+				// end - do stuff here - promise_getIconName
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getIconName', aReason:aReason};
+				console.error('Rejected - promise_getIconName - ', rejObj);
+				deferredMain_updateIconToAllWindows.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
+				console.error('Caught - promise_getIconName - ', rejObj);
+				deferredMain_updateIconToAllWindows.reject(rejObj);
+			}
+		);
+	}
+
+	var do_applyIcon = function() {
+		switch (cOS) {
+			case 'winnt':
+				if (!aDOMWin) {
+					aDOMWin = Services.wm.getMostRecentWindow(null);
+				}
+				var cBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
+									  .getInterface(Ci.nsIWebNavigation)
+									  .QueryInterface(Ci.nsIDocShellTreeItem)
+									  .treeOwner
+									  .QueryInterface(Ci.nsIInterfaceRequestor)
+									  .getInterface(Ci.nsIBaseWindow);
+				var cWinHandlePtrStr = cBaseWin.nativehandle;
+				
+				useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
+				console.info('will apply this icon:', useIconNameStr);
+				var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
+					useIconNameStr,		// iconPath
+					cWinHandlePtrStr	// arrWinHandlePtrStrs
+				]);
+				promise_changeIconForWindows.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_changeIconForWindows - ', aVal);
+						// start - do stuff here - promise_changeIconForWindows
+						deferredMain_updateIconToAllWindows.resolve(true);
+						// end - do stuff here - promise_changeIconForWindows
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
+						console.warn('Rejected - promise_changeIconForWindows - ', rejObj);
+						deferredMain_updateIconToAllWindows.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_changeIconForWindows', aCaught:aCaught};
+						console.error('Caught - promise_changeIconForWindows - ', rejObj);
+						deferredMain_updateIconToAllWindows.reject(rejObj);
+					}
+				);
+				break;
+			
+			case 'linux':
+				//todo:
+				break;
+			
+			default:
+				// should never get here due to the os check initially
+				deferredMain_updateIconToAllWindows.reject('os-unsupported');
+		}
+	}
+	
+	// start - main
+	if (!useIconNameStr) {
+		// figure out icon name
+		do_getIconName();
+	} else {
+		do_applyIcon();
+	}
+	
+	return deferredMain_updateIconToAllWindows.promise;
 }
 
 function updateIconToLauncher(aProfilePath) {
@@ -3492,7 +3583,7 @@ function iniKeyOfName(theProfileName) {
 }
 
 function keepPuiShowing(e) {
-	console.log('keepPuiShowing, e:', e);
+	//console.log('keepPuiShowing, e:', e); //todo: figure out why its called so much
 	var PUI = e.target.ownerDocument.defaultView.PanelUI.panel;
 	PUI.style.opacity = 1;
 	e.stopPropagation();
@@ -3882,6 +3973,7 @@ var windowListener = {
 			
 			var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup 
 			PUI.removeEventListener('popupshowing', updateOnPanelShowing, false);
+			PUI.addEventListener('popuphidden', updateOnPanelHid, false);
 			PUI.removeEventListener('popuphiding', prevHide, false);
 			aDOMWindow.removeEventListener('beforecustomization', beforecustomization, false);
 			aDOMWindow.removeEventListener('customizationending', customizationending, false);
@@ -4593,7 +4685,7 @@ function getChannelNameOfExePath(aExePath) {
 		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]); // note:important: requires tie id to have proper cassing on tie paths
 	} else {
 		var path_channelName;
-		if (cOS != 'Darwin') {
+		if (cOS != 'darwin') {
 			path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
 		} else {
 			path_channelName = OS.Path.join(aExePath.substr(0, aExePath.search(/\.app/i)/*.toLowerCase().indexOf('.app')*/ + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
@@ -4656,7 +4748,7 @@ function getChannelNameOfProfile(for_ini_key) {
 			buildPath = profToolkit.exePath; // todo: this is incorrect!!! 032015 1207p
 			asfsadfd(); // put here as it brings attention to me so i fix this
 		}
-		if (cOS != 'Darwin') {
+		if (cOS != 'darwin') {
 			path_channelName = OS.Path.join(OS.Path.dirname(buildPath), 'defaults', 'pref', 'channel-prefs.js');
 		} else {
 			path_channelName = OS.Path.join(buildPath.substr(0, buildPath.toLowerCase().indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
@@ -5532,7 +5624,7 @@ function makeLauncher(for_ini_key, ch_name) {
 				// start - do stuff here - promise_getChName
 				theChName = aVal;
 	
-				if (cOS == 'Darwin') {
+				if (cOS == 'darwin') {
 					makeMac();		
 				} else {
 					//throw new Error('OS not supported for makeLauncher');
@@ -5684,7 +5776,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 					deferredMain_getProfileSpecs.reject('regex failed to extract path_aProfileLastPlatformDir');
 				} else {
 					path_aProfileLastPlatformDir = path_aProfileLastPlatformDir[1];
-					if (cOS == 'Darwin') {
+					if (cOS == 'darwin') {
 						if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
 							var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
 							path_aProfileLastPlatformDir = nsifile_aProfileLastPlatformDir.target;
@@ -5834,17 +5926,17 @@ function getDefaultBrowserPath() {
 	deferredMain_getDefaultBrowserPath.resolve(null);
 	
 	switch (cOS) {
-		case 'WINNT':
+		case 'winnt':
 			// copy this http://en.code-bude.net/2013/04/28/how-to-retrieve-default-browsers-path-in-c/
 			// that works properly based on this article: https://newoldthing.wordpress.com/2007/03/23/how-does-your-browsers-know-that-its-not-the-default-browser/
 			break;
 		
-		case 'Linux':
+		case 'linux':
 			// GDK
 				// https://developer.gnome.org/gio/stable/GAppInfo.html#g-app-info-get-default-for-uri-scheme
 			break;
 		
-		case 'Darwin':
+		case 'darwin':
 			// http://stackoverflow.com/questions/15404723/how-to-get-version-of-default-browser-on-my-mac-os-x/15406479#15406479
 			break;
 			
@@ -5943,7 +6035,7 @@ function makeDesktopShortcut(for_ini_key) {
 		
 		var deferred_makeCut = new Deferred();
 		
-		if (cOS == 'Darwin') { //note:debug added in winnt
+		if (cOS == 'darwin') { //note:debug added in winnt
 			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 			/*
 			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '-')"
@@ -6115,7 +6207,7 @@ function makeDesktopShortcut(for_ini_key) {
 }
 function getLauncherName(for_ini_key, theChName) {
 	var theProfName_safedForPath;
-	if (cOS == 'WINNT') {
+	if (cOS == 'winnt') {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '-')
 	} else {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' '); //for mac and nix
@@ -6238,14 +6330,14 @@ function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 			}
 		}
 	}
-	console.info('OSPathToFileURI:', OSPathToFileURI);
-	console.info('FileURIToOSPath:', FileURIToOSPath);
+	//console.info('OSPathToFileURI:', OSPathToFileURI);
+	//console.info('FileURIToOSPath:', FileURIToOSPath);
 	
 	var promiseAllArr_loadImgs = [];
 	
 	var handleImgLoad = function(refDeferred) {
 		var theImg = this;
-		console.log('Success on load of path: "' + theImg.src + '"');
+		//console.log('Success on load of path: "' + theImg.src + '"');
 		if (theImg.naturalHeight != theImg.naturalWidth) {
 			console.warn('Unsquare image on path: "' + theImg.src + '"');
 			refDeferred.reject('Unsquare image on paths: "' + theImg.src + '"');
@@ -6303,12 +6395,12 @@ function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 		img.onabort = handleImgAbort.bind(img, deferred_loadImg);
 		img.onerror = handleImgError.bind(img, deferred_loadImg);
 		
-		console.info('arrOfOsPaths[i]:', arrOfOsPaths[i]);
+		//console.info('arrOfOsPaths[i]:', arrOfOsPaths[i]);
 		if (arrOfOsPaths[i].substr(0, 9) == 'chrome://') {
-			console.info('img.src is chrome path so use as is:', arrOfOsPaths[i]);
+			//console.info('img.src is chrome path so use as is:', arrOfOsPaths[i]);
 			img.src = arrOfOsPaths[i];
 		} else {
-			console.info('img.src was os path so making file uri:', OSPathToFileURI[arrOfOsPaths[i]]);
+			//console.info('img.src was os path so making file uri:', OSPathToFileURI[arrOfOsPaths[i]]);
 			img.src = OSPathToFileURI[arrOfOsPaths[i]];
 		}
 	}
@@ -6662,11 +6754,11 @@ function pickerIconset(tWin) {
 		if (rv == Ci.nsIFilePicker.returnOK) {
 			
 			var files = fp.files;
-			console.log('files:', files);
+			//console.log('files:', files);
 			
 			while (files.hasMoreElements()) {
 				var aFile = files.getNext().QueryInterface(Ci.nsIFile);
-				console.log('aFile:', aFile.path);
+				//console.log('aFile:', aFile.path);
 
 				nsifiles_selectedIcons.push(aFile);
 				path_selectedIcons.push(aFile.path); //aFile.path are OS paths
@@ -6697,17 +6789,17 @@ function pickerIconset(tWin) {
 	// start - doInform
 	var doInform = function() {		
 		switch (cOS) {
-			case 'WINNT':
+			case 'winnt':
 				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
 				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-win');
 				break;
 			
-			case 'Linux':
+			case 'linux':
 				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
 				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-linux');
 				break;
 			
-			case 'Darwin':
+			case 'darwin':
 				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
 				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-mac');
 				break;
@@ -6770,9 +6862,9 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 	};
 	
 	var do_platDependentSetup_and_StartOverlayDrawings = function() {
-		if (cOS == 'Darwin') {
+		if (cOS == 'darwin') {
 			
-		} else if (cOS == 'WINNT') {
+		} else if (cOS == 'winnt') {
 			// start - draw overlaid icons and turn save image data
 			var imgDataArr = [];
 			// maybe consider drawing smaller badges on beta
@@ -7035,8 +7127,8 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			promiseAllArr_dcipealbabs.push(loadImagePaths(null, iconNameObj.components['BADGE-ID'], null));
 		}
 		
-		if (cOS == 'Darwin' || cOS == 'WINNT') {
-			var iconExt = cOS == 'Darwin' ? 'icns' : 'ico';
+		if (cOS == 'darwin' || cOS == 'winnt') {
+			var iconExt = cOS == 'darwin' ? 'icns' : 'ico';
 			var deferred_notPrexisting = new Deferred();
 			promiseAllArr_dcipealbabs.push(deferred_notPrexisting.promise);
 			
@@ -7132,7 +7224,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 		// on success goes to 
 		var platformSupported;
 		
-		if (cOS == 'Darwin') { // this if block should similar 67864810
+		if (cOS == 'darwin') { // this if block should similar 67864810
 			var userAgent = myServices.hph.userAgent;
 			//console.info('userAgent:', userAgent);
 			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
@@ -7159,7 +7251,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 					platformSupported = false; //its already false
 				}
 			}
-		} else if (cOS == 'WINNT') {
+		} else if (cOS == 'winnt') {
 			platformSupported = true;
 		}
 		
@@ -7552,7 +7644,7 @@ function getPathsInIconset(iconsetId, liveFetch) {
 		// NOT YET IMPLEMENTED
 	
 	var arryOfSizes = [];
-	if (['WINNT', 'Linux', 'Darwin'].indexOf(cOS) == -1) {
+	if (['winnt', 'linux', 'darwin'].indexOf(cOS) == -1) {
 		return null;
 	}
 
@@ -8086,7 +8178,7 @@ function startup(aData, aReason) {
 	};
 	
 	// os - mac specific stuff
-	if (cOS == 'Darwin') {
+	if (cOS == 'darwin') {
 		macStuff.isMac = true;
 		
 		// check if should override paths
