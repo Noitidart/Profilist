@@ -14,78 +14,89 @@ if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 	throw new Error('huh??? not 32 or 64 bit?!?!');
 }
 
+var ifdef_UNICODE = true
+
 var winTypes = function() {
-	// SIMPLE TYPES
-	this.BOOL = ctypes.bool;
-	this.USHORT = ctypes.unsigned_short;
-	this.BYTE = ctypes.unsigned_char;
-	this.INT = ctypes.int;
-	this.INT_PTR = is64bit ? ctypes.int64_t : ctypes.int;
-	this.UINT = ctypes.unsigned_int;
-	this.UINT_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_int;
-	this.WORD = this.USHORT;
-	this.DWORD = ctypes.uint32_t;
-	this.LPDWORD = this.DWORD.ptr;
-	this.PVOID = ctypes.voidptr_t;
-	this.LPVOID = ctypes.voidptr_t;
-	this.LONG = ctypes.long;
-	this.PLONG = this.LONG.ptr;
-	this.LONG_PTR = ctypes.intptr_t; //is64bit ? ctypes.int64_t : ctypes.long;
-	this.ULONG = ctypes.unsigned_long;
-	this.PULONG = this.ULONG.ptr;
-	this.ULONG_PTR = ctypes.uintptr_t; //is64bit ? ctypes.uint64_t : ctypes.unsigned_long;
-	this.SIZE_T = this.ULONG_PTR;
-	this.DWORD_PTR = this.ULONG_PTR;
-	this.ATOM = this.WORD;
-	this.HANDLE = ctypes.voidptr_t;
-	this.HWND = this.HANDLE;
-	this.HICON = this.HANDLE;
-	this.HINSTANCE = this.HANDLE;
-	this.HMODULE = this.HANDLE;
-	this.HMENU = this.HANDLE;
-	this.HBRUSH = this.HICON;
-	this.HCURSOR = this.HANDLE;
-	this.HHOOK = this.HANDLE;
-	this.HDC = this.HANDLE;
-	this.HGDIOBJ = this.HANDLE;
-	this.HBITMAP = this.HANDLE;
-	this.HFONT = this.HANDLE;
-	this.TCHAR = ctypes.jschar, // Mozilla compiled with UNICODE/_UNICODE macros and wchar_t = jschar
-	this.LPSTR = ctypes.char.ptr;
-	this.LPCSTR = ctypes.char.ptr;
-	this.LPTSTR = ctypes.jschar.ptr; // UNICODE
-	this.LPCTSTR = ctypes.jschar.ptr;
-	this.LPWSTR = ctypes.jschar.ptr; // WCHAR
-	this.LRESULT = this.LONG_PTR;
-	this.WPARAM = this.UINT_PTR;
-	this.LPARAM = ctypes.size_t; // this.LONG_PTR;
-	this.FARPROC = ctypes.voidptr_t; // typedef INT_PTR (FAR WINAPI *FARPROC)();
-	this.COLORREF = this.DWORD; // 0x00bbggrr
-	this.LPHANDLE = this.HANDLE.ptr;
 	
-	
-	this.LPCVOID = ctypes.voidptr_t;
-	this.RM_APP_TYPE = ctypes.unsigned_int;
-	this.VOID = ctypes.void_t;
-	this.WCHAR = ctypes.jschar;
-	
-	// ADVANCED TYPES
-	this.NTSTATUS = this.LONG;
-	this.SYSTEM_INFORMATION_CLASS = this.INT;
-	this.WNDENUMPROC = ctypes.FunctionType(ctypes.default_abi, this.BOOL, [this.HWND, this.LPARAM]);
-	
-	this.PCWSTR = new ctypes.PointerType(this.WCHAR);
-	this.LPCWSTR = this.PCWSTR;
-	
-	if (ctypes.size_t.size == 8) {
-	  this.CallBackABI = ctypes.default_abi;
-	  this.WinABI = ctypes.default_abi;
+	// ABIs
+	if (is64bit) {
+	  this.CALLBACK_ABI = ctypes.default_abi;
+	  this.WINABI = ctypes.default_abi;
 	} else {
-	  this.CallBackABI = ctypes.stdcall_abi;
-	  this.WinABI = ctypes.winapi_abi;
+	  this.CALLBACK_ABI = ctypes.stdcall_abi;
+	  this.WINABI = ctypes.winapi_abi;
 	}
 	
+	// SIMPLE TYPES // based on ctypes.BLAH // as per WinNT.h etc
+	this.BOOL = ctypes.bool;
+	this.BYTE = ctypes.unsigned_char;
+	this.CHAR = ctypes.char;
+	this.DWORD = ctypes.unsigned_long; // IntSafe.h defines it as: // typedef unsigned long DWORD; // so maybe can change this to ctypes.unsigned_long // i was always using `ctypes.uint32_t`
+	this.INT = ctypes.int;
+	this.INT_PTR = is64bit ? ctypes.int64_t : ctypes.int;
+	this.LONG = ctypes.long;
+	this.LONG_PTR = is64bit ? ctypes.int64_t : ctypes.long; // i left it at what i copied pasted it as but i thought it would be `ctypes.intptr_t`
+	this.LPCVOID = ctypes.voidptr_t;
+	this.LPVOID = ctypes.voidptr_t;	
+	this.NTSTATUS = ctypes.long; // https://msdn.microsoft.com/en-us/library/cc230357.aspx // typedef long NTSTATUS;
+	this.PVOID = ctypes.voidptr_t;
+	this.RM_APP_TYPE = ctypes.unsigned_int; // i dont know im just guessing, i cant find a typedef that makes sense to me: https://msdn.microsoft.com/en-us/library/windows/desktop/aa373670%28v=vs.85%29.aspx
+	this.UINT = ctypes.unsigned_int;
+	this.UINT_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_int;
+	this.ULONG = ctypes.unsigned_long;
+	this.ULONG_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_long; // i left it at what i copied pasted it as, but i thought it was this: `ctypes.uintptr_t`
+	this.USHORT = ctypes.unsigned_short;
+	this.VOID = ctypes.void_t;
+	this.WCHAR = ctypes.jschar;
+	this.WORD = ctypes.unsigned_short;
+	
+	// ADVANCED TYPES // as per how it was defined in WinNT.h // defined by "simple types"
+	this.ATOM = this.WORD;
+	this.COLORREF = this.DWORD; // when i copied/pasted there was this comment next to this: // 0x00bbggrr
+	this.DWORD_PTR = this.ULONG_PTR;
+	this.HANDLE = this.PVOID;
+	this.LPCSTR = this.CHAR.ptr; // typedef __nullterminated CONST CHAR *LPCSTR;
+	this.LPCWSTR = this.WCHAR.ptr;
+	this.LPARAM = this.LONG_PTR;
+	this.LPDWORD = this.DWORD.ptr;
+	this.LPSTR = this.CHAR.ptr;
+	this.LPWSTR = this.WCHAR.ptr;
+	this.LRESULT = this.LONG_PTR;
+	this.PLONG = this.LONG.ptr;
+	this.PULONG = this.ULONG.ptr;
+	this.PCWSTR = this.WCHAR.ptr;
+	this.SIZE_T = this.ULONG_PTR;
+	this.SYSTEM_INFORMATION_CLASS = this.INT; // i think due to this search: http://stackoverflow.com/questions/28858849/where-is-system-information-class-defined
+	this.TCHAR = ifdef_UNICODE ? this.WCHAR : ctypes.char; // when i copied pasted this it was just ctypes.char and had this comment: // Mozilla compiled with UNICODE/_UNICODE macros and wchar_t = jschar // in "advanced types" section even though second half is ctypes.char because it has something that is advanced, which is the first part, this.WCHAR
+	this.WPARAM = this.UINT_PTR;
+	
+	// SUPER ADVANCED TYPES // defined by "advanced types"
+	this.HBITMAP = this.HANDLE;
+	this.HBRUSH = this.HANDLE;
+	this.HDC = this.HANDLE;
+	this.HFONT = this.HANDLE;
+	this.HGDIOBJ = this.HANDLE;
+	this.HHOOK = this.HANDLE;
+	this.HICON = this.HANDLE;
+	this.HINSTANCE = this.HANDLE;
+	this.HMENU = this.HANDLE;
+	this.HWND = this.HANDLE;
+	this.LPCTSTR = ifdef_UNICODE ? this.LPCWSTR : this.LPCSTR;
+	this.LPHANDLE = this.HANDLE.ptr;
+	this.LPTSTR = ifdef_UNICODE ? this.LPWSTR : this.LPSTR;	
+	
+	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
+	this.HCURSOR = this.HICON;
+	this.HMODULE = this.HINSTANCE;
+	this.WNDENUMPROC = ctypes.FunctionType(this.CALLBACK_ABI, this.BOOL, [this.HWND, this.LPARAM]); // "super advanced type" because its highest type is `this.HWND` which is "advanced type"
+
+
 	// STRUCTURES
+	
+	// SIMPLE STRUCTS // based on any of the types above
+	
+	// ADVANCED STRUCTS // based on "simple structs" to be defined first
+	
 	
 	/* http://msdn.microsoft.com/en-us/library/windows/hardware/ff545817%28v=vs.85%29.aspx
 	 * typedef struct _FILE_NAME_INFORMATION {
@@ -193,6 +204,49 @@ var winTypes = function() {
 	]);
 	this.PGUID = this.GUID.ptr;
 	// end - structures used by Rstrtmgr.dll
+	
+	// SendMessage structs
+	/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms649010%28v=vs.85%29.aspx
+	 * typedef struct tagCOPYDATASTRUCT {
+	 *   ULONG_PTR dwData;
+	 *   DWORD     cbData;
+	 *   PVOID     lpData;
+	 * } COPYDATASTRUCT, *PCOPYDATASTRUCT;
+	 */
+	this.COPYDATASTRUCT = ctypes.StructType('tagCOPYDATASTRUCT', [
+		{ 'dwData': this.ULONG_PTR },
+		{ 'cbData': this.DWORD },
+		{ 'lpData': this.PVOID }
+	]);
+	this.PCOPYDATASTRUCT = this.COPYDATASTRUCT.ptr;
+	 
+	// Named Pipes
+	/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa379560%28v=vs.85%29.aspx
+	 * typedef struct _SECURITY_ATTRIBUTES {
+	 *   DWORD  nLength;
+	 *   LPVOID lpSecurityDescriptor;
+	 *   BOOL   bInheritHandle;
+	 * } SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+	 */
+	this.SECURITY_ATTRIBUTES = ctypes.StructType('_SECURITY_ATTRIBUTES');
+	this.LPSECURITY_ATTRIBUTES = this.SECURITY_ATTRIBUTES.ptr;
+	
+	/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684342%28v=vs.85%29.aspx
+	 *  typedef struct _OVERLAPPED {
+	 *    ULONG_PTR Internal;
+	 *    ULONG_PTR InternalHigh;
+	 *    union {
+	 *  	struct {
+	 *  	  DWORD Offset;
+	 *  	  DWORD OffsetHigh;
+	 *  	};
+	 *  	PVOID  Pointer;
+	 *    };
+	 *    HANDLE    hEvent;
+	 *  } OVERLAPPED, *LPOVERLAPPED;
+	 */
+	this.OVERLAPPED = ctypes.StructType('_OVERLAPPED');
+	this.LPOVERLAPPED = this.OVERLAPPED.ptr;
 }
 
 var winInit = function() {
@@ -204,6 +258,10 @@ var winInit = function() {
 
 	// CONSTANTS
 	this.CONST = {
+		// BroadcastSystemMessage
+		BSM_APPLICATIONS: 0x00000008,
+		BSF_FORCEIFHUNG: 0x00000020,
+		
 		// GetAncestor
 		GA_PARENT: 1,
 		GA_ROOT: 2,
@@ -215,6 +273,20 @@ var winInit = function() {
 		// LoadImage
 		IMAGE_ICON: 1,
 		LR_LOADFROMFILE: 16,
+		
+		// Named Pipes
+		FILE_ATTRIBUTE_NORMAL: 0x80, // same as 128
+		GENERIC_WRITE: 0x40000000,
+		INVALID_HANDLE_VALUE: -1,
+		OPEN_EXISTING: 3,
+		PIPE_ACCESS_DUPLEX: 0x00000003,
+		PIPE_READMODE_BYTE: 0x00000000,
+		PIPE_TYPE_BYTE: 0x00000000,
+		PIPE_UNLIMITED_INSTANCES: 255,
+		PIPE_WAIT: 0x00000000,
+		WRITE_DAC: 0x00040000,
+		
+		NMPWAIT_WAIT_FOREVER: 0xffffffff,
 		
 		// Rstrtmgr.dll
 		CCH_RM_MAX_APP_NAME: 255, // this is also in TYPES because I needed it to define a struct
@@ -234,6 +306,7 @@ var winInit = function() {
 		// SendMessage
 		ICON_SMALL: 0,
 		ICON_BIG: 1,
+		WM_COPYDATA: 0x004A,
 		WM_SETICON: 0x0080,
 		
 		// SetClassLong
@@ -301,13 +374,31 @@ var winInit = function() {
 
 	// start - predefine your declares here
 	var preDec = { //stands for pre-declare (so its just lazy stuff) //this must be pre-populated by dev // do it alphabateized by key so its ez to look through
+		BroadcastSystemMessage: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644932%28v=vs.85%29.aspx
+			 * long WINAPI BroadcastSystemMessage(
+			 *   __in_         DWORD dwFlags,
+			 *   __inout_opt_  LPDWORD lpdwRecipients,
+			 *   __in_         UINT uiMessage,
+			 *   __in_         WPARAM wParam,
+			 *   __in_         LPARAM lParam
+			 * );
+			 */
+			return lib('user32').declare('BroadcastSystemMessageW', self.TYPE.WINABI,
+				self.TYPE.LONG,		// return
+				self.TYPE.LPDWORD,	// lpdwRecipients
+				self.TYPE.UINT,		// uiMessage
+				self.TYPE.WPARAM,	// wParam
+				self.TYPE.LPARAM	// lParam
+			);
+		},
 		DestroyIcon: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648063%28v=vs.85%29.aspx
 			 * BOOL WINAPI DestroyIcon(
 			 *   _In_  HICON hIcon
 			 * );
 			 */
-			return lib('user32').declare('DestroyIcon', ctypes.winapi_abi,
+			return lib('user32').declare('DestroyIcon', self.TYPE.WINABI,
 				self.TYPE.BOOL,		// return
 				self.TYPE.HICON		// hIcon
 			);
@@ -319,7 +410,7 @@ var winInit = function() {
 			 *   __in_  LPARAM lParam
 			 * );
 			 */
-			return lib('user32').declare('EnumWindows', ctypes.winapi_abi,
+			return lib('user32').declare('EnumWindows', self.TYPE.WINABI,
 				self.TYPE.BOOL,				// return
 				self.TYPE.WNDENUMPROC.ptr,	// lpEnumFunc
 				self.TYPE.LPARAM			// lParam
@@ -332,7 +423,7 @@ var winInit = function() {
 			 * __in_  UINT gaFlags
 			 * );
 			 */
-			return lib('user32').declare('GetAncestor', ctypes.winapi_abi,
+			return lib('user32').declare('GetAncestor', self.TYPE.WINABI,
 				self.TYPE.HWND,	// return
 				self.TYPE.HWND,	// hwnd
 				self.TYPE.UINT	// gaFlags
@@ -345,7 +436,7 @@ var winInit = function() {
 			 *   __in_  UINT wCmd
 			 * );
 			 */
-			return lib('user32').declare('GetWindow', ctypes.winapi_abi,
+			return lib('user32').declare('GetWindow', self.TYPE.WINABI,
 				self.TYPE.HWND,	// return
 				self.TYPE.HWND,	// hWnd
 				self.TYPE.UINT	// wCmd
@@ -358,7 +449,7 @@ var winInit = function() {
 			 *   __out_opt_	LPDWORD lpdwProcessId
 			 * );
 			 */
-			return lib('user32').declare('GetWindowThreadProcessId', ctypes.winapi_abi,
+			return lib('user32').declare('GetWindowThreadProcessId', self.TYPE.WINABI,
 				self.TYPE.DWORD,	// return
 				self.TYPE.HWND,		// hWnd
 				self.TYPE.LPDWORD	// lpdwProcessId
@@ -375,7 +466,7 @@ var winInit = function() {
 			 *   __in_      UINT fuLoad
 			 * );
 			 */
-			return lib('user32').declare('LoadImageW', ctypes.winapi_abi,
+			return lib('user32').declare('LoadImageW', self.TYPE.WINABI,
 				self.TYPE.HANDLE,		// return
 				self.TYPE.HINSTANCE,	// hinst
 				self.TYPE.LPCTSTR,		// lpszName		// ctypes.char.ptr
@@ -393,7 +484,7 @@ var winInit = function() {
 			 *   __out_       WCHAR strSessionKey[ ]
 			 * );
 			 */
-			return lib('Rstrtmgr.dll').declare('RmStartSession', ctypes.winapi_abi,
+			return lib('Rstrtmgr.dll').declare('RmStartSession', self.TYPE.WINABI,
 				self.TYPE.DWORD,		// return
 				self.TYPE.DWORD.ptr,	// *pSessionHandle
 				self.TYPE.DWORD,		// dwSessionFlags
@@ -412,7 +503,7 @@ var winInit = function() {
 			 *   __in_opt_  LPCWSTR rgsServiceNames[ ]
 			 * );
 			 */
-			return lib('Rstrtmgr.dll').declare('RmRegisterResources', ctypes.winapi_abi,
+			return lib('Rstrtmgr.dll').declare('RmRegisterResources', self.TYPE.WINABI,
 				self.TYPE.DWORD,					// return
 				self.TYPE.DWORD,					// dwSessionHandle
 				self.TYPE.UINT,						// nFiles
@@ -433,7 +524,7 @@ var winInit = function() {
 			 *   __out_        LPDWORD lpdwRebootReasons
 			 * );
 			 */
-			return lib('Rstrtmgr.dll').declare('RmGetList', ctypes.winapi_abi,
+			return lib('Rstrtmgr.dll').declare('RmGetList', self.TYPE.WINABI,
 				self.TYPE.DWORD, 				// return
 				self.TYPE.DWORD,				// dwSessionHandle
 				self.TYPE.UINT.ptr,				// *pnProcInfoNeeded
@@ -448,7 +539,7 @@ var winInit = function() {
 			 *   __in_       DWORD dwSessionHandle
 			 * );
 			 */
-			return lib('Rstrtmgr.dll').declare('RmEndSession', ctypes.winapi_abi,
+			return lib('Rstrtmgr.dll').declare('RmEndSession', self.TYPE.WINABI,
 				self.TYPE.DWORD,	// return
 				self.TYPE.DWORD		// dwSessionHandle
 			);
@@ -462,7 +553,7 @@ var winInit = function() {
 			 *   __in_ LPARAM lParam
 			 * );
 			 */
-			return lib('user32').declare('SendMessageW', ctypes.winapi_abi,
+			return lib('user32').declare('SendMessageW', self.TYPE.WINABI,
 				self.TYPE.LRESULT,		// return		// ctypes.uintptr_t
 				self.TYPE.HWND,			// hWnd
 				self.TYPE.UINT,			// Msg
@@ -487,7 +578,7 @@ var winInit = function() {
 			 *   __in_  LONG dwNewLong
 			 * );
 			 */
-			return lib('user32').declare(self.IS64BIT ? 'SetClassLongPtrW' : 'SetClassLongW', ctypes.winapi_abi,
+			return lib('user32').declare(self.IS64BIT ? 'SetClassLongPtrW' : 'SetClassLongW', self.TYPE.WINABI,
 				self.IS64BIT ? self.TYPE.ULONG_PTR : self.TYPE.DWORD,	// return
 				self.TYPE.HWND,											// hWnd
 				self.TYPE.INT,											// nIndex
@@ -503,13 +594,150 @@ var winInit = function() {
 			 *   __in_opt_	LPCVOID dwItem2
 			 * );
 			 */
-			return lib('shell32.dll').declare('SHChangeNotify', ctypes.winapi_abi,
+			return lib('shell32.dll').declare('SHChangeNotify', self.TYPE.WINABI,
 				self.TYPE.VOID,		// return
 				self.TYPE.LONG,		//wEventId
 				self.TYPE.UINT,		//uFlags
 				self.TYPE.LPCVOID,	//dwItem1
 				self.TYPE.LPCVOID	//dwItem2
 			);
+		},
+		ConnectNamedPipe: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365146%28v=vs.85%29.aspx
+			 * BOOL WINAPI ConnectNamedPipe(
+			 *   __in_         HANDLE hNamedPipe,
+			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
+			 * );
+			 */
+			return lib('Kernel32').declare('ConnectNamedPipe', self.TYPE.WINABI,
+				self.TYPE.BOOL,			// return
+				self.TYPE.HANDLE,		// hNamedPipe
+				self.TYPE.LPOVERLAPPED	// lpOverlapped
+			);
+		},
+		CloseHandle: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724211%28v=vs.85%29.aspx
+			 * BOOL WINAPI CloseHandle(
+			 *   __in_  HANDLE hObject
+			 * );
+			 */
+			return lib('Kernel32').declare('CloseHandle', self.TYPE.WINABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE	// hObject
+			);
+		},
+		CreateNamedPipe: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365150%28v=vs.85%29.aspx
+			 *  HANDLE WINAPI CreateNamedPipe(
+			 *    __in_      LPCTSTR lpName,
+			 *    __in_      DWORD dwOpenMode,
+			 *    __in_      DWORD dwPipeMode,
+			 *    __in_      DWORD nMaxInstances,
+			 *    __in_      DWORD nOutBufferSize,
+			 *    __in_      DWORD nInBufferSize,
+			 *    __in_      DWORD nDefaultTimeOut,
+			 *    __in_opt_  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+			 *  );
+			 */
+			return lib('Kernel32').declare('CreateNamedPipeW', self.TYPE.WINABI,
+				self.TYPE.HANDLE,					// return
+				self.TYPE.LPCTSTR,					// lpName
+				self.TYPE.DWORD,					// dwOpenMode
+				self.TYPE.DWORD,					// dwPipeMode
+				self.TYPE.DWORD,					// nMaxInstances
+				self.TYPE.DWORD,					// nOutBufferSize
+				self.TYPE.DWORD,					// nInBufferSize
+				self.TYPE.DWORD,					// nDefaultTimeOut
+				self.TYPE.LPSECURITY_ATTRIBUTES		// lpSecurityAttributes	// todo:
+			);
+		},
+		CreateFile: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858%28v=vs.85%29.aspx
+			 * HANDLE WINAPI CreateFile(
+			 *   __in_      LPCTSTR lpFileName,
+			 *   __in_      DWORD dwDesiredAccess,
+			 *   __in_      DWORD dwShareMode,
+			 *   __in_opt_  LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+			 *   __in_      DWORD dwCreationDisposition,
+			 *   __in_      DWORD dwFlagsAndAttributes,
+			 *   __in_opt_  HANDLE hTemplateFile
+			 * );
+			 */
+			return lib('Kernel32').declare('CreateFileW', self.TYPE.WINABI,
+				self.TYPE.HANDLE,					// return
+				self.TYPE.LPCTSTR,					// lpFileName
+				self.TYPE.DWORD,					// dwDesiredAccess
+				self.TYPE.DWORD,					// dwShareMode
+				self.TYPE.LPSECURITY_ATTRIBUTES,	// lpSecurityAttributes
+				self.TYPE.DWORD,					// dwCreationDisposition
+				self.TYPE.DWORD,					// dwFlagsAndAttributes
+				self.TYPE.HANDLE					// hTemplateFile
+			);
+		},
+		DisconnectNamedPipe: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365166%28v=vs.85%29.aspx
+			 * BOOL WINAPI DisconnectNamedPipe(
+			 *   __in_  HANDLE hNamedPipe
+			 * );
+			 */
+			return lib('Kernel32').declare('DisconnectNamedPipe', self.TYPE.WINABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE	// hNamedPipe
+			);
+		},
+		ReadFile: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365467%28v=vs.85%29.aspx
+			 * BOOL WINAPI ReadFile(
+			 *   __in_         HANDLE hFile,
+			 *   __out_        LPVOID lpBuffer,
+			 *   __in_         DWORD nNumberOfBytesToRead,
+			 *   __out_opt_    LPDWORD lpNumberOfBytesRead,
+			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
+			 * );
+			 */
+			return lib('Kernel32').declare('ReadFile', self.TYPE.WINABI,
+				self.TYPE.BOOL,				// return
+				self.TYPE.HANDLE,			// hFile
+				self.TYPE.LPVOID,			// lpBuffer
+				self.TYPE.DWORD,			// nNumberOfBytesToRead
+				self.TYPE.LPDWORD,			// lpNumberOfBytesRead
+				self.TYPE.LPOVERLAPPED		// lpOverlapped
+			);
+		},
+		WriteFile: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365747%28v=vs.85%29.aspx
+			 * BOOL WINAPI WriteFile(
+			 *   __in_         HANDLE hFile,
+			 *   __in_         LPCVOID lpBuffer,
+			 *   __in_         DWORD nNumberOfBytesToWrite,
+			 *   __out_opt_    LPDWORD lpNumberOfBytesWritten,
+			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
+			 * );
+			 */
+			return lib('Kernel32').declare('WriteFile', self.TYPE.WINABI,
+				self.TYPE.BOOL,			// return
+				self.TYPE.HANDLE,		// hFile
+				self.TYPE.LPCVOID,		// lpBuffer
+				self.TYPE.DWORD,		// nNumberOfBytesToWrite
+				self.TYPE.LPDWORD,		// lpNumberOfBytesWritten
+				self.TYPE.LPOVERLAPPED	// lpOverlapped
+			);
+		},
+		WaitNamedPipe: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365800%28v=vs.85%29.aspx
+			 * BOOL WINAPI WaitNamedPipe(
+			 *   __in_  LPCTSTR lpNamedPipeName,
+			 *   __in_  DWORD nTimeOut
+			 * );
+			 */
+			return lib('Kernel32').declare('WaitNamedPipeW', self.TYPE.WINABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.LPCTSTR,	// lpNamedPipeName
+				self.TYPE.DWORD		// nTimeOut
+			);
+		},
+		FlushFileBuffers: function() {
+			return lib('Kernel32').declare('FlushFileBuffers', self.TYPE.WINABI, self.TYPE.BOOL, self.TYPE.HANDLE);
 		}
 	};
 	// end - predefine your declares here
@@ -518,7 +746,7 @@ var winInit = function() {
 	this.HELPER = {
 		jscGetDeepest: function(obj) {
 			try {
-				console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj, obj.toString());
+				//console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj, obj.toString());
 			} catch(ignore) {}
 
 			while (typeof obj === 'object' && obj !== null && ('contents' in obj || 'value' in obj)) {
@@ -538,7 +766,7 @@ var winInit = function() {
 			if (obj !== null && typeof obj != 'undefined') {
 				obj = obj.toString();
 			}
-			console.info('finaled jscGetDeepest:', obj);
+			//console.info('finaled jscGetDeepest:', obj);
 			return obj;
 		},
 		jscEqual: function(obj1, obj2) {
@@ -552,6 +780,8 @@ var winInit = function() {
 			
 			var str1 = self.HELPER.jscGetDeepest(str1); //cuz apparently its not passing by reference
 			var str2 = self.HELPER.jscGetDeepest(str2); //cuz apparently its not passing by reference
+			
+			console.info('comparing:', str1, str2);
 			
 			if (str1 == str2) {
 				return true;

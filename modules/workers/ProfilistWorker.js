@@ -223,14 +223,21 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 			*/
 			
 			
+			// i noticed with SetClassLong/Ptr changing the icon when it changes in taskbar(unpinned) then the on hover color change which is based on the dominant color of the icon doesnt take after applying it once, maybe i need to destroy the old icon or something
 			var hIconBig_LONG_PTR = ctypes.cast(hIconBig_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
 			var hIconSmall_LONG_PTR = ctypes.cast(hIconSmall_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
 			
 			debugOut.push('hIconBig_LONG_PTR: ' + hIconBig_LONG_PTR.toString());
 			debugOut.push('hIconSmall_LONG_PTR: ' + hIconSmall_LONG_PTR.toString());
 			
+			ctypes.winLastError = 0;
+			debugOut.push('winLastError pre oldBigIcon: ' + ctypes.winLastError);
 			var oldBigIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);
+			debugOut.push('winLastError post oldBigIcon: ' + ctypes.winLastError);
+			ctypes.winLastError = 0;
+			debugOut.push('winLastError pre oldSmallIcon: ' + ctypes.winLastError);
 			var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
+			debugOut.push('winLastError post oldSmallIcon: ' + ctypes.winLastError);
 			
 			if (ostypes.HELPER.jscEqual(oldBigIcon, 0)) {
 				debugOut.push('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
@@ -244,6 +251,10 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 			debugOut.push(['oldBigIcon: ', oldBigIcon, oldBigIcon.toString()].join(' '));
 			debugOut.push(['oldSmallIcon: ', oldSmallIcon, oldSmallIcon.toString()].join(' '));
 			
+			// getting ERROR_ACCESS_DENIED (ctypes.winLastError == 5) when trying to setClassLongPtr on other process
+				// possible work around:
+					// https://social.msdn.microsoft.com/Forums/vstudio/en-US/25b8e6e4-d5bd-4541-8fa8-9df8f7af4206/moving-a-non-mine-window?forum=vclanguage
+					// http://www.codeproject.com/Articles/4610/Three-Ways-to-Inject-Your-Code-into-Another-Proces
 			
 			/*
 			// todo: check if i need to destroy/release these icons, and when
@@ -334,8 +345,7 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 	} else {
 		var path_cProfRootDir = Path;
 	}
-	
-	//note: im missing vms: http://mxr.mozilla.org/mozilla-release/source/profile/dirserviceprovider/src/nsProfileLock.cpp#581
+
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':
@@ -429,8 +439,13 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					}
 					
 					if (rezMain.length > 1) {
+						// really should never be greater then 1, but this is just a fallback
 						rezMain.sort(function(a,b) {
-							return a.dwLowDateTime > b.dwLowDateTime; // sort asc
+							if (a.dwHighDateTime != b.dwHighDateTime) {
+								return a.dwHighDateTime > b.dwHighDateTime; // sort asc
+							} else {
+								return a.dwLowDateTime > b.dwLowDateTime; // sort asc
+							}
 						});
 					}
 					
@@ -463,4 +478,154 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 
 	return rezMain;
 	
+}
+
+function IPC_send(utf8or16_string) {
+	// sends message to target
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+			//msg shoud look like: Profilist--randomId--msg
+			
+			var jsStr_pipeName = 'Profilist';
+			jsStr_pipeName = '\\\\.\\pipe\\' + jsStr_pipeName;
+			var cStr_pipeName = ostypes.TYPE.LPCTSTR.targetType.array()(jsStr_pipeName);
+			
+			var rez_WaitNamedPipe = ostypes.API('WaitNamedPipe')(cStr_pipeName, ostypes.CONST.NMPWAIT_WAIT_FOREVER);
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			if (!rez_WaitNamedPipe) {
+				throw new Error('WaitNamedPipe failed with error: ' + ctypes.winLastError);
+			}
+			
+			var hOut = ostypes.API('CreateFile')(
+				cStr_pipeName,
+				ostypes.CONST.GENERIC_WRITE,
+				0,
+				null,
+				ostypes.CONST.OPEN_EXISTING,
+				ostypes.CONST.FILE_ATTRIBUTE_NORMAL,
+				null
+			);
+			
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			if (ostypes.HELPER.jscEqual(hOut, ostypes.CONST.INVALID_HANDLE_VALUE)) {
+				throw new Error('CreateFile failed with error: ' + ctypes.winLastError);
+			}
+			
+			var len = ostypes.TYPE.DWORD();
+			var dwWritten = ostypes.TYPE.DWORD();
+			/*
+			for (var j=0; j<5; j++) {
+				let i = j;
+				setTimeout(function() {
+					var msg = 'SIGNAL ' + i;
+					var buf = ostypes.TYPE.WCHAR.array()(msg);
+					// if (buf.constructor.size > 1024) {
+						// console.error('cannot send message of', msg, 'because it is greather 1024 in size');
+						// return;
+					// }
+					console.log('Sending message:', msg);
+					var rez_WriteFile;
+					var rez_WriteFile = ostypes.API('WriteFile')(hOut, buf, buf.length, dwWritten.address(), null);
+					if (!rez_WriteFile) {
+						console.error('WriteFile failed with error: ' + ctypes.winLastError);
+						return;
+					}
+					console.info('dwWritten:', dwWritten, dwWritten.toString());
+					// var rez_Flush = ostypes.API('FlushFileBuffers')(hOut);
+					// console.info('rez_Flush:', rez_Flush, rez_Flush.toString(), uneval(rez_Flush));
+				}, i*1000);
+			}
+			
+			setTimeout(function() {
+				var rez_CloseHandle = ostypes.API('CloseHandle')(hOut);
+				console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
+			}, 5*1000);
+			*/
+			
+			var msg = 'SIGNALING';
+			var buf = ostypes.TYPE.WCHAR.array()(msg);
+			console.log('Sending message:', msg);
+			
+			var rez_WriteFile = ostypes.API('WriteFile')(hOut, buf, buf.length, dwWritten.address(), null);
+			if (!rez_WriteFile) {
+				console.error('WriteFile failed with error: ' + ctypes.winLastError);
+			}
+			console.info('dwWritten:', dwWritten, dwWritten.toString());
+			
+			var rez_CloseHandle = ostypes.API('CloseHandle')(hOut);
+			console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
+			break;
+		
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function IPC_init() {
+	// responds to messages i send
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// target must be string of HWND, which is window target
+
+			//var hIn = ostypes.TYPE.HANDLE();
+			
+			var jsStr_pipeName = 'Profilist';
+			jsStr_pipeName = '\\\\.\\pipe\\' + jsStr_pipeName;
+			var cStr_pipeName = ostypes.TYPE.LPCTSTR.targetType.array()(jsStr_pipeName);
+			var /*rez_CreateNamedPipe*/hIn = ostypes.API('CreateNamedPipe')(
+				cStr_pipeName, // name
+				ostypes.CONST.PIPE_ACCESS_DUPLEX | ostypes.CONST.WRITE_DAC, // open mode
+				ostypes.CONST.PIPE_TYPE_BYTE | ostypes.CONST.PIPE_READMODE_BYTE | ostypes.CONST.PIPE_WAIT, // pipe mode
+				ostypes.CONST.PIPE_UNLIMITED_INSTANCES, // max instances
+				1024, // out buffer size
+				1024, // in buffer size
+				2000, // timeout ms
+				null // security
+			);
+			
+			if (ostypes.HELPER.jscEqual(hIn, ostypes.CONST.INVALID_HANDLE_VALUE)) {
+				throw new Error('Could not create the pipe');
+			}			
+			
+			console.info('hIn:', hIn, hIn.toString(), uneval(hIn));
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			
+			var rez_ConnectNamedPipe = ostypes.API('ConnectNamedPipe')(hIn, null); // on this line, then it just hangs waiting for message
+			console.info('rez_ConnectNamedPipe:', rez_ConnectNamedPipe, rez_ConnectNamedPipe.toString(), uneval(rez_ConnectNamedPipe));
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			
+			var buf = ostypes.TYPE.WCHAR.array(100)();
+			var dwBytesRead = ostypes.TYPE.DWORD();
+			for (;;) {
+				var rez_ReadFile = ostypes.API('ReadFile')(hIn, buf, buf.constructor.size, dwBytesRead.address(), null);
+				if (!rez_ReadFile) {
+					console.info('rez_ReadFile:', rez_ReadFile, rez_ReadFile.toString(), uneval(rez_ReadFile));
+					if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+					//throw new Error('ReadFile failed -- probably EOF');
+					break;
+				}
+			}
+			
+			var rez_DisconnectNamedPipe = ostypes.API('DisconnectNamedPipe')(hIn);
+			console.info('rez_DisconnectNamedPipe:', rez_DisconnectNamedPipe, rez_DisconnectNamedPipe.toString(), uneval(rez_DisconnectNamedPipe));
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			
+			console.info('buf.readStringReplaceMalformed:', ostypes.HELPER.readAsChar8ThenAsChar16(buf));
+			console.info('dwBytesRead:', dwBytesRead, dwBytesRead.toString(), uneval(dwBytesRead));
+			//console.info('buf:', buf, buf.toString(), uneval(buf));
+			
+			var rez_CloseHandle = ostypes.API('CloseHandle')(hIn);
+			console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
+			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
+			
+			break;
+		
+		default:
+			throw new Error('os-unsupported');
+	}
 }
