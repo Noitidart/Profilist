@@ -1,10 +1,12 @@
-importScripts('resource://gre/modules/workers/require.js');
-var PromiseWorker = require('chrome://profilist/content/modules/workers/PromiseWorker.js');
+// Imports
 importScripts('resource://gre/modules/osfile.jsm')
+importScripts('resource://gre/modules/workers/require.js');
+importScripts('chrome://profilist/content/modules/cutils.jsm');
 
+// Globals
 var cOS = OS.Constants.Sys.Name.toLowerCase();
-var info; //populated by init
 
+// Some more imports
 switch (cOS) {
 	case 'winnt':
 	//case 'winmo':
@@ -26,6 +28,22 @@ switch (cOS) {
 		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
 }
 
+// PromiseWorker
+var PromiseWorker = require('chrome://profilist/content/modules/workers/PromiseWorker.js');
+var worker = new PromiseWorker.AbstractWorker();
+worker.dispatch = function(method, args = []) {
+	return self[method](...args);
+};
+worker.postMessage = function(result, ...transfers) {
+	self.postMessage(result, ...transfers);
+};
+worker.close = function() {
+	self.close();
+};
+self.addEventListener('message', msg => worker.handleMessage(msg));
+
+// Init
+var info; //populated by init
 function init(objOfInitVars) {
 	switch (cOS) {
 		case 'winnt':
@@ -50,21 +68,6 @@ function init(objOfInitVars) {
 	
 	info = objOfInitVars;
 }
-
-//start - promiseworker setup
-var worker = new PromiseWorker.AbstractWorker();
-worker.dispatch = function(method, args = []) {
-	return self[method](...args);
-};
-worker.postMessage = function(result, ...transfers) {
-	self.postMessage(result, ...transfers);
-};
-worker.close = function() {
-	self.close();
-};
-
-self.addEventListener('message', msg => worker.handleMessage(msg));
-//end - promiseworker setup
 
 var debugOut = [];
 function debugOutCLEAR() {
@@ -166,6 +169,7 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 }
 
 function test(tst) {
+	/*
 	var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(tst));
 	
 	var curBigIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_BIG, 0);
@@ -178,6 +182,43 @@ function test(tst) {
 	var curSmallIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_SMALL, 0);
 	console.info('curSmallIcon_LRESULT:', curSmallIcon_LRESULT, curSmallIcon_LRESULT.toString(), uneval(curSmallIcon_LRESULT));
 	if (ctypes.winLastError != 0) { console.error('Failed curSmallIcon_LRESULT, winLastError:', ctypes.winLastError) }
+	*/
+	var iconPath = 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_amo-puzzle__CHANNEL-REF_beta.ico';
+	var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+	console.info('hIconBig_HANDLE:', hIconBig_HANDLE.toString(), uneval(hIconBig_HANDLE));
+	
+	//console.log('ding jscGD on HANDLE');
+	//console.info('cutils.jscGetDeepest(hIconBig_HANDLE):', cutils.jscGetDeepest(hIconBig_HANDLE).toString()));
+
+	
+	if (hIconBig_HANDLE.isNull()) {
+		throw new Error('Failed to LoadImage of BIG icon at path: ' + iconPath);
+	}
+	
+	var hIconBig_LPARAM = ctypes.cast(hIconBig_HANDLE, ostypes.TYPE.LPARAM);
+	console.info('hIconBig_LPARAM:', hIconBig_LPARAM.toString(), uneval(hIconBig_LPARAM));
+	
+	var jscGD = cutils.jscGetDeepest(hIconBig_LPARAM);
+	console.info('jscGD:', jscGD.toString(), uneval(jscGD));
+	/*
+	
+	console.log('hIconBig_LPARAM.value:', hIconBig_LPARAM.value);
+	
+	
+	/*
+	cutils.jscEqual(hIconBig_LPARAM, 0);
+	
+		cHwnd = ostypes.TYPE.HWND(ctypes.UInt64('0x1750d4e'));
+		var curBigIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_BIG, 0);
+		console.info('curBigIcon_LRESULT:', curBigIcon_LRESULT.toString(), uneval(curBigIcon_LRESULT));
+		
+		console.log('do jscgd now');
+		
+		var jscGD2 = cutils.jscGetDeepest(curBigIcon_LRESULT);
+		
+		cutils.jscEqual(curBigIcon_LRESULT, 0);
+	*/			
+	
 }
 
 function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatchedFile) {
@@ -221,8 +262,8 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			console.info('hIconBig_HANDLE:', hIconBig_HANDLE, hIconBig_HANDLE.toString(), uneval(hIconBig_HANDLE));
 			console.info('hIconSmall_HANDLE:', hIconSmall_HANDLE, hIconSmall_HANDLE.toString(), uneval(hIconSmall_HANDLE));
 			
-			console.info('ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE):', ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE), ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE).toString(), uneval(ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE)));
-			console.info('ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE):', ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE), ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE).toString(), uneval(ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE)));
+			console.info('cutils.jscGetDeepest(hIconBig_HANDLE):', cutils.jscGetDeepest(hIconBig_HANDLE), cutils.jscGetDeepest(hIconBig_HANDLE).toString(), uneval(cutils.jscGetDeepest(hIconBig_HANDLE)));
+			console.info('cutils.jscGetDeepest(hIconSmall_HANDLE):', cutils.jscGetDeepest(hIconSmall_HANDLE), cutils.jscGetDeepest(hIconSmall_HANDLE).toString(), uneval(cutils.jscGetDeepest(hIconSmall_HANDLE)));
 			
 			if (hIconBig_HANDLE.isNull()) {
 				throw new Error('Failed to LoadImage of BIG icon at path: ' + iconPath);
@@ -231,7 +272,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				throw new Error('Failed to LoadImage of SMALL icon at path: ' + iconPath);
 			}
 
-			if (ostypes.HELPER.jscEqual(hIconSmall_HANDLE, hIconBig_HANDLE)) {
+			if (cutils.jscEqual(hIconSmall_HANDLE, hIconBig_HANDLE)) {
 				console.error('WARNING hIconSmall_HANDLE and hIconBig_HANDLE are equal');
 			} else {
 				console.log('good to go hIconSmall_HANDLE and hIconBig_HANDLE are NOT equal');
@@ -249,7 +290,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				
 				var oldBigIcon = ostypes.API('SetClassLong')(cHwnd/*ostypes.TYPE.HWND(ctypes.UInt64('0x310b38'))*/, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);			
 				console.info('winLastError:', ctypes.winLastError);
-				if (ostypes.HELPER.jscEqual(oldBigIcon, 0)) {
+				if (cutils.jscEqual(oldBigIcon, 0)) {
 					//console.log('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
 					if (ctypes.winLastError != 0) {
 						console.error('Failed to apply BIG icon with setClassLong, winLastError:', ctypes.winLastError);
@@ -259,7 +300,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				// tested and verified with the ostypes.TYPE.HWND(ctypes.UInt64('0x310b38')) above, that if oldBigIcon causes winLastError to go to non-0, then if oldSmallIcon call succeeds, winLastError is set back to 0
 				var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
 				console.info('winLastError:', ctypes.winLastError);
-				if (ostypes.HELPER.jscEqual(oldSmallIcon, 0)) {
+				if (cutils.jscEqual(oldSmallIcon, 0)) {
 					//console.log('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
 					if (ctypes.winLastError != 0) {
 						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
@@ -321,7 +362,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 						*/
 						// im just testin ICON_BIG as it seems everything has that, and not always a small. so on my win81 testin, it looks like if has ICON_BIG it has ICON_SMALL, but sometimes it just has ICON_BIG but no ICON_SMALL. I have never seen a has ICON_SMALL and does not have ICON_BIG yet, but it may be a case so then if i find that true just uncomment the curSmallIcon_LRESULT check in if below and block above
 						
-						if ((ostypes.HELPER.jscEqual(curBigIcon_LRESULT, 0)/* && ostypes.HELPER.jscEqual(curSmallIcon_LRESULT, 0)*/) || (winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big && ostypes.HELPER.jscEqual(curBigIcon_LRESULT, winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big))) {
+						if ((cutils.jscEqual(curBigIcon_LRESULT, 0)/* && cutils.jscEqual(curSmallIcon_LRESULT, 0)*/) || (winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big && cutils.jscEqual(curBigIcon_LRESULT, winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big))) {
 							// apply icon here as it doesnt have a WM_SETICON on it, so like is not DOM Inspector or ChatZilla
 							winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo.push(arrWinHandlePtrStrs[i]);
 							
@@ -349,8 +390,10 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				}
 				if (winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo.length > 0) {
 					// write to disk
-					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big = ostypes.HELPER.jscGetDeepest(hIconBig_LPARAM);
-					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.sm = ostypes.HELPER.jscGetDeepest(hIconSmall_LPARAM);
+					console.log('will now write to disk');
+					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big = cutils.jscGetDeepest(hIconBig_LPARAM);
+					console.log('did jscGD on hIconBig_LPARAM and came out with:', winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big);
+					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.sm = cutils.jscGetDeepest(hIconSmall_LPARAM);
 					tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [winntPathToWatchedFile.fullPathToFile, JSON.stringify(winntChangedIconForeignPID_JSON), {encoding:'utf-8', tmpPath:winntPathToWatchedFile.fullPathToFile+'.tmp'}], winntPathToWatchedFile.fromDir);
 				}
 			}
@@ -466,10 +509,10 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					// START SESSION
 					dwSession = new ostypes.TYPE.DWORD();
 					var szSessionKey = ostypes.TYPE.WCHAR.array(ostypes.CONST.CCH_RM_SESSION_KEY + 1)(); //this is a buffer
-					ostypes.HELPER.memset(szSessionKey, '0', ostypes.CONST.CCH_RM_SESSION_KEY ); // remove + 1 as we want null terminated // can do memset(szSessionKey, ostypes.WCHAR('0'), ostypes.CCH_RM_SESSION_KEY + 1); // js-ctypes initializes at 0 filled: ctypes.char16_t.array(33)(["\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00"])"
+					cutils.memset(szSessionKey, '0', ostypes.CONST.CCH_RM_SESSION_KEY ); // remove + 1 as we want null terminated // can do memset(szSessionKey, ostypes.WCHAR('0'), ostypes.CCH_RM_SESSION_KEY + 1); // js-ctypes initializes at 0 filled: ctypes.char16_t.array(33)(["\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00"])"
 					
 					var rez_RmStartSession = ostypes.API('RmStartSession')(dwSession.address(), 0, szSessionKey);
-					if (!ostypes.HELPER.jscEqual(rez_RmStartSession, ostypes.CONST.ERROR_SUCCESS)) {
+					if (!cutils.jscEqual(rez_RmStartSession, ostypes.CONST.ERROR_SUCCESS)) {
 						throw new Error('RmEndSession Failed with error code:' + rez_RmStartSession);
 					}
 					
@@ -485,7 +528,7 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					var rez_RmRegisterResources = ostypes.API('RmRegisterResources')(dwSession, jsArr.length, pszFilepathsArr, 0, null, 0, null);
 					//console.info('rez_RmRegisterResources:', rez_RmRegisterResources, rez_RmRegisterResources.toString(), uneval(rez_RmRegisterResources));
 					
-					if (!ostypes.HELPER.jscEqual(rez_RmRegisterResources, ostypes.CONST.ERROR_SUCCESS)) {
+					if (!cutils.jscEqual(rez_RmRegisterResources, ostypes.CONST.ERROR_SUCCESS)) {
 						throw new Error('RmRegisterResources Failed with error code:', rez_RmRegisterResources);
 					}
 
@@ -499,10 +542,10 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					
 					var rez_RmGetList_Query = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
 					//console.info('rez_RmGetList_Query:', rez_RmGetList_Query, rez_RmGetList_Query.toString(), uneval(rez_RmGetList_Query));	
-					if (ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_SUCCESS)) {
+					if (cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_SUCCESS)) {
 						//console.log('RmGetList succeeded but there are no processes on this so return as I had capped it to 0, so it should return ERROR_MORE_DATA if there was more than 0, rez_RmGetList_Query:', rez_RmGetList_Query);
 						return 0;
-					} else if (!ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
+					} else if (!cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
 						throw new Error('RmGetList failed, rez_RmGetList_Query:' + rez_RmGetList_Query);
 					}
 					
@@ -518,8 +561,8 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					var rez_RmGetList_Fetch = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
 					console.info('rez_RmGetList_Fetch:', rez_RmGetList_Fetch, rez_RmGetList_Fetch.toString(), uneval(rez_RmGetList_Fetch));	
 									
-					if (!ostypes.HELPER.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_SUCCESS)) {
-						if (ostypes.HELPER.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_MORE_DATA)) {
+					if (!cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_SUCCESS)) {
+						if (cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_MORE_DATA)) {
 							//console.warn('RmGetList found that since last RmGetList there is now new/more processes available, so you can opt to run again but I dont need to as I want the first process which opened it, which should be Firefox profile');
 						} else {
 							throw new Error('RmGetList Failed with error code:' + rez_RmGetList_Fetch);
@@ -534,10 +577,10 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					rezMain = [];
 					for (var i=0; i<rgpi.length; i++) {
 						rezMain.push({
-							pid: ostypes.HELPER.jscGetDeepest(rgpi[i].Process.dwProcessId),
-							appName: ostypes.HELPER.readAsChar8ThenAsChar16(rgpi[i].strAppName),
-							dwLowDateTime: parseInt(ostypes.HELPER.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwLowDateTime)),
-							dwHighDateTime: parseInt(ostypes.HELPER.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwHighDateTime))
+							pid: cutils.jscGetDeepest(rgpi[i].Process.dwProcessId),
+							appName: cutils.readAsChar8ThenAsChar16(rgpi[i].strAppName),
+							dwLowDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwLowDateTime)),
+							dwHighDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwHighDateTime))
 						});
 						//console.log('PROCESS ' + i + ' DETAILS', 'PID:', rgpi[i].Process.dwProcessId, 'Application Name:', rgpi[i].strAppName.readStringReplaceMalformed());
 					}
@@ -562,7 +605,7 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 				if (dwSession && dwSession.value != 0) { // dwSession is new ostypes.DWORD so `if (dwSession)` will always be true, need to fix this here: https://gist.github.com/Noitidart/6203ba1b410b7bacaa82#file-_ff-addon-snippet-winapi_rstrtmgr-js-L234
 					var rez_RmEndSession = ostypes.API('RmEndSession')(dwSession);
 					console.info('rez_RmEndSession:', rez_RmEndSession, rez_RmEndSession.toString(), uneval(rez_RmEndSession));
-					if (!ostypes.HELPER.jscEqual(rez_RmEndSession, ostypes.CONST.ERROR_SUCCESS)) {
+					if (!cutils.jscEqual(rez_RmEndSession, ostypes.CONST.ERROR_SUCCESS)) {
 						//console.error('RmEndSession Failed with error code:', rez_RmEndSession);
 						debugOut.push('failed to end session');
 					} else {
@@ -616,7 +659,7 @@ function IPC_send(utf8or16_string) {
 			);
 			
 			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			if (ostypes.HELPER.jscEqual(hOut, ostypes.CONST.INVALID_HANDLE_VALUE)) {
+			if (cutils.jscEqual(hOut, ostypes.CONST.INVALID_HANDLE_VALUE)) {
 				throw new Error('CreateFile failed with error: ' + ctypes.winLastError);
 			}
 			
@@ -694,7 +737,7 @@ function IPC_init() {
 				null // security
 			);
 			
-			if (ostypes.HELPER.jscEqual(hIn, ostypes.CONST.INVALID_HANDLE_VALUE)) {
+			if (cutils.jscEqual(hIn, ostypes.CONST.INVALID_HANDLE_VALUE)) {
 				throw new Error('Could not create the pipe');
 			}			
 			
@@ -721,7 +764,7 @@ function IPC_init() {
 			console.info('rez_DisconnectNamedPipe:', rez_DisconnectNamedPipe, rez_DisconnectNamedPipe.toString(), uneval(rez_DisconnectNamedPipe));
 			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
 			
-			console.info('buf.readStringReplaceMalformed:', ostypes.HELPER.readAsChar8ThenAsChar16(buf));
+			console.info('buf.readStringReplaceMalformed:', cutils.readAsChar8ThenAsChar16(buf));
 			console.info('dwBytesRead:', dwBytesRead, dwBytesRead.toString(), uneval(dwBytesRead));
 			//console.info('buf:', buf, buf.toString(), uneval(buf));
 			
