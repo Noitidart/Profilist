@@ -116,9 +116,8 @@ current builds icon if dev mode is enabled
 		var deferred_readIniAndMaybeBkp = new Deferred();		
 		deferred_readIniAndMaybeBkp.promise.then(
 			function(aVal) {
-				console.log('Fullfilled - deferred_readIniAndMaybeBkp.promise - ', aVal);
+				console.log('Fullfilled - deferred_readIniAndMaybeBkp.promise - ', {d:{d:aVal}});
 				// start - do stuff here - deferred_readIniAndMaybeBkp.promise
-				console.log('Success - deferred_readIniAndMaybeBkp - aVal:', aVal);
 				//parse objs
 				iniStr = aVal; //or can do JSON.stringify(ini);
 				//iniStr_thatAffectDOM
@@ -333,7 +332,7 @@ current builds icon if dev mode is enabled
 		
 		promise_readIni.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_readIni - ', aVal);
+				console.log('Fullfilled - promise_readIni - ', {b:{b:aVal}});
 				// start - do stuff here - promise_readIni
 				var readStr = aVal;
 				if (iniReadStr == readStr) {
@@ -386,7 +385,7 @@ current builds icon if dev mode is enabled
 						var promise_readIniBkp = read_encoded(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
 						promise_readIniBkp.then(
 							function(aVal) {
-								console.log('Fullfilled - promise_readIniBkp - ', aVal);
+								console.log('Fullfilled - promise_readIniBkp - ', {c:{c:aVal}});
 								// start - do stuff here - promise_readIniBkp
 								var readStr = aVal;
 								//i dont do the iniReadStr == readStr check here, BECAUSE what if user made new profiles with the profile manager, then this backup method needs to be called. im thinking that even if backup restored stuff to ini object, and the iniReadStr is prior to backup, then on next read, if it finds iniStr is same then it wont blah blah blah im thinking no need
@@ -1200,10 +1199,22 @@ function initProfToolkit() {
 	
 	// start - define profilist_data structure and paths
 	profToolkit.path_profilistData_root = OS.Path.join(profToolkit.path_iniDir, 'profilist_data');
+	profToolkit.path_profilistData_root__fromDir = profToolkit.path_iniDir; // should be the first bit from os.path.join of path_profilistData_root // for when dirs need to be made from a dir that exists for sure
 	profToolkit.path_iniBkpFile = OS.Path.join(profToolkit.path_profilistData_root, 'profiles.ini.profilist.bkp'); // profToolkit.path_iniFile + '.profilist.bkp'; // path_iniBkpFile is located in this root folder at least per my decision as of now
 	profToolkit.path_profilistData_iconsets = OS.Path.join(profToolkit.path_profilistData_root, 'iconsets');
 	profToolkit.path_profilistData_launcherIcons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
 	profToolkit.path_profilistData_launcherExes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
+	
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			profToolkit.path_profilistData_winntWatchDir = OS.Path.join(profToolkit.path_profilistData_root, 'winnt_watch_dir');
+			break;
+			
+		default:
+			// do nothing
+	}
 	// end - define profilist_data structure and paths
 	
 	//get relative path
@@ -3518,13 +3529,15 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 		switch (cOS) {
 			case 'winnt':
 				var cWinHandlePtrStr;
+				var winntPathToWatchedFile = null;
 				var do_theApply = function() {					
 					console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
 					useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
 					console.info('will apply this icon:', useIconNameStr);
 					var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
 						useIconNameStr,		// iconPath
-						[cWinHandlePtrStr]	// arrWinHandlePtrStrs
+						cWinHandlePtrStr,	// arrWinHandlePtrStrs
+						winntPathToWatchedFile	// samePid
 					]);
 					promise_changeIconForWindows.then(
 						function(aVal) {
@@ -3556,7 +3569,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 											  .treeOwner
 											  .QueryInterface(Ci.nsIInterfaceRequestor)
 											  .getInterface(Ci.nsIBaseWindow);
-						cWinHandlePtrStr = cBaseWin.nativeHandle;
+						cWinHandlePtrStr = [cBaseWin.nativeHandle];
 						
 						do_theApply();
 					} else {
@@ -3592,16 +3605,20 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 						};
 						
 						var do_getWinHandleForPid = function(aProfPID) {
-							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID]);
+							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true]);
 							promise_getWinHandleForPid.then(
 								function(aVal) {
 									console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
 									// start - do stuff here - promise_getWinHandleForPid
 									// aVal is a string to pointer on success, else it is 0
-									if (aVal !== 0) {
+									if (!aVal) {
 										// no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`
 										deferredMain_updateIconToAllWindows.resolve(false);
 									} else {
+										winntPathToWatchedFile = {
+											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, aProfilePath.replace(/([\\*:?<>|\/\"])/g, '-') + '.json'),
+											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
+										};
 										cWinHandlePtrStr = aVal;
 										do_theApply();
 									}
@@ -5540,7 +5557,7 @@ function makeLauncher(for_ini_key, ch_name) {
 			
 			// start - do_makeTopDirs
 			var do_makeTopDirs = function() {
-				var promise_makeTopLevelDirs = makeDir_Bug934283(path_toLauncherContents, {from:profToolkit.path_iniDir});
+				var promise_makeTopLevelDirs = makeDir_Bug934283(path_toLauncherContents, {from:profToolkit.path_profilistData_root__fromDir});
 				promise_makeTopLevelDirs.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_makeTopLevelDirs - ', aVal);
@@ -6590,7 +6607,7 @@ function pickerIconset(tWin) {
             // reader.result contains the ArrayBuffer.			
 			var arrview = new Uint8Array(reader.result);
 			
-			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp', encoding:'utf-8'}], profToolkit.path_iniDir);
+			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp'}], profToolkit.path_iniDir);
 
 			promise_writeArrView.then(
 				function(aVal) {
@@ -8225,6 +8242,45 @@ function mac_doPathsUNoveride() {
 }
 //end - mac over and unover ride stuff
 
+function startProfilistWorker() {
+	
+	ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
+	
+	var objInfo = {};
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			objInfo.OSVersion = Services.sysinfo.getProperty('version');
+			break;
+		default:
+			// data supplied for all os
+			objInfo.FFVersion = Services.appinfo.version;
+			objInfo.FFVersionLessThan30 = (Services.vc.compare(Services.appinfo.version, 30) < 0);
+	}
+	
+	var promise_initWorker = ProfilistWorker.post('init', [objInfo]);
+	promise_initWorker.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_initWorker - ', aVal);
+			// start - do stuff here - promise_initWorker
+			// end - do stuff here - promise_initWorker
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_initWorker', aReason:aReason};
+			console.error('Rejected - promise_initWorker - ', rejObj);
+			//deferred_createProfile.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_initWorker', aCaught:aCaught};
+			console.error('Caught - promise_initWorker - ', rejObj);
+			//deferred_createProfile.reject(rejObj);
+		}
+	);
+	// should maybe test if the promise was successful
+}
+
 function startup(aData, aReason) {
 //	console.log('in startup');
 	// todo: check tie path, if current path does not match tie path then restart at that path (MAYBE)
@@ -8233,7 +8289,7 @@ function startup(aData, aReason) {
 	var do_profilistStartup = function() { // wrap this so have time to do whatever os specific stuff before starting up profilist
 		self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
 		PromiseWorker = Cu.import(self.chrome_path + 'modules/PromiseWorker.jsm').BasePromiseWorker;
-		ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
+		startProfilistWorker();
 		//console.log('aData', aData);
 	//	//console.log('initing prof toolkit');
 		initProfToolkit();
@@ -8454,9 +8510,9 @@ function makeDir_Bug934283(path, options) {
 	// for example: path should be: `OS.Path.join('C:', 'thisDirExistsForSure', 'may exist', 'may exist2')`, and `from` should be `OS.Path.join('C:', 'thisDirExistsForSure')`
 	// options of like ignoreExisting is exercised on final dir
 	
-	if (!('from' in options)) {
-		console.error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
-		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
+	if (!options || !('from' in options)) {
+		console.error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists, you must provide options arg and the from key');
+		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists, you must provide options arg and the from key');
 	}
 
 	if (path.toLowerCase().indexOf(options.from.toLowerCase()) == -1) {
@@ -8627,7 +8683,7 @@ function getTxtDecodr() {
 		txtDecodr = new TextDecoder();
 	}
 	return txtDecodr;
-} 
+}
 
 function read_encoded(path, options) {
 	// because the options.encoding was introduced only in Fx30, this function enables previous Fx to use it
@@ -8636,12 +8692,12 @@ function read_encoded(path, options) {
 	
 	var deferred_read_encoded = new Deferred();
 	
-	if (!options || !('encoding' in options)) {
-		deferred_read_encoded.reject('Must pass encoding in options object');
+	if (options && !('encoding' in options)) {
+		deferred_read_encoded.reject('Must pass encoding in options object, otherwise just use OS.File.read');
 		return deferred_read_encoded.promise;
 	}
 	
-	if (Services.vc.compare(Services.appinfo.version, 30) < 0) { // tests if version is less then 30
+	if (options && Services.vc.compare(Services.appinfo.version, 30) < 0) { // tests if version is less then 30
 		//var encoding = options.encoding; // looks like i dont need to pass encoding to TextDecoder, not sure though for non-utf-8 though
 		delete options.encoding;
 	}
@@ -8649,7 +8705,7 @@ function read_encoded(path, options) {
 	
 	promise_readIt.then(
 		function(aVal) {
-			console.log('Fullfilled - promise_readIt - ', aVal);
+			console.log('Fullfilled - promise_readIt - ', {a:{a:aVal}});
 			// start - do stuff here - promise_readIt
 			var readStr;
 			if (Services.vc.compare(Services.appinfo.version, 30) < 0) { // tests if version is less then 30

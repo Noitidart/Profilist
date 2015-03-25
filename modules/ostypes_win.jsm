@@ -280,6 +280,7 @@ var winInit = function() {
 		INVALID_HANDLE_VALUE: -1,
 		OPEN_EXISTING: 3,
 		PIPE_ACCESS_DUPLEX: 0x00000003,
+		PIPE_ACCESS_INBOUND: 0x00000001,
 		PIPE_READMODE_BYTE: 0x00000000,
 		PIPE_TYPE_BYTE: 0x00000000,
 		PIPE_UNLIMITED_INSTANCES: 255,
@@ -307,6 +308,7 @@ var winInit = function() {
 		ICON_SMALL: 0,
 		ICON_BIG: 1,
 		WM_COPYDATA: 0x004A,
+		WM_GETICON: 0x007F,
 		WM_SETICON: 0x0080,
 		
 		// SetClassLong
@@ -609,7 +611,7 @@ var winInit = function() {
 			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
 			 * );
 			 */
-			return lib('Kernel32').declare('ConnectNamedPipe', self.TYPE.WINABI,
+			return lib('kernel32').declare('ConnectNamedPipe', self.TYPE.WINABI,
 				self.TYPE.BOOL,			// return
 				self.TYPE.HANDLE,		// hNamedPipe
 				self.TYPE.LPOVERLAPPED	// lpOverlapped
@@ -621,7 +623,7 @@ var winInit = function() {
 			 *   __in_  HANDLE hObject
 			 * );
 			 */
-			return lib('Kernel32').declare('CloseHandle', self.TYPE.WINABI,
+			return lib('kernel32').declare('CloseHandle', self.TYPE.WINABI,
 				self.TYPE.BOOL,		// return
 				self.TYPE.HANDLE	// hObject
 			);
@@ -639,7 +641,7 @@ var winInit = function() {
 			 *    __in_opt_  LPSECURITY_ATTRIBUTES lpSecurityAttributes
 			 *  );
 			 */
-			return lib('Kernel32').declare('CreateNamedPipeW', self.TYPE.WINABI,
+			return lib('kernel32').declare('CreateNamedPipeW', self.TYPE.WINABI,
 				self.TYPE.HANDLE,					// return
 				self.TYPE.LPCTSTR,					// lpName
 				self.TYPE.DWORD,					// dwOpenMode
@@ -663,7 +665,7 @@ var winInit = function() {
 			 *   __in_opt_  HANDLE hTemplateFile
 			 * );
 			 */
-			return lib('Kernel32').declare('CreateFileW', self.TYPE.WINABI,
+			return lib('kernel32').declare('CreateFileW', self.TYPE.WINABI,
 				self.TYPE.HANDLE,					// return
 				self.TYPE.LPCTSTR,					// lpFileName
 				self.TYPE.DWORD,					// dwDesiredAccess
@@ -680,7 +682,7 @@ var winInit = function() {
 			 *   __in_  HANDLE hNamedPipe
 			 * );
 			 */
-			return lib('Kernel32').declare('DisconnectNamedPipe', self.TYPE.WINABI,
+			return lib('kernel32').declare('DisconnectNamedPipe', self.TYPE.WINABI,
 				self.TYPE.BOOL,		// return
 				self.TYPE.HANDLE	// hNamedPipe
 			);
@@ -695,7 +697,7 @@ var winInit = function() {
 			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
 			 * );
 			 */
-			return lib('Kernel32').declare('ReadFile', self.TYPE.WINABI,
+			return lib('kernel32').declare('ReadFile', self.TYPE.WINABI,
 				self.TYPE.BOOL,				// return
 				self.TYPE.HANDLE,			// hFile
 				self.TYPE.LPVOID,			// lpBuffer
@@ -714,7 +716,7 @@ var winInit = function() {
 			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
 			 * );
 			 */
-			return lib('Kernel32').declare('WriteFile', self.TYPE.WINABI,
+			return lib('kernel32').declare('WriteFile', self.TYPE.WINABI,
 				self.TYPE.BOOL,			// return
 				self.TYPE.HANDLE,		// hFile
 				self.TYPE.LPCVOID,		// lpBuffer
@@ -730,14 +732,49 @@ var winInit = function() {
 			 *   __in_  DWORD nTimeOut
 			 * );
 			 */
-			return lib('Kernel32').declare('WaitNamedPipeW', self.TYPE.WINABI,
+			return lib('kernel32').declare('WaitNamedPipeW', self.TYPE.WINABI,
 				self.TYPE.BOOL,		// return
 				self.TYPE.LPCTSTR,	// lpNamedPipeName
 				self.TYPE.DWORD		// nTimeOut
 			);
 		},
-		FlushFileBuffers: function() {
-			return lib('Kernel32').declare('FlushFileBuffers', self.TYPE.WINABI, self.TYPE.BOOL, self.TYPE.HANDLE);
+		SetNamedPipeHandleState: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365787%28v=vs.85%29.aspx
+			 * BOOL WINAPI SetNamedPipeHandleState(
+			 *   __in_      HANDLE hNamedPipe,
+			 *   __in_opt_  LPDWORD lpMode,
+			 *   __in_opt_  LPDWORD lpMaxCollectionCount,
+			 *   __in_opt_  LPDWORD lpCollectDataTimeout
+			 * );
+			 */
+			return lib('kernel32').declare('SetNamedPipeHandleState', self.TYPE.WINABI,
+				self.type.HANDLE,	// hNamedPipe
+				self.type.LPDWORD,  // lpMode
+				self.type.LPDWORD,  // lpMaxCollectionCount
+				self.type.LPDWORD  // lpCollectDataTimeout
+			);
+		},
+		TransactNamedPipe: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365790%28v=vs.85%29.aspx
+			 * BOOL WINAPI TransactNamedPipe(
+			 *   __in_         HANDLE hNamedPipe,
+			 *   __in_         LPVOID lpInBuffer,
+			 *   __in_         DWORD nInBufferSize,
+			 *   __out_        LPVOID lpOutBuffer,
+			 *   __in_         DWORD nOutBufferSize,
+			 *   __out_        LPDWORD lpBytesRead,
+			 *   __inout_opt_  LPOVERLAPPED lpOverlapped
+			 * );
+			 */
+			return lib('kernel32').declare('TransactNamedPipe', self.TYPE.WINABI,
+				self.TYPE.HANDLE,		// hNamedPipe,
+				self.TYPE.LPVOID,		// lpInBuffer,
+				self.TYPE.DWORD,		// nInBufferSize,
+				self.TYPE.LPVOID,		// lpOutBuffer,
+				self.TYPE.DWORD,		// nOutBufferSize,
+				self.TYPE.LPDWORD,		// lpBytesRead,
+				self.TYPE.LPOVERLAPPED	// lpOverlapped
+			);
 		}
 	};
 	// end - predefine your declares here
@@ -746,7 +783,7 @@ var winInit = function() {
 	this.HELPER = {
 		jscGetDeepest: function(obj) {
 			try {
-				//console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj, obj.toString());
+				//console.info(Math.round(Math.random() * 10) + ' starting jscGetDeepest:', obj.toString());
 			} catch(ignore) {}
 
 			while (typeof obj === 'object' && obj !== null && ('contents' in obj || 'value' in obj)) {
@@ -754,7 +791,7 @@ var winInit = function() {
 					try {
 						obj = obj.contents;
 					} catch (ex if ex.message == 'cannot get contents of undefined size') {
-						console.error('breaking as got tha contents size undef error, so obj is now:', obj.toString(), obj);
+						console.error('breaking as got tha contents size undef error, so obj is now:', obj.toString());
 						break;
 					}
 				} else if ('value' in obj) {
@@ -765,6 +802,7 @@ var winInit = function() {
 			
 			if (obj !== null && typeof obj != 'undefined') {
 				obj = obj.toString();
+				console.log('jscGD - did tostring:', obj);
 			}
 			//console.info('finaled jscGetDeepest:', obj);
 			return obj;

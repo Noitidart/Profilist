@@ -3,6 +3,7 @@ var PromiseWorker = require('chrome://profilist/content/modules/workers/PromiseW
 importScripts('resource://gre/modules/osfile.jsm')
 
 var cOS = OS.Constants.Sys.Name.toLowerCase();
+var info; //populated by init
 
 switch (cOS) {
 	case 'winnt':
@@ -23,6 +24,31 @@ switch (cOS) {
 		break;
 	default:
 		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+}
+
+function init(objOfInitVars) {
+	switch (cOS) {
+		case 'winnt':
+		//case 'winmo':
+		//case 'wince':
+			var requiredKeys = ['OSVersion'];
+			for (var i=0; i<requiredKeys.length; i++) {
+				if (!(requiredKeys[i] in objOfInitVars)) {
+					throw new Error('failed to init, required key of ' + requiredKeys[i] + ' not found in info obj');
+				}
+			}
+			break;
+		default:
+			// do nothing
+			var requiredKeys = ['FFVersion', 'FFVersionLessThan30'];
+			for (var i=0; i<requiredKeys.length; i++) {
+				if (!(requiredKeys[i] in objOfInitVars)) {
+					throw new Error('failed to init, required key of ' + requiredKeys[i] + ' not found in info obj');
+				}
+			}
+	}
+	
+	info = objOfInitVars;
 }
 
 //start - promiseworker setup
@@ -139,7 +165,22 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 	return rezMain;
 }
 
-function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
+function test(tst) {
+	var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(tst));
+	
+	var curBigIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_BIG, 0);
+	console.info('curBigIcon_LRESULT:', curBigIcon_LRESULT, curBigIcon_LRESULT.toString(), uneval(curBigIcon_LRESULT));
+	if (ctypes.winLastError != 0) { console.error('Failed curBigIcon_LRESULT, winLastError:', ctypes.winLastError) }
+	
+	var curBigIcon_HANDLE = ostypes.TYPE.HANDLE(curBigIcon_LRESULT); //ctypes.cast(curBigIcon, ostypes.TYPE.HANDLE);
+	console.info('curBigIcon_HANDLE:', curBigIcon_HANDLE, curBigIcon_HANDLE.toString(), uneval(curBigIcon_HANDLE));
+	
+	var curSmallIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_SMALL, 0);
+	console.info('curSmallIcon_LRESULT:', curSmallIcon_LRESULT, curSmallIcon_LRESULT.toString(), uneval(curSmallIcon_LRESULT));
+	if (ctypes.winLastError != 0) { console.error('Failed curSmallIcon_LRESULT, winLastError:', ctypes.winLastError) }
+}
+
+function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatchedFile) {
 	// arrWinHandlePtrStrs is an array of strings of window pointers, https://developer.mozilla.org/en-US/Add-ons/Code_snippets/Finding_Window_Handles#OS_Specific_Examples_Using_nsIBaseWindow_-%3E_nativeHandle
 	// iconPath is an os path
 	// winHandlePtrStrs should be passed in as array of arguments, requires at least 1
@@ -156,22 +197,20 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-			// arrWinHandlePtrStrs, just needs to be a single element
+			// mark samePid to true if targeting update same profile this is script is running from
+				// arrWinHandlePtrStrs, just needs to be a single element
+			// else if false, it will update all windows icons with WM_SETICON, write to file the handle of the newBigIcon and newSmIcon
+				// the WM_GETICON of it is null change icon (as first apply to window)
+				// if its not null, check to see if file object has this hwnd. if it does and the WM_GETICON handle matches wats in the file, then do WM_SETICON on it, and update file that its last icon handle was the newBigIcon and newSmIcon
+				// written to file obj look like this: {lastAppliedIconHandle: {big: '0x65454', sm: '0x698798'}, hwndsAppliedTo: ['0x554', '0x5054', ...]
 			// returns
 				// if LOCKED - 1
 				// if NOT locked - 0
 			
-			debugOutCLEAR();
-			
-			debugOut.push('iconPath: ' + iconPath);
-			debugOut.push('arrWinHandlePtrStrs: ' + arrWinHandlePtrStrs.toString());
-			debugOut.push('arrWinHandlePtrStrs[0]: ' + arrWinHandlePtrStrs[0]);
-			debugOutWRITE(true);
+			console.log('iconPath: ' + iconPath);
+			console.log('arrWinHandlePtrStrs: ' + arrWinHandlePtrStrs.toString());
 			
 			var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[0]));
-			
-			debugOut.push(['ostypes.CONST.IMAGE_ICON: ', ostypes.CONST.IMAGE_ICON.toString(), ostypes.CONST.IMAGE_ICON].join(' '));
-			debugOut.push(['ostypes.CONST.LR_LOADFROMFILE: ', ostypes.CONST.LR_LOADFROMFILE.toString(), ostypes.CONST.LR_LOADFROMFILE].join(' '));
 			
 			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 			var hIconSmall_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
@@ -179,91 +218,142 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 			
 			// todo: ask if LoadImage is really taking the right size from the the ico CONTAINER, as im supplying containers
 			
-			debugOut.push('hIconBig_HANDLE: ' + hIconBig_HANDLE.toString());
-			debugOut.push('hIconSmall_HANDLE: ' + hIconSmall_HANDLE.toString());
+			console.info('hIconBig_HANDLE:', hIconBig_HANDLE, hIconBig_HANDLE.toString(), uneval(hIconBig_HANDLE));
+			console.info('hIconSmall_HANDLE:', hIconSmall_HANDLE, hIconSmall_HANDLE.toString(), uneval(hIconSmall_HANDLE));
+			
+			console.info('ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE):', ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE), ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE).toString(), uneval(ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE)));
+			console.info('ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE):', ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE), ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE).toString(), uneval(ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE)));
 			
 			if (hIconBig_HANDLE.isNull()) {
-				debugOut.push('FAILED to LoadImage of big icon');
+				throw new Error('Failed to LoadImage of BIG icon at path: ' + iconPath);
 			}
 			if (hIconSmall_HANDLE.isNull()) {
-				debugOut.push('FAILED to LoadImage of small icon');
+				throw new Error('Failed to LoadImage of SMALL icon at path: ' + iconPath);
 			}
-			debugOut.push(['ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE): ', ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE), ostypes.HELPER.jscGetDeepest(hIconSmall_HANDLE).toString()].join(' '));
-			debugOut.push(['ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE): ', ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE), ostypes.HELPER.jscGetDeepest(hIconBig_HANDLE).toString()].join(' '));
+
 			if (ostypes.HELPER.jscEqual(hIconSmall_HANDLE, hIconBig_HANDLE)) {
-				debugOut.push('WARNING hIconSmall_HANDLE and hIconBig_HANDLE are equal');
+				console.error('WARNING hIconSmall_HANDLE and hIconBig_HANDLE are equal');
 			} else {
-				debugOut.push('good to go hIconSmall_HANDLE and hIconBig_HANDLE are NOT equal');
+				console.log('good to go hIconSmall_HANDLE and hIconBig_HANDLE are NOT equal');
 			}
 			
-			debugOutWRITE(true);
-			
-			/*
-			var hIconBig_LPARAM = ctypes.cast(hIconBig_HANDLE, ostypes.TYPE.LPARAM);
-			var hIconSmall_LPARAM = ctypes.cast(hIconSmall_HANDLE, ostypes.TYPE.LPARAM);
-			
-			debugOut.push('hIconBig_LPARAM: ' + hIconBig_LPARAM.toString());
-			debugOut.push('hIconSmall_LPARAM: ' + hIconSmall_LPARAM.toString());			
-			
-			var successBig = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, hIconBig_LPARAM);
-			var successSmall = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, hIconSmall_LPARAM);
-			// SendMessage //if it was success it will return 0? im not sure. on first time running it, and it was succesful it returns 0 for some reason
-			
-			debugOut.push('successBig: ' + successBig.toString());
-			debugOut.push('successSmall: ' + successSmall.toString());
-			
-			// testing if pinned icon changes
-			var gwOwner_HWND = ostypes.API('GetWindow')(cHwnd, ostypes.CONST.GW_OWNER);
-			debugOut.push(['gwOwner_HWND: ', gwOwner_HWND, gwOwner_HWND.toString()].join(' '));
-			
-			var successBigGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, hIconBig_LPARAM);
-			var successSmallGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, hIconSmall_LPARAM);			
-			debugOut.push(['successBigGwowner: ', successBigGwowner, successBigGwowner.toString()].join(' '));
-			debugOut.push(['successSmallGwowner: ', successSmallGwowner, successSmallGwowner.toString()].join(' '));
-			*/
-			
-			
-			// i noticed with SetClassLong/Ptr changing the icon when it changes in taskbar(unpinned) then the on hover color change which is based on the dominant color of the icon doesnt take after applying it once, maybe i need to destroy the old icon or something
-			var hIconBig_LONG_PTR = ctypes.cast(hIconBig_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
-			var hIconSmall_LONG_PTR = ctypes.cast(hIconSmall_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
-			
-			debugOut.push('hIconBig_LONG_PTR: ' + hIconBig_LONG_PTR.toString());
-			debugOut.push('hIconSmall_LONG_PTR: ' + hIconSmall_LONG_PTR.toString());
-			
-			ctypes.winLastError = 0;
-			debugOut.push('winLastError pre oldBigIcon: ' + ctypes.winLastError);
-			var oldBigIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);
-			debugOut.push('winLastError post oldBigIcon: ' + ctypes.winLastError);
-			ctypes.winLastError = 0;
-			debugOut.push('winLastError pre oldSmallIcon: ' + ctypes.winLastError);
-			var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
-			debugOut.push('winLastError post oldSmallIcon: ' + ctypes.winLastError);
-			
-			if (ostypes.HELPER.jscEqual(oldBigIcon, 0)) {
-				debugOut.push('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
+			if (!winntPathToWatchedFile) {
+				// update icon to pid that owns this thread
+				// i noticed with SetClassLong/Ptr changing the icon when it changes in taskbar(unpinned) then the on hover color change which is based on the dominant color of the icon doesnt take after applying it once, maybe i need to destroy the old icon or something
+				var hIconBig_LONG_PTR = ctypes.cast(hIconBig_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+				var hIconSmall_LONG_PTR = ctypes.cast(hIconSmall_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+				
+				console.info('hIconBig_LONG_PTR:', hIconBig_LONG_PTR, hIconBig_LONG_PTR.toString(), uneval(hIconBig_LONG_PTR));
+				console.info('hIconSmall_LONG_PTR:', hIconSmall_LONG_PTR, hIconSmall_LONG_PTR.toString(), uneval(hIconSmall_LONG_PTR));
+				
+				
+				var oldBigIcon = ostypes.API('SetClassLong')(cHwnd/*ostypes.TYPE.HWND(ctypes.UInt64('0x310b38'))*/, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);			
+				console.info('winLastError:', ctypes.winLastError);
+				if (ostypes.HELPER.jscEqual(oldBigIcon, 0)) {
+					//console.log('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
+					if (ctypes.winLastError != 0) {
+						console.error('Failed to apply BIG icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+				}
+				
+				// tested and verified with the ostypes.TYPE.HWND(ctypes.UInt64('0x310b38')) above, that if oldBigIcon causes winLastError to go to non-0, then if oldSmallIcon call succeeds, winLastError is set back to 0
+				var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
+				console.info('winLastError:', ctypes.winLastError);
+				if (ostypes.HELPER.jscEqual(oldSmallIcon, 0)) {
+					//console.log('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
+					if (ctypes.winLastError != 0) {
+						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+				}
+				// getting ERROR_ACCESS_DENIED (ctypes.winLastError == 5) when trying to setClassLongPtr on other process
+					// possible work around:
+						// https://social.msdn.microsoft.com/Forums/vstudio/en-US/25b8e6e4-d5bd-4541-8fa8-9df8f7af4206/moving-a-non-mine-window?forum=vclanguage
+						// http://www.codeproject.com/Articles/4610/Three-Ways-to-Inject-Your-Code-into-Another-Proces
+				
+				/*
+				// todo: check if i need to destroy/release these icons, and when
+				var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig_HANDLE);
+				var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall_HANDLE);
+				
+				debugOut.push('rez_destroyBig: ' + rez_destroyBig.toString());
+				debugOut.push('rez_destroySmall: ' + rez_destroySmall.toString());
+				*/
+			} else {
+				// update icon to pid that does not own this PromiseWorker thread
+				
+				var hIconBig_LPARAM = ctypes.cast(hIconBig_HANDLE, ostypes.TYPE.LPARAM);
+				console.info('hIconBig_LPARAM:', hIconBig_LPARAM, hIconBig_LPARAM.toString(), uneval(hIconBig_LPARAM));
+				
+				var hIconSmall_LPARAM = ctypes.cast(hIconSmall_HANDLE, ostypes.TYPE.LPARAM);
+				console.info('hIconSmall_LPARAM:', hIconSmall_LPARAM, hIconSmall_LPARAM.toString(), uneval(hIconSmall_LPARAM));
+				
+				
+				try {
+					var winntChangedIconForeignPID_JSON = JSON.parse(read_encoded(winntPathToWatchedFile.fullPathToFile, {encoding:'utf-8'}));
+					winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo = []; // clear the applied to array as this is only used by on activate of the window of ff profile that has profilist installed, it goes through these hwnd and if they still exist it removes the WM_SETICON so it can make the SetClassLong icon show through. it also does SetClassLong so to handle future opened windows
+				} catch (aReason if aReason.becauseNoSuchFile) {
+					// file not existing is ok
+					console.log('making object');
+					var winntChangedIconForeignPID_JSON = {
+						lastAppliedIcon_LRESULT: { // LRESULT and LPARAM are both LONG_PTR
+							big: null,
+							sm: null
+						},
+						hwndPtrStrsAppliedTo: []
+					};
+					console.info('winntChangedIconForeignPID_JSON:', JSON.stringify(winntChangedIconForeignPID_JSON));
+				}
+				
+				for (var i=0; i<arrWinHandlePtrStrs.length; i++) {
+						cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[i]));
+						var curBigIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_BIG, 0);
+						console.info('curBigIcon_LRESULT:', curBigIcon_LRESULT, curBigIcon_LRESULT.toString(), uneval(curBigIcon_LRESULT));
+						if (ctypes.winLastError != 0) { console.error('Failed curBigIcon_LRESULT, winLastError:', ctypes.winLastError); continue; }
+						
+						//var curBigIcon_HANDLE = ostypes.TYPE.HANDLE(curBigIcon_LRESULT); //ctypes.cast(curBigIcon, ostypes.TYPE.HANDLE);
+						//console.info('curBigIcon_HANDLE:', curBigIcon_HANDLE, curBigIcon_HANDLE.toString(), uneval(curBigIcon_HANDLE));
+						// see study here on HANDLE an LRESULT of the icons are same reardless of PID accessed from: https://gist.github.com/Noitidart/35d0cd738830c9c2f417#comment-1419624
+						
+						/*
+						var curSmallIcon_LRESULT = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_GETICON, ostypes.CONST.ICON_SMALL, 0);
+						console.info('curSmallIcon_LRESULT:', curSmallIcon_LRESULT, curSmallIcon_LRESULT.toString(), uneval(curSmallIcon_LRESULT));
+						if (ctypes.winLastError != 0) { console.error('Failed curSmallIcon_LRESULT, winLastError:', ctypes.winLastError) }
+						*/
+						// im just testin ICON_BIG as it seems everything has that, and not always a small. so on my win81 testin, it looks like if has ICON_BIG it has ICON_SMALL, but sometimes it just has ICON_BIG but no ICON_SMALL. I have never seen a has ICON_SMALL and does not have ICON_BIG yet, but it may be a case so then if i find that true just uncomment the curSmallIcon_LRESULT check in if below and block above
+						
+						if ((ostypes.HELPER.jscEqual(curBigIcon_LRESULT, 0)/* && ostypes.HELPER.jscEqual(curSmallIcon_LRESULT, 0)*/) || (winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big && ostypes.HELPER.jscEqual(curBigIcon_LRESULT, winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big))) {
+							// apply icon here as it doesnt have a WM_SETICON on it, so like is not DOM Inspector or ChatZilla
+							winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo.push(arrWinHandlePtrStrs[i]);
+							
+							var oldBigIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, hIconBig_LPARAM);
+							console.info('oldBigIcon:', oldBigIcon.toString(), uneval(oldBigIcon));
+							if (ctypes.winLastError != 0) { console.error('Failed oldBigIcon, winLastError:', ctypes.winLastError); }
+							
+							var oldSmallIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, hIconSmall_LPARAM);
+							console.info('oldSmallIcon:', oldSmallIcon.toString(), uneval(oldSmallIcon));
+							if (ctypes.winLastError != 0) { console.error('Failed oldSmallIcon, winLastError:', ctypes.winLastError); }
+							// SendMessage //if it was success it will return 0? im not sure. on first time running it, and it was succesful it returns 0 for some reason
+							
+							//// testing if pinned icon changes per: 
+							// var gwOwner_HWND = ostypes.API('GetWindow')(cHwnd, ostypes.CONST.GW_OWNER);
+							// console.info('gwOwner_HWND:', gwOwner_HWND.toString(), uneval(gwOwner_HWND));
+							// if (ctypes.winLastError != 0) { console.error('Failed gwOwner_HWND, winLastError:', ctypes.winLastError); }
+
+							// debugOut.push(['gwOwner_HWND: ', gwOwner_HWND, gwOwner_HWND.toString()].join(' '));
+							
+							// var successBigGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, hIconBig_LPARAM);
+							// var successSmallGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, hIconSmall_LPARAM);			
+							// debugOut.push(['successBigGwowner: ', successBigGwowner, successBigGwowner.toString()].join(' '));
+							// debugOut.push(['successSmallGwowner: ', successSmallGwowner, successSmallGwowner.toString()].join(' '));
+						}
+				}
+				if (winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo.length > 0) {
+					// write to disk
+					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big = ostypes.HELPER.jscGetDeepest(hIconBig_LPARAM);
+					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.sm = ostypes.HELPER.jscGetDeepest(hIconSmall_LPARAM);
+					tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [winntPathToWatchedFile.fullPathToFile, JSON.stringify(winntChangedIconForeignPID_JSON), {encoding:'utf-8', tmpPath:winntPathToWatchedFile.fullPathToFile+'.tmp'}], winntPathToWatchedFile.fromDir);
+				}
 			}
-			if (ostypes.HELPER.jscEqual(oldSmallIcon, 0)) {
-				debugOut.push('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
-			}
-			
-			//todo: maybe there is a way to tell if application was successful or not?
-			
-			debugOut.push(['oldBigIcon: ', oldBigIcon, oldBigIcon.toString()].join(' '));
-			debugOut.push(['oldSmallIcon: ', oldSmallIcon, oldSmallIcon.toString()].join(' '));
-			
-			// getting ERROR_ACCESS_DENIED (ctypes.winLastError == 5) when trying to setClassLongPtr on other process
-				// possible work around:
-					// https://social.msdn.microsoft.com/Forums/vstudio/en-US/25b8e6e4-d5bd-4541-8fa8-9df8f7af4206/moving-a-non-mine-window?forum=vclanguage
-					// http://www.codeproject.com/Articles/4610/Three-Ways-to-Inject-Your-Code-into-Another-Proces
-			
-			/*
-			// todo: check if i need to destroy/release these icons, and when
-			var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig_HANDLE);
-			var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall_HANDLE);
-			
-			debugOut.push('rez_destroyBig: ' + rez_destroyBig.toString());
-			debugOut.push('rez_destroySmall: ' + rez_destroySmall.toString());
-			*/
 			
 			debugOutWRITE(true);
 			break;
@@ -276,11 +366,12 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs) {
 	
 }
 
-function getPtrStrToWinOfProf(aProfilePID) {
+function getPtrStrToWinOfProf(aProfilePID, allWin) {
 	// have to use one of the profile PID obtaining methods before using this function (on nix/max can use queryProfileLocked) (windows has to use getPidForProfile)
 	// dont be an idiot, dont run this function when not running, but if you do this it will go through everything and find no window and return null, but be smart, its much better perf to use the isRunning function (queryProfileLocked) first, especially on windows
 	
 	// resolves to string of ptr of window handle
+		// if allWin is true then an array of all string of ptr of windows of the pid
 	// aProfilePID should be jsInt
 	
 	debugOutCLEAR();
@@ -295,13 +386,19 @@ function getPtrStrToWinOfProf(aProfilePID) {
 			
 			var PID = ostypes.TYPE.DWORD();
 			
-			var foundMatchingHwnd = 0;
+			var arrWinPtrStrs = [];
+			var found = 0;
 			var SearchPD = function(hwnd, lparam) {
 				var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
 				debugOut.push(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
 				if (PID.value == aProfilePID) {
-					foundMatchingHwnd = hwnd;
-					return false;
+					found = true;
+					arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+					if (!allWin) {
+						return false;
+					} else {
+						return true;
+					}
 				} else {
 					return true;
 				}
@@ -311,13 +408,20 @@ function getPtrStrToWinOfProf(aProfilePID) {
 			var rez_EnuMWindows = ostypes.API('EnumWindows')(SearchPD_ptr, wnd);
 			debugOutWRITE();
 			
-			if (foundMatchingHwnd) {
-				console.info('found this:', foundMatchingHwnd.toString());
-				var ancestor = ostypes.API('GetAncestor')(foundMatchingHwnd, ostypes.CONST.GA_PARENT);
-				console.info('ancestor:', ancestor.toString());
-				var ptrStr = ancestor.toString();
-				ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
-				return ptrStr;
+			if (found) {
+				console.info('found this:', arrWinPtrStrs);
+				//var ancestor = ostypes.API('GetAncestor')(foundMatchingHwnd, ostypes.CONST.GA_PARENT);
+				//console.info('ancestor:', ancestor.toString());
+				//var ptrStr = ancestor.toString();
+				//var ptrStr = ancestor.toString();
+				//ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
+				if (allWin) {
+					return arrWinPtrStrs;
+				} else {
+					return arrWinPtrStrs[0];
+				}
+			} else {
+				return 0;
 			}
 			return foundMatchingHwnd;
 			break;
@@ -395,7 +499,7 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 					
 					var rez_RmGetList_Query = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
 					//console.info('rez_RmGetList_Query:', rez_RmGetList_Query, rez_RmGetList_Query.toString(), uneval(rez_RmGetList_Query));	
-					if (ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.ERROR_SUCCESS)) {
+					if (ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_SUCCESS)) {
 						//console.log('RmGetList succeeded but there are no processes on this so return as I had capped it to 0, so it should return ERROR_MORE_DATA if there was more than 0, rez_RmGetList_Query:', rez_RmGetList_Query);
 						return 0;
 					} else if (!ostypes.HELPER.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
@@ -479,7 +583,9 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 	return rezMain;
 	
 }
-
+// my ipc plan for winnt
+	// on deactivate of window start listening, only need inbound
+	// other firefox profile can send message so that will need to init as outbound only
 function IPC_send(utf8or16_string) {
 	// sends message to target
 	switch (cOS) {
@@ -502,7 +608,7 @@ function IPC_send(utf8or16_string) {
 			var hOut = ostypes.API('CreateFile')(
 				cStr_pipeName,
 				ostypes.CONST.GENERIC_WRITE,
-				0,
+				0,	// do not share this pipe with others
 				null,
 				ostypes.CONST.OPEN_EXISTING,
 				ostypes.CONST.FILE_ATTRIBUTE_NORMAL,
@@ -579,8 +685,8 @@ function IPC_init() {
 			var cStr_pipeName = ostypes.TYPE.LPCTSTR.targetType.array()(jsStr_pipeName);
 			var /*rez_CreateNamedPipe*/hIn = ostypes.API('CreateNamedPipe')(
 				cStr_pipeName, // name
-				ostypes.CONST.PIPE_ACCESS_DUPLEX | ostypes.CONST.WRITE_DAC, // open mode
-				ostypes.CONST.PIPE_TYPE_BYTE | ostypes.CONST.PIPE_READMODE_BYTE | ostypes.CONST.PIPE_WAIT, // pipe mode
+				ostypes.CONST.PIPE_ACCESS_INBOUND, // open mode
+				ostypes.CONST.PIPE_WAIT, // pipe mode
 				ostypes.CONST.PIPE_UNLIMITED_INSTANCES, // max instances
 				1024, // out buffer size
 				1024, // in buffer size
@@ -629,3 +735,127 @@ function IPC_init() {
 			throw new Error('os-unsupported');
 	}
 }
+
+// start - helper functions
+var txtDecodr; // holds TextDecoder if created
+function getTxtDecodr() {
+	if (!txtDecodr) {
+		txtDecodr = new TextDecoder();
+	}
+	return txtDecodr;
+}
+function read_encoded(path, options) {
+	// async version of read_encoded from bootstrap.js
+	// because the options.encoding was introduced only in Fx30, this function enables previous Fx to use it
+	// must pass encoding to options object, same syntax as OS.File.read >= Fx30
+	// TextDecoder must have been imported with Cu.importGlobalProperties(['TextDecoder']);
+
+	if (options && !('encoding' in options)) {
+		throw new Error('Must pass encoding in options object, otherwise just use OS.File.read');
+	}
+	
+	if (options && info.FFVersionLessThan30) { // tests if version is less then 30
+		//var encoding = options.encoding; // looks like i dont need to pass encoding to TextDecoder, not sure though for non-utf-8 though
+		delete options.encoding;
+	}
+	
+	var aVal = OS.File.read(path, options);
+
+	if (info.FFVersionLessThan30) { // tests if version is less then 30
+		//console.info('decoded aVal', getTxtDecodr().decode(aVal));
+		return getTxtDecodr().decode(aVal); // Convert this array to a text
+	} else {
+		//console.info('aVal', aVal);
+		return aVal;
+	}
+}
+function writeDirsFrom_tileLastThenWriteAtomic() {
+	
+}
+
+function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir) {
+	// sync version of the one from bootstrap
+	//argsOfOsFileFunc must be array
+	
+	if (['writeAtomic', 'copy', 'makeDir'].indexOf(nameOfOsFileFunc) == -1) {
+		throw new Error('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
+	}
+	
+	
+	// setup retry
+	var retryIt = function() {
+		//try {
+			var promise_retryAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
+			return 'tryOsFile succeeded after making dirs';
+		//} catch (ex) {
+			
+		//}
+		// no try so it throws if errors
+	};
+	
+	// setup recurse make dirs
+	var makeDirs = function() {
+		var toDir;
+		switch (nameOfOsFileFunc) {
+			case 'writeAtomic':
+				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
+				break;
+				
+			case 'copy':
+				toDir = OS.Path.dirname(argsOfOsFileFunc[1]);
+				break;
+
+			case 'makeDir':
+				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
+				break;
+				
+			default:
+				throw new Error('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
+		}
+		makeDir_Bug934283(toDir, {from: fromDir});
+		return retryIt();
+	};
+	
+	// do initial attempt
+	try {
+		var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
+		return 'initialAttempt succeeded'
+	} catch (ex) {
+		if (ex.becauseNoSuchFile) {
+			console.log('make dirs then do secondAttempt');
+			return makeDirs();
+		}
+	}
+}
+
+function makeDir_Bug934283(path, options) {
+	// sync version of one in bootstrap.js
+	
+	if (!options || !('from' in options)) {
+		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists, you must provide options arg and the from key');
+	}
+
+	if (path.toLowerCase().indexOf(options.from.toLowerCase()) == -1) {
+		throw new Error('The `from` string was not found in `path` string');
+	}
+
+	var options_from = options.from;
+	delete options.from;
+
+	var dirsToMake = OS.Path.split(path).components.slice(OS.Path.split(options_from).components.length);
+	console.log('dirsToMake:', dirsToMake);
+
+	var pathExistsForCertain = options_from;
+	var makeDirRecurse = function() {
+		pathExistsForCertain = OS.Path.join(pathExistsForCertain, dirsToMake[0]);
+		dirsToMake.splice(0, 1);
+		var promise_makeDir = OS.File.makeDir(pathExistsForCertain, options);
+		if (dirsToMake.length > 0) {
+			return makeDirRecurse();
+		} else {
+			return 'this path now exists for sure: "' + pathExistsForCertain + '"';
+		}
+	};
+	return makeDirRecurse();
+}
+// end - helper functions
