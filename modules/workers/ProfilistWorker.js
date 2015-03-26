@@ -9,16 +9,16 @@ var cOS = OS.Constants.Sys.Name.toLowerCase();
 // Some more imports
 switch (cOS) {
 	case 'winnt':
-	//case 'winmo':
-	//case 'wince':
+	case 'winmo':
+	case 'wince':
 		importScripts('chrome://profilist/content/modules/ostypes_win.jsm');
 		break;
 	case 'linux':
-	//case 'freebsd':
-	//case 'openbsd':
-	//case 'sunos':
-	//case 'webos': // Palm Pre
-	//case 'android': //profilist doesnt support android (android doesnt have profiles)
+	case 'freebsd':
+	case 'openbsd':
+	case 'sunos':
+	case 'webos': // Palm Pre
+	case 'android': //profilist doesnt support android (android doesnt have profiles)
 		importScripts('chrome://profilist/content/modules/ostypes_nix.jsm');
 		break;
 	case 'darwin':
@@ -183,6 +183,11 @@ function test(tst) {
 	console.info('curSmallIcon_LRESULT:', curSmallIcon_LRESULT, curSmallIcon_LRESULT.toString(), uneval(curSmallIcon_LRESULT));
 	if (ctypes.winLastError != 0) { console.error('Failed curSmallIcon_LRESULT, winLastError:', ctypes.winLastError) }
 	*/
+	
+	
+	
+	/*****
+	// testing jscGetDeepest
 	var iconPath = 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_amo-puzzle__CHANNEL-REF_beta.ico';
 	var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 	console.info('hIconBig_HANDLE:', hIconBig_HANDLE.toString(), uneval(hIconBig_HANDLE));
@@ -200,12 +205,12 @@ function test(tst) {
 	
 	var jscGD = cutils.jscGetDeepest(hIconBig_LPARAM);
 	console.info('jscGD:', jscGD.toString(), uneval(jscGD));
-	/*
+	
 	
 	console.log('hIconBig_LPARAM.value:', hIconBig_LPARAM.value);
 	
 	
-	/*
+	
 	cutils.jscEqual(hIconBig_LPARAM, 0);
 	
 		cHwnd = ostypes.TYPE.HWND(ctypes.UInt64('0x1750d4e'));
@@ -217,8 +222,122 @@ function test(tst) {
 		var jscGD2 = cutils.jscGetDeepest(curBigIcon_LRESULT);
 		
 		cutils.jscEqual(curBigIcon_LRESULT, 0);
-	*/			
+	******/
+
+	///*
+		// remove WM_SETICON
+		var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(tst));
+		var oldBigIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, 0);
+		var oldSmallIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, 0);
+		console.info('oldBigIcon:', oldBigIcon.toString(), uneval(oldBigIcon));
+		if (ctypes.winLastError != 0) { console.error('Failed oldBigIcon, winLastError:', ctypes.winLastError); }
+	//*/
+	/*
+		// set class long
+		var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(tst));
+		var iconPath = 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_mdn__CHANNEL-REF_beta.ico';
+		
+		var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+		var hIconSmall_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+		var hIconBig_LONG_PTR = ctypes.cast(hIconBig_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+		var hIconSmall_LONG_PTR = ctypes.cast(hIconSmall_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+		console.info('hIconBig_HANDLE:', hIconBig_HANDLE.toString(), uneval(hIconBig_HANDLE));
+		
+				var oldBigIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);			
+				console.info('winLastError:', ctypes.winLastError);
+				if (cutils.jscEqual(oldBigIcon, 0)) {
+					//console.log('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
+					if (ctypes.winLastError != 0) {
+						console.error('Failed to apply BIG icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+				}
+				
+				// tested and verified with the ostypes.TYPE.HWND(ctypes.UInt64('0x310b38')) above, that if oldBigIcon causes winLastError to go to non-0, then if oldSmallIcon call succeeds, winLastError is set back to 0
+				var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
+				console.info('winLastError:', ctypes.winLastError);
+				if (cutils.jscEqual(oldSmallIcon, 0)) {
+					//console.log('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
+					if (ctypes.winLastError != 0) {
+						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+				}
+	//*/
 	
+	
+}
+
+function removeWmSetIcons_thenSetLong(contents_JSON, fullPathToFile, mostRecWinHwndPtrStr) {
+	// WINNT only
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			for (var i=0; i<contents_JSON.hwndPtrStrsAppliedTo.length; i++) {
+				var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(contents_JSON.hwndPtrStrsAppliedTo[i]));
+				
+				// may need to check if window is open first
+				
+				// remove the icon
+				var oldBigIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, 0);
+				console.info('oldBigIcon:', oldBigIcon.toString(), uneval(oldBigIcon));
+				if (ctypes.winLastError != 0) { console.error('Failed oldBigIcon, winLastError:', ctypes.winLastError); }
+				
+				// remove the icon
+				var oldSmallIcon = ostypes.API('SendMessage')(cHwnd, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, 0);
+				console.info('oldSmallIcon:', oldSmallIcon.toString(), uneval(oldSmallIcon));
+				if (ctypes.winLastError != 0) { console.error('Failed oldSmallIcon, winLastError:', ctypes.winLastError); }
+			}
+			
+			// actually scratch this comment, i have to use a hwnd of a visible window otherwise it behaves weirdly, it sometimes gives winLastError 6 which is INVALID_HANDLE or gives 0 but doesnt update // will use the last cHwnd from the for loop here
+			cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(mostRecWinHwndPtrStr));
+			
+			/*
+			// set back with long
+			var hIconBig_LONG_PTR = ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.big)) : ostypes.TYPE.LONG(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.big));
+			var hIconSmall_LONG_PTR = ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm)) : ostypes.TYPE.LONG(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm));
+			*/
+			// actually scrap the set back with long, i have to set back by LoadImage again otherwise if the profile the icon was applied from is closed, it will mem release the icon, even if use LR_SHARED as its cross process
+			if (info.OSVersion == '5.1') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+				// winxp
+				var bigSize = 32;
+			} else {
+				var bigSize = 256;
+			}
+			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, contents_JSON.lastAppliedIconPath, ostypes.CONST.IMAGE_ICON, bigSize, bigSize, ostypes.CONST.LR_LOADFROMFILE);
+			var hIconSmall_HANDLE = ostypes.API('LoadImage')(null, contents_JSON.lastAppliedIconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
+			
+			var hIconBig_LONG_PTR = ctypes.cast(hIconBig_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+			var hIconSmall_LONG_PTR = ctypes.cast(hIconSmall_HANDLE, ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+						
+			console.info('hIconBig_LONG_PTR:', cutils.jscGetDeepest(hIconBig_LONG_PTR), hIconBig_LONG_PTR.toString(), uneval(hIconBig_LONG_PTR));
+			console.info('hIconSmall_LONG_PTR:', cutils.jscGetDeepest(hIconSmall_LONG_PTR), hIconSmall_LONG_PTR.toString(), uneval(hIconSmall_LONG_PTR));
+			
+			var oldBigIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);			
+			console.info('winLastError:', ctypes.winLastError);
+			if (cutils.jscEqual(oldBigIcon, 0)) {
+				//console.log('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
+				if (ctypes.winLastError != 0) {
+					console.error('Failed to apply BIG icon with setClassLong, winLastError:', ctypes.winLastError);
+				}
+			}
+			
+			var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
+			console.info('winLastError:', ctypes.winLastError);
+			if (cutils.jscEqual(oldSmallIcon, 0)) {
+				//console.log('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
+				if (ctypes.winLastError != 0) {
+					console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
+				}
+			}
+			
+			// delete the fullFilePathToWM_SETICON
+			OS.File.remove(fullPathToFile);
+			
+			break;
+			
+		default:
+			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+	}
 }
 
 function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatchedFile) {
@@ -253,7 +372,13 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			
 			var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[0]));
 			
-			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 256, 256, ostypes.CONST.LR_LOADFROMFILE); //todo: detect if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (info.OSVersion == '5.1') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+				// winxp
+				var bigSize = 32;
+			} else {
+				var bigSize = 256;
+			}
+			var hIconBig_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, bigSize, bigSize, ostypes.CONST.LR_LOADFROMFILE);
 			var hIconSmall_HANDLE = ostypes.API('LoadImage')(null, iconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
 			// LoadImage was returning null because i had declared LoadImageA but then i defeined LPCTSTR as ctypes.jschar. i had to use LoadImageW to use with ctypes.jschar. I didnt test but i guess to use with LoadImageA you have to use ctypes.char
 			
@@ -322,13 +447,6 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			} else {
 				// update icon to pid that does not own this PromiseWorker thread
 				
-				var hIconBig_LPARAM = ctypes.cast(hIconBig_HANDLE, ostypes.TYPE.LPARAM);
-				console.info('hIconBig_LPARAM:', hIconBig_LPARAM, hIconBig_LPARAM.toString(), uneval(hIconBig_LPARAM));
-				
-				var hIconSmall_LPARAM = ctypes.cast(hIconSmall_HANDLE, ostypes.TYPE.LPARAM);
-				console.info('hIconSmall_LPARAM:', hIconSmall_LPARAM, hIconSmall_LPARAM.toString(), uneval(hIconSmall_LPARAM));
-				
-				
 				try {
 					var winntChangedIconForeignPID_JSON = JSON.parse(read_encoded(winntPathToWatchedFile.fullPathToFile, {encoding:'utf-8'}));
 					winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo = []; // clear the applied to array as this is only used by on activate of the window of ff profile that has profilist installed, it goes through these hwnd and if they still exist it removes the WM_SETICON so it can make the SetClassLong icon show through. it also does SetClassLong so to handle future opened windows
@@ -336,7 +454,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 					// file not existing is ok
 					console.log('making object');
 					var winntChangedIconForeignPID_JSON = {
-						lastAppliedIcon_LRESULT: { // LRESULT and LPARAM are both LONG_PTR
+						lastAppliedIcon_LRESULT: { // LRESULT and LPARAM are both LONG_PTR, this is used if user makes a 2nd or more change, so then it wont think that all icons are WM_ICONSET
 							big: null,
 							sm: null
 						},
@@ -344,6 +462,12 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 					};
 					console.info('winntChangedIconForeignPID_JSON:', JSON.stringify(winntChangedIconForeignPID_JSON));
 				}
+				
+				var hIconBig_LPARAM = ctypes.cast(hIconBig_HANDLE, ostypes.TYPE.LPARAM);
+				console.info('hIconBig_LPARAM:', hIconBig_LPARAM, hIconBig_LPARAM.toString(), uneval(hIconBig_LPARAM));
+				
+				var hIconSmall_LPARAM = ctypes.cast(hIconSmall_HANDLE, ostypes.TYPE.LPARAM);
+				console.info('hIconSmall_LPARAM:', hIconSmall_LPARAM, hIconSmall_LPARAM.toString(), uneval(hIconSmall_LPARAM));
 				
 				for (var i=0; i<arrWinHandlePtrStrs.length; i++) {
 						cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[i]));
@@ -392,6 +516,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 					// write to disk
 					console.log('will now write to disk');
 					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big = cutils.jscGetDeepest(hIconBig_LPARAM);
+					winntChangedIconForeignPID_JSON.lastAppliedIconPath = iconPath;
 					console.log('did jscGD on hIconBig_LPARAM and came out with:', winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.big);
 					winntChangedIconForeignPID_JSON.lastAppliedIcon_LRESULT.sm = cutils.jscGetDeepest(hIconSmall_LPARAM);
 					tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [winntPathToWatchedFile.fullPathToFile, JSON.stringify(winntChangedIconForeignPID_JSON), {encoding:'utf-8', tmpPath:winntPathToWatchedFile.fullPathToFile+'.tmp'}], winntPathToWatchedFile.fromDir);

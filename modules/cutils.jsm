@@ -20,16 +20,15 @@ function utilsInit() {
 		}
 		while (obj && isNaN(obj) && ('contents' in obj || 'value' in obj)) {
 			if ('contents' in obj) {
-				if (obj.constructor.targetType && obj.constructor.targetType.size != undefined) {
-					console.log('breaking as no targetType.size on obj level:', obj.toString());
+				if (obj.constructor.targetType && obj.constructor.targetType.size === undefined) {
+					console.error('breaking as no targetType.size on obj level:', obj.toString());
 					break;
 				} else {
-					console.info('obj.constructor.targetType.size != undefined:',obj.constructor.targetType.size != undefined,obj.constructor.targetType.size);
 					obj = obj.contents;
 				}
 			} else if ('value' in obj) {
-				if (obj.constructor.targetType && obj.constructor.targetType.size != undefined) {
-					console.log('breaking as no targetType.size on obj level:', obj.toString());
+				if (obj.constructor.targetType && obj.constructor.targetType.size === undefined) {
+					console.error('breaking as no targetType.size on obj level:', obj.toString());
 					break;
 				} else {
 					obj = obj.value;

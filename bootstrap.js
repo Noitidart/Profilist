@@ -3576,7 +3576,9 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 						// test if profile at aProfilePath is running
 							// if it isnt then resolve
 							// if it is then continue to badge apply after getting handle for one of its windows
+						
 						var do_getProfPid = function() {
+							// even for xp just go ahead and run this, it will return 0 if not found. if not found it will go through absolutely all handles which can take up to 1s but its not going to apply so its not a delay
 							var promise_pidOfProfile = ProfilistWorker.post('getPidForRunningProfile', [ini[aProfilePath].props.IsRelative, aProfilePath, profToolkit.rootPathDefault]);
 							promise_pidOfProfile.then(
 								function(aVal) {
@@ -4735,6 +4737,7 @@ function activated(e) {
 	);
 
 	
+	
 	/*
 	if (openCPContWins.length > 0) {
 		console.log('cp tabs are open somewhere, e:', e);
@@ -4759,6 +4762,70 @@ function activated(e) {
 		}
 	}
 	*/
+	
+	// start - os specific stuff
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// check if 
+			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, profToolkit.selectedProfile.iniKey.replace(/([\\*:?<>|\/\"])/g, '-') + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
+			var promise_checkWmSeticoned = read_encoded(fullFilePathToWM_SETICON, {encoding:'utf8'});
+			promise_checkWmSeticoned.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_checkWmSeticoned - ', aVal);
+					// start - do stuff here - promise_checkWmSeticoned
+					
+					var mostRecWinHwndPtrStr = Services.wm.getMostRecentWindow(null).QueryInterface(Ci.nsIInterfaceRequestor) // no chance for most rec win to be null as this is in the activated event listener which was attached to a window
+										  .getInterface(Ci.nsIWebNavigation)
+										  .QueryInterface(Ci.nsIDocShellTreeItem)
+										  .treeOwner
+										  .QueryInterface(Ci.nsIInterfaceRequestor)
+										  .getInterface(Ci.nsIBaseWindow).nativeHandle;
+					var contents_JSON = JSON.parse(aVal);					
+					var promise_removeWinIcons_thenSetLong = ProfilistWorker.post('removeWmSetIcons_thenSetLong', [contents_JSON, fullFilePathToWM_SETICON, mostRecWinHwndPtrStr]);
+					promise_removeWinIcons_thenSetLong.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_removeWinIcons_thenSetLong - ', aVal);
+							// start - do stuff here - promise_removeWinIcons_thenSetLong
+							
+							// end - do stuff here - promise_removeWinIcons_thenSetLong
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_removeWinIcons_thenSetLong', aReason:aReason};
+							console.warn('Rejected - promise_removeWinIcons_thenSetLong - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_removeWinIcons_thenSetLong', aCaught:aCaught};
+							console.error('Caught - promise_removeWinIcons_thenSetLong - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					);
+					// end - do stuff here - promise_checkWmSeticoned
+				},
+				function(aReason) {
+					if (aReasonMax(aReason).becauseNoSuchFile) {
+						console.log('was not WmSeticoned');
+						return;
+					}
+					var rejObj = {name:'promise_checkWmSeticoned', aReason:aReason};
+					console.warn('Rejected - promise_checkWmSeticoned - ', rejObj);
+					//deferred_createProfile.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_checkWmSeticoned', aCaught:aCaught};
+					console.error('Caught - promise_checkWmSeticoned - ', rejObj);
+					//deferred_createProfile.reject(rejObj);
+				}
+			);
+			break;
+		default:
+			// do nothing
+	}
+	// end - os specific stuff
 }
 
 var observers = {
