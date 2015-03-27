@@ -5240,7 +5240,213 @@ function delAliasThenMake(pathTrg, pathMake) {
 	return deferred_delAliasThenMake.promise;
 }
 
-function makeLauncher(for_ini_key, ch_name) {
+function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launching) {
+	// returns promise
+	// resolves with:
+		// {cProfilePath:for_ini_key, profSpecs:getProfileSpecs(), OSPath:of_icon_created, alreadyExisted:false} // profSpecs is not there if iconNameObj was passed into makeIcon as second arg
+		
+	// makes launcher if it doesnt exist,  or if overwrite arg (force update) is true (DOES NOT: updates parameters if they are wrong)
+	// makes icon first if it doesnt exist
+	
+	var deferredMain_makeLauncher = new Deferred();
+	var resolveObj = {
+		cProfilePath: for_ini_key
+	};
+		
+	// start - os support check
+	var do_platCheck = function() {
+		// rejects derredMain_makeIcon
+		// on success goes to 
+		var platformSupported;
+		
+		if (cOS == 'darwin') { // this if block should similar 67864810
+			var userAgent = myServices.hph.userAgent;
+			//console.info('userAgent:', userAgent);
+			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
+			//console.info('version_osx matched:', version_osx);
+			
+			if (!version_osx) {
+				console.error('Could not identify Mac OS X version.');
+				platformSupported = false;
+			} else {		
+				version_osx = parseFloat(version_osx[1]);
+				console.info('version_osx parseFloated:', version_osx);
+				if (version_osx >= 0 && version_osx < 6) {
+					//will never happen, as my min support of profilist is for FF29 which is min of osx10.6
+					//deferred_makeIcnsOfPaths.reject('OS X < 10.6 is not supported, your version is: ' + version_osx);
+					platformSupported = true;
+				} else if (version_osx >= 6 && version_osx < 7) {
+					//deferred_makeIcnsOfPaths.reject('Mac OS X 10.6 support coming soon. I need to figure out how to use MacMemory functions then follow the outline here: https://github.com/philikon/osxtypes/issues/3');
+					platformSupported = true;
+				} else if (version_osx >= 7) {
+					// ok supported
+					platformSupported = true;
+				} else {
+					//deferred_makeIcnsOfPaths.reject('Some unknown value of version_osx was found:' + version_osx);
+					platformSupported = false; //its already false
+				}
+				resolveObj.launcherExtension = 'app';
+			}
+		} else if (cOS == 'winnt') {
+			platformSupported = true;
+			resolveObj.launcherExtension = 'lnk';
+		} else if (cOS == 'linux') {
+			platformSupported = true;
+			resolveObj.launcherExtension = 'desktop';
+		}
+		
+		if (!platformSupported) {
+			console.info('platformSupported:', platformSupported);
+			deferredMain_makeIcon.reject('OS not supported for makeIcon');
+			//return; //no deeper exec so no need for return
+		} else {
+			do_MLGetProfSpecs();
+		}
+	}
+	// end - os support check
+	
+	var do_MLGetProfSpecs = function() {
+		// basically do_getProfSpecs
+		if (iconNameObj) {
+			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
+		} else {
+			var promise_MLgetProfSpecs = getProfileSpecs(for_ini_key, ifRunningThenTakeThat, launching); //if running then take that, is inputted here
+			promise_MLgetProfSpecs.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_MLgetProfSpecs - ', aVal);
+					// start - do stuff here - promise_MLgetProfSpecs
+					resolveObj.profSpecs = aVal;
+					do_MLcheckIfPreExisting();
+					// end - do stuff here - promise_MLgetProfSpecs
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
+					console.warn('Rejected - promise_MLgetProfSpecs - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_MLgetProfSpecs', aCaught:aCaught};
+					console.error('Caught - promise_MLgetProfSpecs - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			);
+		}
+	};
+	
+	var do_MLcheckIfPreExisting = function() {
+		if (forceOverwrite) {
+			do_preCreate();
+			return;
+		}
+		//resolveObj.launcherName = getLauncherName(for_ini_key, resolveObj.profSpecs.channel_exeForProfile);
+		resolveObj.path_launcher = OS.Path.join(profToolkit.path_profilistData_launcherExes, resolveObj.profSpecs.launcherName + '.' + resolveObj.launcherExtension);
+		
+		var promise_launcherExist = OS.File.exist(resolveObj.path_launcher);
+		promise_launcherExist.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_launcherExist - ', aVal);
+				// start - do stuff here - promise_launcherExist
+				if (aVal) {
+					resolveObj.alreadyExisted = true;
+					deferredMain_makeLauncher.resolve(resolveObj);
+				} else {
+					do_preCreate();
+				}
+				// end - do stuff here - promise_launcherExist
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_launcherExist', aReason:aReason};
+				console.warn('Rejected - promise_launcherExist - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_launcherExist', aCaught:aCaught};
+				console.error('Caught - promise_launcherExist - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_preCreate = function() {
+		var promiseAllArr_preCreate = [];
+		
+		
+		switch (cOS) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+				
+				break;
+			case 'linux':
+			case 'freebsd':
+			case 'openbsd':
+			case 'sunos':
+			case 'webos':
+			case 'android':
+				
+				//break;
+			case 'darwin':
+				
+				//break;
+			default:
+				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+		}
+		
+		promiseAllArr_preCreate.push(makeIcon(for_ini_key, resolveObj.profSpecs.iconName)); // if running then take that, that should be determined in the prof get specs
+		var promiseAll_preCreate = Promise.all(promiseAllArr_preCreate);
+		promiseAll_preCreate.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_preCreate - ', aVal);
+				// start - do stuff here - promiseAll_preCreate
+				// end - do stuff here - promiseAll_preCreate
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
+				console.warn('Rejected - promiseAll_preCreate - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_preCreate', aCaught:aCaught};
+				console.error('Caught - promiseAll_preCreate - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_creation = function() {
+		switch (cOS) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+				
+				break;
+			case 'linux':
+			case 'freebsd':
+			case 'openbsd':
+			case 'sunos':
+			case 'webos':
+			case 'android':
+				
+				//break;
+			case 'darwin':
+				
+				//break;
+			default:
+				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+		}
+	}
+	// start - main
+	do_platCheck();
+	// end - main
+	
+	return deferredMain_makeLauncher.promise;
+	
+	
+	
+	////////////////////////////////////////////////////////////////////
 	// makes the launcher for nix/mac
 	// overwrites without making any checks (on mac it checks for existing [by checking plist.info and taking its bundle-identifier &&&& also checking dock.plist for this .app])
 	var deferred_makeLauncher = new Deferred();
@@ -5904,7 +6110,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		iconNameComponents['BADGE-ID'] = specObj.iconsetId_badge;
 	}
 	
-	var makeIconName = function() {
+	var makeIconAndLauncherName = function() {
 		var comps = {};
 		var iconNameArr = [];
 		for (var k in iconNameComponents) {
@@ -5914,11 +6120,14 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			str: iconNameArr.join('__'),
 			components: iconNameComponents
 		}
+		if (specObj.channel_exeForProfile) {
+			specObj.launcherName = getLauncherName(aProfilePath, specObj.channel_exeForProfile);
+		}
 	};
 	
 	var getChannelToExePath = function() {
 		if (skipChannelForProfile || (specObj.channel_exeForProfile && specObj.iconsetId_base)) {
-			makeIconName();
+			makeIconAndLauncherName();
 			deferredMain_getProfileSpecs.resolve(specObj);
 		} else {
 			var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
@@ -5931,7 +6140,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 						specObj.iconsetId_base = aVal;
 						iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
 					}
-					makeIconName();
+					makeIconAndLauncherName();
 					deferredMain_getProfileSpecs.resolve(specObj);
 					// end - do stuff here - promise_channelForExe
 				},
@@ -6038,7 +6247,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 				specObj.path_exeForProfile = profToolkit.path_exeCur;
 				specObj.channel_exeForProfile = getChannelNameOfProfile(profToolkit.selectedProfile.iniKey); // supports temp profile as iniKey will be null
 				specObj.iconsetId_base = specObj.channel_exeForProfile;
-				makeIconName();
+				makeIconAndLauncherName();
 				deferredMain_getProfileSpecs.resolve(specObj);
 			} else {
 				if (!specObj.isRunning) {
@@ -6187,9 +6396,12 @@ function getPathToProfileDir(for_ini_key) {
 	}
 }
 
-function appNameFromChan(theChName) {
+function getAppNameFromChan(theChName) {
 	//based on channel name returns what the app name should be
 	switch (theChName) {
+		case 'esr':
+			return 'Firefox ESR';
+			break;
 		case 'release':
 			return 'Firefox';
 			break;
@@ -6197,7 +6409,7 @@ function appNameFromChan(theChName) {
 			return 'Firefox Beta';
 			break;
 		case 'aurora':
-			return 'Firefox Dev';
+			return 'Firefox Developer';
 			break;
 		case 'nightly':
 			return 'Nightly';
@@ -6208,9 +6420,282 @@ function appNameFromChan(theChName) {
 	}
 }
 
-function makeDesktopShortcut(for_ini_key) {
+function launchProfile(aProfilePath, safeMode) {
+	/*** LOGIC ***/
+	// if running
+		// then its most recent window is focused
+	// if not running
+		// decide launching/build path to use
+			// if tied, then use that (caution: user could have re-tied it, so icon may need updating)
+			// if not tied, then use current builds path
+		// get channel of launching build path
+		// ensure icon exists for buildsChannel/profilesBadge combination
+		// do os specific functions
+			// winnt
+				// if tied
+					// make launcher if it doesnt exist with tied build path and icon
+					
+					
+					// ensure icon exists for this (cuz on startup if profilist is installed it changes the icon), if it doesnt, then update launcher and deskcut with it
+					// ensure build path is right on launcher
+					// get build path from ini and nsIProcess launch with that
+					
+				// if not tied
+					// dont change build path in launcher, launcher doesnt have to exist, but make it (with icon of channel default browser if firefox, if default build not firefox, then use current build) (maybe dont wait for it to complete making)
+					// ensure icon with this channel and badge exist, as if profilist is installed in it, it will change the icon of the windows
+					// nsIProcess launch with build of current executing
+			// mac
+				// calculate launcherName and update .app to it
+				// ensure .app are matches target launch build
+					// if tied
+						// ensure the icon of the .app is of the tied build
+					// if not tied
+						// ensure the icon of the .app is what it is supposed to be (may not be of the build path its launching with)
+				// launch it
+				// detect if profilist is installed and eanbled in launchiing profile
+					// if it is installed dont do anything
+					// if it is NOT installed
+						// monitor every second till queryProfileLocked comes back as running then
+							// update .app build path back to what it should be
+							// update .app icon back to what it should be
+							// do not update dock
+				// on startup
+					// if profilist is installed
+						// update .app build path back to what it should be
+						// update .app icon back to what it should be
+					// if not installed
+						// do nothing
+			// nix
+				// if tied
+				
+				// if not tied
+			// else, default to nsIProcess launch with build of current executing
+	
+}
+
+function updateLauncherAndDeskcut(updateReason) {
+	// returns promise
+	// updateReason is 4:
+		// renamed
+		// deleted (if running, reject)
+		// rebadged
+		// rechanneled
+		
+	// updates launcher and deskcut if they exist
+	// if rebadged/rechanneled then that changes the icon
+		// winnt
+			// if running or not update launcher and deskcut, but dont update windows
+		// mac
+			// if running or not update launcher and deskcut, but dont update dock
+		// nix
+}
+
+function makeDeskCut(for_ini_key, dontCheckIfLauncherIsCorrect_justCutToIt) {
+	// returns promise
+	
+	// creates desktop shortcut to the launcher
+	// if launcher doesnt exist it makes it first
+	
+	var deferredMain_makeDeskCut = new Deferred();
+	
+	var resolveObj = {
+		cProfilePath: for_ini_key
+	};
+		
+	// start - os support check
+	var do_platCheck = function() {
+		// rejects derredMain_makeIcon
+		// on success goes to 
+		var platformSupported;
+		
+		if (cOS == 'darwin') { // this if block should similar 67864810
+			var userAgent = myServices.hph.userAgent;
+			//console.info('userAgent:', userAgent);
+			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
+			//console.info('version_osx matched:', version_osx);
+			
+			if (!version_osx) {
+				console.error('Could not identify Mac OS X version.');
+				platformSupported = false;
+			} else {		
+				version_osx = parseFloat(version_osx[1]);
+				console.info('version_osx parseFloated:', version_osx);
+				if (version_osx >= 0 && version_osx < 6) {
+					//will never happen, as my min support of profilist is for FF29 which is min of osx10.6
+					//deferred_makeIcnsOfPaths.reject('OS X < 10.6 is not supported, your version is: ' + version_osx);
+					platformSupported = true;
+				} else if (version_osx >= 6 && version_osx < 7) {
+					//deferred_makeIcnsOfPaths.reject('Mac OS X 10.6 support coming soon. I need to figure out how to use MacMemory functions then follow the outline here: https://github.com/philikon/osxtypes/issues/3');
+					platformSupported = true;
+				} else if (version_osx >= 7) {
+					// ok supported
+					platformSupported = true;
+				} else {
+					//deferred_makeIcnsOfPaths.reject('Some unknown value of version_osx was found:' + version_osx);
+					platformSupported = false; //its already false
+				}
+				resolveObj.launcherExtension = 'app';
+			}
+		} else if (cOS == 'winnt') {
+			platformSupported = true;
+			resolveObj.launcherExtension = 'lnk';
+		} else if (cOS == 'linux') {
+			platformSupported = true;
+			resolveObj.launcherExtension = 'desktop';
+		}
+		
+		if (!platformSupported) {
+			console.info('platformSupported:', platformSupported);
+			deferredMain_makeIcon.reject('OS not supported for makeIcon');
+			//return; //no deeper exec so no need for return
+		} else {
+			do_MLGetProfSpecs();
+		}
+	}
+	// end - os support check
+	
+	var do_MLGetProfSpecs = function() {
+		// basically do_getProfSpecs
+		if (iconNameObj) {
+			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
+		} else {
+			var promise_MLgetProfSpecs = getProfileSpecs(for_ini_key, ifRunningThenTakeThat, launching); //if running then take that, is inputted here
+			promise_MLgetProfSpecs.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_MLgetProfSpecs - ', aVal);
+					// start - do stuff here - promise_MLgetProfSpecs
+					resolveObj.profSpecs = aVal;
+					do_MLcheckIfPreExisting();
+					// end - do stuff here - promise_MLgetProfSpecs
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
+					console.warn('Rejected - promise_MLgetProfSpecs - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_MLgetProfSpecs', aCaught:aCaught};
+					console.error('Caught - promise_MLgetProfSpecs - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			);
+		}
+	};
+	
+	var do_MLcheckIfPreExisting = function() {
+		if (forceOverwrite) {
+			do_preCreate();
+			return;
+		}
+		//resolveObj.launcherName = getLauncherName(for_ini_key, resolveObj.profSpecs.channel_exeForProfile);
+		resolveObj.path_launcher = OS.Path.join(profToolkit.path_profilistData_launcherExes, resolveObj.profSpecs.launcherName + '.' + resolveObj.launcherExtension);
+		
+		var promise_launcherExist = OS.File.exist(resolveObj.path_launcher);
+		promise_launcherExist.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_launcherExist - ', aVal);
+				// start - do stuff here - promise_launcherExist
+				if (aVal) {
+					resolveObj.alreadyExisted = true;
+					deferredMain_makeLauncher.resolve(resolveObj);
+				} else {
+					do_preCreate();
+				}
+				// end - do stuff here - promise_launcherExist
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_launcherExist', aReason:aReason};
+				console.warn('Rejected - promise_launcherExist - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_launcherExist', aCaught:aCaught};
+				console.error('Caught - promise_launcherExist - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_preCreate = function() {
+		var promiseAllArr_preCreate = [];
+		
+		
+		switch (cOS) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+				
+				break;
+			case 'linux':
+			case 'freebsd':
+			case 'openbsd':
+			case 'sunos':
+			case 'webos':
+			case 'android':
+				
+				//break;
+			case 'darwin':
+				
+				//break;
+			default:
+				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+		}
+		
+		promiseAllArr_preCreate.push(makeIcon(for_ini_key, resolveObj.profSpecs.iconName)); // if running then take that, that should be determined in the prof get specs
+		var promiseAll_preCreate = Promise.all(promiseAllArr_preCreate);
+		promiseAll_preCreate.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_preCreate - ', aVal);
+				// start - do stuff here - promiseAll_preCreate
+				// end - do stuff here - promiseAll_preCreate
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
+				console.warn('Rejected - promiseAll_preCreate - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_preCreate', aCaught:aCaught};
+				console.error('Caught - promiseAll_preCreate - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_makeCut = function() {
+		switch (cOS) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+				
+				break;
+			case 'linux':
+			case 'freebsd':
+			case 'openbsd':
+			case 'sunos':
+			case 'webos':
+			case 'android':
+				
+				//break;
+			case 'darwin':
+				
+				//break;
+			default:
+				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+		}
+	}
+	// start - main
+	do_platCheck();
+	// end - main
+	
+	return deferredMain_makeDeskCut.promise;
+	
+	////////////////////////////
 	console.info('for_ini_key:', for_ini_key, 'ini[for_ini_key]:', ini[for_ini_key], ini);
-	var deferred_makeDesktopShortcut = new Deferred();
+	var deferred_makeDeskCut = new Deferred();
 
 	/* algo ::::
 		check if cut exists, (for mac make sure by checking if has ini.launcher, if it does then read the shell of profilst-exec and see if that path points to correct one, if its not correct then mark as non exist
@@ -6246,13 +6731,13 @@ function makeDesktopShortcut(for_ini_key) {
 					function(aReason) {
 						var rejObj = {name:'promise_doMakeLauncher', aReason:aReason};
 						console.warn('Rejected - promise_doMakeLauncher - ', rejObj);
-						deferred_makeDesktopShortcut.reject(rejObj);
+						deferred_makeDeskCut.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_doMakeLauncher', aCaught:aCaught};
 						console.error('Caught - promise_doMakeLauncher - ', rejObj);
-						deferred_makeDesktopShortcut.reject(rejObj);
+						deferred_makeDeskCut.reject(rejObj);
 					}
 				);
 			}
@@ -6265,23 +6750,23 @@ function makeDesktopShortcut(for_ini_key) {
 					function(aVal) {
 						console.log('Fullfilled - promise_makeDeskAlias - ', aVal);
 						// start - do stuff here - promise_makeDeskAlias
-						deferred_makeDesktopShortcut.resolve('successfully made desktop shortcut');
+						deferred_makeDeskCut.resolve('successfully made desktop shortcut');
 						// end - do stuff here - promise_makeDeskAlias
 					},
 					function(aReason) {
 						//if (aReason.unixErrno == 17) {
-						//	deferred_makeDesktopShortcut.resolve('desktop shortcut already exists'); //should never happen as i del first
+						//	deferred_makeDeskCut.resolve('desktop shortcut already exists'); //should never happen as i del first
 						//} else {
 							var rejObj = {name:'promise_makeDeskAlias', aReason:aReason};
 							console.warn('Rejected - promise_makeDeskAlias - ', rejObj);
-							deferred_makeDesktopShortcut.reject(rejObj);
+							deferred_makeDeskCut.reject(rejObj);
 						//}
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_makeDeskAlias', aCaught:aCaught};
 						console.error('Caught - promise_makeDeskAlias - ', rejObj);
-						deferred_makeDesktopShortcut.reject(rejObj);
+						deferred_makeDeskCut.reject(rejObj);
 					}
 				);
 			}
@@ -6323,7 +6808,7 @@ function makeDesktopShortcut(for_ini_key) {
 								makeLauncherThenAlias();
 							} else {
 								console.log('no update needed, so resolve as saying it already exists');
-								deferred_makeDesktopShortcut.resolve('already exists with right params');
+								deferred_makeDeskCut.resolve('already exists with right params');
 							}
 						}
 						// end - do stuff here - promise_launcherExists
@@ -6336,14 +6821,14 @@ function makeDesktopShortcut(for_ini_key) {
 						} else {
 							var rejObj = {name:'promise_launcherExists', aReason:aReason};
 							console.error('Caught - promise_launcherExists - ', rejObj);
-							deferred_makeDesktopShortcut.reject(rejObj);
+							deferred_makeDeskCut.reject(rejObj);
 						}
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'promise_launcherExists', aCaught:aCaught};
 						console.error('Caught - promise_launcherExists - ', rejObj);
-						deferred_makeDesktopShortcut.reject(rejObj);
+						deferred_makeDeskCut.reject(rejObj);
 					}
 				);
 			} else {
@@ -6353,7 +6838,7 @@ function makeDesktopShortcut(for_ini_key) {
 		} else if (cOS == 'asdflaksdfj') {
 			
 		} else {
-			deferred_makeDesktopShortcut.reject('Profilist only supports desktop shortcut creation for the following operating systems: Darwin(MacOS X)');
+			deferred_makeDeskCut.reject('Profilist only supports desktop shortcut creation for the following operating systems: Darwin(MacOS X)');
 		}
 	};
 	// end - makeCut
@@ -6372,13 +6857,13 @@ function makeDesktopShortcut(for_ini_key) {
 			function(aReason) {
 				var rejObj = {name:'promise_getChName', aReason:aReason};
 				console.warn('Rejected - promise_getChName - ', rejObj);
-				deferred_makeDesktopShortcut.reject(rejObj);
+				deferred_makeDeskCut.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
 				var rejObj = {name:'promise_getChName', aCaught:aCaught};
 				console.error('Caught - promise_getChName - ', rejObj);
-				deferred_makeDesktopShortcut.reject(rejObj);
+				deferred_makeDeskCut.reject(rejObj);
 			}
 		);
 	};
@@ -6391,16 +6876,16 @@ function makeDesktopShortcut(for_ini_key) {
 	
 	do_getChName();
 	
-	return deferred_makeDesktopShortcut.promise;
+	return deferred_makeDeskCut.promise;
 }
 function getLauncherName(for_ini_key, theChName) {
 	var theProfName_safedForPath;
 	if (cOS == 'winnt') {
 		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '-')
 	} else {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, ' '); //for mac and nix
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, '-'); //for mac and nix
 	}
-	return appNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
+	return getAppNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 }
 // end - shortcut creation
 
@@ -7622,7 +8107,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 			break;
 		/*end - generic not specific to profilist cp comm*/
 		case 'query-make-desktop-shortcut':
-			var promise_makeRequestedCut = makeDesktopShortcut(incomingJson.key_in_ini);
+			var promise_makeRequestedCut = makeDeskCut(incomingJson.key_in_ini);
 			promise_makeRequestedCut.then(
 				function(aVal) {
 					console.log('Fullfilled - promise_makeRequestedCut - ', aVal);

@@ -101,6 +101,48 @@ function refreshIconAtPath(iconPath) {
 	return rezMain;
 }
 
+function launchPath(fullPath) {
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// shellExecEx
+			// http://blogs.msdn.com/b/oldnewthing/archive/2010/11/18/10092914.aspx
+			// i get access denied as it requires STA
+			try {
+				var rez_CoInitializeEx = ostypes.API('CoInitializeEx')(null, 0x2 | 0x4);
+				console.info('rez_CoInitializeEx:', rez_CoInitializeEx.toString(), uneval(rez_CoInitializeEx));
+				if (ctypes.winLastError != 0) { console.error('Failed rez_CoInitializeEx, winLastError:', ctypes.winLastError); }
+				
+				var sei = ostypes.TYPE.SHELLEXECUTEINFO();
+				console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
+				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
+				sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath);
+				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
+				var rez_ShellExecuteEx = ostypes.API('ShellExecuteEx')(sei.address());
+				console.info('rez_ShellExecuteEx:', rez_ShellExecuteEx.toString(), uneval(rez_ShellExecuteEx));
+				if (ctypes.winLastError != 0) { console.error('Failed rez_ShellExecuteEx, winLastError:', ctypes.winLastError); }
+			} finally {
+				var rez_CoUninitialize = ostypes.API('CoUninitialize')();
+			}
+			break;
+		case 'linux':
+		case 'freebsd':
+		case 'openbsd':
+		case 'sunos':
+		case 'webos':
+		case 'android':
+			// gio
+			
+			break;
+		case 'darwin':
+			// open
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
 function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 	// IsRelative is the value from profiles.ini for the profile you want to target
 	// Path is the value from profiles.ini for the profile you want to target
@@ -527,8 +569,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				if (!ostypes.CONST.IID_IPropertyStore) {
 					console.log('defining IPropertyStore CONSTs');
 					ostypes.CONST.IID_IPropertyStore = ostypes.HELPER.CLSIDFromString('886d8eeb-8cf2-4446-8d02-cdba1dbdcf99');
-					console.error('hereeee');
-					console.info('IID_IPropertyStore:', ostypes.CONST.IID_IPropertyStore.toString());
+					//console.info('IID_IPropertyStore:', ostypes.CONST.IID_IPropertyStore.toString());
 					
 					// this test vaidates that the js version o ostypes.HELPER.CLSIDFromString matches and works fine
 					// var aIID_IPropertyStore = ostypes.TYPE.GUID();
@@ -547,19 +588,29 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				}
 				
 				for (var i=0; i<arrWinHandlePtrStrs.length; i++) {
-					console.error('here i:', i);
 					cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[i]));
 					var ppsPtr = ostypes.TYPE.IPropertyStore.ptr();
 					var hr_SHGetPropertyStoreForWindow = ostypes.API('SHGetPropertyStoreForWindow')(cHwnd, ostypes.CONST.IID_IPropertyStore.address(), ppsPtr.address());
-					console.error('got hr');
 					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'SHGetPropertyStoreForWindow');
 					
 					var pps = ppsPtr.contents.lpVtbl.contents;
-					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), 'Contoso.Scratch');
-					ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
-					break;
+					try {
+						//console.log('now setting on', arrWinHandlePtrStrs[i]);
+						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), 'Contoso.Scratch');
+						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), iconPath + ',-2'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_mdn__CHANNEL-REF_beta.ico,-6'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource.address(), '')
+						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchCommand.address(), '');
+						//console.log('done set on', arrWinHandlePtrStrs[i]);
+						ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
+					} catch(ex) {
+						console.error('ex caught when setting IPropertyStore:', ex);
+						throw ex;
+					} finally {
+						pps.Release(ppsPtr);
+					}
 				}
-				console.log('one win7+ proc');
+				console.log('done win7+ proc');
 			}
 
 			break;

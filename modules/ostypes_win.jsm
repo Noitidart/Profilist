@@ -80,6 +80,7 @@ var winTypes = function() {
 	this.HHOOK = this.HANDLE;
 	this.HICON = this.HANDLE;
 	this.HINSTANCE = this.HANDLE;
+	this.HKEY = this.HANDLE;
 	this.HMENU = this.HANDLE;
 	this.HWND = this.HANDLE;
 	this.LPCOLESTR = this.OLECHAR.ptr; // typedef [string] const OLECHAR *LPCOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L288
@@ -102,7 +103,7 @@ var winTypes = function() {
 	// STRUCTURES
 	
 	// SIMPLE STRUCTS // based on any of the types above
-	/* http://msdn.microsoft.com/en-us/library/ff718266.aspx
+	/* 
 	 * typedef struct {
 	 *   unsigned long Data1;
 	 *   unsigned short Data2;
@@ -341,6 +342,44 @@ var winTypes = function() {
 	
 	// IPropertyStore
 	this.LPUNKNOWN = ctypes.voidptr_t; // ctypes.StructType('LPUNKNOWN'); // public typedef IUnknown* LPUNKNOWN; // i dont use the full struct so just leave it like this, actually lets just make it voidptr_t
+	
+	/* typedef struct _SHELLEXECUTEINFO {
+	 *   DWORD     cbSize;
+	 *   ULONG     fMask;
+	 *   HWND      hwnd;
+	 *   LPCTSTR   lpVerb;
+	 *   LPCTSTR   lpFile;
+	 *   LPCTSTR   lpParameters;
+	 *   LPCTSTR   lpDirectory;
+	 *   int       nShow;
+	 *   HINSTANCE hInstApp;
+	 *   LPVOID    lpIDList;
+	 *   LPCTSTR   lpClass;
+	 *   HKEY      hkeyClass;
+	 *   DWORD     dwHotKey;
+	 *   union {
+	 *     HANDLE hIcon;
+	 *     HANDLE hMonitor;
+	 *   } DUMMYUNIONNAME;
+	 *   HANDLE    hProcess;
+	 * } SHELLEXECUTEINFO, *LPSHELLEXECUTEINFO;
+	 */
+	this.SHELLEXECUTEINFO = ctypes.StructType('_SHELLEXECUTEINFO', [
+		{ 'cbSize': this.DWORD },
+		{ 'fMask': this.ULONG },
+		{ 'hwnd': this.HWND },
+		{ 'lpVerb': this.LPCTSTR },
+		{ 'lpFile': this.LPCTSTR },
+		{ 'lpParameters': this.LPCTSTR },
+		{ 'lpDirectory': this.LPCTSTR },
+		{ 'nShow': this.INT },
+		{ 'hInstApp': this.HINSTANCE },
+		{ 'lpIDList': this.LPVOID },
+		{ 'lpClass': this.LPCTSTR },
+		{ 'hkeyClass': this.HKEY },
+		{ 'dwHotKey': this.DWORD },
+		{ 'hIcon': this.HANDLE } // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
+	]);
 }
 
 var winInit = function() {
@@ -352,6 +391,7 @@ var winInit = function() {
 
 	// CONSTANTS
 	this.CONST = {
+		SW_SHOWNORMAL: 1,
 		VARIANT_FALSE: 0, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 		VARIANT_TRUE: -1, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 		VT_LPWSTR: 0x001F, // 31
@@ -508,6 +548,27 @@ var winInit = function() {
 				self.TYPE.LPCOLESTR,	// lpsz
 				self.TYPE.GUID.ptr		// pclsid
 			); 
+		},
+		CoInitializeEx: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms695279%28v=vs.85%29.aspx
+			 * HRESULT CoInitializeEx(
+			 *   __in_opt_  LPVOID pvReserved,
+			 *   __in_      DWORD dwCoInit
+			 * );
+			 */
+			return lib('Ole32.dll').declare('CoInitializeEx', self.TYPE.WINABI,
+				self.TYPE.HRESULT,	// result
+				self.TYPE.LPVOID,	// pvReserved
+				self.TYPE.DWORD		// dwCoInit
+			);
+		},
+		CoUninitialize: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms688715%28v=vs.85%29.aspx
+			 * void CoUninitialize(void);
+			 */
+			return lib('Ole32.dll').declare('CoUninitialize', self.TYPE.WINABI,
+				self.TYPE.VOID	// return
+			);
 		},
 		DestroyIcon: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648063%28v=vs.85%29.aspx
@@ -728,6 +789,17 @@ var winInit = function() {
 				self.TYPE.UINT,		//uFlags
 				self.TYPE.LPCVOID,	//dwItem1
 				self.TYPE.LPCVOID	//dwItem2
+			);
+		},
+		ShellExecuteEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/bb762154%28v=vs.85%29.aspx
+			 * BOOL ShellExecuteEx(
+			 *   __inout_  SHELLEXECUTEINFO *pExecInfo
+			 * );
+			 */
+			return lib('shell32.dll').declare('ShellExecuteEx', self.TYPE.WINABI,
+				self.TYPE.BOOL,					// return
+				self.TYPE.SHELLEXECUTEINFO.ptr	// *pExecInfo
 			);
 		},
 		SHGetPropertyStoreForWindow: function() {
