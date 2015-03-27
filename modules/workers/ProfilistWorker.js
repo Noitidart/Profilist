@@ -297,7 +297,7 @@ function removeWmSetIcons_thenSetLong(contents_JSON, fullPathToFile, mostRecWinH
 			var hIconSmall_LONG_PTR = ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm)) : ostypes.TYPE.LONG(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm));
 			*/
 			// actually scrap the set back with long, i have to set back by LoadImage again otherwise if the profile the icon was applied from is closed, it will mem release the icon, even if use LR_SHARED as its cross process
-			if (info.OSVersion == '5.1') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (info.OSVersion == '5.1' || info.OSVersion == '5.2') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -370,9 +370,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			console.log('iconPath: ' + iconPath);
 			console.log('arrWinHandlePtrStrs: ' + arrWinHandlePtrStrs.toString());
 			
-			var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[0]));
-			
-			if (info.OSVersion == '5.1') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (info.OSVersion == '5.1' || info.OSVersion == '5.2') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -403,6 +401,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				console.log('good to go hIconSmall_HANDLE and hIconBig_HANDLE are NOT equal');
 			}
 			
+			var cHwnd;
 			if (!winntPathToWatchedFile) {
 				// update icon to pid that owns this thread
 				// i noticed with SetClassLong/Ptr changing the icon when it changes in taskbar(unpinned) then the on hover color change which is based on the dominant color of the icon doesnt take after applying it once, maybe i need to destroy the old icon or something
@@ -412,9 +411,8 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				console.info('hIconBig_LONG_PTR:', hIconBig_LONG_PTR, hIconBig_LONG_PTR.toString(), uneval(hIconBig_LONG_PTR));
 				console.info('hIconSmall_LONG_PTR:', hIconSmall_LONG_PTR, hIconSmall_LONG_PTR.toString(), uneval(hIconSmall_LONG_PTR));
 				
-				
-				var oldBigIcon = ostypes.API('SetClassLong')(cHwnd/*ostypes.TYPE.HWND(ctypes.UInt64('0x310b38'))*/, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);			
-				console.info('winLastError:', ctypes.winLastError);
+				cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[0]));
+				var oldBigIcon = ostypes.API('SetClassLong')(cHwnd/*ostypes.TYPE.HWND(ctypes.UInt64('0x310b38'))*/, ostypes.CONST.GCLP_HICON, hIconBig_LONG_PTR);
 				if (cutils.jscEqual(oldBigIcon, 0)) {
 					//console.log('Got 0 for oldBigIcon, this does not mean that bigIcon did not apply, it just means that there was no PREVIOUS big icon');
 					if (ctypes.winLastError != 0) {
@@ -424,7 +422,6 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				
 				// tested and verified with the ostypes.TYPE.HWND(ctypes.UInt64('0x310b38')) above, that if oldBigIcon causes winLastError to go to non-0, then if oldSmallIcon call succeeds, winLastError is set back to 0
 				var oldSmallIcon = ostypes.API('SetClassLong')(cHwnd, ostypes.CONST.GCLP_HICONSM, hIconSmall_LONG_PTR);
-				console.info('winLastError:', ctypes.winLastError);
 				if (cutils.jscEqual(oldSmallIcon, 0)) {
 					//console.log('Got 0 for oldSmallIcon, this does not mean that smallIcon did not apply, it just means that there was no PREVIOUS small icon');
 					if (ctypes.winLastError != 0) {
@@ -523,7 +520,48 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				}
 			}
 			
-			debugOutWRITE(true);
+			//console.log('OSVersion:', parseFloat(info.OSVersion), info.OSVersion);
+			if (parseFloat(info.OSVersion) >= 6.1) {
+				console.log('win7+');
+				// win7+
+				if (!ostypes.CONST.IID_IPropertyStore) {
+					console.log('defining IPropertyStore CONSTs');
+					ostypes.CONST.IID_IPropertyStore = ostypes.HELPER.CLSIDFromString('886d8eeb-8cf2-4446-8d02-cdba1dbdcf99');
+					console.error('hereeee');
+					console.info('IID_IPropertyStore:', ostypes.CONST.IID_IPropertyStore.toString());
+					
+					// this test vaidates that the js version o ostypes.HELPER.CLSIDFromString matches and works fine
+					// var aIID_IPropertyStore = ostypes.TYPE.GUID();
+					// var hr_CLSIDFromString_IIDIPropertyStore = ostypes.API('CLSIDFromString')('{886d8eeb-8cf2-4446-8d02-cdba1dbdcf99}', aIID_IPropertyStore.address());
+					// ostypes.HELPER.checkHRESULT(hr_CLSIDFromString_IIDIPropertyStore, 'CLSIDFromString (IID_IPropertyStore)');
+					// console.info('hresult passed fine, aIID_IPropertyStore2:', aIID_IPropertyStore.toString());
+									
+					var fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource = ostypes.HELPER.CLSIDFromString('9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3');
+					//console.info('fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource:', fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource.toString());
+					
+					ostypes.CONST.PKEY_AppUserModel_ID = ostypes.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 5); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391569%28v=vs.85%29.aspx
+					ostypes.CONST.PKEY_AppUserModel_RelaunchCommand = ostypes.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 2);// guid and pid from: http://msdn.microsoft.com/en-us/library/dd391571%28v=vs.85%29.aspx
+					ostypes.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource = ostypes.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 4); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391572%28v=vs.85%29.aspx
+					ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource = ostypes.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 3); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391573%28v=vs.85%29.aspx
+					//console.log('done defining IPropertyStore CONSTs');
+				}
+				
+				for (var i=0; i<arrWinHandlePtrStrs.length; i++) {
+					console.error('here i:', i);
+					cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(arrWinHandlePtrStrs[i]));
+					var ppsPtr = ostypes.TYPE.IPropertyStore.ptr();
+					var hr_SHGetPropertyStoreForWindow = ostypes.API('SHGetPropertyStoreForWindow')(cHwnd, ostypes.CONST.IID_IPropertyStore.address(), ppsPtr.address());
+					console.error('got hr');
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'SHGetPropertyStoreForWindow');
+					
+					var pps = ppsPtr.contents.lpVtbl.contents;
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), 'Contoso.Scratch');
+					ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
+					break;
+				}
+				console.log('one win7+ proc');
+			}
+
 			break;
 		case 'linux':
 			// arrWinHandlePtrStrs needs all windows handles

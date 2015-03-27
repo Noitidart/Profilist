@@ -1,10 +1,6 @@
-//todo: figure out if for 64bit the abis are different as done here: https://gist.github.com/Noitidart/1f9d574451b8aaaef219#file-_ff-addon-snippet-winapi_getrunningpids-js-L16
-//todo: work on jscGetDeepest, in EnuMWindows it goes berserk but doesnt error, good place to experiemnt
-
 var EXPORTED_SYMBOLS = ['ostypes'];
-//const {utils: Cu} = Components;
-//Cu.import('resource://gre/modules/ctypes.jsm');
-//Cu.reportError('os:' + os);
+
+importScripts('chrome://profilist/content/modules/cutils.jsm'); // used by HELPER functions
 
 if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 	var is64bit = false;
@@ -14,7 +10,7 @@ if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 	throw new Error('huh??? not 32 or 64 bit?!?!');
 }
 
-var ifdef_UNICODE = true
+var ifdef_UNICODE = true;
 
 var winTypes = function() {
 	
@@ -46,15 +42,19 @@ var winTypes = function() {
 	this.ULONG = ctypes.unsigned_long;
 	this.ULONG_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_long; // i left it at what i copied pasted it as, but i thought it was this: `ctypes.uintptr_t`
 	this.USHORT = ctypes.unsigned_short;
+	this.VARIANT_BOOL = ctypes.short;
+	this.VARTYPE = ctypes.unsigned_short;
 	this.VOID = ctypes.void_t;
 	this.WCHAR = ctypes.jschar;
 	this.WORD = ctypes.unsigned_short;
 	
 	// ADVANCED TYPES // as per how it was defined in WinNT.h // defined by "simple types"
 	this.ATOM = this.WORD;
+	this.BOOLEAN = this.BYTE; // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 	this.COLORREF = this.DWORD; // when i copied/pasted there was this comment next to this: // 0x00bbggrr
 	this.DWORD_PTR = this.ULONG_PTR;
 	this.HANDLE = this.PVOID;
+	this.HRESULT = this.LONG;
 	this.LPCSTR = this.CHAR.ptr; // typedef __nullterminated CONST CHAR *LPCSTR;
 	this.LPCWSTR = this.WCHAR.ptr;
 	this.LPARAM = this.LONG_PTR;
@@ -62,6 +62,7 @@ var winTypes = function() {
 	this.LPSTR = this.CHAR.ptr;
 	this.LPWSTR = this.WCHAR.ptr;
 	this.LRESULT = this.LONG_PTR;
+	this.OLECHAR = this.WCHAR; // typedef WCHAR OLECHAR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L286
 	this.PLONG = this.LONG.ptr;
 	this.PULONG = this.ULONG.ptr;
 	this.PCWSTR = this.WCHAR.ptr;
@@ -81,8 +82,10 @@ var winTypes = function() {
 	this.HINSTANCE = this.HANDLE;
 	this.HMENU = this.HANDLE;
 	this.HWND = this.HANDLE;
+	this.LPCOLESTR = this.OLECHAR.ptr; // typedef [string] const OLECHAR *LPCOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L288
 	this.LPCTSTR = ifdef_UNICODE ? this.LPCWSTR : this.LPCSTR;
 	this.LPHANDLE = this.HANDLE.ptr;
+	this.LPOLESTR = this.OLECHAR.ptr; // typedef [string] OLECHAR *LPOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L287 // http://stackoverflow.com/a/1607335/1828637 // LPOLESTR is usually to be allocated with CoTaskMemAlloc()
 	this.LPTSTR = ifdef_UNICODE ? this.LPWSTR : this.LPSTR;	
 	
 	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
@@ -90,13 +93,117 @@ var winTypes = function() {
 	this.HMODULE = this.HINSTANCE;
 	this.WNDENUMPROC = ctypes.FunctionType(this.CALLBACK_ABI, this.BOOL, [this.HWND, this.LPARAM]); // "super advanced type" because its highest type is `this.HWND` which is "advanced type"
 
-
+	// inaccrurate types - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
+	this.PCIDLIST_ABSOLUTE = ctypes.voidptr_t; // https://github.com/west-mt/ssbrowser/blob/452e21d728706945ad00f696f84c2f52e8638d08/chrome/content/modules/WindowsShortcutService.jsm#L115
+	this.PIDLIST_ABSOLUTE = ctypes.voidptr_t;
+	this.WIN32_FIND_DATA = ctypes.voidptr_t;
+	this.WINOLEAPI = ctypes.voidptr_t; // i guessed on this one
+	
 	// STRUCTURES
 	
 	// SIMPLE STRUCTS // based on any of the types above
+	/* http://msdn.microsoft.com/en-us/library/ff718266.aspx
+	 * typedef struct {
+	 *   unsigned long Data1;
+	 *   unsigned short Data2;
+	 *   unsigned short Data3;
+	 *   byte Data4[8];
+	 * } GUID, UUID, *PGUID;
+	 */
+	this.GUID = ctypes.StructType('GUID', [
+	  { 'Data1': this.ULONG },
+	  { 'Data2': this.USHORT },
+	  { 'Data3': this.USHORT },
+	  { 'Data4': this.BYTE.array(8) }
+	]);
+	this.PROPVARIANT = new ctypes.StructType('PROPVARIANT', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
+		{ 'vt': this.VARTYPE }, // constants for this are available at MSDN: http://msdn.microsoft.com/en-us/library/windows/desktop/aa380072%28v=vs.85%29.aspx
+		{ 'wReserved1': this.WORD },
+		{ 'wReserved2': this.WORD },
+		{ 'wReserved3': this.WORD },
+		{ 'pwszVal': this.LPWSTR } // union, i just use pwszVal so I picked that one // for InitPropVariantFromString // when using this see notes on MSDN doc page chat of PROPVARIANT ( http://msdn.microsoft.com/en-us/library/windows/desktop/aa380072%28v=vs.85%29.aspx )this guy says: "VT_LPWSTR must be allocated with CoTaskMemAlloc :: (Presumably this also applies to VT_LPSTR) VT_LPWSTR is described as being a string pointer with no information on how it is allocated. You might then assume that the PROPVARIANT doesn't own the string and just has a pointer to it, but you'd be wrong. In fact, the string stored in a VT_LPWSTR PROPVARIANT must be allocated using CoTaskMemAlloc and be freed using CoTaskMemFree. Evidence for this: Look at what the inline InitPropVariantFromString function does: It sets a VT_LPWSTR using SHStrDupW, which in turn allocates the string using CoTaskMemAlloc. Knowing that, it's obvious that PropVariantClear is expected to free the string using CoTaskMemFree. I can't find this explicitly documented anywhere, which is a shame, but step through this code in a debugger and you can confirm that the string is freed by PropVariantClear: ```#include <Propvarutil.h>	int wmain(int argc, TCHAR *lpszArgv[])	{	PROPVARIANT pv;	InitPropVariantFromString(L"Moo", &pv);	::PropVariantClear(&pv);	}```  If  you put some other kind of string pointer into a VT_LPWSTR PROPVARIANT your program is probably going to crash."
+	]);
 	
 	// ADVANCED STRUCTS // based on "simple structs" to be defined first
+	this.CLSID = this.GUID;
+	this.PGUID = this.GUID.ptr;
+	this.IID = this.GUID;
 	
+	/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
+	 * typedef struct {
+	 *   GUID  fmtid;
+	 *   DWORD pid;	
+	 * } PROPERTYKEY;	                                                           
+	 */
+	this.PROPERTYKEY = new ctypes.StructType('PROPERTYKEY', [
+		{ 'fmtid': this.GUID },                                
+		{ 'pid': this.DWORD }                                  
+	]);                                                        
+	
+	// SUPER ADVANCED STRUCTURES - based on advanced structs
+	this.REFCLSID = this.CLSID.ptr; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L288
+	this.REFIID = this.IID.ptr;
+	this.REFPROPERTYKEY = this.PROPERTYKEY.ptr; // note: if you use any REF... (like this.REFPROPERTYKEY) as an arg to a declare, that arg expects a ptr. this is basically like
+	this.REFPROPVARIANT = this.PROPVARIANT.ptr;
+	
+	// VTABLE's
+	var IPropertyStoreVtbl = ctypes.StructType('IPropertyStoreVtbl');
+	this.IPropertyStore = ctypes.StructType('IPropertyStore', [{
+		'lpVtbl': IPropertyStoreVtbl.ptr
+	}]);
+	//this.IPropertyStorePtr = IPropertyStore.ptr;
+	IPropertyStoreVtbl.define(
+		[{ //start inherit from IUnknown
+			'QueryInterface': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr,
+					this.REFIID,		// riid
+					this.VOID.ptr.ptr	// **ppvObject
+				]).ptr
+		}, {
+			'AddRef': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IPropertyStore.ptr
+				]).ptr
+		}, {
+			'Release': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IPropertyStore.ptr
+				]).ptr
+		}, { //end inherit from IUnknown
+			'GetCount': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr,
+					this.DWORD.ptr	// *cProps
+				]).ptr
+		}, {
+			'GetAt': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr,
+					this.DWORD,				// iProp
+					this.PROPERTYKEY.ptr	// *pkey
+				]).ptr
+		}, {
+			'GetValue': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr,
+					this.REFPROPERTYKEY,	// key
+					this.PROPVARIANT.ptr	// *pv
+				]).ptr
+		}, {
+			'SetValue': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr,
+					this.REFPROPERTYKEY,	// key
+					this.REFPROPVARIANT		// propvar
+				]).ptr
+		}, {
+			'Commit': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPropertyStore.ptr
+				]).ptr
+		}]
+	);
 	
 	/* http://msdn.microsoft.com/en-us/library/windows/hardware/ff545817%28v=vs.85%29.aspx
 	 * typedef struct _FILE_NAME_INFORMATION {
@@ -187,22 +294,6 @@ var winTypes = function() {
 	  { 'TSSessionId': this.DWORD }, // DWORD
 	  { 'bRestartable': this.BOOL } // BOOL
 	]);
-
-	/* http://msdn.microsoft.com/en-us/library/ff718266.aspx
-	 * typedef struct {
-	 *   unsigned long Data1;
-	 *   unsigned short Data2;
-	 *   unsigned short Data3;
-	 *   byte Data4[8];
-	 * } GUID, UUID, *PGUID;
-	 */
-	this.GUID = ctypes.StructType('GUID', [
-	  { 'Data1': this.ULONG },
-	  { 'Data2': this.USHORT },
-	  { 'Data3': this.USHORT },
-	  { 'Data4': this.BYTE.array(8) }
-	]);
-	this.PGUID = this.GUID.ptr;
 	// end - structures used by Rstrtmgr.dll
 	
 	// SendMessage structs
@@ -247,6 +338,9 @@ var winTypes = function() {
 	 */
 	this.OVERLAPPED = ctypes.StructType('_OVERLAPPED');
 	this.LPOVERLAPPED = this.OVERLAPPED.ptr;
+	
+	// IPropertyStore
+	this.LPUNKNOWN = ctypes.voidptr_t; // ctypes.StructType('LPUNKNOWN'); // public typedef IUnknown* LPUNKNOWN; // i dont use the full struct so just leave it like this, actually lets just make it voidptr_t
 }
 
 var winInit = function() {
@@ -258,6 +352,10 @@ var winInit = function() {
 
 	// CONSTANTS
 	this.CONST = {
+		VARIANT_FALSE: 0, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
+		VARIANT_TRUE: -1, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
+		VT_LPWSTR: 0x001F, // 31
+
 		// BroadcastSystemMessage
 		BSM_APPLICATIONS: 0x00000008,
 		BSF_FORCEIFHUNG: 0x00000020,
@@ -269,6 +367,10 @@ var winInit = function() {
 
 		// GetWindow
 		GW_OWNER: 4,
+
+		// HRESULTs - http://msdn.microsoft.com/en-us/library/windows/desktop/aa378137%28v=vs.85%29.aspx
+		S_OK: 0,
+		S_FALSE: 1,
 		
 		// LoadImage
 		IMAGE_ICON: 1,
@@ -340,7 +442,7 @@ var winInit = function() {
 		WS_VISIBLE: 0x10000000,
 		WS_CAPTION: 0x00C00000,
 		
-		SW_RESTORE: 9
+		SW_RESTORE: 9,
 	};
 	
 	var _lib = {}; // cache for lib
@@ -393,6 +495,19 @@ var winInit = function() {
 				self.TYPE.WPARAM,	// wParam
 				self.TYPE.LPARAM	// lParam
 			);
+		},
+		CLSIDFromString: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms680589%28v=vs.85%29.aspx
+			 * HRESULT CLSIDFromString(
+			 *   __in_ LPCOLESTR lpsz,
+			 *   __out_ LPCLSID pclsid
+			 * );
+			 */
+			return lib('Ole32.dll').declare('CLSIDFromString', self.TYPE.WINABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.LPCOLESTR,	// lpsz
+				self.TYPE.GUID.ptr		// pclsid
+			); 
 		},
 		DestroyIcon: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648063%28v=vs.85%29.aspx
@@ -476,6 +591,17 @@ var winInit = function() {
 				self.TYPE.INT,			// cxDesired
 				self.TYPE.INT,			// cyDesired
 				self.TYPE.UINT			// fuLoad
+			);
+		},
+		PropVariantClear: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/aa380073%28v=vs.85%29.aspx
+			 * WINOLEAPI PropVariantClear(
+			 * __in_ PROPVARIANT *pvar
+			 * );
+			 */
+			return lib('Ole32.dll').declare('PropVariantClear', self.TYPE.WINABI,
+				self.TYPE.WINOLEAPI,			// return
+				self.TYPE.PROPVARIANT.ptr		// *pvar
 			);
 		},
 		RmStartSession: function() {
@@ -603,6 +729,34 @@ var winInit = function() {
 				self.TYPE.LPCVOID,	//dwItem1
 				self.TYPE.LPCVOID	//dwItem2
 			);
+		},
+		SHGetPropertyStoreForWindow: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/dd378430%28v=vs.85%29.aspx
+			 * HRESULT SHGetPropertyStoreForWindow(
+			 * __in_ HWND hwnd,
+			 * __in_ REFIID riid,
+			 * __out_ void **ppv
+			 * );
+			 */
+			return lib('shell32').declare('SHGetPropertyStoreForWindow', self.TYPE.WINABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.HWND,			// hwnd
+				self.TYPE.REFIID,		// riid
+				ctypes.voidptr_t		// **ppv // i can set this to `self.TYPE.IPropertyStore.ptr.ptr` // however i cannot set this to ctypes.void_t.ptr.ptr i have no iea why, and i thouh `void **ppv` is either void_t.ptr.ptr or ctypes.voidptr_t.ptr // ctypes.voidptr_t as was one here: `void**` the `QueryInterface` also has out argument `void**` and he used `ctypes.voidptr_t` (https://github.com/west-mt/ssbrowser/blob/452e21d728706945ad00f696f84c2f52e8638d08/chrome/content/modules/WindowsShortcutService.jsm#L74)
+			);
+		},
+		SHStrDup: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb759924%28v=vs.85%29.aspx
+			* HRESULT SHStrDup(
+			* __in_ LPCTSTR pszSource,
+			* __out_ LPTSTR *ppwsz
+			* );
+			*/
+			return lib('Shlwapi.dll').declare('SHStrDupW', self.TYPE.WINABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.LPCTSTR,		// pszSource
+				self.TYPE.LPTSTR.ptr	// *ppwsz
+			); 
 		},
 		ConnectNamedPipe: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365146%28v=vs.85%29.aspx
@@ -780,7 +934,104 @@ var winInit = function() {
 	// end - predefine your declares here
 	// end - function declares
 	
-	this.HELPER = {};
+	this.HELPER = {
+		checkHRESULT: function(hr /*HRESULT*/, funcName /*jsStr*/) {
+			if(parseInt(cutils.jscGetDeepest(hr)) < 0) {
+				throw new Error('HRESULT ' + hr + ' returned from function ' + funcName);
+			}
+		},
+		CLSIDFromString: function(lpsz /*jsStr*/) {
+			// lpsz should look like: "886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99" no quotes
+			var GUID_or_IID = self.TYPE.GUID();
+
+			var pieces = lpsz.split('-');
+			
+			GUID_or_IID.Data1 = parseInt(pieces[0], 16);
+			GUID_or_IID.Data2 = parseInt(pieces[1], 16);
+			GUID_or_IID.Data3 = parseInt(pieces[2], 16);
+			
+			var piece34 = pieces[3] + '' + pieces[4];
+			
+			for (var i=0; i<8; i++) {
+			  GUID_or_IID.Data4[i] = parseInt(piece34.substr(i*2,2), 16);
+			};
+
+			return GUID_or_IID;
+		},
+		InitPropVariantFromString: function(psz/*PCWSTR*/, ppropvar/*PROPVARIANT.ptr*/) {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb762305%28v=vs.85%29.aspx
+			 * NOTE1: I have to write my own InitPropVariantFromString because its not in a dll its defined in a header
+			 * NOTE2: When using this see notes on MSDN doc page chat of PROPVARIANT ( http://msdn.microsoft.com/en-us/library/windows/desktop/aa380072%28v=vs.85%29.aspx )this guy says: "VT_LPWSTR must be allocated with CoTaskMemAlloc :: (Presumably this also applies to VT_LPSTR) VT_LPWSTR is described as being a string pointer with no information on how it is allocated. You might then assume that the PROPVARIANT doesn't own the string and just has a pointer to it, but you'd be wrong. In fact, the string stored in a VT_LPWSTR PROPVARIANT must be allocated using CoTaskMemAlloc and be freed using CoTaskMemFree. Evidence for this: Look at what the inline InitPropVariantFromString function does: It sets a VT_LPWSTR using SHStrDupW, which in turn allocates the string using CoTaskMemAlloc. Knowing that, it's obvious that PropVariantClear is expected to free the string using CoTaskMemFree. I can't find this explicitly documented anywhere, which is a shame, but step through this code in a debugger and you can confirm that the string is freed by PropVariantClear: ```#include <Propvarutil.h>	int wmain(int argc, TCHAR *lpszArgv[])	{	PROPVARIANT pv;	InitPropVariantFromString(L"Moo", &pv);	::PropVariantClear(&pv);	}```  If  you put some other kind of string pointer into a VT_LPWSTR PROPVARIANT your program is probably going to crash."
+			 * HRESULT InitPropVariantFromString(
+			 *   __in_   PCWSTR psz,
+			 *   __out_  PROPVARIANT *ppropvar
+			 * );
+			 */
+			// SHStrDup uses CoTaskMemAlloc to allocate the strin so is true to the noe from MSDN
+			var hr_SHStrDup = self.API('SHStrDup')(psz, ppropvar.contents.pwszVal.address()); //note in PROPVARIANT defintion `pwszVal` is defined as `LPWSTR` and `SHStrDup` expects second arg as `LPTSTR.ptr` but both `LPTSTR` and `LPWSTR` are defined the same with `ctypes.jschar` so this should be no problem // after learnin that LPTSTR is wchar when ifdef_UNICODE and i have ifdef_UNICODE set to true so they are the same
+			console.info('hr_SHStrDup:', hr_SHStrDup.toString(), uneval(hr_SHStrDup));
+			
+			// console.log('propvarPtr.contents.pwszVal', propvarPtr.contents.pwszVal);
+			this.checkHRESULT(hr_SHStrDup, 'InitPropVariantFromString -> hr_SHStrDup'); // this will throw if HRESULT is bad
+
+			ppropvar.contents.vt = self.CONST.VT_LPWSTR;
+
+			return hr_SHStrDup;
+		},
+		IPropertyStore_SetValue: function(vtblPpsPtr, pps/*IPropertyStore*/, pkey/*REFPROPERTYKEY*/, pszValue/*PCWSTR*/) {
+			// from: http://blogs.msdn.com/b/oldnewthing/archive/2011/06/01/10170113.aspx
+			// for strings!! InitPropVariantFromString
+			// returns hr of SetValue, but if hr of it failed it will throw, so i dont have to check the return value
+			
+			var ppropvar = self.TYPE.PROPVARIANT();
+
+			var hr_InitPropVariantFromString = this.InitPropVariantFromString(pszValue, ppropvar.address());
+			this.checkHRESULT(hr_InitPropVariantFromString, 'failed InitPropVariantFromString'); //this will throw if HRESULT is bad
+
+			var hr_SetValue = pps.SetValue(vtblPpsPtr, pkey, ppropvar.address());
+			this.checkHRESULT(hr_SetValue, 'IPropertyStore_SetValue');
+			
+			var rez_PropVariantClear = self.API('PropVariantClear')(ppropvar.address());
+			console.info('rez_PropVariantClear:', rez_PropVariantClear, rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
+
+			return hr_SetValue;
+		},
+		IPropertyStore_GetValue: function(vtblPpsPtr, pps/*IPropertyStore*/, pkey/*REFPROPERTYKEY*/, ppropvar /*PROPVARIANT*/ /* or null if you want jsstr returned */) {
+			// currently setup for String propvariants only, meaning  key pwszVal is populated
+			// returns hr of GetValue if a ostypes.PROPVARIANT() is supplied as ppropvar arg
+			// returns jsstr if ppropvar arg is not supplied (creates a temp propvariant and clears it for function use)
+			
+			var ret_js = false;
+			if (!ppropvar) {
+				ppropvar = self.TYPE.PROPVARIANT();
+				ret_js = true;
+			}
+			
+			//console.info('pps.GetValue', pps.GetValue);
+			var hr_GetValue = pps.GetValue(vtblPpsPtr, pkey, ppropvar.address());
+			this.checkHRESULT(hr_GetValue, 'IPropertyStore_GetValue');
+			
+			console.info('ppropvar:', ppropvar.toString(), uneval(ppropvar));
+			
+			if (ret_js) {
+				console.info('ppropvar.pwszVal:', ppropvar.pwszVal.toString(), uneval(ppropvar.pwszVal));
+				if (ppropvar.pwszVal.isNull()) {
+					console.log('ppropvar.pwszVal is NULL so blank string was found');
+					var jsstr = '';
+				} else {
+					var jsstr = cutils.readAsChar8ThenAsChar16(ppropvar.pwszVal);
+				}
+				
+				var rez_PropVariantClear = self.API('PropVariantClear')(ppropvar.address());
+				console.info('rez_PropVariantClear:', rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
+
+				return jsstr;
+			} else {
+				console.warn('remember to clear the PROPVARIANT yourself then');
+				return hr_GetValue;
+			}
+		}
+	};
 }
 
 var ostypes = new winInit();

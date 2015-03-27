@@ -3456,11 +3456,8 @@ function tbb_box_click(e) {
 }
 
 // start - functions to update icons at various locations
-function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
-	// if aDOMWin is passed
-		// if aProfilePath is not supplied, it will figure out what profile that aDOMWin belongs to and update its icon accordingly
-		// if aProfilePath is supplid, then it will not figure out what profile it belongs to and just go for it
-	// if aDOMWin is null, it updates all windows of current profile, no need for aProfilePath (aProfilePath is ignored), its very simple to figure out current profile
+function updateIconToAllWindows(aProfilePath, useIconNameStr) {
+	// if aProfilePath is of cur profile it uses XPCOM to get all windows
 	
 	// useIconNameStr should be string of path
 	
@@ -3562,15 +3559,19 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr, aDOMWin) {
 				
 				if (!aDOMWin) {
 					if (aProfilePath == profToolkit.selectedProfile.iniKey) {
-						aDOMWin = Services.wm.getMostRecentWindow(null);
-						var cBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
-											  .getInterface(Ci.nsIWebNavigation)
-											  .QueryInterface(Ci.nsIDocShellTreeItem)
-											  .treeOwner
-											  .QueryInterface(Ci.nsIInterfaceRequestor)
-											  .getInterface(Ci.nsIBaseWindow);
-						cWinHandlePtrStr = [cBaseWin.nativeHandle];
-						
+						// is current profile so no need for ctyes to get handles for all windows
+						cWinHandlePtrStr = [];
+						var DOMWindows = Services.wm.getEnumerator(null);
+						while (DOMWindows.hasMoreElements()) {
+							var aDOMWin = DOMWindows.getNext();
+							var aBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
+												  .getInterface(Ci.nsIWebNavigation)
+												  .QueryInterface(Ci.nsIDocShellTreeItem)
+												  .treeOwner
+												  .QueryInterface(Ci.nsIInterfaceRequestor)
+												  .getInterface(Ci.nsIBaseWindow);
+							cWinHandlePtrStr.push(aBaseWin.nativeHandle);
+						}
 						do_theApply();
 					} else {
 						// test if profile at aProfilePath is running
