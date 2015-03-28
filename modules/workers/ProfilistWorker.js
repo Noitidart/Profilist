@@ -117,11 +117,15 @@ function launchPath(fullPath) {
 				var sei = ostypes.TYPE.SHELLEXECUTEINFO();
 				console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-				sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath);
+				var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath)
+				sei.lpFile = cStr;
+				//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
 				var rez_ShellExecuteEx = ostypes.API('ShellExecuteEx')(sei.address());
 				console.info('rez_ShellExecuteEx:', rez_ShellExecuteEx.toString(), uneval(rez_ShellExecuteEx));
 				if (ctypes.winLastError != 0) { console.error('Failed rez_ShellExecuteEx, winLastError:', ctypes.winLastError); }
+				console.info('sei:', sei.toString());
+				console.log('sei.hInstApp:', sei.hInstApp.toString());
 			} finally {
 				var rez_CoUninitialize = ostypes.API('CoUninitialize')();
 			}
@@ -137,6 +141,186 @@ function launchPath(fullPath) {
 			break;
 		case 'darwin':
 			// open
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function createShortcut(path_createInDir, str_createWithName, path_linkTo, options) {
+	// winnt only
+	
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			/*
+			example args:
+			path_createInDir: OS.Constants.Path.desktopDir
+			str_createWithName: 'My Shortcut' // do not included '.lnk'
+			path_linkTo: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
+			options: {
+				path_createWithIcon: OS.Path.join(OS.Constants.Path.desktopDir, 'smiley.ico'), // optional because the icon of the targetFile is used if one is not provided
+				int_createWithIconIndex: 0, // 0 is used if not provided
+				str_createWithAppUserModelId: 'blah', // max 128 characters, no spaces // no systemAppUserModelID is set if not provided
+				str_createWtihArgs: '-P -no-remote', // no args are set if not provided
+				str_createWithDesc: 'this is description i want shown on my shortcut', // no descriptin is set if not provided
+				path_createWithWorkDir: null // i have no idea what a working dir is, but if not provided its not set
+				
+			}
+			*/
+			// creates shortcut file (.lnk)
+			var shellLink;
+			var persistFile;
+			var propertyStore;
+			try {
+				var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
+				console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+				if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx) || cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
+					//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
+				} else {
+					throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
+				}
+				
+				if (!options) {
+					options = {};
+				}
+				
+				ostypes.HELPER.InitShellLinkAndPersistFileConsts();
+
+				var shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
+				var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_ShellLink.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_IShellLink.address(), shellLinkPtr.address());
+				console.info('hr_CoCreateInstance:', hr_CoCreateInstance.toString(), uneval(hr_CoCreateInstance));
+				ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'CoCreateInstance');
+				shellLink = shellLinkPtr.contents.lpVtbl.contents;
+
+				
+				var persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
+				var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPersistFile.address(), persistFilePtr.address());
+				console.info('hr_shellLinkQI:', hr_shellLinkQI.toString(), uneval(hr_shellLinkQI));
+				ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'QueryInterface (IShellLink->IPersistFile)');
+				persistFile = persistFilePtr.contents.lpVtbl.contents;
+
+				if ('str_createWithAppUserModelId' in options) {
+					ostypes.HELPER.InitPropStoreConsts();
+					var propertyStorePtr = ostypes.IPropertyStore.ptr();
+					var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, IID_IPropertyStore.address(), propertyStorePtr.address());
+					console.info('hr_shellLinkQI2:', hr_shellLinkQI2.toString(), uneval(hr_shellLinkQI2));
+					ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'QueryInterface (IShellLink->IPropertyStore)');
+					propertyStore = propertyStorePtr.contents.lpVtbl.contents;
+				}
+				
+				/*
+				var shortcutFile = OS.Path.join(OS.Constants.Path.desktopDir, 'jsctypes.lnk'); // string path, must end in .lnk
+				var targetFile = FileUtils.getFile('XREExeF', []).path; // string path
+				var workingDir = null; // string path // from MSDN: The working directory is optional unless the target requires a working directory. For example, if an application creates a Shell link to a Microsoft Word document that uses a template residing in a different directory, the application would use this method to set the working directory.
+				var args = '-P -no-remote'; // command line arguments // string
+				var description = 'my sc via jsctypes'; // string
+				var iconFile = OS.Path.join(OS.Constants.Path.desktopDir, 'ppbeta.ico'); // string path
+				var iconIndex = null; // integer
+				var systemAppUserModelID = 'rawr45654'; // string
+				
+				cancelFinally = true;
+				*/
+				
+				var path_create = OS.Path.join(path_createInDir, str_createWithName + '.lnk');
+				
+				//will overwrite existing
+				var promise_checkExists = OS.File.exists(path_create);
+				if (promise_checkExists) {
+					//exists
+					var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
+					console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
+					ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+				}
+
+				//if(path_linkTo) { // required
+					var hr_SetPath = shellLink.SetPath(shellLinkPtr, path_linkTo);
+					console.info('hr_SetPath:', hr_SetPath.toString(), uneval(hr_SetPath));
+					ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
+				//}
+
+				if('path_createWithWorkDir' in options) {
+					var hr_SetWorkingDirectory = shellLink.SetWorkingDirectory(shellLinkPtr, options.path_createWithWorkDir);
+					console.info('hr_SetWorkingDirectory:', hr_SetWorkingDirectory.toString(), uneval(hr_SetWorkingDirectory));
+					ostypes.HELPER.checkHRESULT(hr, 'SetWorkingDirectory');
+				}
+
+				if ('str_createWtihArgs' in options) {
+					var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, options.str_createWtihArgs);
+					console.info('hr_SetArguments:', hr_SetArguments.toString(), uneval(hr_SetArguments));
+					ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
+				}
+
+				if ('str_createWithDesc' in options) {
+					var hr_SetDescription = shellLink.SetDescription(shellLinkPtr, options.str_createWithDesc);
+					console.info('hr_SetDescription:', hr_SetDescription.toString(), uneval(hr_SetDescription));
+					ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
+				}
+
+				if('path_createWithIcon' in options) {
+					var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, options.path_createWithIcon, options.int_createWithIconIndex ? options.int_createWithIconIndex : 0);
+					console.info('hr_SetIconLocation:', hr_SetIconLocation.toString(), uneval(hr_SetIconLocation));
+					ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
+				}
+
+				if ('str_createWithAppUserModelId' in options) {
+					var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), options.str_createWithAppUserModelId);		
+					ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
+				
+					var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+					console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
+				}
+				
+				var hr_Save = persistFile.Save(persistFilePtr, path_create, false);
+				console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
+				ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
+				
+				console.log('Shortcut succesfully created');
+						
+			} finally {
+				var sumThrowMsg = [];
+				if(persistFile) {
+					try {
+						persistFile.Release(persistFilePtr);
+					} catch(e) {
+						console.error("Failure releasing persistFile: ", e);
+						sumThrowMsg.push(e.message);
+					}
+				}
+				
+				if(propertyStore) {
+					try {
+						propertyStore.Release(propertyStorePtr);
+					} catch(e) {
+						console.error("Failure releasing propertyStore: ", e.message.toString());
+						sumThrowMsg.push(e.message);
+					}
+				}
+
+				if(shellLink) {
+					try {
+						shellLink.Release(shellLinkPtr);
+					} catch(e) {
+						console.error("Failure releasing shellLink: ", e.message.toString());
+						sumThrowMsg.push(e.message);
+					}
+				}
+				
+				//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
+					try {
+						ostypes.API('CoUninitialize')(); // return void
+					} catch(e) {
+						console.error("Failure calling CoUninitialize: ", e.message.toString());
+						sumThrowMsg.push(e.message);
+					}
+				//}
+				
+				if (sumThrowMsg.length > 0) {
+					throw new Error(sumThrowMsg.join(' |||| '));
+				}
+				console.log('finally proc complete');
+			}
 			break;
 		default:
 			throw new Error('os-unsupported');

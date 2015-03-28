@@ -206,6 +206,214 @@ var winTypes = function() {
 		}]
 	);
 	
+	var IShellLinkWVtbl = ctypes.StructType('IShellLinkWVtbl');
+	this.IShellLinkW = ctypes.StructType('IShellLinkW', [{
+		'lpVtbl': IShellLinkWVtbl.ptr
+	}]);
+	//this.IShellLinkWPtr = new ctypes.PointerType(IShellLinkW);
+	IShellLinkWVtbl.define(
+		[{ //start inherit from IUnknown
+			'QueryInterface': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.REFIID,	// riid
+					this.VOID.ptr	// **ppvObject
+				]).ptr
+		}, {
+			'AddRef': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IShellLinkW.ptr
+				]).ptr
+		}, {
+			'Release': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IShellLinkW.ptr
+				]).ptr
+		}, { //end inherit from IUnknown //start IShellLinkW
+			'GetPath': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPTSTR,				// pszFile
+					this.INT,					// cchMaxPath
+					this.WIN32_FIND_DATA.ptr,	// *pfd
+					this.DWORD					// fFlags
+				]).ptr
+		}, {
+			'GetIDList': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.PIDLIST_ABSOLUTE.ptr	// *ppidl
+				]).ptr
+		}, {
+			'SetIDList': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.PCIDLIST_ABSOLUTE	// pidl
+				]).ptr
+		}, {
+			'GetDescription': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPTSTR,	// pszName
+					this.INT		// cchMaxName
+				]).ptr
+		}, {
+			'SetDescription': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR		// pszName
+				]).ptr
+		}, {
+			'GetWorkingDirectory': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPTSTR,		// pszDir
+					this.INT			// cchMaxPath
+				]).ptr
+		}, {
+			'SetWorkingDirectory': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR
+				]).ptr
+		}, {
+			'GetArguments': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPTSTR,	// pszArgs
+					this.INT		// cchMaxPath
+				]).ptr
+		}, {
+			'SetArguments': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR		// pszArgs
+				]).ptr
+		}, {
+			'GetHotKey': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.WORD.ptr	// *pwHotkey
+				]).ptr
+		}, {
+			'SetHotKey': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.WORD	// wHotkey
+				]).ptr
+		}, {
+			'GetShowCmd': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.INT.ptr		// *piShowCmd
+				]).ptr
+		}, {
+			'SetShowCmd': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.INT		// iShowCmd
+				]).ptr
+		}, {
+			'GetIconLocation': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPTSTR,	// pszIconPath
+					this.INT,		// cchIconPath
+					this.INT.ptr	// *piIcon
+				]).ptr
+		}, {
+			'SetIconLocation': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR,	// pszIconPath
+					this.INT		// iIcon
+				]).ptr
+		}, {
+			'SetRelativePath': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR,	// pszPathRel
+					this.DWORD		// dwReserved
+				]).ptr
+		}, {
+			'Resolve': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.HWND,	// hwnd
+					this.DWORD	// fFlags
+				]).ptr
+		}, {
+			'SetPath': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IShellLinkW.ptr,
+					this.LPCTSTR	// pszFile
+				]).ptr
+		}]
+	);
+	
+	var IPersistFileVtbl = ctypes.StructType('IPersistFileVtbl');
+	this.IPersistFile = ctypes.StructType('IPersistFile',[{
+			'lpVtbl': IPersistFileVtbl.ptr
+		}]
+	);
+	IPersistFileVtbl.define(
+		[{ //start inherit from IUnknown
+			'QueryInterface': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.REFIID,	// riid
+					this.VOID.ptr	// **ppvObject
+				]).ptr
+		}, {
+			'AddRef': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IPersistFile.ptr
+				]).ptr
+		}, {
+			'Release': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.ULONG, [
+					this.IPersistFile.ptr
+				]).ptr
+		}, { //end inherit from IUnknown //start inherit from IPersist
+			'GetClassID': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.CLSID.ptr	// *pClassID
+				]).ptr
+		}, { //end inherit from IPersist // start IPersistFile
+			'IsDirty': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+				]).ptr
+		}, {
+			'Load': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.LPCOLESTR,	// pszFileName
+					this.DWORD		// dwMode
+				]).ptr
+		}, {
+			'Save': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.LPCOLESTR,	// pszFileName
+					this.BOOL		// fRemember
+				]).ptr
+		}, {
+			'SaveCompleted': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.LPCOLESTR	// pszFileName
+				]).ptr
+		}, {
+			'GetCurFile': ctypes.FunctionType(this.CALLBACK_ABI,
+				this.HRESULT, [
+					this.IPersistFile.ptr,
+					this.LPOLESTR.ptr	// *ppszFileName
+				]).ptr
+		}
+	]);
+	
 	/* http://msdn.microsoft.com/en-us/library/windows/hardware/ff545817%28v=vs.85%29.aspx
 	 * typedef struct _FILE_NAME_INFORMATION {
 	 * ULONG FileNameLength;
@@ -391,6 +599,8 @@ var winInit = function() {
 
 	// CONSTANTS
 	this.CONST = {
+		COINIT_APARTMENTTHREADED: 0x2,
+		CLSCTX_INPROC_SERVER: 0x1,
 		SW_SHOWNORMAL: 1,
 		VARIANT_FALSE: 0, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 		VARIANT_TRUE: -1, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
@@ -548,6 +758,25 @@ var winInit = function() {
 				self.TYPE.LPCOLESTR,	// lpsz
 				self.TYPE.GUID.ptr		// pclsid
 			); 
+		},
+		CoCreateInstance: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms686615%28v=vs.85%29.aspx
+			 * HRESULT CoCreateInstance(
+			 *   __in_   REFCLSID rclsid,
+			 *   __in_   LPUNKNOWN pUnkOuter,
+			 *   __in_   DWORD dwClsContext,
+			 *   __in_   REFIID riid,
+			 *   __out_  LPVOID *ppv
+			 * );
+			 */
+			return lib('Ole32.dll').declare('CoCreateInstance', self.TYPE.WINABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.REFCLSID,		// rclsid
+				self.TYPE.LPUNKNOWN,	// pUnkOuter
+				self.TYPE.DWORD,		// dwClsContext
+				self.TYPE.REFIID,		// riid
+				self.TYPE.LPVOID		// *ppv
+			);
 		},
 		CoInitializeEx: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms695279%28v=vs.85%29.aspx
@@ -1049,6 +1278,58 @@ var winInit = function() {
 			ppropvar.contents.vt = self.CONST.VT_LPWSTR;
 
 			return hr_SHStrDup;
+		},
+		InitShellLinkAndPersistFileConsts: function() {
+			if (!self.CONST.CLSID_ShellLink || (self.CONST.CLSID_ShellLink.isNull && self.CONST.CLSID_ShellLink.isNull())) {
+				if (self.CONST.CLSID_ShellLink && (self.CONST.CLSID_ShellLink.isNull && self.CONST.CLSID_ShellLink.isNull())) {
+					console.error('in here because self.CONST.CLSID_ShellLink.isNull() which is ok, i was just curious to see if it ever went to null after set it as const, you kno gc stuff');
+				}
+				self.CONST.CLSID_ShellLink = self.HELPER.CLSIDFromString('00021401-0000-0000-C000-000000000046');
+				// var CLSID_ShellLink = self.TYPE.GUID();
+				// var hr_CLSID_ShellLink = ostypes.API('CLSIDFromString')('{}', CLSID_ShellLink.address());
+				// //console.info('hr_CLSID_ShellLink:', hr_CLSID_ShellLink, hr_CLSID_ShellLink.toString(), uneval(hr_CLSID_ShellLink));
+				// ostypes.HELPER.checkHRESULT(hr_CLSID_ShellLink, 'CLSIDFromString (CLSID_ShellLink)');
+				// //console.info('CLSID_ShellLink:', CLSID_ShellLink, CLSID_ShellLink.toString(), uneval(CLSID_ShellLink));
+				
+				self.CONST.IID_IShellLink = self.HELPER.CLSIDFromString('000214F9-0000-0000-C000-000000000046');
+				// var IID_IShellLink = self.TYPE.GUID();
+				// hr_IID_IShellLink = ostypes.API('CLSIDFromString')('{000214F9-0000-0000-C000-000000000046}', IID_IShellLink.address());
+				// //console.info('hr_IID_IShellLink:', hr_IID_IShellLink, hr_IID_IShellLink.toString(), uneval(hr_IID_IShellLink));
+				// ostypes.HELPER.checkHRESULT(hr_IID_IShellLink, 'CLSIDFromString (IID_ShellLink)');
+				// //console.info('IID_IShellLink:', IID_IShellLink, IID_IShellLink.toString(), uneval(IID_IShellLink));
+				
+				self.CONST.IID_IPersistFile = self.HELPER.CLSIDFromString('0000010b-0000-0000-C000-000000000046');
+				// var IID_IPersistFile = self.TYPE.GUID();
+				// var hr_IID_IPersistFile = ostypes.API('CLSIDFromString')('{0000010b-0000-0000-C000-000000000046}', IID_IPersistFile.address());
+				// console.info('hr_IID_IPersistFile:', hr_IID_IPersistFile, hr_IID_IPersistFile.toString(), uneval(hr_IID_IPersistFile));
+				// ostypes.HELPER.checkHRESULT(hr_IID_IPersistFile, 'CLSIDFromString (IID_IPersistFile)');
+				// console.info('IID_IPersistFile:', IID_IPersistFile, IID_IPersistFile.toString(), uneval(IID_IPersistFile));
+			}
+		},
+		InitPropStoreConsts: function() {
+			if (!self.CONST.IID_IPropertyStore || (self.CONST.IID_IPropertyStore.isNull && self.CONST.IID_IPropertyStore.isNull())) {
+				if (self.CONST.IID_IPropertyStore && (self.CONST.IID_IPropertyStore.isNull && self.CONST.IID_IPropertyStore.isNull())) {
+					console.error('in here because self.CONST.IID_IPropertyStore.isNull() which is ok, i was just curious to see if it ever went to null after set it as const, you kno gc stuff');
+				}
+				console.log('defining IPropertyStore CONSTs');
+				self.CONST.IID_IPropertyStore = self.HELPER.CLSIDFromString('886d8eeb-8cf2-4446-8d02-cdba1dbdcf99');
+				//console.info('IID_IPropertyStore:', self.CONST.IID_IPropertyStore.toString());
+				
+				// this test vaidates that the js version o self.HELPER.CLSIDFromString matches and works fine
+				// var aIID_IPropertyStore = self.TYPE.GUID();
+				// var hr_CLSIDFromString_IIDIPropertyStore = self.API('CLSIDFromString')('{886d8eeb-8cf2-4446-8d02-cdba1dbdcf99}', aIID_IPropertyStore.address());
+				// self.HELPER.checkHRESULT(hr_CLSIDFromString_IIDIPropertyStore, 'CLSIDFromString (IID_IPropertyStore)');
+				// console.info('hresult passed fine, aIID_IPropertyStore2:', aIID_IPropertyStore.toString());
+								
+				var fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource = self.HELPER.CLSIDFromString('9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3');
+				//console.info('fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource:', fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource.toString());
+				
+				self.CONST.PKEY_AppUserModel_ID = self.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 5); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391569%28v=vs.85%29.aspx
+				self.CONST.PKEY_AppUserModel_RelaunchCommand = self.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 2);// guid and pid from: http://msdn.microsoft.com/en-us/library/dd391571%28v=vs.85%29.aspx
+				self.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource = self.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 4); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391572%28v=vs.85%29.aspx
+				self.CONST.PKEY_AppUserModel_RelaunchIconResource = self.TYPE.PROPERTYKEY(fmtid_ID_RelaunchCommand_RelaunchDisplayNameResource_RelaunchIconResource, 3); // guid and pid from: http://msdn.microsoft.com/en-us/library/dd391573%28v=vs.85%29.aspx
+				//console.log('done defining IPropertyStore CONSTs');
+			}
 		},
 		IPropertyStore_SetValue: function(vtblPpsPtr, pps/*IPropertyStore*/, pkey/*REFPROPERTYKEY*/, pszValue/*PCWSTR*/) {
 			// from: http://blogs.msdn.com/b/oldnewthing/archive/2011/06/01/10170113.aspx
