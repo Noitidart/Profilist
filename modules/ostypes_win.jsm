@@ -1364,10 +1364,10 @@ var winInit = function() {
 			var hr_GetValue = pps.GetValue(vtblPpsPtr, pkey, ppropvar.address());
 			this.checkHRESULT(hr_GetValue, 'IPropertyStore_GetValue');
 			
-			console.info('ppropvar:', ppropvar.toString(), uneval(ppropvar));
+			//console.info('ppropvar:', ppropvar.toString(), uneval(ppropvar));
 			
 			if (ret_js) {
-				console.info('ppropvar.pwszVal:', ppropvar.pwszVal.toString(), uneval(ppropvar.pwszVal));
+				//console.info('ppropvar.pwszVal:', ppropvar.pwszVal.toString(), uneval(ppropvar.pwszVal));
 				if (ppropvar.pwszVal.isNull()) {
 					console.log('ppropvar.pwszVal is NULL so blank string was found');
 					var jsstr = '';
@@ -1376,7 +1376,7 @@ var winInit = function() {
 				}
 				
 				var rez_PropVariantClear = self.API('PropVariantClear')(ppropvar.address());
-				console.info('rez_PropVariantClear:', rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
+				//console.info('rez_PropVariantClear:', rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
 
 				return jsstr;
 			} else {

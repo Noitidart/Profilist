@@ -166,7 +166,6 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 				str_createWtihArgs: '-P -no-remote', // no args are set if not provided
 				str_createWithDesc: 'this is description i want shown on my shortcut', // no descriptin is set if not provided
 				path_createWithWorkDir: null // i have no idea what a working dir is, but if not provided its not set
-				
 			}
 			*/
 			// creates shortcut file (.lnk)
@@ -203,8 +202,8 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 
 				if ('str_createWithAppUserModelId' in options) {
 					ostypes.HELPER.InitPropStoreConsts();
-					var propertyStorePtr = ostypes.IPropertyStore.ptr();
-					var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, IID_IPropertyStore.address(), propertyStorePtr.address());
+					var propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
+					var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPropertyStore.address(), propertyStorePtr.address());
 					console.info('hr_shellLinkQI2:', hr_shellLinkQI2.toString(), uneval(hr_shellLinkQI2));
 					ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'QueryInterface (IShellLink->IPropertyStore)');
 					propertyStore = propertyStorePtr.contents.lpVtbl.contents;
@@ -265,9 +264,13 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 				}
 
 				if ('str_createWithAppUserModelId' in options) {
-					var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), options.str_createWithAppUserModelId);		
-					ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
-				
+					if (promise_checkExists) {
+						console.error('cannot update System.AppUserModel.ID, you specified it should though, so throwing warning as it will not update it'); // trying to update while it exists returns HRESULT of -2147287035 which is STG_E_ACCESSDENIED
+					} else {
+						var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), options.str_createWithAppUserModelId);		
+						ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
+					}
+					
 					var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
 					console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
 				}
