@@ -106,28 +106,30 @@ function launchPath(fullPath) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-			// shellExecEx
-			// http://blogs.msdn.com/b/oldnewthing/archive/2010/11/18/10092914.aspx
-			// i get access denied as it requires STA
 			try {
-				var rez_CoInitializeEx = ostypes.API('CoInitializeEx')(null, 0x2 | 0x4);
-				console.info('rez_CoInitializeEx:', rez_CoInitializeEx.toString(), uneval(rez_CoInitializeEx));
-				if (ctypes.winLastError != 0) { console.error('Failed rez_CoInitializeEx, winLastError:', ctypes.winLastError); }
+				// shellExecEx
+				// http://blogs.msdn.com/b/oldnewthing/archive/2010/11/18/10092914.aspx
+				// i get access denied as it requires STA
+				//var rez_CoInitializeEx = ostypes.API('CoInitializeEx')(null, 0x2 | 0x4);
+				//console.info('rez_CoInitializeEx:', rez_CoInitializeEx.toString(), uneval(rez_CoInitializeEx));
+				//if (ctypes.winLastError != 0) { console.error('Failed rez_CoInitializeEx, winLastError:', ctypes.winLastError); }
 				
 				var sei = ostypes.TYPE.SHELLEXECUTEINFO();
-				console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
+				//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-				var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath)
+				var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath);
 				sei.lpFile = cStr;
 				//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
+				
 				var rez_ShellExecuteEx = ostypes.API('ShellExecuteEx')(sei.address());
 				console.info('rez_ShellExecuteEx:', rez_ShellExecuteEx.toString(), uneval(rez_ShellExecuteEx));
 				if (ctypes.winLastError != 0) { console.error('Failed rez_ShellExecuteEx, winLastError:', ctypes.winLastError); }
-				console.info('sei:', sei.toString());
-				console.log('sei.hInstApp:', sei.hInstApp.toString());
+				
+				//console.info('sei:', sei.toString());
+				//console.log('sei.hInstApp:', sei.hInstApp.toString());
 			} finally {
-				var rez_CoUninitialize = ostypes.API('CoUninitialize')();
+				//var rez_CoUninitialize = ostypes.API('CoUninitialize')();
 			}
 			break;
 		case 'linux':
@@ -158,7 +160,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 			example args:
 			path_createInDir: OS.Constants.Path.desktopDir
 			str_createWithName: 'My Shortcut' // do not included '.lnk'
-			path_linkTo: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
+			path_linkTo: Services.dirsvc.get('XREExeF', Ci.nsIFile).path // CAN be null IF the shortcut already exists and you want to use this for just updating icon or something
 			options: {
 				path_createWithIcon: OS.Path.join(OS.Constants.Path.desktopDir, 'smiley.ico'), // optional because the icon of the targetFile is used if one is not provided
 				int_createWithIconIndex: 0, // 0 is used if not provided
@@ -231,13 +233,17 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
 					console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
 					ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+				} else {
+					if (!path_linkTo) {
+						throw new Error('The shortcut does not exist, therefore a target to link this shortcut to must be provided');
+					}
 				}
 
-				//if(path_linkTo) { // required
+				if (path_linkTo) { // required
 					var hr_SetPath = shellLink.SetPath(shellLinkPtr, path_linkTo);
 					console.info('hr_SetPath:', hr_SetPath.toString(), uneval(hr_SetPath));
 					ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
-				//}
+				}
 
 				if('path_createWithWorkDir' in options) {
 					var hr_SetWorkingDirectory = shellLink.SetWorkingDirectory(shellLinkPtr, options.path_createWithWorkDir);
@@ -283,16 +289,16 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 						
 			} finally {
 				var sumThrowMsg = [];
-				if(persistFile) {
+				if (persistFile) {
 					try {
 						persistFile.Release(persistFilePtr);
 					} catch(e) {
-						console.error("Failure releasing persistFile: ", e);
+						console.error("Failure releasing persistFile: ", e.toString());
 						sumThrowMsg.push(e.message);
 					}
 				}
 				
-				if(propertyStore) {
+				if (propertyStore) {
 					try {
 						propertyStore.Release(propertyStorePtr);
 					} catch(e) {
@@ -301,7 +307,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					}
 				}
 
-				if(shellLink) {
+				if (shellLink) {
 					try {
 						shellLink.Release(shellLinkPtr);
 					} catch(e) {
@@ -397,7 +403,72 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 	return rezMain;
 }
 
-function test(tst) {
+function makeAlias(path_create, path_target) {
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			// returns true/false
+			// creates a hard link
+			// directory must be different otherwise hard link fails to make, it makes a blank file, clicking it, pops open the windows "use what program to open this" thing
+			// names can be different. // update of icon name or target path updates to the other. // update of file name does not propogate to the other
+			
+			// path_create and path_target must include extenions
+			
+			var rez_CreateHardLink = ostypes.API('CreateHardLink')(path_create, path_target, null);
+			console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
+			if (ctypes.winLastError != 0) { console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError); }
+			return rez_CreateHardLink;
+			
+			break;
+		case 'linux':
+		case 'freebsd':
+		case 'openbsd':
+		case 'sunos':
+		case 'webos':
+		case 'android':
+			// returns
+				// if LOCKED - jsInt > 0 which is the PID
+				// if NOT locked - 0 if NOT locked, otherwise 
+			
+			var path_lock = OS.Path.join(path_cProfRootDir, '.parentlock');
+			var path_lock_sym = OS.Path.join(path_cProfRootDir, 'lock');
+			
+			break;
+		case 'darwin':
+			// returns
+				// if LOCKED - jsInt > 0 which is the PID
+				// if NOT locked - 0 if NOT locked, otherwise 
+			
+			var path_lock = OS.Path.join(path_cProfRootDir, '.parentlock');
+			// var path_lock_sym = OS.Path.join(path_cProfRootDir, 'lock'); // do macs have symlink'ed lock?
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}	
+}
+
+function test(tst, tst2) {
+	/*
+	// symbolic link requires elevated privelages so ditched this, as i dont know if user needs to be logged in as admin for an elevated com obj to be made
+	var symPth = ostypes.TYPE.LPCTSTR.targetType.array()(tst);
+	var trgPth = ostypes.TYPE.LPCTSTR.targetType.array()(tst2);
+	var rez = ostypes.API('CreateSymbolicLink')(symPth, trgPth, 0);
+	console.info('rez:', rez.toString(), uneval(rez));
+	if (ctypes.winLastError != 0) { console.error('Failed rez, winLastError:', ctypes.winLastError); }
+	*/
+
+	
+	var createPth = ostypes.TYPE.LPCTSTR.targetType.array()(tst);
+	var trgPth = ostypes.TYPE.LPCTSTR.targetType.array()(tst2);
+	var rez = ostypes.API('CreateHardLink')(symPth, trgPth, null);
+	console.info('rez:', rez.toString(), uneval(rez));
+	if (ctypes.winLastError != 0) { console.error('Failed rez, winLastError:', ctypes.winLastError); }
+	
+	// hard link is working how i was hoping a symlink would, user can rename it, move it around, and it remains connected, even icon change reflects
+	
+	return;
 	/*
 	var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(tst));
 	
@@ -789,7 +860,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource.address(), '')
 						//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchCommand.address(), '');
 						//console.log('done set on', arrWinHandlePtrStrs[i]);
-						ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
+						//ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
 					} catch(ex) {
 						console.error('ex caught when setting IPropertyStore:', ex);
 						throw ex;

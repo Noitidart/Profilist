@@ -117,18 +117,24 @@ var winTypes = function() {
 	  { 'Data3': this.USHORT },
 	  { 'Data4': this.BYTE.array(8) }
 	]);
-	this.PROPVARIANT = new ctypes.StructType('PROPVARIANT', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
+	this.PROPVARIANT = ctypes.StructType('PROPVARIANT', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
 		{ 'vt': this.VARTYPE }, // constants for this are available at MSDN: http://msdn.microsoft.com/en-us/library/windows/desktop/aa380072%28v=vs.85%29.aspx
 		{ 'wReserved1': this.WORD },
 		{ 'wReserved2': this.WORD },
 		{ 'wReserved3': this.WORD },
 		{ 'pwszVal': this.LPWSTR } // union, i just use pwszVal so I picked that one // for InitPropVariantFromString // when using this see notes on MSDN doc page chat of PROPVARIANT ( http://msdn.microsoft.com/en-us/library/windows/desktop/aa380072%28v=vs.85%29.aspx )this guy says: "VT_LPWSTR must be allocated with CoTaskMemAlloc :: (Presumably this also applies to VT_LPSTR) VT_LPWSTR is described as being a string pointer with no information on how it is allocated. You might then assume that the PROPVARIANT doesn't own the string and just has a pointer to it, but you'd be wrong. In fact, the string stored in a VT_LPWSTR PROPVARIANT must be allocated using CoTaskMemAlloc and be freed using CoTaskMemFree. Evidence for this: Look at what the inline InitPropVariantFromString function does: It sets a VT_LPWSTR using SHStrDupW, which in turn allocates the string using CoTaskMemAlloc. Knowing that, it's obvious that PropVariantClear is expected to free the string using CoTaskMemFree. I can't find this explicitly documented anywhere, which is a shame, but step through this code in a debugger and you can confirm that the string is freed by PropVariantClear: ```#include <Propvarutil.h>	int wmain(int argc, TCHAR *lpszArgv[])	{	PROPVARIANT pv;	InitPropVariantFromString(L"Moo", &pv);	::PropVariantClear(&pv);	}```  If  you put some other kind of string pointer into a VT_LPWSTR PROPVARIANT your program is probably going to crash."
 	]);
+	this.SECURITY_ATTRIBUTES = ctypes.StructType('_SECURITY_ATTRIBUTES', [ // https://msdn.microsoft.com/en-us/library/windows/desktop/aa379560%28v=vs.85%29.aspx
+		{ 'nLength': this.DWORD },
+		{ 'lpSecurityDescriptor': this.LPVOID },
+		{ 'bInheritHandle': this.BOOL }
+	]);
 	
 	// ADVANCED STRUCTS // based on "simple structs" to be defined first
 	this.CLSID = this.GUID;
 	this.PGUID = this.GUID.ptr;
 	this.IID = this.GUID;
+	this.LPSECURITY_ATTRIBUTES = this.SECURITY_ATTRIBUTES.ptr;
 	
 	/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
 	 * typedef struct {
@@ -586,7 +592,8 @@ var winTypes = function() {
 		{ 'lpClass': this.LPCTSTR },
 		{ 'hkeyClass': this.HKEY },
 		{ 'dwHotKey': this.DWORD },
-		{ 'hIcon': this.HANDLE } // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
+		{ 'hIcon': this.HANDLE }, // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
+		{ 'hProcess': this.HANDLE }
 	]);
 }
 
@@ -797,6 +804,36 @@ var winInit = function() {
 			 */
 			return lib('Ole32.dll').declare('CoUninitialize', self.TYPE.WINABI,
 				self.TYPE.VOID	// return
+			);
+		},
+		CreateSymbolicLink: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa363866%28v=vs.85%29.aspx
+			 * BOOLEAN WINAPI CreateSymbolicLink(
+			 *   __in_  LPTSTR lpSymlinkFileName,
+			 *   __in_  LPTSTR lpTargetFileName,
+			 *   __in_  DWORD dwFlags
+			 * );
+			 */
+			return lib('kernel32').declare('CreateSymbolicLinkW', self.TYPE.WINABI,
+				self.TYPE.BOOLEAN,	// return
+				self.TYPE.LPTSTR,	// lpSymlinkFileName
+				self.TYPE.LPTSTR,	// lpTargetFileName
+				self.TYPE.DWORD		// dwFlags
+			);
+		},
+		CreateHardLink: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa363860%28v=vs.85%29.aspx
+			 * BOOL WINAPI CreateHardLink(
+			 *   __in_        LPCTSTR lpFileName,
+			 *   __in_        LPCTSTR lpExistingFileName,
+			 *   __reserved_  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+			 * );
+			 */
+			return lib('kernel32').declare('CreateHardLinkW', self.TYPE.WINABI,
+				self.TYPE.BOOL,					// return
+				self.TYPE.LPCTSTR,				// lpFileName
+				self.TYPE.LPCTSTR,				// lpExistingFileName
+				self.TYPE.LPSECURITY_ATTRIBUTES	// lpSecurityAttributes
 			);
 		},
 		DestroyIcon: function() {
@@ -1026,7 +1063,7 @@ var winInit = function() {
 			 *   __inout_  SHELLEXECUTEINFO *pExecInfo
 			 * );
 			 */
-			return lib('shell32.dll').declare('ShellExecuteEx', self.TYPE.WINABI,
+			return lib('shell32.dll').declare('ShellExecuteExW', self.TYPE.WINABI,
 				self.TYPE.BOOL,					// return
 				self.TYPE.SHELLEXECUTEINFO.ptr	// *pExecInfo
 			);
