@@ -245,7 +245,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
 				}
 
-				if('path_createWithWorkDir' in options) {
+				if ('path_createWithWorkDir' in options) {
 					var hr_SetWorkingDirectory = shellLink.SetWorkingDirectory(shellLinkPtr, options.path_createWithWorkDir);
 					console.info('hr_SetWorkingDirectory:', hr_SetWorkingDirectory.toString(), uneval(hr_SetWorkingDirectory));
 					ostypes.HELPER.checkHRESULT(hr, 'SetWorkingDirectory');
@@ -263,7 +263,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
 				}
 
-				if('path_createWithIcon' in options) {
+				if ('path_createWithIcon' in options) {
 					var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, options.path_createWithIcon, options.int_createWithIconIndex ? options.int_createWithIconIndex : 0);
 					console.info('hr_SetIconLocation:', hr_SetIconLocation.toString(), uneval(hr_SetIconLocation));
 					ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
@@ -427,22 +427,10 @@ function makeAlias(path_create, path_target) {
 		case 'sunos':
 		case 'webos':
 		case 'android':
-			// returns
-				// if LOCKED - jsInt > 0 which is the PID
-				// if NOT locked - 0 if NOT locked, otherwise 
-			
-			var path_lock = OS.Path.join(path_cProfRootDir, '.parentlock');
-			var path_lock_sym = OS.Path.join(path_cProfRootDir, 'lock');
-			
-			break;
 		case 'darwin':
-			// returns
-				// if LOCKED - jsInt > 0 which is the PID
-				// if NOT locked - 0 if NOT locked, otherwise 
-			
-			var path_lock = OS.Path.join(path_cProfRootDir, '.parentlock');
-			// var path_lock_sym = OS.Path.join(path_cProfRootDir, 'lock'); // do macs have symlink'ed lock?
-			
+			// if alread exists it throws with ctypes.unixErrno 17
+			var rez_unixSymLink = OS.File.unixSymLink(path_target, path_create);
+			return rez_unixSymLink;
 			break;
 		default:
 			throw new Error('os-unsupported');
@@ -597,7 +585,7 @@ function removeWmSetIcons_thenSetLong(contents_JSON, fullPathToFile, mostRecWinH
 			var hIconSmall_LONG_PTR = ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm)) : ostypes.TYPE.LONG(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm));
 			*/
 			// actually scrap the set back with long, i have to set back by LoadImage again otherwise if the profile the icon was applied from is closed, it will mem release the icon, even if use LR_SHARED as its cross process
-			if (info.OSVersion == '5.1' || info.OSVersion == '5.2') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (info.isWinXp) { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -670,7 +658,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			console.log('iconPath: ' + iconPath);
 			console.log('arrWinHandlePtrStrs: ' + arrWinHandlePtrStrs.toString());
 			
-			if (info.OSVersion == '5.1' || info.OSVersion == '5.2') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (info.isWinXp) { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -821,7 +809,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			}
 			
 			//console.log('OSVersion:', parseFloat(info.OSVersion), info.OSVersion);
-			if (parseFloat(info.OSVersion) >= 6.1) {
+			if (info.isWin7) {
 				console.log('win7+');
 				// win7+
 				if (!ostypes.CONST.IID_IPropertyStore) {
@@ -1061,9 +1049,9 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 						// really should never be greater then 1, but this is just a fallback
 						rezMain.sort(function(a,b) {
 							if (a.dwHighDateTime != b.dwHighDateTime) {
-								return a.dwHighDateTime > b.dwHighDateTime; // sort asc
+								return ctypes.UInt64.compare(a.dwHighDateTime, b.dwHighDateTime) > 0; // sort asc
 							} else {
-								return a.dwLowDateTime > b.dwLowDateTime; // sort asc
+								return ctypes.UInt64.compare(a.dwLowDateTime, b.dwLowDateTime) > 0; // sort asc
 							}
 						});
 					}

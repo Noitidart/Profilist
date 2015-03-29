@@ -13,7 +13,7 @@ const self = {
 
 const myPrefBranch = 'extensions.' + self.name + '@jetpack.';
 const myServices = {};
-Cu.importGlobalProperties(['TextDecoder']); //const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
+Cu.importGlobalProperties(['TextEncoder', 'TextDecoder']); //const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
@@ -27,7 +27,7 @@ Cu.import('resource://gre/modules/AddonManager.jsm');
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
 XPCOMUtils.defineLazyGetter(myServices, 'stringBundle', function () { return Services.strings.createBundle('chrome://profilist/locale/bootstrap.properties?' + Math.random()) /* Randomize URI to work around bug 719376 */ });
 XPCOMUtils.defineLazyGetter(myServices, 'hph', function () { return Cc['@mozilla.org/network/protocol;1?name=http'].getService(Ci.nsIHttpProtocolHandler); });
-
+XPCOMUtils.defineLazyGetter(myServices, 'wt7', function () { return Cc["@mozilla.org/windows-taskbar;1"].getService(Ci.nsIWinTaskbar); });
 
 const tbb_box_style = '';
 const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
@@ -46,6 +46,7 @@ var currentThisBuildsIconPath = '';
 
 var cOS = OS.Constants.Sys.Name.toLowerCase();
 var macStuff = {};
+var winStuff = {};
 var updateLauncherAndCutIconsOnBrowserShutdown; // set this to a function if this profiles build tie was changed while it was running, it will update the icon on browser shutdown
 
 const iconsetSizes_OS = {
@@ -1204,7 +1205,7 @@ function initProfToolkit() {
 	profToolkit.path_profilistData_iconsets = OS.Path.join(profToolkit.path_profilistData_root, 'iconsets');
 	profToolkit.path_profilistData_launcherIcons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
 	profToolkit.path_profilistData_launcherExes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
-	
+	profToolkit.path_profilistData_idsJson = OS.Path.join(path_profilistData_root, 'ids.json');
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':
@@ -4053,6 +4054,12 @@ var windowListener = {
 			OS.Constants.Path.libsqlite3 = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
 			OS.Constants.Path.libxul = 	Services.dirsvc.get('XpcomLib', Ci.nsIFile).path;
 			*/
+		} else if (winStuff.isWin7) {
+			// win7+
+			if (winStuff.setSystemAppUserModelID_perWin) {
+				myServices.wt7.setGroupIdForWindow(aDOMWindow, winStuff.setSystemAppUserModelID_perWin);
+				//todo: set other stuff, like window RelaunchCommand RelaunchName RelaunchIcon
+			}
 		}
 		// end - do os specific stuff
 		
@@ -5240,6 +5247,44 @@ function delAliasThenMake(pathTrg, pathMake) {
 	return deferred_delAliasThenMake.promise;
 }
 
+var _getProfId = {}; // cache
+function getProfId(aProfilePath) {
+	// returns promise
+		// resolves with string of id or null if temp profile
+	var deferredMain_getProfId = new Deferred();
+	
+	if (profToolkit.selectedProfile.iniKey === null) {
+		deferredMain_getProfId.resolve(null);
+	} else if (aProfilePath in _getProfId) {
+		deferredMain_getProfId.resolve(_getProfId[aProfilePath]);
+	} else {
+		var path_aProfileDir = getPathToProfileDir(aProfilePath);
+		var path_aProfileTimesDotJson = OS.Path.join(path_aProfileDir, 'times.json');
+		var promise_readTimes = read_encoded(path_aProfileTimesDotJson, {encoding:'utf-8'});
+		promise_readTimes.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readTimes - ', aVal);
+				// start - do stuff here - promise_readTimes
+				deferredMain_getProfId.resolve(ini[aProfilePath].props['Profilist.id']);
+				// end - do stuff here - promise_readTimes
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_readTimes', aReason:aReason};
+				console.warn('Rejected - promise_readTimes - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readTimes', aCaught:aCaught};
+				console.error('Caught - promise_readTimes - ', rejObj);
+				deferred_createProfile.reject(rejObj);
+			}
+		);
+	}
+	
+	return deferredMain_getProfId.promise;
+}
+
 function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launching) {
 	// returns promise
 	// resolves with:
@@ -6389,6 +6434,10 @@ function getPathToProfileDir(for_ini_key) {
 		throw new Error('getPathToProfileDir for_ini_key "' + for_ini_key + '" not found in ini');
 	}
 	
+	if (for_ini_key == profToolkit.selectedProfile.iniKey) {
+		return profToolkit.selectedProfile.rootDirPath;
+	}
+	
 	if (ini[for_ini_key].props.IsRelative == '1') {
 		return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)));
 	} else {
@@ -6420,7 +6469,9 @@ function getAppNameFromChan(theChName) {
 	}
 }
 
-function launchProfile(aProfilePath, safeMode) {
+function launchProfile(aProfilePath, arrOfArgs) {
+	// arrOfArgs is array of other command line arguments you want it launched with
+	
 	/*** LOGIC ***/
 	// if running
 		// then its most recent window is focused
@@ -8804,7 +8855,12 @@ function startProfilistWorker() {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-			objInfo.OSVersion = Services.sysinfo.getProperty('version');
+			objInfo.OSVersion = winStuff.OSVersion;
+			if (winStuff.isWinXp) {
+				objInfo.isWinXp = true;
+			} else if (winStuff.isWin7) {
+				objInfo.isWin7 = true;
+			}
 			break;
 		default:
 			// data supplied for all os
@@ -8910,43 +8966,69 @@ function startup(aData, aReason) {
 	};
 	
 	// start - os specific pre-startup stuff
-	if (cOS == 'darwin') {
-		macStuff.isMac = true;
-		
-		// check if should override paths
-		if (OS.Constants.Path.libDir.indexOf('profilist_data') > -1) {
-			macStuff.isProfilistLauncher = true;
-			// need to override
-			var promise_overridePaths = mac_doPathsOverride();
-			promise_overridePaths.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_overridePaths - ', aVal);
-					// start - do stuff here - promise_overridePaths
-					do_profilistStartup();
-					// end - do stuff here - promise_overridePaths
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_overridePaths', aReason:aReason};
-					console.warn('Rejected - promise_overridePaths - ', rejObj);
-					Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_overridePaths', aCaught:aCaught};
-					console.error('Caught - promise_overridePaths - ', rejObj);
-					Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
-				}
-			);
-		} else {
-			// actually no need to create, as when first launcher is made the paths get made so ignore: `//create pathsPrefContentsJson;`
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			winStuff.OSVersion = parseFloat(Services.sysinfo.getProperty('version'));
+			if (winStuff.OSVersion >= 6.1) {
+				winStuff.isWin7 = true;
+			} else if (winStuff.OSVersion == 5.1 || winStuff.OSVersion == 5.2) {
+				winStuff.isWinXp = true;
+			}
+			
 			do_profilistStartup();
-		}
-		
-	} else {
-		do_profilistStartup();
+			break;
+		/*
+		case 'linux':
+		case 'freebsd':
+		case 'openbsd':
+		case 'sunos':
+		case 'webos': // Palm Pre
+		case 'android': //profilist doesnt support android (android doesnt have profiles)
+			
+			do_profilistStartup();
+			break;
+		*/
+		case 'darwin':
+			macStuff.isMac = true;
+			
+			// check if should override paths
+			if (OS.Constants.Path.libDir.indexOf('profilist_data') > -1) {
+				macStuff.isProfilistLauncher = true;
+				// need to override
+				var promise_overridePaths = mac_doPathsOverride();
+				promise_overridePaths.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_overridePaths - ', aVal);
+						// start - do stuff here - promise_overridePaths
+						do_profilistStartup();
+						// end - do stuff here - promise_overridePaths
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_overridePaths', aReason:aReason};
+						console.warn('Rejected - promise_overridePaths - ', rejObj);
+						Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_overridePaths', aCaught:aCaught};
+						console.error('Caught - promise_overridePaths - ', rejObj);
+						Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
+					}
+				);
+			} else {
+				// actually no need to create, as when first launcher is made the paths get made so ignore: `//create pathsPrefContentsJson;`
+				do_profilistStartup();
+			}
+			
+			
+			break;
+		default:
+			do_profilistStartup();
 	}
-	// end - os specific pre-startup stuff
 	
+	// end - os specific pre-startup stuff	
 }
 
 function shutdown(aData, aReason) {
@@ -9000,6 +9082,231 @@ function shutdown(aData, aReason) {
 		//}
 	}
 	// end - os specific stuff
+}
+
+function refreshIdsJson(justRead, isEnabled, isUninstall) {
+	// requires that profToolkit be inited
+	// this will get current profiles id if not already available
+	
+	// returns promise
+		// resolves with array [selectedProfile id, json of ids.json];
+	
+	var json_ids; // an object holding the id from times.json correlated to object, which holds, HashString of path when installed for WINNT, to bundle-identifier for Mac, to itself for *nix
+	// on uninstall of profilist from a profile, it removes the id from profToolkit.path_profilistData_idsJson
+	/* example:
+	{
+		enabled: true/false,
+		winnt: {
+			SystemAppUserModelID: '46545' // max 128 chars, no spaces
+		},
+		mac: {
+			bundleIdentifier: '465454'
+		},
+		nix: {
+			
+		}
+	}
+	*/
+	var deferredMain_refreshIdsJson = new Deferred();
+
+	var aProfId;
+	var do_readIdsJson_and_getProfId = function() {
+		var promiseAllArr_readIdsAndProfId = [];
+		var deferred_readIdsJson = new Deferred();
+		
+		promiseAllArr_readIdsAndProfId.push(deferred_readIdsJson.promise);
+		promiseAllArr_readIdsAndProfId.push(getProfId(profToolkit.selectedProfile.iniKey));
+		
+		var promise_readIdsJson = read_encoded(profToolkit.path_profilistData_idsJson, {encoding:'utf-8'});
+		promise_readIdsJson.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readIdsJson - ', aVal);
+				// start - do stuff here - promise_readIdsJson
+				deferred_readIdsJson.resolve(aVal);
+				// end - do stuff here - promise_readIdsJson
+			},
+			function(aReason) {
+				if (aReasonMax(aReason).becauseNoSuchFile) {
+					json_ids = {};
+					deferred_readIdsJson.resolve('{}');
+				} else {
+					var rejObj = {name:'promise_readIdsJson', aReason:aReason};
+					console.warn('Rejected - promise_readIdsJson - ', rejObj);
+					deferred_readIdsJson.reject(rejObj);
+				}
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readIdsJson', aCaught:aCaught};
+				console.error('Caught - promise_readIdsJson - ', rejObj);
+				deferred_readIdsJson.reject(rejObj);
+			}
+		);
+		
+		var promiseAll_readIdsAndProfId = Promise.all(promiseAllArr_readIdsAndProfId);
+		promiseAll_readIdsAndProfId.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_readIdsAndProfId - ', aVal);
+				// start - do stuff here - promiseAll_readIdsAndProfId
+				json_ids = JSON.parse(aVal[0]);
+				aProfId = aVal[1];
+				do_writeIdsJson();
+				// end - do stuff here - promiseAll_readIdsAndProfId
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_readIdsAndProfId', aReason:aReason};
+				console.warn('Rejected - promiseAll_readIdsAndProfId - ', rejObj);
+				deferredMain_refreshIdsJson.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_readIdsAndProfId', aCaught:aCaught};
+				console.error('Caught - promiseAll_readIdsAndProfId - ', rejObj);
+				deferredMain_refreshIdsJson.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_writeIdsJson = function() {
+		var resolveObj = {slectedProfileId: aProfId, json_ids: json_ids, neededWrite: false};
+		if (justRead) {
+			return deferredMain_refreshIdsJson.resolve(resolveObj);
+		}
+		if (isUninstall) {
+			if (aProfId in json_ids) {
+				delete json_ids[aProfId];
+				shouldWrite = true;
+			} else {
+				deferredMain_refreshIdsJson(resolveObj); // can detect that on uninstall didnt remove anything as neededWrite of resolveObj will be false
+			}
+		} else {
+			if (aProfId in json_ids && json_ids[aProfId].enabled == isEnabled) {
+				// do nothing
+				var oldObj = JSON.parse(JSON.stringify(json_ids[aProfId));
+			}
+			
+			var shouldWrite = false;
+			
+			if (oldObj.enabled !== isEnabled) { //using === as it may be undefined which is same as false at == level
+				json_ids[aProfId].enabled =  isEnabled;
+				shouldWrite = true;
+			}
+			
+			if (isEnabled) {
+				switch (cOS) {
+					case 'winnt':
+					case 'winmo':
+					case 'wince':
+						if (parseFloat(Services.sysinfo.getProperty('version')) >= 6.1) {
+							//win7+
+							if (!(setSystemAppUserModelID_perWin in winStuff)) {
+								var cSystemAppUserModelID = Services.prefs.getCharPref('browser.taskbar.lastgroupid');
+								var useSepSystemAppUserModelIDs;
+								try {
+									useSepSystemAppUserModelIDs = Services.prefs.getBoolPref('taskbar.grouping.useprofile'); // 
+								} catch (ex) {
+									if (ex.result == 2147549183 /*ex.name == 'NS_ERROR_UNEXPECTED'*/) {
+										// either its there and is not a bool, or it doesnt exist
+										Services.prefs.clearUserPref('browser.taskbar.lastgroupid'); // so in case it was created but not as bool we clear it first which erases it
+									}
+								}
+								if (!useSepSystemAppUserModelIDs) {
+									Services.prefs.setBoolPref('taskbar.grouping.useprofile', true);
+								}
+								
+								var shouldBeCur = HashString(profToolkit.selectedProfile.rootDirPath);
+								
+								if (oldObj.SystemAppUserModelID != /*cSystemAppUserModelID != shouldBeCur*/) { // if (oldObj.SystemAppUserModelID != json_ids[aProfId].SystemAppUserModelID) {
+									json_ids[aProfId].SystemAppUserModelID = shouldBeCur;
+									// use oldObj.SystemAppUserModelID to find pinned shortcuts and delete it and remake it with new one (shouldBeCur)				
+									shouldWrite = true;
+									winStuff.setSystemAppUserModelID_perWin = shouldBeCur;
+									setSystemAppUserModelID_onAllOpenWin();
+									//check if pinned, check with oldObj.SystemAppUserModelID, if it is then update that pinned shortcut with this SystemAppUserModelID, has to be done by deleting and recreating it
+								} else {
+									winStuff.setSystemAppUserModelID_perWin = false;
+									// do nothing
+								}
+								
+								// test if current SystemAppUserModelID is equal to 
+								
+									// test if current id is set to one of the default SystemAppUserModelIDs
+										// if YES then set taskbar.grouping.useprofile to be true, but mark window opener to mark SHGetWindowPropertyStore until next restart
+										// if NO then test if it is the HashString value
+											// if YES then good to go
+											// if NO then set SystemAppUserModelID in json_ids to be this (should never happen)
+							} else {
+								// this is a re-run of refreshIdsJson and the SystemAppUserModelID stuff was already taken care of
+							}
+						}
+						break;
+					case 'linux':
+					case 'freebsd':
+					case 'openbsd':
+					case 'sunos':
+					case 'webos': // Palm Pre
+					case 'android': //profilist doesnt support android (android doesnt have profiles)
+						importScripts('chrome://profilist/content/modules/ostypes_nix.jsm');
+						break;
+					case 'darwin':
+						importScripts('chrome://profilist/content/modules/ostypes_mac.jsm');
+						break;
+					default:
+						throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+				}
+			}
+			
+			if (shouldWrite) {
+				resolveObj.neededWrite = true;
+				var promise_writeIdsJson = OS.File.writeAtomic(profToolkit.path_profilistData_idsJson, JSON.stringify(json_ids), {encoding:'utf-8'});
+				promise_writeIdsJson.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_writeIdsJson - ', aVal);
+						// start - do stuff here - promise_writeIdsJson
+						deferredMain_refreshIdsJson.resolve(resolveObj);
+						// end - do stuff here - promise_writeIdsJson
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_writeIdsJson', aReason:aReason};
+						console.warn('Rejected - promise_writeIdsJson - ', rejObj);
+						deferredMain_refreshIdsJson.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_writeIdsJson', aCaught:aCaught};
+						console.error('Caught - promise_writeIdsJson - ', rejObj);
+						deferredMain_refreshIdsJson.reject(rejObj);
+					}
+				);
+			}
+		}
+	}
+	
+	return deferredMain_refreshIdsJson.promise;
+}
+
+function setSystemAppUserModelID_onAllOpenWin() {
+	// WINNT function only
+	switch (cOS) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			if (parseFloat(Services.sysinfo.getProperty('version')) >= 6.1) {
+				// win7+
+				if (winStuff.setSystemAppUserModelID_perWin) {
+					var DOMWindows = Services.wm.getEnumerator(null);
+					while (DOMWindows.hasMoreElements()) {
+						var aDOMWindow = DOMWindows.getNext();
+						myServices.wt7.setGroupIdForWindow(aDOMWindow, winStuff.setSystemAppUserModelID_perWin);
+					}
+				} else {
+					console.error('winStuff.setSystemAppUserModelID_perWin is false');
+				}
+			}
+			break;
+		default:
+			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+	}
 }
 
 function install() {}
@@ -9362,4 +9669,52 @@ function isLittleEndian() {
 	new DataView(buffer).setInt16(0, 256, true);
 	return new Int16Array(buffer)[0] === 256;
 };
+
+function HashString() {
+	/**
+	 * Javascript implementation of
+	 * https://hg.mozilla.org/mozilla-central/file/0cefb584fd1a/mfbt/HashFunctions.h
+	 * aka. the mfbt hash function.
+	 */ 
+  // Note: >>>0 is basically a cast-to-unsigned for our purposes.
+  const encoder = new TextEncoder("utf-8");
+  const kGoldenRatio = 0x9E3779B9;
+
+  // Multiply two uint32_t like C++ would ;)
+  const mul32 = (a, b) => {
+    // Split into 16-bit integers (hi and lo words)
+    let ahi = (a >> 16) & 0xffff;
+    let alo = a & 0xffff;
+    let bhi = (b >> 16) & 0xffff
+    let blo = b & 0xffff;
+    // Compute new hi and lo seperately and recombine.
+    return (
+      (((((ahi * blo) + (alo * bhi)) & 0xffff) << 16) >>> 0) +
+      (alo * blo)
+    ) >>> 0;
+  };
+
+  // kGoldenRatioU32 * (RotateBitsLeft32(aHash, 5) ^ aValue);
+  const add = (hash, val) => {
+    // Note, cannot >> 27 here, but / (1<<27) works as well.
+    let rotl5 = (
+      ((hash << 5) >>> 0) |
+      (hash / (1<<27)) >>> 0
+    ) >>> 0;
+    return mul32(kGoldenRatio, (rotl5 ^ val) >>> 0);
+  }
+
+  return function(text) {
+    // Convert to utf-8.
+    // Also decomposes the string into uint8_t values already.
+    let data = encoder.encode(text);
+
+    // Compute the actual hash
+    let rv = 0;
+    for (let c of data) {
+      rv = add(rv, c | 0);
+    }
+    return rv;
+  };
+}
 // end - common helper functions

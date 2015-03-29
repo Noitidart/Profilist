@@ -873,6 +873,17 @@ var winInit = function() {
 				self.TYPE.UINT	// gaFlags
 			);
 		},
+		GetCurrentProcessExplicitAppUserModelID: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/dd378419.aspx
+			 * HRESULT GetCurrentProcessExplicitAppUserModelID(
+			 *   __out_  PWSTR *AppID
+			 * );
+			 */
+			return lib('shell32').declare('GetCurrentProcessExplicitAppUserModelID', self.TYPE.WINABI,
+				self.TYPE.HRESULT,	// return
+				self.TYPE.PWSTR.ptr	// *AppID
+			);
+		},
 		GetWindow: function() {
 			/* http://msdn.microsoft.com/en-us/library/ms633515%28v=vs.85%29.aspx
 			 * HWND WINAPI GetWindow(
