@@ -9391,81 +9391,218 @@ function uninstall(aData, aReason) {
 
 // end - custom to profilist helper functions
 
-function getPathToPinnedCut(aSystemAppUserModelID, aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
+function getPathToPinnedCut(aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
 	//winnt only
-	// searches the folders where shortcuts go if it is pinned, and if found resolves to its path, else resolves to null
+	// searches the folders where shortcuts go if it is pinned
 		// so reminder: if get null, then know that its not pinned
 	// returns promise
-	// if aSystemAppUserModelID is provided, then it overrides aProfilePath (meaning aProfilePath is ignored)
 	// dontCheck_dirIfRelaunchCmdPin is set to true, when looking for if default is pinned, as default pin is never found in dirIfRelaunchCmdPin
+	// rsolves to arr of paths, arr cuz, if default profile, then they can have multiple builds pinned
+	// resolves to undefined on stupid error (like testing temp profile for pin)
+	
+	// warning, i should monitor this with every windows update, this is implementation detail, it can change at any time without notice: http://stackoverflow.com/questions/28228042/shgetpropertystoreforwindow-how-to-set-properties-on-existing-system-appusermo#comment44829015_28228042
 	
 	var deferredMain_getPathToPinnedCut = new Deferred();
 	
-	// warning, i should monitor this with every windows update, this is implementation detail, it can change at any time without notice: http://stackoverflow.com/questions/28228042/shgetpropertystoreforwindow-how-to-set-properties-on-existing-system-appusermo#comment44829015_28228042
-	var path_dirIfNormalPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
-	var path_dirIfRelaunchCmdPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
+	if (!winStuff.isWin7) {
+		deferredMain_getPathToPinnedCut.reject(undefined);
+		return deferredMain_getPathToPinnedCut.promise;
+	}
+	
+	// globals for sub funcs
+	var searchCriterias = {
+		containsStr: [], // case insensitive find // used for finding default pins
+		matchesStr: [] // case insenstiive match
+	};
+	
+	var do_setupCriterias = function() {
+		// rejects main on fail, calls do_search on success
+		// all pushes should be lower cased //note: because i allow user to specify custom path to builds, and they might mess up the casing
 
-	// if in dirIfRelaunchCmdPin then the shortcut is held within a dir with random? weird string, so have to enumChildEntries 1 level deep
-	// if in dirIfNormalPin then just immediate children, so enumChildEntries with just 0 level deep
-	
-	/*logic*/
-	// enumChildEntries for both dirs, in delegate, if not dir then test its SystemAppUserModelID
-	// delegate checks
-		// not yet decided:
-			// SystemAppUserModelID - reason: if i want to find if default SystemAppUserModelID is pinned and change its target path. its easier to figure out SystemAppUserModelID of default then having to getPathToProfileDir of default profile (NO THIS IS NOT TRUE, its equally easy to get path to dfault profiles profile dir, just iterate through ini to find guy with Default=1, there has to be at least something with Default=1) {but what if no default profile) [actually the default pin cut should have path to just the build!! duhhhh!]
-			// if target path contains getPathToProfileDir(aProfilePath) - reason: SystemAppUserModelID is HashString of profileDir anyways, so going deep to SystemAppUserModelID is redundant and extra overhead
-	
-	var searchFullfilled = false; // set to true when pinned match is found, so it aborts remaining iteration of delegate 
-	var delegate_checkPinFile = function(entry) {
-		if (searchFullfilled) {
-			return true; // to stop iteration of delegate
+		if (aProfilePath === null) {
+			// temporary profiles cannot be pinned
+			deferredMain_getPathToPinnedCut.reject(undefined);
+			return deferredMain_getPathToPinnedCut.promise;
 		}
-		if (!entry.isDir) {
-			// do test
-			var cPinFileFullfillsSearch;
-			if (cPinFileFullfillsSearch) {
-				deferredMain_getPathToPinnedCut.resolve(entry.path);
-				return true; // this should stop iteration
+
+		if (ini[aProfilePath].props.Default == '1') {
+			// to matchesStr push all builds from ini.General.Profilist['dev-builds'] // note: dev-builds should be an object with unique id to build path
+			// to matchesStr push all the builds found in registry
+			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+			for (var buildId in devBuilds) {
+				searchCriterias.matchesStr.push(devBuilds[buildId].toLowerCase());
 			}
+			
+			var installedFxInfos = getAllFxBuilds();
+			
+			for (var i=0; i<installedFxInfos.length; i++) {
+				var cBuildPath = installedFxInfos.Name.toLowerCase();
+				if (searchCriterias.matchesStr.indexOf(cBuildPath) === -1) {
+					searchCriterias.matchesStr.push(cBuildPath);
+				}
+			}
+			
+			do_search();
+		} else {
+			// to containsStr push getPathToProfileDir(aProfilePath)
+			searchCriterias.matchesStr.push(getPathToProfileDir(aProfilePath).toLowerCase());
 		}
 	};
 	
-	var promiseAllArr_checkContainedPinFiles;
-	if (dontCheck_dirIfRelaunchCmdPin) {
-		promiseAllArr_checkContainedPinFiles = [
-			enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0)
-		];		
-	} else {
-		promiseAllArr_checkContainedPinFiles = [
-			enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0),
-			enumChildEntries(path_dirIfRelaunchCmdPin, delegate_checkPinFile, 1)
-		];
+	var do_search = function() {
+		// rejects main on fail, resolves main on success
+		var path_dirIfNormalPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+		var path_dirIfRelaunchCmdPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
+
+		// if in dirIfRelaunchCmdPin then the shortcut is held within a dir with random? weird string, so have to enumChildEntries 1 level deep
+		// if in dirIfNormalPin then just immediate children, so enumChildEntries with just 0 level deep
+		
+		/*logic*/
+		// enumChildEntries for both dirs, in delegate, if not dir then test its SystemAppUserModelID
+		// delegate checks
+			// not yet decided:
+				// SystemAppUserModelID - reason: if i want to find if default SystemAppUserModelID is pinned and change its target path. its easier to figure out SystemAppUserModelID of default then having to getPathToProfileDir of default profile (NO THIS IS NOT TRUE, its equally easy to get path to dfault profiles profile dir, just iterate through ini to find guy with Default=1, there has to be at least something with Default=1) {but what if no default profile) [actually the default pin cut should have path to just the build!! duhhhh!]
+				// if target path contains getPathToProfileDir(aProfilePath) - reason: SystemAppUserModelID is HashString of profileDir anyways, so going deep to SystemAppUserModelID is redundant and extra overhead
+		
+		var searchFullfilled = false; // set to true when pinned match is found, so it aborts remaining iteration of delegate 
+		
+		// created functions so it handles hoisting
+		
+		
+		//note: testing is case insensitive because i allow user to specify custom path to builds, and they might mess up the casing
+		var testMatches = function(str1, str2) {
+			// tests if str1 and str2 are same
+			console.log('testMatches str1:', str1, 'vs str2:', str2);
+			if (str1 == str2) {
+				return true;
+			} else {
+				return false;
+			}
+		};
+		
+		var testContains = function(str1, str2) {
+			// tests if str1 contains str2
+			console.log('testContains str1:', str1, 'vs str2:', str2);
+			if (str1.indexOf('"' + str2 + '"') > -1) { // double quotes as contins are only for profileDir's and if user has two profile dirs like "..../Unamed Profile 1" and "..../Unamed Profile 11" then it can give false posive as "..../Unamed Profile 1" will be found in both cases // and when i set targets, i always set the profileDir in double quotes. and pinned files are shortcuts to my launcher, and a shortcut to a target shortcut takes the path of the target shortcut
+				return true;
+			} else {
+				return false;
+			}
+		}
+		
+		var searchResults = [];
+		
+		var delegate_checkPinFile = function(entry) {
+			if (searchCriterias.matchesStr.length == 0 && searchCriterias.containsSr.length == 0) {
+				return true; // to stop iteration of delegate
+			}
+			if (!entry.isDir) {
+				// do test
+				for (var i=0; i<searchCriterias.matchesStr.length; i++) {
+					if (testMatches(searchCriterias.matchesStr[i], entry.path)) {
+						searchResults.push(entry.path);
+						searchCriterias.matchesStr.splice(i, 1);
+						return; // to prevent deeper exec, and this is assuming that each searchCriteria can only have one pinned cut match, which is correct assumption
+					}
+				}
+				for (var i=0; i<searchCriterias.containsStr.length; i++) {
+					if (testContains(searchCriterias.containsStr[i], entry.path)) {
+						searchResults.push(entry.path);
+						searchCriterias.containsStr.splice(i, 1);
+						return; // to prevent deeper exec, and this is assuming that each searchCriteria can only have one pinned cut match, which is correct assumption
+					}
+				}
+			}
+		};
+		
+		var promiseAllArr_checkContainedPinFiles;
+		if (dontCheck_dirIfRelaunchCmdPin) {
+			promiseAllArr_checkContainedPinFiles = [
+				enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0)
+			];		
+		} else {
+			promiseAllArr_checkContainedPinFiles = [
+				enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0),
+				enumChildEntries(path_dirIfRelaunchCmdPin, delegate_checkPinFile, 1)
+			];
+		}
+		
+		var promiseAll_checkContainedPinFiles = Promise.all(promiseAllArr_checkContainedPinFiles);
+		promiseAll_checkContainedPinFiles.then(
+		  function(aVal) {
+			console.log('Fullfilled - promiseAll_checkContainedPinFiles - ', aVal);
+			// start - do stuff here - promiseAll_checkContainedPinFiles
+			if (searchCriterias.matchesStr.length == 0 && searchCriterias.containsSr.length == 0) {
+				deferredMain_getPathToPinnedCut.reject(searchResults);
+			} else {
+				deferredMain_getPathToPinnedCut.reject(null);
+			}
+			// end - do stuff here - promiseAll_checkContainedPinFiles
+		  },
+		  function(aReason) {
+			var rejObj = {name:'promiseAll_checkContainedPinFiles', aReason:aReason};
+			console.warn('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
+			deferredMain_getPathToPinnedCut.reject(rejObj);
+		  }
+		).catch(
+		  function(aCaught) {
+			var rejObj = {name:'promiseAll_checkContainedPinFiles', aCaught:aCaught};
+			console.error('Caught - promiseAll_checkContainedPinFiles - ', rejObj);
+			deferredMain_getPathToPinnedCut.reject(rejObj);
+		  }
+		);
 	}
 	
-	var promiseAll_checkContainedPinFiles = Promise.all(promiseAllArr_checkContainedPinFiles);
-	promiseAll_checkContainedPinFiles.then(
-	  function(aVal) {
-		console.log('Fullfilled - promiseAll_checkContainedPinFiles - ', aVal);
-		// start - do stuff here - promiseAll_checkContainedPinFiles
-		// if it got here, then no pinned shortcut/file found so reject main
-		deferredMain_getPathToPinnedCut.reject(null);
-		// end - do stuff here - promiseAll_checkContainedPinFiles
-	  },
-	  function(aReason) {
-		var rejObj = {name:'promiseAll_checkContainedPinFiles', aReason:aReason};
-		console.warn('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
-		deferredMain_getPathToPinnedCut.reject(rejObj);
-	  }
-	).catch(
-	  function(aCaught) {
-		var rejObj = {name:'promiseAll_checkContainedPinFiles', aCaught:aCaught};
-		console.error('Caught - promiseAll_checkContainedPinFiles - ', rejObj);
-		deferredMain_getPathToPinnedCut.reject(rejObj);
-	  }
-	);
+	do_setupCriterias();
 	
 	return deferredMain_getPathToPinnedCut.promise;
 };
+
+var _cache_getAllFxBuilds;
+function getAllFxBuilds() {
+	// currently win7+ only
+	
+	if (!winStuff.isWin7) {
+		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+	} else {
+		if (!_cache_getAllFxBuilds) {
+			var wrk = Cc['@mozilla.org/windows-registry-key;1'].createInstance(Components.interfaces.nsIWindowsRegKey);
+			var keypath = 'Software\\Mozilla\\' + Services.appinfo.name + '\\TaskBarIDs'; //Services.appinfo.name == appInfo->GetName(appName) // http://mxr.mozilla.org/comm-central/source/mozilla/widget/windows/WinTaskbar.cpp#284
+			try {
+			  wrk.open(wrk.ROOT_KEY_LOCAL_MACHINE, keypath, wrk.ACCESS_READ);
+			} catch(ex) {
+			  //console.warn(ex)
+			  if (ex.message != 'Component returned failure code: 0x80004005 (NS_ERROR_FAILURE) [nsIWindowsRegKey.open]') {
+				throw ex;
+			  } else {
+				try {
+				  wrk.open(wrk.ROOT_KEY_CURRENT_USER, keypath, wrk.ACCESS_READ);
+				} catch (ex) {
+				  throw ex;
+				}
+			  }
+			}
+			//list children
+			var numVals = wrk.valueCount;
+			for (var i=0; i<numVals; i++) {
+			  var keyval = {
+				Name: wrk.getValueName(i)
+			  };
+			  keyval.Type = wrk.getValueType(keyval.Name);
+			  keyval.TypeStr = win_RegTypeStr_from_RegTypeInt(keyval.Type);
+			  if (keyval.Type == 0) {
+				throw new Error('keyval.Type is `0` I have no idea how to read this value keyval.Type == `' + keyval.Type + '` and keyval. Name == `' + keyval.Name + '`');    
+			  }
+			  keyval.Value = wrk['read' + keyval.TypeStr + 'Value'](keyval.Name)
+			  //console.log('keyval:', uneval(keyval), keyval);
+			  _cache_getAllFxBuilds.push(keyval);
+			}
+			wrk.close();
+		}
+		
+		return _cache_getAllFxBuilds;
+	}
+}
 
 // start - common helper functions
 function Deferred() {
@@ -9962,5 +10099,21 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 	}
 
 	return deferredMain_enumChildEntries.promise;
+}
+
+function win_RegTypeStr_from_RegTypeInt(int) {
+  if (int == 1) {
+    return 'String';
+  } else if (int == 3) {
+    return 'Binary';
+  } else if (int == 4) {
+    return 'Int';
+  } else if (int == 11) {
+    return 'Int64';
+  } else if (int == 0) {
+    return 'NONE';
+  } else {
+    throw new Error('keyval.Type is not any of the expected values of 0, 2, 3, 4, or 11 so am now confused. keyval.Type == `' + int + '`');
+  }
 }
 // end - common helper functions
