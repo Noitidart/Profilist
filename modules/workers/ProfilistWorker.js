@@ -152,6 +152,42 @@ function launchPath(fullPath) {
 function createShortcut(path_createInDir, str_createWithName, path_linkTo, options) {
 	// winnt only
 	
+	/* logic - current */
+	// regardless of existance and if str_createWithAppUserModelId is set, it tries to overwrite whatever was provided
+	
+	// reason this is issue: is because if System.AppUserModel.ID is already set, you can't change it, it hangs or crashes or something todo: test what exactly happens, also test what if i set it to the same System.AppUserModel.ID, see if anything goes wrong
+	
+	/* logic - maintain times */
+	// if shortcut already exists
+		// if options.str_createWithAppUserModelId is set
+			// IPropertyStore_GetValue on System.AppUserModel.ID is done, if it matches options.str_createWithAppUserModelId OR is blank then
+				// properites are overwritten with whatever else is prvoided
+			// else
+				// GetPath to get ftCreationTime, lpLastAccessTime, and lpLastWriteTime
+				// file is deleted
+				// shortcut is created with whatever properties were provided
+				// SetFileTime is set on the created shortcut with the pointers obtained from GetPath
+		// else
+			// then its properties are overwritten with whatever was provided
+
+	// reason for this is so that System.AppUserModel.ID cannot be set if one is already there
+	// reason to maintain the times via GetPath and SetFileTime is because ???
+		// i think any hardlink to the shortcut gets deleted when the shortcut gets deleted, todo: verify this
+			// 19:31	noida	if i have a hardlink to a shortcut, does the hardlink get deleted if the shortcut is deleted?
+			// 19:31	noida	i need to delete the shortcut for a second as i recreate it with a new System.AppUserModel.ID
+		// ??? == i think its so that things point to this shortcut, (ex: the launcher shortcuts), like pinned icon in taskbar, can find it again? todo: test this to figure out
+		
+	/* alternative logic - doesnt maintain times*/
+	// if shortcut already exists
+		// if options.str_createWithAppUserModelId is set
+			// IPropertyStore_GetValue on System.AppUserModel.ID is done, if it matches options.str_createWithAppUserModelId OR is blank then
+				// properites are overwritten with whatever else is prvoided
+			// else
+				// file is deleted
+				// shortcut is created with whatever properties were provided
+		// else
+			// then its properties are overwritten with whatever was provided
+	
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':

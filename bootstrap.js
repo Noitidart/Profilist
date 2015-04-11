@@ -5248,23 +5248,39 @@ function delAliasThenMake(pathTrg, pathMake) {
 }
 
 var _getProfId = {}; // cache
-function getProfId(aProfilePath) {
+function getProfId(aProfilePath, preProfToolkitInit) {
 	// returns promise
 		// resolves with string of id or null if temp profile
+		
+	// if preProfToolkitInit then it will get itselfs id
+	
 	var deferredMain_getProfId = new Deferred();
 	
-	if (profToolkit.selectedProfile.iniKey === null) {
+	if (!preProfToolkitInit && profToolkit.selectedProfile.iniKey === null) {
+		// temporary profile
 		deferredMain_getProfId.resolve(null);
-	} else if (aProfilePath in _getProfId) {
+	} else if (!preProfToolkitInit && aProfilePath == profToolkit.selectedProfile.iniKey && 'selectedProfile' in _getProfId) {
+		deferredMain_getProfId.resolve(_getProfId.selectedProfile);
+	}  else if (!preProfToolkitInit && aProfilePath in _getProfId) {
 		deferredMain_getProfId.resolve(_getProfId[aProfilePath]);
 	} else {
-		var path_aProfileDir = getPathToProfileDir(aProfilePath);
+		if (preProfToolkitInit) {
+			var path_aProfileDir = OS.Constants.Path.profileDir;
+		} else {
+			var path_aProfileDir = getPathToProfileDir(aProfilePath);
+		}
 		var path_aProfileTimesDotJson = OS.Path.join(path_aProfileDir, 'times.json');
 		var promise_readTimes = read_encoded(path_aProfileTimesDotJson, {encoding:'utf-8'});
 		promise_readTimes.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_readTimes - ', aVal);
 				// start - do stuff here - promise_readTimes
+				var theProfId = JSON.parse(aVal).created;
+				if (!preProfToolkitInit) {
+					_getProfId[aProfilePath] = theProfId;
+				} else {
+					_getProfId.selectedProfile = theProfId;
+				}
 				deferredMain_getProfId.resolve(ini[aProfilePath].props['Profilist.id']);
 				// end - do stuff here - promise_readTimes
 			},
@@ -8863,10 +8879,11 @@ function startProfilistWorker() {
 			}
 			break;
 		default:
-			// data supplied for all os
-			objInfo.FFVersion = Services.appinfo.version;
-			objInfo.FFVersionLessThan30 = (Services.vc.compare(Services.appinfo.version, 30) < 0);
+			// do nothing
 	}
+	// data supplied for all os
+	objInfo.FFVersion = Services.appinfo.version;
+	objInfo.FFVersionLessThan30 = (Services.vc.compare(Services.appinfo.version, 30) < 0);
 	
 	var promise_initWorker = ProfilistWorker.post('init', [objInfo]);
 	promise_initWorker.then(
@@ -8902,7 +8919,8 @@ function startup(aData, aReason) {
 		//console.log('aData', aData);
 	//	//console.log('initing prof toolkit');
 		initProfToolkit();
-	//	//console.log('init done');
+		refreshIdsJson(false, true);
+		//	//console.log('init done');
 		//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
 		//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
 		//var cssEnc = encodeURIComponent(css);
@@ -9041,7 +9059,6 @@ function shutdown(aData, aReason) {
 	//myServices.sss.unregisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 	
 	windowListener.unregister();
-	
 	//if ([ADDON_DISABLE, ADDON_UNINSTALL].indexOf(aReason) > -1) {
 		console.log('will disable listener for clients if it was enabled');
 		disableListenerForClients();
@@ -9071,6 +9088,10 @@ function shutdown(aData, aReason) {
 	
 	Cu.unload(self.chrome_path + 'modules/PromiseWorker.jsm');
 	
+	if (aReason == ADDON_DISABLE) {
+		refreshIdsJson(false, false, false);
+	}
+	
 	// start - os specific stuff
 	if (macStuff.isMac) {
 		//if ([ADDON_DOWNGRADE, ADDON_UPGRADE].indexOf(aReason) > -1 || macStuff.overidingDirProvider) { // its not bad to leave this registered so im going to leave it on disable/uninstall, but on upgrade/downgrade i unreg it so on the upgrade i can properly recognize that its a profilist launcher as opposed to main Firefox.app
@@ -9084,7 +9105,44 @@ function shutdown(aData, aReason) {
 	// end - os specific stuff
 }
 
+function getIsProfilistEnabledInProfile(aProfilePath) {
+	// returns promise
+		// resolves to true or false depending on if enabled
+	var deferredMain_getIsProfilistEnabledInProfile = new Deferred();
+	
+	if (aProfilePath === null) {
+		// temporary profile
+		deferredMain_getIsProfilistEnabledInProfile.resolve(null);
+	} else if (aProfilePath == profToolkit.selectedProfile.iniKey) {
+		
+	}
+	
+	return deferredMain_getIsProfilistEnabledInProfile.promise;
+}
+
+function getIsProfilistUninstalledInAllOtherProfiles() {
+	
+}
+
+function getSystemAppUserModelId(aProfilePath) {
+	// WINNT function only
+	
+	if (!winStuff.isWin7) {
+		
+	}
+}
+
 function refreshIdsJson(justRead, isEnabled, isUninstall) {
+	// purpose of this function:
+		// mark ids.json that profilist is enabled/disabled or uninstalled (remove key) in this profile
+		// if winnt
+			// it will get the last used SystemAppUserModelID and if its different then it will fix the old pinned shortcuts
+			// set up the pref to use different SystemAppUserModelID per profile, and if its false enable the pref, and until restart it will change the SystemAppUserModelID on windows itself
+		// if mac
+			// 
+		// if nix
+			// 
+	
 	// requires that profToolkit be inited
 	// this will get current profiles id if not already available
 	
@@ -9169,6 +9227,7 @@ function refreshIdsJson(justRead, isEnabled, isUninstall) {
 	
 	var do_writeIdsJson = function() {
 		var resolveObj = {slectedProfileId: aProfId, json_ids: json_ids, neededWrite: false};
+		winStuff.lastReadProfilistDataIdsJson = json_ids;
 		if (justRead) {
 			return deferredMain_refreshIdsJson.resolve(resolveObj);
 		}
@@ -9257,6 +9316,7 @@ function refreshIdsJson(justRead, isEnabled, isUninstall) {
 			}
 			
 			if (shouldWrite) {
+				winStuff.lastReadProfilistDataIdsJson = json_ids; //i shouldnt have to do this as its passed by reference (and i already set winStuff.lastReadProfilistDataIdsJson at start of func do_writeIdsJson) and it should update as i mod it, but just in case... i do this here
 				resolveObj.neededWrite = true;
 				var promise_writeIdsJson = OS.File.writeAtomic(profToolkit.path_profilistData_idsJson, JSON.stringify(json_ids), {encoding:'utf-8'});
 				promise_writeIdsJson.then(
@@ -9320,11 +9380,92 @@ function uninstall(aData, aReason) {
 	}
 	myPrefListener.uninstall(aReason); //deletes owned branches AND owned prefs on UNowned branches, this is optional, you can choose to leave your preferences on the users computer	
 	//end pref stuff more
+	
+	if (aReason == ADDON_UNINSTALL) {
+		// real uninstall, have to do this becuse this uninstall function triggers for ADDON_DOWNGRADE and ADDON_UPGRADE too
+		refreshIdsJson(false, false, true);
+	}
 }
 
 // start - custom to profilist helper functions
 
 // end - custom to profilist helper functions
+
+function getPathToPinnedCut(aSystemAppUserModelID, aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
+	//winnt only
+	// searches the folders where shortcuts go if it is pinned, and if found resolves to its path, else resolves to null
+		// so reminder: if get null, then know that its not pinned
+	// returns promise
+	// if aSystemAppUserModelID is provided, then it overrides aProfilePath (meaning aProfilePath is ignored)
+	// dontCheck_dirIfRelaunchCmdPin is set to true, when looking for if default is pinned, as default pin is never found in dirIfRelaunchCmdPin
+	
+	var deferredMain_getPathToPinnedCut = new Deferred();
+	
+	// warning, i should monitor this with every windows update, this is implementation detail, it can change at any time without notice: http://stackoverflow.com/questions/28228042/shgetpropertystoreforwindow-how-to-set-properties-on-existing-system-appusermo#comment44829015_28228042
+	var path_dirIfNormalPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+	var path_dirIfRelaunchCmdPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
+
+	// if in dirIfRelaunchCmdPin then the shortcut is held within a dir with random? weird string, so have to enumChildEntries 1 level deep
+	// if in dirIfNormalPin then just immediate children, so enumChildEntries with just 0 level deep
+	
+	/*logic*/
+	// enumChildEntries for both dirs, in delegate, if not dir then test its SystemAppUserModelID
+	// delegate checks
+		// not yet decided:
+			// SystemAppUserModelID - reason: if i want to find if default SystemAppUserModelID is pinned and change its target path. its easier to figure out SystemAppUserModelID of default then having to getPathToProfileDir of default profile (NO THIS IS NOT TRUE, its equally easy to get path to dfault profiles profile dir, just iterate through ini to find guy with Default=1, there has to be at least something with Default=1) {but what if no default profile) [actually the default pin cut should have path to just the build!! duhhhh!]
+			// if target path contains getPathToProfileDir(aProfilePath) - reason: SystemAppUserModelID is HashString of profileDir anyways, so going deep to SystemAppUserModelID is redundant and extra overhead
+	
+	var searchFullfilled = false; // set to true when pinned match is found, so it aborts remaining iteration of delegate 
+	var delegate_checkPinFile = function(entry) {
+		if (searchFullfilled) {
+			return true; // to stop iteration of delegate
+		}
+		if (!entry.isDir) {
+			// do test
+			var cPinFileFullfillsSearch;
+			if (cPinFileFullfillsSearch) {
+				deferredMain_getPathToPinnedCut.resolve(entry.path);
+				return true; // this should stop iteration
+			}
+		}
+	};
+	
+	var promiseAllArr_checkContainedPinFiles;
+	if (dontCheck_dirIfRelaunchCmdPin) {
+		promiseAllArr_checkContainedPinFiles = [
+			enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0)
+		];		
+	} else {
+		promiseAllArr_checkContainedPinFiles = [
+			enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0),
+			enumChildEntries(path_dirIfRelaunchCmdPin, delegate_checkPinFile, 1)
+		];
+	}
+	
+	var promiseAll_checkContainedPinFiles = Promise.all(promiseAllArr_checkContainedPinFiles);
+	promiseAll_checkContainedPinFiles.then(
+	  function(aVal) {
+		console.log('Fullfilled - promiseAll_checkContainedPinFiles - ', aVal);
+		// start - do stuff here - promiseAll_checkContainedPinFiles
+		// if it got here, then no pinned shortcut/file found so reject main
+		deferredMain_getPathToPinnedCut.reject(null);
+		// end - do stuff here - promiseAll_checkContainedPinFiles
+	  },
+	  function(aReason) {
+		var rejObj = {name:'promiseAll_checkContainedPinFiles', aReason:aReason};
+		console.warn('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
+		deferredMain_getPathToPinnedCut.reject(rejObj);
+	  }
+	).catch(
+	  function(aCaught) {
+		var rejObj = {name:'promiseAll_checkContainedPinFiles', aCaught:aCaught};
+		console.error('Caught - promiseAll_checkContainedPinFiles - ', rejObj);
+		deferredMain_getPathToPinnedCut.reject(rejObj);
+	  }
+	);
+	
+	return deferredMain_getPathToPinnedCut.promise;
+};
 
 // start - common helper functions
 function Deferred() {
@@ -9716,5 +9857,110 @@ function HashString() {
     }
     return rv;
   };
+}
+
+function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, depth) {
+	// IMPORTANT: as dev calling this functiopn `depth` arg must ALWAYS be undefined (dont even set it to 0 or null, must completly omit setting it, or set it to undefined). this arg is meant for internal use for iteration
+	// `delegate` is required
+	// pathToDir is required, it is string
+	// max_depth should be set to null/undefined if you want to enumerate till every last bit is enumerated. paths will be iterated to including max_depth.
+	// if runDelegateOnRoot, then delegate runs on the root path with depth arg of -1
+	// this function iterates all elements at depth i, then after all done then it iterates all at depth i + 1, and then so on
+	// if arg of `runDelegateOnRoot` is true then minimum depth is -1 (and is of the root), otherwise min depth starts at 0, contents of root
+	// if delegate returns true, it will stop iteration
+	// if set max_depth to 0, it will just iterate immediate children of pathToDir, unlesss you set runDelegateOnRoot to true, then it will just run delegate on the root
+	var deferredMain_enumChildEntries = new Deferred();
+	
+	if (depth === undefined) {
+		// at root pathDir
+		depth = 0;
+		if (runDelegateOnRoot) {
+			var entry = {
+				isDir: true,
+				name: OS.Path.basename(pathToDir),
+				path: pathToDir
+			};
+			var rez_delegate = delegate(entry, -1);
+			if (rez_delegate) {
+				deferredMain_enumChildEntries.resolve(entry);
+				return deferredMain_enumChildEntries.promise; // to break out of this func, as if i dont break here it will go on to iterate through this dir
+			}
+		}
+	} else {
+		depth++;
+	}
+	
+	if ((max_depth === null || max_depth === undefined) || (depth <= max_depth)) {
+		var iterrator = new OS.File.DirectoryIterator(pathToDir);
+		var subdirs = [];
+		var promise_batch = iterrator.nextBatch();
+		promise_batch.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_batch - ', aVal);
+				// start - do stuff here - promise_batch
+				for (var i = 0; i < aVal.length; i++) {
+					if (aVal[i].isDir) {
+						subdirs.push(aVal[i]);
+					}
+					var rez_delegate_on_child = delegate(aVal[i], depth);
+					if (rez_delegate_on_child) {
+						deferredMain_enumChildEntries.resolve(aVal[i]);
+						return/* deferredMain_enumChildEntries.promise -- im pretty sure i dont need this, as of 040115*/; //to break out of this if loop i cant use break, because it will get into the subdir digging, so it will not see the `return deferredMain_enumChildEntries.promise` after this if block so i have to return deferredMain_enumChildEntries.promise here
+					}
+				}
+				// finished running delegate on all items at this depth and delegate never returned true
+
+				if (subdirs.length > 0) {
+					var promiseArr_itrSubdirs = [];
+					for (var i = 0; i < subdirs.length; i++) {
+						promiseArr_itrSubdirs.push(enumChildEntries(subdirs[i].path, delegate, max_depth, null, depth)); //the runDelegateOnRoot arg doesnt matter here anymore as depth arg is specified
+					}
+					var promiseAll_itrSubdirs = Promise.all(promiseArr_itrSubdirs);
+					promiseAll_itrSubdirs.then(
+						function(aVal) {
+							console.log('Fullfilled - promiseAll_itrSubdirs - ', aVal);
+							// start - do stuff here - promiseAll_itrSubdirs
+							deferredMain_enumChildEntries.resolve('done iterating all - including subdirs iteration is done - in pathToDir of: ' + pathToDir);
+							// end - do stuff here - promiseAll_itrSubdirs
+						},
+						function(aReason) {
+							var rejObj = {name:'promiseAll_itrSubdirs', aReason:aReason};
+							rejObj.aExtra = 'meaning finished iterating all entries INCLUDING subitering subdirs in dir of pathToDir';
+							rejobj.pathToDir = pathToDir;
+							console.warn('Rejected - promiseAll_itrSubdirs - ', rejObj);
+							deferredMain_enumChildEntries.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promiseAll_itrSubdirs', aCaught:aCaught};
+							console.error('Caught - promiseAll_itrSubdirs - ', rejObj);
+							deferredMain_enumChildEntries.reject(rejObj);
+						}
+					);
+				} else {
+					deferredMain_enumChildEntries.resolve('done iterating all - no subdirs - in pathToDir of: ' + pathToDir);
+				}
+				// end - do stuff here - promise_batch
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_batch', aReason:aReason};
+				if (aReason.winLastError == 2) {
+					rejObj.probableReason = 'directory at pathToDir doesnt exist';
+				}
+				console.warn('Rejected - promise_batch - ', rejObj);
+				deferredMain_enumChildEntries.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_batch', aCaught:aCaught};
+				console.error('Caught - promise_batch - ', rejObj);
+				deferredMain_enumChildEntries.reject(rejObj);
+			}
+		);
+	} else {
+		deferredMain_enumChildEntries.resolve('max depth exceeded, so will not do it, at pathToDir of: ' + pathToDir);
+	}
+
+	return deferredMain_enumChildEntries.promise;
 }
 // end - common helper functions

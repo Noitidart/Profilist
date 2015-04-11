@@ -100,17 +100,18 @@ var winTypes = function() {
 	this.WIN32_FIND_DATA = ctypes.voidptr_t;
 	this.WINOLEAPI = ctypes.voidptr_t; // i guessed on this one
 	
+	// consts for structures
+	var struct_const = {
+		blah: false
+	};
+	
 	// STRUCTURES
 	
 	// SIMPLE STRUCTS // based on any of the types above
-	/* 
-	 * typedef struct {
-	 *   unsigned long Data1;
-	 *   unsigned short Data2;
-	 *   unsigned short Data3;
-	 *   byte Data4[8];
-	 * } GUID, UUID, *PGUID;
-	 */
+	this.FILETIME = ctypes.StructType('_FILETIME', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/ms724284%28v=vs.85%29.aspx
+	  { 'dwLowDateTime': this.DWORD },
+	  { 'dwHighDateTime': this.DWORD }
+	]);
 	this.GUID = ctypes.StructType('GUID', [
 	  { 'Data1': this.ULONG },
 	  { 'Data2': this.USHORT },
@@ -132,9 +133,28 @@ var winTypes = function() {
 	
 	// ADVANCED STRUCTS // based on "simple structs" to be defined first
 	this.CLSID = this.GUID;
-	this.PGUID = this.GUID.ptr;
 	this.IID = this.GUID;
 	this.LPSECURITY_ATTRIBUTES = this.SECURITY_ATTRIBUTES.ptr;
+	this.PGUID = this.GUID.ptr;
+	this.PFILETIME = this.FILETIME.ptr;
+	
+	// SUPER ADV STRUCTS
+	this.WIN32_FIND_DATA = ctypes.StructType('_WIN32_FIND_DATA', [ // https://msdn.microsoft.com/en-us/library/windows/desktop/aa365740%28v=vs.85%29.aspx
+		{ 'dwFileAttributes': this.DWORD },
+		{ 'ftCreationTime': this.FILETIME },
+		{ 'ftLastAccessTime': this.FILETIME },
+		{ 'ftLastWriteTime': this.FILETIME },
+		{ 'nFileSizeHigh': this.DWORD },
+		{ 'nFileSizeLow': this.DWORD },
+		{ 'dwReserved0': this.DWORD },
+		{ 'dwReserved1': this.DWORD },
+		{ 'cFileName': this.TCHAR.array(OS.Constants.Win.MAX_PATH) },
+		{ 'cAlternateFileName': this.TCHAR.array(14)
+	]);
+	
+	// SUPER DUPER ADV STRUCTS
+	this.PWIN32_FIND_DATA = this.WIN32_FIND_DATA.ptr;
+	this.LPWIN32_FIND_DATA = this.WIN32_FIND_DATA.ptr;
 	
 	/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb773381%28v=vs.85%29.aspx
 	 * typedef struct {
@@ -463,17 +483,6 @@ var winTypes = function() {
 	]);
 	
 	// start - structures used by Rstrtmgr.dll
-	/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms724284%28v=vs.85%29.aspx
-	 * typedef struct _FILETIME {
-	 *   DWORD dwLowDateTime;
-	 *   DWORD dwHighDateTime;
-	 * } FILETIME, *PFILETIME;
-	 */
-	this.FILETIME = ctypes.StructType('_FILETIME', [
-	  { 'dwLowDateTime': this.DWORD },
-	  { 'dwHighDateTime': this.DWORD }
-	]);
-	this.PFILETIME = this.FILETIME.ptr;
 	
 	/* http://msdn.microsoft.com/en-us/library/windows/desktop/aa373677%28v=vs.85%29.aspx
 	 * typedef struct {
@@ -1049,6 +1058,22 @@ var winInit = function() {
 				self.TYPE.HWND,											// hWnd
 				self.TYPE.INT,											// nIndex
 				self.IS64BIT ? self.TYPE.LONG_PTR : self.TYPE.LONG		// dwNewLong
+			);
+		},
+		SetFileTime: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724933%28v=vs.85%29.aspx
+			 * BOOL WINAPI SetFileTime(
+			 *   __in_      HANDLE hFile,
+			 *   __in_opt_  const FILETIME *lpCreationTime,
+			 *   __in_opt_  const FILETIME *lpLastAccessTime,
+			 *   __in_opt_  const FILETIME *lpLastWriteTime
+			 * );
+			 */
+			return lib('kernel32').declare('SetFileTime', self.TYPE.WINABI,
+				self.TYPE.BOOL,				// return
+				self.TYPE.FILETIME.ptr,		// *lpCreationTime
+				self.TYPE.FILETIME.ptr,		// *lpLastAccessTime
+				self.TYPE.FILETIME.ptr		// *lpLastWriteTime
 			);
 		},
 		SHChangeNotify: function() {
