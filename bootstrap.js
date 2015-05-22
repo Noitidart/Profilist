@@ -3,31 +3,45 @@ delete mac override paths files
 delete ovveride paths pref
 */
 
-const {interfaces: Ci, utils: Cu, classes: Cc, results: Cr} = Components;
-const self = {
-	name: 'Profilist',
-	id: 'Profilist@jetpack',
-	chrome_path: 'chrome://profilist/content/',
-	aData: 0,
-};
-
-const myPrefBranch = 'extensions.' + self.name + '@jetpack.';
-const myServices = {};
-Cu.importGlobalProperties(['TextEncoder', 'TextDecoder']); //const { TextDecoder } = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
-Cu.import('resource://gre/modules/Services.jsm');
+// Imports
+const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
+Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
-Cu.import('resource://gre/modules/XPCOMUtils.jsm');
-Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
+const {TextDecoder, TextEncoder, OS} = Cu.import('resource://gre/modules/osfile.jsm', {});
 Cu.import('resource://gre/modules/Promise.jsm');
 //Cu.import('resource://gre/modules/PromiseUtils.jsm');
-Cu.import('resource://gre/modules/AddonManager.jsm');
-//XPCOMUtils.defineLazyGetter(myServices, 'sss', function(){ return Cc['@mozilla.org/content/style-sheet-service;1'].getService(Ci.nsIStyleSheetService) });
-//XPCOMUtils.defineLazyGetter(myServices, 'tps', function(){ return Cc['@mozilla.org/toolkit/profile-service;1'].createInstance(Ci.nsIToolkitProfileService) });
-XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
-XPCOMUtils.defineLazyGetter(myServices, 'stringBundle', function () { return Services.strings.createBundle('chrome://profilist/locale/bootstrap.properties?' + Math.random()) /* Randomize URI to work around bug 719376 */ });
-XPCOMUtils.defineLazyGetter(myServices, 'hph', function () { return Cc['@mozilla.org/network/protocol;1?name=http'].getService(Ci.nsIHttpProtocolHandler); });
-XPCOMUtils.defineLazyGetter(myServices, 'wt7', function () { return Cc["@mozilla.org/windows-taskbar;1"].getService(Ci.nsIWinTaskbar); });
+Cu.import('resource://gre/modules/Services.jsm');
+Cu.import('resource://gre/modules/XPCOMUtils.jsm');
+
+// Globals
+const core = {
+	addon: {
+		name: 'Profilist',
+		id: 'Profilist@jetpack',
+		path: {
+			name: 'profilist',
+			content: 'chrome://profilist/content/',
+			locale: 'chrome://profilist/locale/',
+			modules: 'chrome://profilist/content/modules/',
+			workers: 'chrome://profilist/content/modules/workers/',
+			resources: 'chrome://profilist/content/resources/',
+			images: 'chrome://profilist/content/resources/images/',
+			styles: 'chrome://profilist/content/resources/styles/',
+			bindings: 'chrome://profilist/content/resources/bindings/'
+		}
+	},
+	os: {
+		name: OS.Constants.Sys.Name.toLowerCase()
+	}
+};
+
+var PromiseWorker;
+var bootstrap = this;
+const NS_HTML = 'http://www.w3.org/1999/xhtml';
+const cui_cssUri = Services.io.newURI(core.addon.path.resources + 'cui.css', null, null);
+
+const myPrefBranch = 'extensions.' + core.name + '@jetpack.';
 
 const tbb_box_style = '';
 const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
@@ -67,7 +81,6 @@ const iconsetSizes_Profilist = {
 
 //var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 //var pathProfilesIniBkp = profToolkit.path_iniFile + '.profilist.bkp';
-var PromiseWorker;
 var ProfilistWorker;
 
 var ini = {UnInitialized:true};
@@ -103,6 +116,74 @@ Profilist.defaultProfilePath
 Profilist.defaultProfileIsRelative - (not outside of props as if deafultProfilePath doesnt change this obviously doesnt change)
 Profilist.currentThisBuildsIconPath
 */
+
+// Lazy Imports
+const myServices = {};
+XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
+XPCOMUtils.defineLazyGetter(myServices, 'hph', function () { return Cc['@mozilla.org/network/protocol;1?name=http'].getService(Ci.nsIHttpProtocolHandler); });
+XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'bootstrap.properties?' + Math.random()); /* Randomize URI to work around bug 719376 */ });
+XPCOMUtils.defineLazyGetter(myServices, 'wt7', function () { return Cc["@mozilla.org/windows-taskbar;1"].getService(Ci.nsIWinTaskbar); });
+
+function extendCore() {
+	// adds some properties i use to core
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			core.os.version = parseFloat(Services.sysinfo.getProperty('version'));
+			// http://en.wikipedia.org/wiki/List_of_Microsoft_Windows_versions
+			if (core.os.version == 6.0) {
+				core.os.version_name = 'vista';
+			}
+			if (core.os.version >= 6.1) {
+				core.os.version_name = '7+';
+			}
+			if (core.os.version == 5.1 || core.os.version == 5.2) { // 5.2 is 64bit xp
+				core.os.version_name = 'xp';
+			}
+			break;
+			
+		case 'darwin':
+			var userAgent = myServices.hph.userAgent;
+			//console.info('userAgent:', userAgent);
+			var version_osx = userAgent.match(/Mac OS X 10\.([\d\.]+)/);
+			//console.info('version_osx matched:', version_osx);
+			
+			if (!version_osx) {
+				throw new Error('Could not identify Mac OS X version.');
+			} else {
+				var version_osx_str = version_osx[1];
+				var ints_split = version_osx[1].split('.');
+				if (ints_split.length == 1) {
+					core.os.version = parseInt(ints_split[0]);
+				} else if (ints_split.length >= 2) {
+					core.os.version = ints_split[0] + '.' + ints_split[1];
+					if (ints_split.length > 2) {
+						core.os.version += ints_split.slice(2).join('');
+					}
+					core.os.version = parseFloat(core.os.version);
+				}
+				// this makes it so that 10.10.0 becomes 10.0
+				// 10.10.1 => 10.1
+				// so can compare numerically, as 10.0 is less then 10.1
+				
+				//core.os.version = 6.9; // note: debug: temporarily forcing mac to be 10.6 so we can test kqueue
+			}
+			break;
+		default:
+			// nothing special
+	}
+	
+	core.os.toolkit = Services.appinfo.widgetToolkit.toLowerCase();
+	core.os.xpcomabi = Services.appinfo.XPCOMABI;
+	
+	core.firefox = {};
+	core.firefox.version = Services.appinfo.version;
+	
+	console.log('done adding to core, it is now:', core);
+}
+
+// START - Addon Functionalities
 function readIniAndParseObjs(writeIfDiff) { //as of yet nothing uses writeIfDiff arg
 //is promise
 //reads ini and if its not touched by profilist, then it reads bkp, if bkp doesnt exist than it touches ini and queus writeIniBkp and writeIni
@@ -192,20 +273,20 @@ current builds icon if dev mode is enabled
 							if (b[1].toLowerCase() == profToolkit.exePathLower) {
 								if (/^(?:esr|release|beta|aurora|nightly)$/m.test(b[0])) {
 									console.log('making bullet');
-									//currentThisBuildsIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+									//currentThisBuildsIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
 									switch (b[0]) {
 										case 'esr':
 										case 'release':
-											currentThisBuildsIconPath = self.chrome_path + 'ff-channel-base-iconsets/release/release16.png';
+											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/release/release16.png';
 											break;
 										case 'beta':
-											currentThisBuildsIconPath = self.chrome_path + 'ff-channel-base-iconsets/beta/beta16.png';
+											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/beta/beta16.png';
 											break;
 										case 'aurora':
-											currentThisBuildsIconPath = self.chrome_path + 'ff-channel-base-iconsets/dev/dev16.png';
+											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/dev/dev16.png';
 											break;
 										case 'nightly':
-											currentThisBuildsIconPath = self.chrome_path + 'ff-channel-base-iconsets/nightly/nightly16.png';
+											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/nightly/nightly16.png';
 											break;
 										default:
 											console.error('cannot find currentThisBuildsIconPath');
@@ -218,7 +299,7 @@ current builds icon if dev mode is enabled
 						});
 						//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
 						if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
-							currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
+							currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
 						} else {
 							currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
 						}
@@ -1883,7 +1964,7 @@ function cssBackgroundUrl_for_devBuildExePath(exePath) {
 			//tieFoundInArr = true;
 			console.info('tieFound/path so path to icon of this tiePath is:', devBuildsPathsAndIconsArr[i][0]);
 			if (/^(?:release|beta|aurora|nightly)$/m.test(exePath)) {
-				return self.chrome_path + 'bullet_' + b[0] + '.png';
+				return core.addon.path.images + 'bullet_' + b[0] + '.png';
 			} else {
 				return OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, exePath) + '#' + Math.random());
 			}
@@ -2442,7 +2523,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
 		//elHeight = parseFloat(elHeight);
 		if (elHeight == 0) {
-			myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'DEBUG', 'elHeight = 0', false, null, null, 'Profilist');
+			myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'DEBUG', 'elHeight = 0', false, null, null, 'Profilist');
 			if (appendChild) {
 				elHeight = PUIsync_height; //json[i].nodeToClone.boxObject.height;
 				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
@@ -2616,7 +2697,7 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 					if (b[1].toLowerCase() == profToolkit.exePathLower) {
 						if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
 							console.log('making bullet');
-							currentThisBuildsIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+							currentThisBuildsIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
 						} else {
 							currentThisBuildsIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
 						}
@@ -2625,7 +2706,7 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 				});
 				//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
 				if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
-					currentThisBuildsIconPath = self.chrome_path + 'bullet_beta.png';
+					currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
 				} else {
 					currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
 				}
@@ -2729,26 +2810,26 @@ function actuallyMakeRename(el) {
 	var oldProfName = el.getAttribute('label');
 	var promptInput = {value:oldProfName}
 	var promptCheck = {value:false}
-	var promptResult = Services.prompt.prompt(null, self.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
+	var promptResult = Services.prompt.prompt(null, core.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
 	if (promptResult) {
 		if (promptInput.value == '') {
 			var confirmCheck = {value:false};
-			var confirmResult = Services.prompt.confirmCheck(null, self.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All of its files will be deleted.', 'Confirm Deletion', confirmCheck);
+			var confirmResult = Services.prompt.confirmCheck(null, core.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All of its files will be deleted.', 'Confirm Deletion', confirmCheck);
 			if (confirmResult) {				
 				if (confirmCheck.value) {
 					var promise = deleteProfile(1, oldProfName);
 					promise.then(
 						function() {
-							//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
-							myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.', false, null, null, 'Profilist');
+							//Services.prompt.alert(null, core.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
+							myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.', false, null, null, 'Profilist');
 						},
 						function(aRejectReason) {
 //							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
-							Services.prompt.alert(null, self.name + ' - ' + 'Delete Failed', aRejectReason.message);
+							Services.prompt.alert(null, core.name + ' - ' + 'Delete Failed', aRejectReason.message);
 						}
 					);
 				} else {
-					Services.prompt.alert(null, self.name + ' - ' + 'Delete Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
+					Services.prompt.alert(null, core.name + ' - ' + 'Delete Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
 				}
 			}
 		} else {
@@ -2757,9 +2838,9 @@ function actuallyMakeRename(el) {
 				var promise = renameProfile(1, oldProfName, newProfName);
 				promise.then(
 					function() {
-						//Services.prompt.alert(null, self.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
+						//Services.prompt.alert(null, core.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
 //						console.warn('Rename promise completed succesfully');
-						myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
+						myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
 						updateProfToolkit(1, 1).then(
 							function() {
 								//return Promise.resolve('updateProfToolkit success');
@@ -2771,14 +2852,14 @@ function actuallyMakeRename(el) {
 					},
 					function(aRejectReason) {
 //						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ', aRejectReason);
-						Services.prompt.alert(null, self.name + ' - ' + 'Rename Failed', aRejectReason.message);
+						Services.prompt.alert(null, core.name + ' - ' + 'Rename Failed', aRejectReason.message);
 					}
 				);
 			}
 		}
 	}
 	delete win.ProfilistInRenameMode;
-	//Services.prompt.alert(null, self.name + ' - ' + 'debug', 'deleted ProfilistInRenameMode');
+	//Services.prompt.alert(null, core.name + ' - ' + 'debug', 'deleted ProfilistInRenameMode');
 	return;
 	el.style.fontWeight = 'bold';
 	
@@ -3139,7 +3220,7 @@ function tbb_box_click(e) {
 					devBuilds.forEach(function(b) {
 						if (b[1].toLowerCase() != profToolkit.exePathLower && b[1] != ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie']) {
 							if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
-								var useIconPath = self.chrome_path + 'bullet_' + b[0] + '.png';
+								var useIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
 							} else {
 								var useIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
 							}
@@ -3812,9 +3893,9 @@ function launchProfile(e, profName, suppressAlert, url) {
 //		console.log('window is in rename mode so dont launch profile');
 		return;
 	}
-	//Services.prompt.alert(null, self.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
+	//Services.prompt.alert(null, core.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
 	if (!suppressAlert) {
-		myServices.as.showAlertNotification(self.aData.resourceURI.asciiSpec + 'icon.png', self.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"', false, null, null, 'Profilist');
+		myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"', false, null, null, 'Profilist');
 	}
 
 	var found = false;
@@ -3827,7 +3908,7 @@ function launchProfile(e, profName, suppressAlert, url) {
 	}
 			
 	if (!found) {
-		Services.prompt.alert(null, self.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Profile name not found in Profiles.ini in memory.');
+		Services.prompt.alert(null, core.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Profile name not found in Profiles.ini in memory.');
 //		console.info('dump of profiles = ', ini);
 		return false;
 	}
@@ -3870,14 +3951,14 @@ function createUnnamedProfile() {
 				},
 				function(aRejectReason) {
 //					console.warn('Create profile failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
-					Services.prompt.alert(null, self.name + ' - ' + 'Create Failed', aRejectReason.message);
+					Services.prompt.alert(null, core.name + ' - ' + 'Create Failed', aRejectReason.message);
 					return Promise.reject('Create Failed. ' + aRejectReason.message);
 				}
 			);
 		},
 		function(aRejectReason) {
 //			console.error('createProfile readIni promise rejected');
-			Services.prompt.alert(null, self.name + ' - ' + 'Read Failed', aRejectReason.message);
+			Services.prompt.alert(null, core.name + ' - ' + 'Read Failed', aRejectReason.message);
 			return Promise.reject('Read Failed. ' + aRejectReason.message);
 		}
 	);
@@ -4076,7 +4157,7 @@ var windowListener = {
 			}
 			aDOMWindow.Profilist = null;
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet //NOTE: IMPORTANT: Intermittently this errors, it says illegal value, but when i dump cssUri value its this: `"jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/main.css"` SO i changed cssUri = to self.chrome_path INSTEAD of `self.aData.resourceURI.spec` ill see how that works out ACTUALLY event with chrome_path its doing the same but only on second and after, meaning its not getting unregistered on uninstall
+			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet //NOTE: IMPORTANT: Intermittently this errors, it says illegal value, but when i dump cssUri value its this: `"jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/main.css"` SO i changed cssUri = to core.chrome_path INSTEAD of `core.aData.resourceURI.spec` ill see how that works out ACTUALLY event with chrome_path its doing the same but only on second and after, meaning its not getting unregistered on uninstall
 			
 			pnl.addEventListener('popupshowing', updateOnPanelShowing, false);
 			pnl.addEventListener('popuphidden', updateOnPanelHid, false);
@@ -8023,7 +8104,7 @@ const subDataSplitter = ':~:~:~:'; //note: must match splitter const used in cli
 var addonListener = {
   onPropertyChanged: function(addon, properties) {
 	//console.log('props changed on addon:', addon.id, 'properties:', properties);
-	if (addon.id == self.id) {
+	if (addon.id == core.id) {
 	  if (properties.indexOf('applyBackgroundUpdates') > -1){
 		//updateOptionTabsDOM('autoupdate', addon.applyBackgroundUpdates);
 		cpCommPostMsg(['pref-to-dom', 'autoupdate', addon.applyBackgroundUpdates].join(subDataSplitter));
@@ -8396,7 +8477,7 @@ function getPathsInIconset(iconsetId, liveFetch) {
 		if (iconsetId == 'esr') {
 			iconsetId = 'release';
 		}
-		var pathBase_OSPath = self.chrome_path + 'ff-channel-base-iconsets/' + iconsetId + '/' + iconsetId;
+		var pathBase_OSPath = core.addon.path.images + 'channel-iconsets/' + iconsetId + '/' + iconsetId;
 		var pathBase_FileURI = pathBase_OSPath;
 	} else {
 		var pathBase_OSPath = OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId);
@@ -8863,8 +8944,9 @@ function mac_doPathsUNoveride() {
 //end - mac over and unover ride stuff
 
 function startProfilistWorker() {
+	extendCore();
 	
-	ProfilistWorker = new PromiseWorker(self.chrome_path + 'modules/workers/ProfilistWorker.js');
+	ProfilistWorker = new PromiseWorker(core.addon.path.workers + 'ProfilistWorker.js');
 	
 	var objInfo = {};
 	switch (cOS) {
@@ -8913,8 +8995,8 @@ function startup(aData, aReason) {
 	// todo: if build path is correct then ensure proper icon is applied
 	
 	var do_profilistStartup = function() { // wrap this so have time to do whatever os specific stuff before starting up profilist
-		self.aData = aData; //must go first, because functions in loadIntoWindow use self.aData
-		PromiseWorker = Cu.import(self.chrome_path + 'modules/PromiseWorker.jsm').BasePromiseWorker;
+		//core.aData = aData; //must go first, because functions in loadIntoWindow use core.aData
+		PromiseWorker = Cu.import(core.addon.path.modules + 'PromiseWorker.jsm').BasePromiseWorker;
 		startProfilistWorker();
 		//console.log('aData', aData);
 	//	//console.log('initing prof toolkit');
@@ -8922,10 +9004,10 @@ function startup(aData, aReason) {
 		refreshIdsJson(false, true);
 		//	//console.log('init done');
 		//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
-		//var css = '.findbar-container {-moz-binding:url(' + self.path.chrome + 'findbar.xml#matchword_xbl)}';
+		//var css = '.findbar-container {-moz-binding:url(' + core.addon.path.chrome + 'findbar.xml#matchword_xbl)}';
 		//var cssEnc = encodeURIComponent(css);
 		var newURIParam = {
-			aURL: self.chrome_path /*self.aData.resourceURI.spec*/ + 'main.css', //'data:text/css,' + cssEnc,
+			aURL: core.addon.path.styles + 'main.css',
 			aOriginCharset: null,
 			aBaseURI: null
 		}
@@ -9086,7 +9168,7 @@ function shutdown(aData, aReason) {
 	myPrefListener.unregister();
 	//end pref stuff more
 	
-	Cu.unload(self.chrome_path + 'modules/PromiseWorker.jsm');
+	Cu.unload(core.addon.path.modules + 'PromiseWorker.jsm');
 	
 	if (aReason == ADDON_DISABLE) {
 		refreshIdsJson(false, false, false);
@@ -10031,6 +10113,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 		var iterrator = new OS.File.DirectoryIterator(pathToDir);
 		var subdirs = [];
 		var promise_batch = iterrator.nextBatch();
+		// :TODO: iterrator.close() somewhere!! maybe here as i dont use iterrator anymore after .nextBatch()
 		promise_batch.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_batch - ', aVal);
@@ -10115,5 +10198,53 @@ function win_RegTypeStr_from_RegTypeInt(int) {
   } else {
     throw new Error('keyval.Type is not any of the expected values of 0, 2, 3, 4, or 11 so am now confused. keyval.Type == `' + int + '`');
   }
+}
+function SIPWorker(workerScopeName, aPath, aCore=core) {
+	// "Start and Initialize PromiseWorker"
+	// returns promise
+		// resolve value: jsBool true
+	// aCore is what you want aCore to be populated with
+	// aPath is something like `core.addon.path.content + 'modules/workers/blah-blah.js'`
+	
+	// :todo: add support and detection for regular ChromeWorker // maybe? cuz if i do then ill need to do ChromeWorker with callback
+	
+	var deferredMain_SIPWorker = new Deferred();
+
+	if (!(workerScopeName in bootstrap)) {
+		bootstrap[workerScopeName] = new PromiseWorker(aPath);
+		
+		//aCore = JSON.parse(JSON.stringify(aCore));
+		
+		if ('addon' in aCore && 'aData' in aCore.addon) {
+			delete aCore.addon.aData; // we delete this because it has nsIFile and other crap it, but maybe in future if I need this I can try JSON.stringify'ing it
+		}
+		
+		var promise_initWorker = bootstrap[workerScopeName].post('init', [aCore]);
+		promise_initWorker.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_initWorker - ', aVal);
+				// start - do stuff here - promise_initWorker
+				deferredMain_SIPWorker.resolve(true);
+				// end - do stuff here - promise_initWorker
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_initWorker', aReason:aReason};
+				console.warn('Rejected - promise_initWorker - ', rejObj);
+				deferredMain_SIPWorker.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_initWorker', aCaught:aCaught};
+				console.error('Caught - promise_initWorker - ', rejObj);
+				deferredMain_SIPWorker.reject(rejObj);
+			}
+		);
+		
+	} else {
+		deferredMain_SIPWorker.reject('Something is loaded into bootstrap[workerScopeName] already');
+	}
+	
+	return deferredMain_SIPWorker.promise;
+	
 }
 // end - common helper functions

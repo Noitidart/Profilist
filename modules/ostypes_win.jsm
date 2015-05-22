@@ -1,7 +1,5 @@
 var EXPORTED_SYMBOLS = ['ostypes'];
 
-importScripts('chrome://profilist/content/modules/cutils.jsm'); // used by HELPER functions
-
 if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 	var is64bit = false;
 } else if (ctypes.voidptr_t.size == 8 /* 64-bit */) {

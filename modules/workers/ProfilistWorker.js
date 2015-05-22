@@ -1,3 +1,111 @@
+'use strict';
+
+// Imports
+importScripts('resource://gre/modules/osfile.jsm');
+importScripts('resource://gre/modules/workers/require.js');
+
+// Globals
+const core = { // have to set up the main keys that you want when aCore is merged from mainthread in init
+	addon: {
+		path: {
+			content: 'chrome://nativeshot/content/',
+		}
+	},
+	os: {
+		name: OS.Constants.Sys.Name.toLowerCase()
+	},
+	firefox: {}
+};
+
+var OSStuff = {}; // global vars populated by init, based on OS
+
+// Imports that use stuff defined in chrome
+// I don't import ostypes_*.jsm yet as I want to init core first, as they use core stuff like core.os.isWinXP etc
+// imported scripts have access to global vars on MainWorker.js
+importScripts(core.addon.path.content + 'modules/cutils.jsm');
+importScripts(core.addon.path.content + 'modules/ctypes_math.jsm');
+
+// Setup PromiseWorker
+var PromiseWorker = require(core.addon.path.content + 'modules/workers/PromiseWorker.js');
+var worker = new PromiseWorker.AbstractWorker();
+worker.dispatch = function(method, args = []) {
+	return self[method](...args);
+};
+worker.postMessage = function(result, ...transfers) {
+	self.postMessage(result, ...transfers);
+};
+worker.close = function() {
+	self.close();
+};
+self.addEventListener('message', msg => worker.handleMessage(msg));
+
+////// end of imports and definitions
+
+function init(objCore) {
+	//console.log('in worker init');
+	
+	// merge objCore into core
+	// core and objCore is object with main keys, the sub props
+	
+	for (var p in objCore) {
+		/* // cant set things on core as its const
+		if (!(p in core)) {
+			core[p] = {};
+		}
+		*/
+		
+		for (var pp in objCore[p]) {
+			core[p][pp] = objCore[p][pp];
+		}
+	}
+
+	if (core.os.toolkit == 'gtk2') {
+		core.os.name = 'gtk';
+	}
+	
+	// I import ostypes_*.jsm in init as they may use things like core.os.isWinXp etc
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			importScripts(core.addon.path.content + 'modules/ostypes_win.jsm');
+			break
+		case 'gtk':
+			importScripts(core.addon.path.content + 'modules/ostypes_gtk.jsm');
+			break;
+		case 'darwin':
+			importScripts(core.addon.path.content + 'modules/ostypes_mac.jsm');
+			break;
+		default:
+			throw new Error({
+				name: 'addon-error',
+				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+			});
+	}
+	
+	// OS Specific Init
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				OSStuff.hiiii = true;
+				
+			break;
+		default:
+			// do nothing special
+	}
+	
+	return true;
+}
+
+// Start - Addon Functionality
+
+// End - Addon Functionality
+
+// START - Common
+// END - Common
+
 // Imports
 importScripts('resource://gre/modules/osfile.jsm')
 importScripts('resource://gre/modules/workers/require.js');
@@ -43,7 +151,7 @@ worker.close = function() {
 self.addEventListener('message', msg => worker.handleMessage(msg));
 
 // Init
-var info; //populated by init
+var core; //populated by init
 function init(objOfInitVars) {
 	switch (cOS) {
 		case 'winnt':
@@ -66,19 +174,7 @@ function init(objOfInitVars) {
 			}
 	}
 	
-	info = objOfInitVars;
-}
-
-var debugOut = [];
-function debugOutCLEAR() {
-	debugOut = [];
-}
-function debugOutWRITE(dontClear) {
-	var str = debugOut.join('\n');
-	OS.File.writeAtomic(OS.Path.join(OS.Constants.Path.desktopDir, 'debugOut.txt'), str, {encoding:'utf-8'});
-	if (!dontClear) {
-		debugOutCLEAR();
-	}
+	core = objOfInitVars;
 }
 
 //////////////////////////////////////////////////////// new way
@@ -621,7 +717,7 @@ function removeWmSetIcons_thenSetLong(contents_JSON, fullPathToFile, mostRecWinH
 			var hIconSmall_LONG_PTR = ostypes.IS64BIT ? ostypes.TYPE.LONG_PTR(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm)) : ostypes.TYPE.LONG(ctypes.Int64(contents_JSON.lastAppliedIcon_LRESULT.sm));
 			*/
 			// actually scrap the set back with long, i have to set back by LoadImage again otherwise if the profile the icon was applied from is closed, it will mem release the icon, even if use LR_SHARED as its cross process
-			if (info.isWinXp) { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (core.os.version_name == 'xp') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -694,7 +790,7 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 			console.log('iconPath: ' + iconPath);
 			console.log('arrWinHandlePtrStrs: ' + arrWinHandlePtrStrs.toString());
 			
-			if (info.isWinXp) { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
+			if (core.os.version_name == 'xp') { // if winxp and if so then use 32 instead of 256 per https://gist.github.com/Noitidart/0f55b7ca0f89fe2610fa#file-_ff-addon-snippet-browseforbadgethencreatesaveanapply-js-L328
 				// winxp
 				var bigSize = 32;
 			} else {
@@ -762,8 +858,8 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig_HANDLE);
 				var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall_HANDLE);
 				
-				debugOut.push('rez_destroyBig: ' + rez_destroyBig.toString());
-				debugOut.push('rez_destroySmall: ' + rez_destroySmall.toString());
+				console.log('rez_destroyBig: ' + rez_destroyBig.toString());
+				console.log('rez_destroySmall: ' + rez_destroySmall.toString());
 				*/
 			} else {
 				// update icon to pid that does not own this PromiseWorker thread
@@ -825,12 +921,12 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 							// console.info('gwOwner_HWND:', gwOwner_HWND.toString(), uneval(gwOwner_HWND));
 							// if (ctypes.winLastError != 0) { console.error('Failed gwOwner_HWND, winLastError:', ctypes.winLastError); }
 
-							// debugOut.push(['gwOwner_HWND: ', gwOwner_HWND, gwOwner_HWND.toString()].join(' '));
+							// console.log(['gwOwner_HWND: ', gwOwner_HWND, gwOwner_HWND.toString()].join(' '));
 							
 							// var successBigGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_BIG, hIconBig_LPARAM);
 							// var successSmallGwowner = ostypes.API('SendMessage')(gwOwner_HWND, ostypes.CONST.WM_SETICON, ostypes.CONST.ICON_SMALL, hIconSmall_LPARAM);			
-							// debugOut.push(['successBigGwowner: ', successBigGwowner, successBigGwowner.toString()].join(' '));
-							// debugOut.push(['successSmallGwowner: ', successSmallGwowner, successSmallGwowner.toString()].join(' '));
+							// console.log(['successBigGwowner: ', successBigGwowner, successBigGwowner.toString()].join(' '));
+							// console.log(['successSmallGwowner: ', successSmallGwowner, successSmallGwowner.toString()].join(' '));
 						}
 				}
 				if (winntChangedIconForeignPID_JSON.hwndPtrStrsAppliedTo.length > 0) {
@@ -844,8 +940,8 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 				}
 			}
 			
-			//console.log('OSVersion:', parseFloat(info.OSVersion), info.OSVersion);
-			if (info.isWin7) {
+			//console.log('OSVersion:', parseFloat(core.OSVersion), core.OSVersion);
+			if (core.os.version_name == '7+') {
 				console.log('win7+');
 				// win7+
 				if (!ostypes.CONST.IID_IPropertyStore) {
@@ -913,8 +1009,7 @@ function getPtrStrToWinOfProf(aProfilePID, allWin) {
 		// if allWin is true then an array of all string of ptr of windows of the pid
 	// aProfilePID should be jsInt
 	
-	debugOutCLEAR();
-	debugOut.push(['aProfilePID: ', aProfilePID, aProfilePID.toString()].join(' '));
+	console.log(['aProfilePID: ', aProfilePID, aProfilePID.toString()].join(' '));
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':
@@ -929,7 +1024,7 @@ function getPtrStrToWinOfProf(aProfilePID, allWin) {
 			var found = 0;
 			var SearchPD = function(hwnd, lparam) {
 				var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
-				debugOut.push(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
+				console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
 				if (PID.value == aProfilePID) {
 					found = true;
 					arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
@@ -945,7 +1040,6 @@ function getPtrStrToWinOfProf(aProfilePID, allWin) {
 			var SearchPD_ptr = ostypes.TYPE.WNDENUMPROC.ptr(SearchPD);
 			var wnd = ostypes.TYPE.LPARAM(0);
 			var rez_EnuMWindows = ostypes.API('EnumWindows')(SearchPD_ptr, wnd);
-			debugOutWRITE();
 			
 			if (found) {
 				console.info('found this:', arrWinPtrStrs);
@@ -953,7 +1047,7 @@ function getPtrStrToWinOfProf(aProfilePID, allWin) {
 				//console.info('ancestor:', ancestor.toString());
 				//var ptrStr = ancestor.toString();
 				//var ptrStr = ancestor.toString();
-				//ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
+				//ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ptrStr = '0x' + ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
 				if (allWin) {
 					return arrWinPtrStrs;
 				} else {
@@ -980,7 +1074,6 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 	// path_DefProfRt is Services.dirsvc.get('DefProfRt', Ci.nsIFile).path - ChromeWorker's don't have access to it so has to be passed in
 	
 	// resolves to jsInt 0 if not running, resolves to jsStr > 0 if found
-	debugOutCLEAR();
 	var rezMain;
 	if (IsRelative == '1') {
 		var cProfileDirName = OS.Path.basename(OS.Path.normalize(Path));
@@ -999,121 +1092,124 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 			
 			var path_lock = OS.Path.join(path_cProfRootDir, 'parent.lock');
 			
-			try { // using try-finally just for the finally
-				var dwSession;
-				rezMain = function() {
-					// START SESSION
-					dwSession = new ostypes.TYPE.DWORD();
-					var szSessionKey = ostypes.TYPE.WCHAR.array(ostypes.CONST.CCH_RM_SESSION_KEY + 1)(); //this is a buffer
-					cutils.memset(szSessionKey, '0', ostypes.CONST.CCH_RM_SESSION_KEY ); // remove + 1 as we want null terminated // can do memset(szSessionKey, ostypes.WCHAR('0'), ostypes.CCH_RM_SESSION_KEY + 1); // js-ctypes initializes at 0 filled: ctypes.char16_t.array(33)(["\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00"])"
-					
-					var rez_RmStartSession = ostypes.API('RmStartSession')(dwSession.address(), 0, szSessionKey);
-					if (!cutils.jscEqual(rez_RmStartSession, ostypes.CONST.ERROR_SUCCESS)) {
-						throw new Error('RmEndSession Failed with error code:' + rez_RmStartSession);
-					}
-					
-					// REGISTER RESOURCES
-					var jsStr_pszFilepath1 = path_lock; //path to file name
-					var pszFilepath1 = ostypes.TYPE.WCHAR.array()(jsStr_pszFilepath1); //creates null terminated c string, null terminated string is required for RmRegisterResources
-					//console.info('pszFilepath1:', pszFilepath1, pszFilepath1.toString(), uneval(pszFilepath1));
-					
-					var jsArr = [pszFilepath1];
-					var pszFilepathsArr = ostypes.TYPE.PCWSTR.array(/*no need, but can have it*//*jsArr.length*/)(jsArr); // when 2 it is: [ctypes.char16_t.ptr(ctypes.UInt64("0x0")), ctypes.char16_t.ptr(ctypes.UInt64("0x0"))]
-					//console.info('pszFilepathsArr:', pszFilepathsArr, pszFilepathsArr.toString(), uneval(pszFilepathsArr));
-					
-					var rez_RmRegisterResources = ostypes.API('RmRegisterResources')(dwSession, jsArr.length, pszFilepathsArr, 0, null, 0, null);
-					//console.info('rez_RmRegisterResources:', rez_RmRegisterResources, rez_RmRegisterResources.toString(), uneval(rez_RmRegisterResources));
-					
-					if (!cutils.jscEqual(rez_RmRegisterResources, ostypes.CONST.ERROR_SUCCESS)) {
-						throw new Error('RmRegisterResources Failed with error code:', rez_RmRegisterResources);
-					}
-
-					var nProcInfoNeeded = ostypes.TYPE.UINT(0); // 0 to fetch
-					var rgpi = null;
-					var nProcInfo = ostypes.TYPE.UINT(0); // this here is us telling how many array elements to fill, we initially provide null as rgpi so it has to be 0, otherwise it will probably crash asit will try to fill this number into null. after RmGetlist, it gets set to how many were actually filled
-					var dwReason = ostypes.TYPE.DWORD(0);
-					
-					//console.info('INIT nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
-					//console.info('INIT nProcInfo:', nProcInfo, nProcInfo.toString());
-					
-					var rez_RmGetList_Query = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
-					//console.info('rez_RmGetList_Query:', rez_RmGetList_Query, rez_RmGetList_Query.toString(), uneval(rez_RmGetList_Query));	
-					if (cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_SUCCESS)) {
-						//console.log('RmGetList succeeded but there are no processes on this so return as I had capped it to 0, so it should return ERROR_MORE_DATA if there was more than 0, rez_RmGetList_Query:', rez_RmGetList_Query);
-						return 0;
-					} else if (!cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
-						throw new Error('RmGetList failed, rez_RmGetList_Query:' + rez_RmGetList_Query);
-					}
-					
-					//console.info('POST nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
-					//console.info('POST nProcInfo:', nProcInfo, nProcInfo.toString());
-					//console.info('POST dwReason:', dwReason, dwReason.toString());
-					
-					rgpi = ostypes.TYPE.RM_PROCESS_INFO.array(nProcInfoNeeded.value)(); //alrady ptr so dont need to pass rgpi.ptr to RmGetList
-					nProcInfo = ostypes.TYPE.UINT(rgpi.length);
-					
-					console.info('RE-INIT nProcInfo:', nProcInfo, nProcInfo.toString());
-					
-					var rez_RmGetList_Fetch = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
-					console.info('rez_RmGetList_Fetch:', rez_RmGetList_Fetch, rez_RmGetList_Fetch.toString(), uneval(rez_RmGetList_Fetch));	
-									
-					if (!cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_SUCCESS)) {
-						if (cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_MORE_DATA)) {
-							//console.warn('RmGetList found that since last RmGetList there is now new/more processes available, so you can opt to run again but I dont need to as I want the first process which opened it, which should be Firefox profile');
-						} else {
-							throw new Error('RmGetList Failed with error code:' + rez_RmGetList_Fetch);
-						}
-					}
-					
-					//console.info('FINAL nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
-					//console.info('FINAL nProcInfo:', nProcInfo, nProcInfo.toString());
-					//console.info('FINAL dwReason:', dwReason, dwReason.toString());
-					//console.info('FINAL rgpi:', rgpi, rgpi.toString());
-					
-					rezMain = [];
-					for (var i=0; i<rgpi.length; i++) {
-						rezMain.push({
-							pid: cutils.jscGetDeepest(rgpi[i].Process.dwProcessId),
-							appName: cutils.readAsChar8ThenAsChar16(rgpi[i].strAppName),
-							dwLowDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwLowDateTime)),
-							dwHighDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwHighDateTime))
-						});
-						//console.log('PROCESS ' + i + ' DETAILS', 'PID:', rgpi[i].Process.dwProcessId, 'Application Name:', rgpi[i].strAppName.readStringReplaceMalformed());
-					}
-					
-					if (rezMain.length > 1) {
-						// really should never be greater then 1, but this is just a fallback
-						rezMain.sort(function(a,b) {
-							if (a.dwHighDateTime != b.dwHighDateTime) {
-								return ctypes.UInt64.compare(a.dwHighDateTime, b.dwHighDateTime) > 0; // sort asc
-							} else {
-								return ctypes.UInt64.compare(a.dwLowDateTime, b.dwLowDateTime) > 0; // sort asc
-							}
-						});
-					}
-					
-					return parseInt(rezMain[0].pid);
-					// END SESSION // in finally so it will happen right after this line
-				}();
-			} /*catch(mainEx) { // if do catch it wont reject promise
+			if (core.os.version_name == 'xp') {
 				
-			} */finally {
-				if (dwSession && dwSession.value != 0) { // dwSession is new ostypes.DWORD so `if (dwSession)` will always be true, need to fix this here: https://gist.github.com/Noitidart/6203ba1b410b7bacaa82#file-_ff-addon-snippet-winapi_rstrtmgr-js-L234
-					var rez_RmEndSession = ostypes.API('RmEndSession')(dwSession);
-					console.info('rez_RmEndSession:', rez_RmEndSession, rez_RmEndSession.toString(), uneval(rez_RmEndSession));
-					if (!cutils.jscEqual(rez_RmEndSession, ostypes.CONST.ERROR_SUCCESS)) {
-						//console.error('RmEndSession Failed with error code:', rez_RmEndSession);
-						debugOut.push('failed to end session');
+			} else {
+				// assuming its >winxp, i dont think ff29 installs on < winxp
+				try { // using try-finally just for the finally
+					var dwSession;
+					rezMain = function() {
+						// START SESSION
+						dwSession = new ostypes.TYPE.DWORD();
+						var szSessionKey = ostypes.TYPE.WCHAR.array(ostypes.CONST.CCH_RM_SESSION_KEY + 1)(); //this is a buffer
+						cutils.memset(szSessionKey, '0', ostypes.CONST.CCH_RM_SESSION_KEY ); // remove + 1 as we want null terminated // can do memset(szSessionKey, ostypes.WCHAR('0'), ostypes.CCH_RM_SESSION_KEY + 1); // js-ctypes initializes at 0 filled: ctypes.char16_t.array(33)(["\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00"])"
+						
+						var rez_RmStartSession = ostypes.API('RmStartSession')(dwSession.address(), 0, szSessionKey);
+						if (!cutils.jscEqual(rez_RmStartSession, ostypes.CONST.ERROR_SUCCESS)) {
+							throw new Error('RmEndSession Failed with error code:' + rez_RmStartSession);
+						}
+						
+						// REGISTER RESOURCES
+						var jsStr_pszFilepath1 = path_lock; //path to file name
+						var pszFilepath1 = ostypes.TYPE.WCHAR.array()(jsStr_pszFilepath1); //creates null terminated c string, null terminated string is required for RmRegisterResources
+						//console.info('pszFilepath1:', pszFilepath1, pszFilepath1.toString(), uneval(pszFilepath1));
+						
+						var jsArr = [pszFilepath1];
+						var pszFilepathsArr = ostypes.TYPE.PCWSTR.array(/*no need, but can have it*//*jsArr.length*/)(jsArr); // when 2 it is: [ctypes.char16_t.ptr(ctypes.UInt64("0x0")), ctypes.char16_t.ptr(ctypes.UInt64("0x0"))]
+						//console.info('pszFilepathsArr:', pszFilepathsArr, pszFilepathsArr.toString(), uneval(pszFilepathsArr));
+						
+						var rez_RmRegisterResources = ostypes.API('RmRegisterResources')(dwSession, jsArr.length, pszFilepathsArr, 0, null, 0, null);
+						//console.info('rez_RmRegisterResources:', rez_RmRegisterResources, rez_RmRegisterResources.toString(), uneval(rez_RmRegisterResources));
+						
+						if (!cutils.jscEqual(rez_RmRegisterResources, ostypes.CONST.ERROR_SUCCESS)) {
+							throw new Error('RmRegisterResources Failed with error code:', rez_RmRegisterResources);
+						}
+
+						var nProcInfoNeeded = ostypes.TYPE.UINT(0); // 0 to fetch
+						var rgpi = null;
+						var nProcInfo = ostypes.TYPE.UINT(0); // this here is us telling how many array elements to fill, we initially provide null as rgpi so it has to be 0, otherwise it will probably crash asit will try to fill this number into null. after RmGetlist, it gets set to how many were actually filled
+						var dwReason = ostypes.TYPE.DWORD(0);
+						
+						//console.info('INIT nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+						//console.info('INIT nProcInfo:', nProcInfo, nProcInfo.toString());
+						
+						var rez_RmGetList_Query = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
+						//console.info('rez_RmGetList_Query:', rez_RmGetList_Query, rez_RmGetList_Query.toString(), uneval(rez_RmGetList_Query));	
+						if (cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_SUCCESS)) {
+							//console.log('RmGetList succeeded but there are no processes on this so return as I had capped it to 0, so it should return ERROR_MORE_DATA if there was more than 0, rez_RmGetList_Query:', rez_RmGetList_Query);
+							return 0;
+						} else if (!cutils.jscEqual(rez_RmGetList_Query, ostypes.CONST.ERROR_MORE_DATA)) {
+							throw new Error('RmGetList failed, rez_RmGetList_Query:' + rez_RmGetList_Query);
+						}
+						
+						//console.info('POST nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+						//console.info('POST nProcInfo:', nProcInfo, nProcInfo.toString());
+						//console.info('POST dwReason:', dwReason, dwReason.toString());
+						
+						rgpi = ostypes.TYPE.RM_PROCESS_INFO.array(nProcInfoNeeded.value)(); //alrady ptr so dont need to pass rgpi.ptr to RmGetList
+						nProcInfo = ostypes.TYPE.UINT(rgpi.length);
+						
+						console.info('RE-INIT nProcInfo:', nProcInfo, nProcInfo.toString());
+						
+						var rez_RmGetList_Fetch = ostypes.API('RmGetList')(dwSession, nProcInfoNeeded.address(), nProcInfo.address(), rgpi, dwReason.address());
+						console.info('rez_RmGetList_Fetch:', rez_RmGetList_Fetch, rez_RmGetList_Fetch.toString(), uneval(rez_RmGetList_Fetch));	
+										
+						if (!cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_SUCCESS)) {
+							if (cutils.jscEqual(rez_RmGetList_Fetch, ostypes.CONST.ERROR_MORE_DATA)) {
+								//console.warn('RmGetList found that since last RmGetList there is now new/more processes available, so you can opt to run again but I dont need to as I want the first process which opened it, which should be Firefox profile');
+							} else {
+								throw new Error('RmGetList Failed with error code:' + rez_RmGetList_Fetch);
+							}
+						}
+						
+						//console.info('FINAL nProcInfoNeeded:', nProcInfoNeeded, nProcInfoNeeded.toString());
+						//console.info('FINAL nProcInfo:', nProcInfo, nProcInfo.toString());
+						//console.info('FINAL dwReason:', dwReason, dwReason.toString());
+						//console.info('FINAL rgpi:', rgpi, rgpi.toString());
+						
+						rezMain = [];
+						for (var i=0; i<rgpi.length; i++) {
+							rezMain.push({
+								pid: cutils.jscGetDeepest(rgpi[i].Process.dwProcessId),
+								appName: cutils.readAsChar8ThenAsChar16(rgpi[i].strAppName),
+								dwLowDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwLowDateTime)),
+								dwHighDateTime: parseInt(cutils.jscGetDeepest(rgpi[i].Process.ProcessStartTime.dwHighDateTime))
+							});
+							//console.log('PROCESS ' + i + ' DETAILS', 'PID:', rgpi[i].Process.dwProcessId, 'Application Name:', rgpi[i].strAppName.readStringReplaceMalformed());
+						}
+						
+						if (rezMain.length > 1) {
+							// really should never be greater then 1, but this is just a fallback
+							rezMain.sort(function(a,b) {
+								if (a.dwHighDateTime != b.dwHighDateTime) {
+									return ctypes.UInt64.compare(a.dwHighDateTime, b.dwHighDateTime) > 0; // sort asc
+								} else {
+									return ctypes.UInt64.compare(a.dwLowDateTime, b.dwLowDateTime) > 0; // sort asc
+								}
+							});
+						}
+						
+						return parseInt(rezMain[0].pid);
+						// END SESSION // in finally so it will happen right after this line
+					}();
+				} /*catch(mainEx) { // if do catch it wont reject promise
+					
+				} */finally {
+					if (dwSession && dwSession.value != 0) { // dwSession is new ostypes.DWORD so `if (dwSession)` will always be true, need to fix this here: https://gist.github.com/Noitidart/6203ba1b410b7bacaa82#file-_ff-addon-snippet-winapi_rstrtmgr-js-L234
+						var rez_RmEndSession = ostypes.API('RmEndSession')(dwSession);
+						console.info('rez_RmEndSession:', rez_RmEndSession, rez_RmEndSession.toString(), uneval(rez_RmEndSession));
+						if (!cutils.jscEqual(rez_RmEndSession, ostypes.CONST.ERROR_SUCCESS)) {
+							//console.error('RmEndSession Failed with error code:', rez_RmEndSession);
+							console.log('failed to end session');
+						} else {
+							console.log('succesfully ended session');
+						}
 					} else {
-						debugOut.push('succesfully ended session');
+						console.log('NO NEED to end session');
 					}
-				} else {
-					debugOut.push('NO NEED to end session');
+					// with or without catch, the finally does run. without catch, it even rejects the promise. this is good and expected!!
 				}
-				debugOutWRITE();
-				// with or without catch, the finally does run. without catch, it even rejects the promise. this is good and expected!!
 			}
-			
 			break;
 		default:
 			throw new Error('os-unsupported');
@@ -1121,158 +1217,6 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 
 	return rezMain;
 	
-}
-// my ipc plan for winnt
-	// on deactivate of window start listening, only need inbound
-	// other firefox profile can send message so that will need to init as outbound only
-function IPC_send(utf8or16_string) {
-	// sends message to target
-	switch (cOS) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-			
-			//msg shoud look like: Profilist--randomId--msg
-			
-			var jsStr_pipeName = 'Profilist';
-			jsStr_pipeName = '\\\\.\\pipe\\' + jsStr_pipeName;
-			var cStr_pipeName = ostypes.TYPE.LPCTSTR.targetType.array()(jsStr_pipeName);
-			
-			var rez_WaitNamedPipe = ostypes.API('WaitNamedPipe')(cStr_pipeName, ostypes.CONST.NMPWAIT_WAIT_FOREVER);
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			if (!rez_WaitNamedPipe) {
-				throw new Error('WaitNamedPipe failed with error: ' + ctypes.winLastError);
-			}
-			
-			var hOut = ostypes.API('CreateFile')(
-				cStr_pipeName,
-				ostypes.CONST.GENERIC_WRITE,
-				0,	// do not share this pipe with others
-				null,
-				ostypes.CONST.OPEN_EXISTING,
-				ostypes.CONST.FILE_ATTRIBUTE_NORMAL,
-				null
-			);
-			
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			if (cutils.jscEqual(hOut, ostypes.CONST.INVALID_HANDLE_VALUE)) {
-				throw new Error('CreateFile failed with error: ' + ctypes.winLastError);
-			}
-			
-			var len = ostypes.TYPE.DWORD();
-			var dwWritten = ostypes.TYPE.DWORD();
-			/*
-			for (var j=0; j<5; j++) {
-				let i = j;
-				setTimeout(function() {
-					var msg = 'SIGNAL ' + i;
-					var buf = ostypes.TYPE.WCHAR.array()(msg);
-					// if (buf.constructor.size > 1024) {
-						// console.error('cannot send message of', msg, 'because it is greather 1024 in size');
-						// return;
-					// }
-					console.log('Sending message:', msg);
-					var rez_WriteFile;
-					var rez_WriteFile = ostypes.API('WriteFile')(hOut, buf, buf.length, dwWritten.address(), null);
-					if (!rez_WriteFile) {
-						console.error('WriteFile failed with error: ' + ctypes.winLastError);
-						return;
-					}
-					console.info('dwWritten:', dwWritten, dwWritten.toString());
-					// var rez_Flush = ostypes.API('FlushFileBuffers')(hOut);
-					// console.info('rez_Flush:', rez_Flush, rez_Flush.toString(), uneval(rez_Flush));
-				}, i*1000);
-			}
-			
-			setTimeout(function() {
-				var rez_CloseHandle = ostypes.API('CloseHandle')(hOut);
-				console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
-			}, 5*1000);
-			*/
-			
-			var msg = 'SIGNALING';
-			var buf = ostypes.TYPE.WCHAR.array()(msg);
-			console.log('Sending message:', msg);
-			
-			var rez_WriteFile = ostypes.API('WriteFile')(hOut, buf, buf.length, dwWritten.address(), null);
-			if (!rez_WriteFile) {
-				console.error('WriteFile failed with error: ' + ctypes.winLastError);
-			}
-			console.info('dwWritten:', dwWritten, dwWritten.toString());
-			
-			var rez_CloseHandle = ostypes.API('CloseHandle')(hOut);
-			console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
-			break;
-		
-		default:
-			throw new Error('os-unsupported');
-	}
-}
-
-function IPC_init() {
-	// responds to messages i send
-	switch (cOS) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-			// target must be string of HWND, which is window target
-
-			//var hIn = ostypes.TYPE.HANDLE();
-			
-			var jsStr_pipeName = 'Profilist';
-			jsStr_pipeName = '\\\\.\\pipe\\' + jsStr_pipeName;
-			var cStr_pipeName = ostypes.TYPE.LPCTSTR.targetType.array()(jsStr_pipeName);
-			var /*rez_CreateNamedPipe*/hIn = ostypes.API('CreateNamedPipe')(
-				cStr_pipeName, // name
-				ostypes.CONST.PIPE_ACCESS_INBOUND, // open mode
-				ostypes.CONST.PIPE_WAIT, // pipe mode
-				ostypes.CONST.PIPE_UNLIMITED_INSTANCES, // max instances
-				1024, // out buffer size
-				1024, // in buffer size
-				2000, // timeout ms
-				null // security
-			);
-			
-			if (cutils.jscEqual(hIn, ostypes.CONST.INVALID_HANDLE_VALUE)) {
-				throw new Error('Could not create the pipe');
-			}			
-			
-			console.info('hIn:', hIn, hIn.toString(), uneval(hIn));
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			
-			var rez_ConnectNamedPipe = ostypes.API('ConnectNamedPipe')(hIn, null); // on this line, then it just hangs waiting for message
-			console.info('rez_ConnectNamedPipe:', rez_ConnectNamedPipe, rez_ConnectNamedPipe.toString(), uneval(rez_ConnectNamedPipe));
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			
-			var buf = ostypes.TYPE.WCHAR.array(100)();
-			var dwBytesRead = ostypes.TYPE.DWORD();
-			for (;;) {
-				var rez_ReadFile = ostypes.API('ReadFile')(hIn, buf, buf.constructor.size, dwBytesRead.address(), null);
-				if (!rez_ReadFile) {
-					console.info('rez_ReadFile:', rez_ReadFile, rez_ReadFile.toString(), uneval(rez_ReadFile));
-					if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-					//throw new Error('ReadFile failed -- probably EOF');
-					break;
-				}
-			}
-			
-			var rez_DisconnectNamedPipe = ostypes.API('DisconnectNamedPipe')(hIn);
-			console.info('rez_DisconnectNamedPipe:', rez_DisconnectNamedPipe, rez_DisconnectNamedPipe.toString(), uneval(rez_DisconnectNamedPipe));
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			
-			console.info('buf.readStringReplaceMalformed:', cutils.readAsChar8ThenAsChar16(buf));
-			console.info('dwBytesRead:', dwBytesRead, dwBytesRead.toString(), uneval(dwBytesRead));
-			//console.info('buf:', buf, buf.toString(), uneval(buf));
-			
-			var rez_CloseHandle = ostypes.API('CloseHandle')(hIn);
-			console.info('rez_CloseHandle:', rez_CloseHandle, rez_CloseHandle.toString(), uneval(rez_CloseHandle));
-			if (ctypes.winLastError != 0) { console.error('winLastError:', ctypes.winLastError) }
-			
-			break;
-		
-		default:
-			throw new Error('os-unsupported');
-	}
 }
 
 // start - helper functions
@@ -1293,14 +1237,14 @@ function read_encoded(path, options) {
 		throw new Error('Must pass encoding in options object, otherwise just use OS.File.read');
 	}
 	
-	if (options && info.FFVersionLessThan30) { // tests if version is less then 30
+	if (options && core.firefox.version < 30) { // tests if version is less then 30
 		//var encoding = options.encoding; // looks like i dont need to pass encoding to TextDecoder, not sure though for non-utf-8 though
 		delete options.encoding;
 	}
 	
 	var aVal = OS.File.read(path, options);
 
-	if (info.FFVersionLessThan30) { // tests if version is less then 30
+	if (core.FFVersionLessThan30) { // tests if version is less then 30
 		//console.info('decoded aVal', getTxtDecodr().decode(aVal));
 		return getTxtDecodr().decode(aVal); // Convert this array to a text
 	} else {

@@ -78,19 +78,19 @@ div:not(:first-of-type) > span:nth-of-type(1):not(.browse) .browse-icon {
 }
 
 div:not(:first-of-type) > span:nth-of-type(1).release {
-	background-image: url(../ff-channel-base-iconsets/release/release16.png);
+	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/release/release16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).beta {
-	background-image: url(../ff-channel-base-iconsets/beta/beta16.png);
+	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/beta/beta16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).dev {
-	background-image: url(../ff-channel-base-iconsets/dev/dev16.png);
+	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/dev/dev16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).aurora {
-	background-image: url(../ff-channel-base-iconsets/aurora/aurora16.png);
+	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/aurora/aurora16.png);
 }
 div:not(:first-of-type) > span:nth-of-type(1).nightly {
-	background-image: url(../ff-channel-base-iconsets/nightly/nightly16.png);
+	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/nightly/nightly16.png);
 }
 
 div:not(:first-of-type) > span:nth-of-type(1) {
@@ -246,13 +246,13 @@ div.error  > span:nth-of-type(2) > input[type=text] {
 div.error  > span:nth-of-type(2) > input[type=text] {
 	border: 1px solid rgba(187, 59, 1, 1); /*#bb3b01;*/
 	/*background-color: rgba(187, 59, 1, .1);*/
-	background: url('bg_error.png') repeat scroll left top #fff; /*because i want the opacity of red bg on white bg, i have to use image*/
+	background: url('chrome://profilist/content/resources/images/bg_error.png') repeat scroll left top #fff; /*because i want the opacity of red bg on white bg, i have to use image*/
 }
 
 div.warn  > span:nth-of-type(2) > input[type=text] {
 	border: 1px solid rgba(232, 188, 0, 1); /*#e8bc00;*/
 	/*background-color: rgba(232, 188, 0, .1);*/
-	background: url('bg_warn.png') repeat scroll left top #fff;
+	background: url('chrome://profilist/content/resources/images/bg_warn.png') repeat scroll left top #fff;
 }
 
 .tools:before {
@@ -265,7 +265,7 @@ div.warn  > span:nth-of-type(2) > input[type=text] {
 
 @font-face {
   font-family: 'fontello';
-  src: url('fontello.woff') format('woff');
+  src: url('chrome://profilist/content/resources/styles/fontello.woff') format('woff');
   font-weight: normal;
   font-style: normal;
   /* unicodes
@@ -380,7 +380,7 @@ padding: 0px;
 }
 
 .hd {
-background: url('eum_box_top.png') no-repeat scroll left top transparent;
+background: url('chrome://profilist/content/resources/images/eum_box_top.png') no-repeat scroll left top transparent;
 height: 10px;
 width: 486px;
 margin: 0px;
@@ -388,7 +388,7 @@ padding: 0px;
 }
 
 #login-dialog-inner {
-background: url('eum_box_slice.png') repeat-y scroll left top transparent;
+background: url('chrome://profilist/content/resources/images/eum_box_slice.png') repeat-y scroll left top transparent;
 width: 486px;
 float: left;
 padding: 0px 5px;
@@ -461,7 +461,7 @@ border: 1px solid #abadb3;
 }
 
 .ft {
-background: url('eum_box_btm.png') no-repeat scroll left top transparent;
+background: url('chrome://profilist/content/resources/images/eum_box_btm.png') no-repeat scroll left top transparent;
 color: #FFF;
 font-size: 0.93em;
 float: left;

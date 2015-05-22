@@ -86,7 +86,7 @@
 /* end drawer look */
 
 .profilist-tbb-box {
-	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
+	-moz-binding: url('chrome://profilist/content/resources/bindings/toolbarbutton.xml#tbb-box');
 	display:flex;
 	border-style: solid;
 	border-width: 1px 0; /*border top and bottom at 1, left and right at 0*/
@@ -174,7 +174,7 @@ this is kind of nice think about it
 	flex-grow: 1;
 	border:0;
 	display:flex;
-	/*-moz-binding: url('chrome://profilist/content/xbl.xml#tbb');*/
+	/*-moz-binding: url('chrome://profilist/content/resources/bindings/toolbarbutton.xml#tbb');*/
 	/*height: 36px;*/
 	box-sizing: border-box;
 	flex-basis: 0%;
@@ -206,17 +206,17 @@ this is kind of nice think about it
 }
 
 .profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
-	list-style-image: url('chrome://profilist/content/inactive-user.png');
+	list-style-image: url(chrome://profilist/content/resources/images/inactive-user.png);
 }
 .profilist-tbb-box[status='active']	.toolbarbutton-icon {
-	list-style-image: url('chrome://profilist/content/active-user.png');
+	list-style-image: url(chrome://profilist/content/resources/images/active-user.png);
 }
 .profilist-tbb-box.profilist-create .toolbarbutton-icon {
-	list-style-image: url(chrome://profilist/content/plus.png);
+	list-style-image: url(chrome://profilist/content/resources/images/plus.png);
 }
 
 #profilist-loading .toolbarbutton-icon {
-	list-style-image: url(chrome://profilist/content/icon16.png);
+	list-style-image: url(chrome://profilist/content/resources/images/icon16.png);
 }
 
 .profilist-tbb:not([badge]) .profilist-badge {
@@ -346,8 +346,8 @@ this is kind of nice think about it
 /* dots */
 .profilist-tbb-box .profilist-submenu box.profilist-dots {
 	/*padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
-	/* list-style-image: url(chrome://profilist/content/3dots.png); */
-	background: url(chrome://profilist/content/3dots_shifted.png) no-repeat center center transparent;
+	/* list-style-image: url(chrome://profilist/content/resources/images/3dots.png); */
+	background: url(chrome://profilist/content/resources/images/3dots_shifted.png) no-repeat center center transparent;
 	filter: none;
 	opacity: 1;
 	flex-shrink: 0;
@@ -358,7 +358,7 @@ this is kind of nice think about it
 
 .profilist-tbb-box.profilist-tied .profilist-submenu box.profilist-dots {
 	width: 8px;
-	/*background-image: url(chrome://profilist/content/3dots_shifted.png); *//*margin-top: 1px;*/ /*margin-top 1px messes up the hover, there is 1px sliver at top where still wtihin tbb-box but it hides the submenu*/
+	/*background-image: url(chrome://profilist/content/resources/images/3dots_shifted.png); *//*margin-top: 1px;*/ /*margin-top 1px messes up the hover, there is 1px sliver at top where still wtihin tbb-box but it hides the submenu*/
 	margin-left: 3px;
 }
 
@@ -431,24 +431,24 @@ this is kind of nice think about it
 	display:none;
 }
 .profilist-inactive-del {
-	/* list-style-image: url(chrome://profilist/content/bullet_delete.png); */
-	background: url(chrome://profilist/content/bullet_delete.png) no-repeat center center transparent;
+	/* list-style-image: url(chrome://profilist/content/resources/images/bullet_delete.png); */
+	background: url(chrome://profilist/content/resources/images/bullet_delete.png) no-repeat center center transparent;
 }
 .profilist-rename {
-	/*list-style-image: url(chrome://profilist/content/bullet_edit.png);*/
-	background: url(chrome://profilist/content/bullet_edit.png) no-repeat center center transparent;
+	/*list-style-image: url(chrome://profilist/content/resources/images/bullet_edit.png);*/
+	background: url(chrome://profilist/content/resources/images/bullet_edit.png) no-repeat center center transparent;
 }
 .profilist-default {
-	background: url(chrome://profilist/content/bullet_gray.png) no-repeat center center transparent;
+	background: url(chrome://profilist/content/resources/images/bullet_gray.png) no-repeat center center transparent;
 }
 .profilist-is-default {
 	/*used to show which other profile is the current default one when user hovers over ".profilist-default"*/
-	/* list-style-image: url(chrome://profilist/content/bullet_blue.png); */
-	background: url(chrome://profilist/content/bullet_blue.png) no-repeat center center transparent;
+	/* list-style-image: url(chrome://profilist/content/resources/images/bullet_blue.png); */
+	background: url(chrome://profilist/content/resources/images/bullet_blue.png) no-repeat center center transparent;
 }
 .profilist-dev-safe {
-	/* list-style-image: url(chrome://profilist/content/bullet_wrench.png); */
-	background: url(chrome://profilist/content/bullet_wrench.png) no-repeat center center transparent;
+	/* list-style-image: url(chrome://profilist/content/resources/images/bullet_wrench.png); */
+	background: url(chrome://profilist/content/resources/images/bullet_wrench.png) no-repeat center center transparent;
 }
 .profilist-dev-build {
 	/* list-style-image: url(chrome://branding/content/icon16.png); */
@@ -461,16 +461,16 @@ this is kind of nice think about it
 }
 	/*
 	.profilist-tbb-box.profilist-tied-release .profilist-dev-build {
-		background: url(chrome://profilist/content/bullet_release.png) no-repeat center center transparent;
+		background: url(chrome://profilist/content/resources/images/bullet_release.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-beta .profilist-dev-build {
-		background: url(chrome://profilist/content/bullet_beta.png) no-repeat center center transparent;
+		background: url(chrome://profilist/content/resources/images/bullet_beta.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-aurora .profilist-dev-build {
-		background: url(chrome://profilist/content/bullet_aurora.png) no-repeat center center transparent;
+		background: url(chrome://profilist/content/resources/images/bullet_aurora.png) no-repeat center center transparent;
 	}
 	.profilist-tbb-box.profilist-tied-nightly .profilist-dev-build {
-		background: url(chrome://profilist/content/bullet_nightly.png) no-repeat center center transparent;
+		background: url(chrome://profilist/content/resources/images/bullet_nightly.png) no-repeat center center transparent;
 	}
 	*/
 .profilist-tbb-box.profilist-tied .profilist-dev-build {
@@ -481,8 +481,8 @@ this is kind of nice think about it
 	display: none;
 }
 .profilist-create .profilist-submenu box.profilist-clone {
-	/* list-style-image: url(chrome://profilist/content/clone.png); */
-	background: url(chrome://profilist/content/clone.png) no-repeat center center transparent;
+	/* list-style-image: url(chrome://profilist/content/resources/images/clone.png); */
+	background: url(chrome://profilist/content/resources/images/clone.png) no-repeat center center transparent;
 	width: 32px;
 }
 .profilist-create .profilist-submenu box:not(.profilist-clone) {
@@ -491,12 +491,12 @@ this is kind of nice think about it
 /* end submenu*/
 
 #profilistLoading .profilist-tbb {
-	list-style-image: url(chrome://profilist/content/icon16.png);
+	list-style-image: url(chrome://profilist/content/resources/images/icon16.png);
 }
 
 /* start - when in customization mode and is disabled */
 .profilist-tbb-box[disabled] .profilist-tbb {
-	filter: url(filters.svg#grayscale);
+	filter: url(chrome://profilist/content/resources/styles/filters.svg#grayscale);
 }
 .profilist-tbb-box[disabled] .toolbarbutton-icon {
   opacity: 0.4 !important;
@@ -507,7 +507,7 @@ this is kind of nice think about it
 }
 
 .profilist-tbb-box[disabled] .profilist-badge {
-	/*filter: url(filters.svg#grayscale);*/ /*this doesnt work on image, its so weird, its making it a square weirrrrd, also tried: `filter:grayscale(100%)`*/
+	/*filter: url(chrome://profilist/content/resources/styles/filters.svg#grayscale);*/ /*this doesnt work on image, its so weird, its making it a square weirrrrd, also tried: `filter:grayscale(100%)`*/
 }
 
 .profilist-tbb-box[disabled] .toolbarbutton-text {

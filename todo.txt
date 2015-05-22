@@ -1,7 +1,0 @@
-4/10/15
-* winnt: detect when path of custom profile changed, as ill need to change the path on the launcher (??? maybe)
-* winnt: dont allow pinning (by mod of relanchcmd) of temporary profils
-
-OLD
-* need to ensure to duplicate paths in saved builds
-* to do, if delete from dev builds a path that has ties, then untie all those profiles
