@@ -59,8 +59,7 @@ var devBuildsStrOnLastUpdateToGlobalVar = ''; //named this for global var instea
 var currentThisBuildsIconPath = '';
 
 var cOS = OS.Constants.Sys.Name.toLowerCase();
-var macStuff = {};
-var winStuff = {};
+var OSStuff = {}; // global vars populated by init, based on OS
 var updateLauncherAndCutIconsOnBrowserShutdown; // set this to a function if this profiles build tie was changed while it was running, it will update the icon on browser shutdown
 
 const iconsetSizes_OS = {
@@ -116,6 +115,7 @@ Profilist.defaultProfilePath
 Profilist.defaultProfileIsRelative - (not outside of props as if deafultProfilePath doesnt change this obviously doesnt change)
 Profilist.currentThisBuildsIconPath
 */
+var profStatObj;
 
 // Lazy Imports
 const myServices = {};
@@ -4129,16 +4129,16 @@ var windowListener = {
 		}
 		
 		// start - do os specific stuff
-		if (macStuff.isMac) {
+		if (core.os.name == 'darwin') {
 			/*
 			OS.Constants.Path.libDir = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
 			OS.Constants.Path.libsqlite3 = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
 			OS.Constants.Path.libxul = 	Services.dirsvc.get('XpcomLib', Ci.nsIFile).path;
 			*/
-		} else if (winStuff.isWin7) {
+		} else if (core.os.version_name != '7+') {
 			// win7+
-			if (winStuff.setSystemAppUserModelID_perWin) {
-				myServices.wt7.setGroupIdForWindow(aDOMWindow, winStuff.setSystemAppUserModelID_perWin);
+			if (OSStuff.setSystemAppUserModelID_perWin) {
+				myServices.wt7.setGroupIdForWindow(aDOMWindow, OSStuff.setSystemAppUserModelID_perWin);
 				//todo: set other stuff, like window RelaunchCommand RelaunchName RelaunchIcon
 			}
 		}
@@ -8834,7 +8834,7 @@ function mac_doPathsOverride() {
 			// not yet cross checked with custom path
 		};
 		
-		macStuff.overidingDirProvider = {
+		OSStuff.overidingDirProvider = {
 			getFile: function(aProp, aPersistent) {
 				aPersistent.value = true;
 				if (replaceTypes[specialKeyReplaceType[aProp]]) {
@@ -8859,7 +8859,7 @@ function mac_doPathsOverride() {
 			*/
 			Services.dirsvc.undefine(key);
 		}
-		Services.dirsvc.registerProvider(macStuff.overidingDirProvider);
+		Services.dirsvc.registerProvider(OSStuff.overidingDirProvider);
 		//myServices.ds.unregisterProvider(dirProvider);
 		console.log('oevrrid');
 	};
@@ -8902,15 +8902,15 @@ function mac_doPathsOverride() {
 }
 
 function mac_doPathsUNoveride() {
-	if (!macStuff.overidingDirProvider) {
+	if (!OSStuff.overidingDirProvider) {
 		console.log('nothing to unoverride');
 		return;
 	}
 	
-	Services.dirsvc.unregisterProvider(macStuff.overidingDirProvider);
+	Services.dirsvc.unregisterProvider(OSStuff.overidingDirProvider);
 	console.warn('ok took it out the overidingProvider');
 	
-	macStuff.UNoveridingDirProvider = {
+	OSStuff.UNoveridingDirProvider = {
 		getFile: function(aProp, aPersistent) {
 			aPersistent.value = true;
 			return nsIFile_origAlias[aProp];
@@ -8931,88 +8931,57 @@ function mac_doPathsUNoveride() {
 			console.warn('warn on key:', key, ex);
 		}
 	}
-	Services.dirsvc.registerProvider(macStuff.UNoveridingDirProvider);
+	Services.dirsvc.registerProvider(OSStuff.UNoveridingDirProvider);
 	
 	for (var key in specialKeyReplaceType) {
 		// because will be unregistering this provider i have to run through them and get them defined, otherwise they will never get defined, and referencing them via Serv.dirvs.get('blah'...) will throw as theres no dir provider to provide it
 		var dummy = Services.dirsvc.get(key, Ci.nsIFile);
 		console.log('did unooveride on key', key, 'path:', dummy.path);
 	}
-	Services.dirsvc.unregisterProvider(macStuff.UNoveridingDirProvider);
+	Services.dirsvc.unregisterProvider(OSStuff.UNoveridingDirProvider);
 
 }
 //end - mac over and unover ride stuff
-
-function startProfilistWorker() {
-	extendCore();
-	
-	ProfilistWorker = new PromiseWorker(core.addon.path.workers + 'ProfilistWorker.js');
-	
-	var objInfo = {};
-	switch (cOS) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-			objInfo.OSVersion = winStuff.OSVersion;
-			if (winStuff.isWinXp) {
-				objInfo.isWinXp = true;
-			} else if (winStuff.isWin7) {
-				objInfo.isWin7 = true;
-			}
-			break;
-		default:
-			// do nothing
-	}
-	// data supplied for all os
-	objInfo.FFVersion = Services.appinfo.version;
-	objInfo.FFVersionLessThan30 = (Services.vc.compare(Services.appinfo.version, 30) < 0);
-	
-	var promise_initWorker = ProfilistWorker.post('init', [objInfo]);
-	promise_initWorker.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_initWorker - ', aVal);
-			// start - do stuff here - promise_initWorker
-			// end - do stuff here - promise_initWorker
-		},
-		function(aReason) {
-			var rejObj = {name:'promise_initWorker', aReason:aReason};
-			console.error('Rejected - promise_initWorker - ', rejObj);
-			//deferred_createProfile.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promise_initWorker', aCaught:aCaught};
-			console.error('Caught - promise_initWorker - ', rejObj);
-			//deferred_createProfile.reject(rejObj);
-		}
-	);
-	// should maybe test if the promise was successful
-}
 
 function startup(aData, aReason) {
 //	console.log('in startup');
 	// todo: check tie path, if current path does not match tie path then restart at that path (MAYBE)
 	// todo: if build path is correct then ensure proper icon is applied
 	
+	var do_postProfilistStartup_OSSpecific = function() {
+		// start - os specific post-startup stuff
+		switch (cOS) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+		
+					// apply icon to windows
+					updateIconToAllWindows(profToolkit.selectedProfile.iniKey);
+					
+				break;
+			default:
+				// do nothing
+		}
+		// end - os specific post-startup stuff
+	}
+	
 	var do_profilistStartup = function() { // wrap this so have time to do whatever os specific stuff before starting up profilist
 		//core.aData = aData; //must go first, because functions in loadIntoWindow use core.aData
+		
+		var promiseAllArr_startup = [];
+		
 		PromiseWorker = Cu.import(core.addon.path.modules + 'PromiseWorker.jsm').BasePromiseWorker;
-		startProfilistWorker();
-		//console.log('aData', aData);
-	//	//console.log('initing prof toolkit');
-		initProfToolkit();
-		refreshIdsJson(false, true);
-		//	//console.log('init done');
-		//updateProfToolkit(1, 1); //although i dont need the 2nd arg as its init
-		//var css = '.findbar-container {-moz-binding:url(' + core.addon.path.chrome + 'findbar.xml#matchword_xbl)}';
-		//var cssEnc = encodeURIComponent(css);
+		var promise_startMainWorker = SIPWorker('ProfilistWorker', core.addon.path.workers + 'ProfilistWorker.js');
+		
+		
+		var promise_iniFirstRead = readIniAndParseObjs();
+		
 		var newURIParam = {
 			aURL: core.addon.path.styles + 'main.css',
 			aOriginCharset: null,
 			aBaseURI: null
 		}
 		cssUri = Services.io.newURI(newURIParam.aURL, newURIParam.aOriginCharset, newURIParam.aBaseURI);
-		//myServices.sss.loadAndRegisterSheet(cssUri, myServices.sss.AUTHOR_SHEET);
 		
 		//start pref stuff more
 		myPrefListener = new PrefListener(); //init
@@ -9020,82 +8989,59 @@ function startup(aData, aReason) {
 		myPrefListener.register(aReason, false);
 		//end pref stuff more
 		
-		var promise_iniFirstRead = readIniAndParseObjs();
-		promise_iniFirstRead.then(
+		promiseAllArr_startup = [promise_startMainWorker, promise_iniFirstRead];
+		
+		promiseAllArr_startup.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_iniFirstRead - ', aVal);
-				
-				windowListener.register();
-				
-				for (var o in observers) {
-					if (observers[o].preReg) { observers[o].preReg() }
-					Services.obs.addObserver(observers[o].anObserver, o, false);
-					observers[o].WAS_REGGED = true;
-					if (observers[o].postReg) { observers[o].postReg() }
-				}
-				//ifClientsAliveEnsure_thenEnsureListenersAlive();
-				onResponseEnsureEnabledElseDisabled();
-				//Services.obs.notifyObservers(null, 'profilist-update-cp-dom', 'restart');
-				
-				// start - os specific post-startup stuff
-				switch (cOS) {
-					case 'winnt':
-					case 'winmo':
-					case 'wince':
-				
-						// apply icon to windows
-						updateIconToAllWindows(profToolkit.selectedProfile.iniKey);
-						break;
+				console.log('Fullfilled - promiseAllArr_startup - ', aVal);
+				// start - do stuff here - promiseAllArr_startup
+
+					initProfToolkit(); // requires promise_iniFirstRead be done
+					if (profToolkit.selectedProfile.iniKey) {
+						// its not a temp prof
+						updateProfStatObj({ // requires initProfToolkit be done
+							aProfilePath: OS.Constants.Path.profileDir,
+							aStatus: 1,
+							readFirst: true,
+							markOnlyIfDiff: true
+						});
+					}
+
+					windowListener.register(); // requires promise_startMainWorker be done // requires promise_iniFirstRead be done
 					
-					default:
-						// do nothing
-				}
-				// end - os specific post-startup stuff
-				
+					for (var o in observers) {
+						if (observers[o].preReg) { observers[o].preReg() }
+						Services.obs.addObserver(observers[o].anObserver, o, false);
+						observers[o].WAS_REGGED = true;
+						if (observers[o].postReg) { observers[o].postReg() }
+					}
+					
+					onResponseEnsureEnabledElseDisabled(); // requires promise_iniFirstRead be done // requires observers addObserver'ed
+					
+					do_postProfilistStartup_OSSpecific(); // this requires all the above post startup stuff done
+					
+				// end - do stuff here - promiseAllArr_startup
 			},
 			function(aReason) {
-				var rejObj = {name:'promise_iniFirstRead', aReason:aReason};
-				console.error('Rejected - promise_iniFirstRead - ', rejObj);
+				var rejObj = {name:'promiseAllArr_startup', aReason:aReason};
+				console.warn('Rejected - promiseAllArr_startup - ', rejObj);
+				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
-				console.error('Caught - promise_iniFirstRead - ', aCaught);
-				// throw aCaught;
+				var rejObj = {name:'promiseAllArr_startup', aCaught:aCaught};
+				console.error('Caught - promiseAllArr_startup - ', rejObj);
+				deferred_createProfile.reject(rejObj);
 			}
 		);
 	};
 	
 	// start - os specific pre-startup stuff
 	switch (cOS) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-			winStuff.OSVersion = parseFloat(Services.sysinfo.getProperty('version'));
-			if (winStuff.OSVersion >= 6.1) {
-				winStuff.isWin7 = true;
-			} else if (winStuff.OSVersion == 5.1 || winStuff.OSVersion == 5.2) {
-				winStuff.isWinXp = true;
-			}
-			
-			do_profilistStartup();
-			break;
-		/*
-		case 'linux':
-		case 'freebsd':
-		case 'openbsd':
-		case 'sunos':
-		case 'webos': // Palm Pre
-		case 'android': //profilist doesnt support android (android doesnt have profiles)
-			
-			do_profilistStartup();
-			break;
-		*/
 		case 'darwin':
-			macStuff.isMac = true;
-			
 			// check if should override paths
 			if (OS.Constants.Path.libDir.indexOf('profilist_data') > -1) {
-				macStuff.isProfilistLauncher = true;
+				OSStuff.isProfilistLauncher = true;
 				// need to override
 				var promise_overridePaths = mac_doPathsOverride();
 				promise_overridePaths.then(
@@ -9171,12 +9117,17 @@ function shutdown(aData, aReason) {
 	Cu.unload(core.addon.path.modules + 'PromiseWorker.jsm');
 	
 	if (aReason == ADDON_DISABLE) {
-		refreshIdsJson(false, false, false);
+		updateProfStatObj({ // requires initProfToolkit be done
+			aProfilePath: OS.Constants.Path.profileDir,
+			aStatus: 0,
+			readFirst: true,
+			markOnlyIfDiff: true // its gotta be non-0 right now so a diff will definitely exist
+		});
 	}
 	
 	// start - os specific stuff
-	if (macStuff.isMac) {
-		//if ([ADDON_DOWNGRADE, ADDON_UPGRADE].indexOf(aReason) > -1 || macStuff.overidingDirProvider) { // its not bad to leave this registered so im going to leave it on disable/uninstall, but on upgrade/downgrade i unreg it so on the upgrade i can properly recognize that its a profilist launcher as opposed to main Firefox.app
+	if (core.os.name == 'darwin') {
+		//if ([ADDON_DOWNGRADE, ADDON_UPGRADE].indexOf(aReason) > -1 || OSStuff.overidingDirProvider) { // its not bad to leave this registered so im going to leave it on disable/uninstall, but on upgrade/downgrade i unreg it so on the upgrade i can properly recognize that its a profilist launcher as opposed to main Firefox.app
 			mac_doPathsUNoveride();
 			//console.log('unregistered dir provider');
 			// old notes below:
@@ -9209,222 +9160,188 @@ function getIsProfilistUninstalledInAllOtherProfiles() {
 function getSystemAppUserModelId(aProfilePath) {
 	// WINNT function only
 	
-	if (!winStuff.isWin7) {
+	if (core.os.version_name != '7+') {
 		
 	}
 }
 
-function refreshIdsJson(justRead, isEnabled, isUninstall) {
-	// purpose of this function:
-		// mark ids.json that profilist is enabled/disabled or uninstalled (remove key) in this profile
-		// if winnt
-			// it will get the last used SystemAppUserModelID and if its different then it will fix the old pinned shortcuts
-			// set up the pref to use different SystemAppUserModelID per profile, and if its false enable the pref, and until restart it will change the SystemAppUserModelID on windows itself
-		// if mac
-			// 
-		// if nix
-			// 
+function getProfStat(aProfilePath, dontRefreshStatObj) {
+	// updates prof stat obj and returns profile status, 0-disabled, 1-enabled, -1-uninstalled
+	// if dontRefreshStatObj is true, then it doesnt read the file
+	var deferredMain_getProfStat = new Deferred();
 	
-	// requires that profToolkit be inited
-	// this will get current profiles id if not already available
-	
-	// returns promise
-		// resolves with array [selectedProfile id, json of ids.json];
-	
-	var json_ids; // an object holding the id from times.json correlated to object, which holds, HashString of path when installed for WINNT, to bundle-identifier for Mac, to itself for *nix
-	// on uninstall of profilist from a profile, it removes the id from profToolkit.path_profilistData_idsJson
-	/* example:
-	{
-		enabled: true/false,
-		winnt: {
-			SystemAppUserModelID: '46545' // max 128 chars, no spaces
-		},
-		mac: {
-			bundleIdentifier: '465454'
-		},
-		nix: {
-			
+	if (profToolkit.selectedProfile.iniKey) {
+		// meaning its a temp profile
+		deferredMain_getProfStat.resolve(1);
+	} else if (aProfilePath == profToolkit.selectedProfile.iniKey) {
+		// its selected profile
+		deferredMain_getProfStat.resolve(1);
+	} else {
+		if (dontRefreshStatObj && profStatObj) { //if devuser set dontRefreshStatObj to true, then if profStatObj is not undefined/uninited then it wont refresh it
+			var promise_updateProfStatObj = updateProfStatObj();
+			promise_updateProfStatObj.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_updateProfStatObj - ', aVal);
+					// start - do stuff here - promise_updateProfStatObj
+					doResolving();
+					// end - do stuff here - promise_updateProfStatObj
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_updateProfStatObj', aReason:aReason};
+					console.warn('Rejected - promise_updateProfStatObj - ', rejObj);
+					deferredMain_getProfStat.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_updateProfStatObj', aCaught:aCaught};
+					console.error('Caught - promise_updateProfStatObj - ', rejObj);
+					deferredMain_getProfStat.reject(rejObj);
+				}
+			);
+		} else {
+			doResolving();
 		}
 	}
-	*/
-	var deferredMain_refreshIdsJson = new Deferred();
+	
+	var doResolving = function() {
+		if (aProfilePath in profStatObj) {
+			deferredMain_getProfStat.resolve(profStatObj[aProfilePath]);
+		} else {
+			deferredMain_getProfStat.resolve(-1);
+		}
+	};
+	
+	return deferredMain_getProfStat.promise;
+}
 
-	var aProfId;
-	var do_readIdsJson_and_getProfId = function() {
-		var promiseAllArr_readIdsAndProfId = [];
-		var deferred_readIdsJson = new Deferred();
+function updateProfStatObj(markObj) {
+	// unique key for profiles is the profile path
+	// if markObj supplied it will read then write based on options provided
+	// if markObj is NOT supplied then it will read file into obj
 		
-		promiseAllArr_readIdsAndProfId.push(deferred_readIdsJson.promise);
-		promiseAllArr_readIdsAndProfId.push(getProfId(profToolkit.selectedProfile.iniKey));
-		
-		var promise_readIdsJson = read_encoded(profToolkit.path_profilistData_idsJson, {encoding:'utf-8'});
-		promise_readIdsJson.then(
+	// if markObj is set, then it will not read the ini file unless specifically told to do so // this comment affects defaults
+	
+	var deferredMain_updateProfStatObj = new Deferred();
+	
+	var defaultsMarkObj = {
+		readFirst: false,
+		markOnlyIfDiff: true // if aStatus in current obj profStatObj does not equal (differs from) aStatus then it will mark, if it is equal then it does nothing // if do readFirst:true then should definitely set markOnlyIfDiff to true, otherwise it will do an absolutely unncessary write. wherease if readFirst was false, then if we write, it will write the contents of the current obj, which might overwrite changes
+		// aProfilePath: jsStr, // must be devuser supplied
+		// aStatus: jsInt, // must be devuser supplied: 0 for disabled, 1 for enabled, -1 for uninstalled (if uninstalled the key will be deleted from obj and file)
+	};
+	
+	var do_readProfStatFile = function(gotoWriteObj) {
+		var promise_readProfStatFile = read_encoded(profToolkit.path_profilistData_idsJson, {encoding:'utf-8'});
+		promise_readProfStatFile.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_readIdsJson - ', aVal);
-				// start - do stuff here - promise_readIdsJson
-				deferred_readIdsJson.resolve(aVal);
-				// end - do stuff here - promise_readIdsJson
+				console.log('Fullfilled - promise_readProfStatFile - ', aVal);
+				// start - do stuff here - promise_readProfStatFile
+				profStatObj = JSON.parse(aVal);
+				/*
+				if (profToolkit.selectedProfile.iniKey) {
+					// current prof is not a temp prof
+					profStatObj[profToolkit.selectedProfile.iniKey] = 1;
+				}
+				*/
+				if (gotoWriteObj) {
+					do_testIfShouldWrite();
+				} else {
+					deferredMain_updateProfStatObj.resolve('had to just read, done');
+				}
+				// end - do stuff here - promise_readProfStatFile
 			},
 			function(aReason) {
 				if (aReasonMax(aReason).becauseNoSuchFile) {
-					json_ids = {};
-					deferred_readIdsJson.resolve('{}');
+					profStatObj = {};
+					/*
+					if (profToolkit.selectedProfile.iniKey) {
+						// current prof is not a temp prof
+						profStatObj[profToolkit.selectedProfile.iniKey] = 1;
+					}
+					*/
+					if (gotoWriteObj) {
+						do_testIfShouldWrite();
+					} else {
+						deferredMain_updateProfStatObj.resolve('had to just read, done');
+					}
 				} else {
-					var rejObj = {name:'promise_readIdsJson', aReason:aReason};
-					console.warn('Rejected - promise_readIdsJson - ', rejObj);
-					deferred_readIdsJson.reject(rejObj);
+					var rejObj = {name:'promise_readProfStatFile', aReason:aReason};
+					console.warn('Rejected - promise_readProfStatFile - ', rejObj);
+					deferredMain_updateProfStatObj.reject(rejObj);
 				}
 			}
 		).catch(
 			function(aCaught) {
-				var rejObj = {name:'promise_readIdsJson', aCaught:aCaught};
-				console.error('Caught - promise_readIdsJson - ', rejObj);
-				deferred_readIdsJson.reject(rejObj);
-			}
-		);
-		
-		var promiseAll_readIdsAndProfId = Promise.all(promiseAllArr_readIdsAndProfId);
-		promiseAll_readIdsAndProfId.then(
-			function(aVal) {
-				console.log('Fullfilled - promiseAll_readIdsAndProfId - ', aVal);
-				// start - do stuff here - promiseAll_readIdsAndProfId
-				json_ids = JSON.parse(aVal[0]);
-				aProfId = aVal[1];
-				do_writeIdsJson();
-				// end - do stuff here - promiseAll_readIdsAndProfId
-			},
-			function(aReason) {
-				var rejObj = {name:'promiseAll_readIdsAndProfId', aReason:aReason};
-				console.warn('Rejected - promiseAll_readIdsAndProfId - ', rejObj);
-				deferredMain_refreshIdsJson.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promiseAll_readIdsAndProfId', aCaught:aCaught};
-				console.error('Caught - promiseAll_readIdsAndProfId - ', rejObj);
-				deferredMain_refreshIdsJson.reject(rejObj);
+				var rejObj = {name:'promise_readProfStatFile', aCaught:aCaught};
+				console.error('Caught - promise_readProfStatFile - ', rejObj);
+				deferredMain_updateProfStatObj.reject(rejObj);
 			}
 		);
 	};
 	
-	var do_writeIdsJson = function() {
-		var resolveObj = {slectedProfileId: aProfId, json_ids: json_ids, neededWrite: false};
-		winStuff.lastReadProfilistDataIdsJson = json_ids;
-		if (justRead) {
-			return deferredMain_refreshIdsJson.resolve(resolveObj);
-		}
-		if (isUninstall) {
-			if (aProfId in json_ids) {
-				delete json_ids[aProfId];
-				shouldWrite = true;
+	var do_testIfShouldWrite = function() {
+		if (markObj.markOnlyIfDiff) {
+			if (!profStatObj) {
+				do_writeProfStatFile();
+			} else  if ((!(markObj.aProfilePath in profStatObj) && markObj.aStatus != -1) || (profStatObj[markObj.aProfilePath] != markObj.aStatus)) {
+				if (markObj.aStatus == -1) {
+					delete profStatObj[markObj.aProfilePath];
+				} else {
+					profStatObj[markObj.aProfilePath] = markObj.aStatus;
+				}
+				do_writeProfStatFile();
 			} else {
-				deferredMain_refreshIdsJson(resolveObj); // can detect that on uninstall didnt remove anything as neededWrite of resolveObj will be false
+				deferredMain_updateProfStatObj.resolve('no need to write as there are no differences');;
 			}
 		} else {
-			if (aProfId in json_ids && json_ids[aProfId].enabled == isEnabled) {
-				// do nothing
-				var oldObj = JSON.parse(JSON.stringify(json_ids[aProfId));
-			}
-			
-			var shouldWrite = false;
-			
-			if (oldObj.enabled !== isEnabled) { //using === as it may be undefined which is same as false at == level
-				json_ids[aProfId].enabled =  isEnabled;
-				shouldWrite = true;
-			}
-			
-			if (isEnabled) {
-				switch (cOS) {
-					case 'winnt':
-					case 'winmo':
-					case 'wince':
-						if (parseFloat(Services.sysinfo.getProperty('version')) >= 6.1) {
-							//win7+
-							if (!(setSystemAppUserModelID_perWin in winStuff)) {
-								var cSystemAppUserModelID = Services.prefs.getCharPref('browser.taskbar.lastgroupid');
-								var useSepSystemAppUserModelIDs;
-								try {
-									useSepSystemAppUserModelIDs = Services.prefs.getBoolPref('taskbar.grouping.useprofile'); // 
-								} catch (ex) {
-									if (ex.result == 2147549183 /*ex.name == 'NS_ERROR_UNEXPECTED'*/) {
-										// either its there and is not a bool, or it doesnt exist
-										Services.prefs.clearUserPref('browser.taskbar.lastgroupid'); // so in case it was created but not as bool we clear it first which erases it
-									}
-								}
-								if (!useSepSystemAppUserModelIDs) {
-									Services.prefs.setBoolPref('taskbar.grouping.useprofile', true);
-								}
-								
-								var shouldBeCur = HashString(profToolkit.selectedProfile.rootDirPath);
-								
-								if (oldObj.SystemAppUserModelID != /*cSystemAppUserModelID != shouldBeCur*/) { // if (oldObj.SystemAppUserModelID != json_ids[aProfId].SystemAppUserModelID) {
-									json_ids[aProfId].SystemAppUserModelID = shouldBeCur;
-									// use oldObj.SystemAppUserModelID to find pinned shortcuts and delete it and remake it with new one (shouldBeCur)				
-									shouldWrite = true;
-									winStuff.setSystemAppUserModelID_perWin = shouldBeCur;
-									setSystemAppUserModelID_onAllOpenWin();
-									//check if pinned, check with oldObj.SystemAppUserModelID, if it is then update that pinned shortcut with this SystemAppUserModelID, has to be done by deleting and recreating it
-								} else {
-									winStuff.setSystemAppUserModelID_perWin = false;
-									// do nothing
-								}
-								
-								// test if current SystemAppUserModelID is equal to 
-								
-									// test if current id is set to one of the default SystemAppUserModelIDs
-										// if YES then set taskbar.grouping.useprofile to be true, but mark window opener to mark SHGetWindowPropertyStore until next restart
-										// if NO then test if it is the HashString value
-											// if YES then good to go
-											// if NO then set SystemAppUserModelID in json_ids to be this (should never happen)
-							} else {
-								// this is a re-run of refreshIdsJson and the SystemAppUserModelID stuff was already taken care of
-							}
-						}
-						break;
-					case 'linux':
-					case 'freebsd':
-					case 'openbsd':
-					case 'sunos':
-					case 'webos': // Palm Pre
-					case 'android': //profilist doesnt support android (android doesnt have profiles)
-						importScripts('chrome://profilist/content/modules/ostypes_nix.jsm');
-						break;
-					case 'darwin':
-						importScripts('chrome://profilist/content/modules/ostypes_mac.jsm');
-						break;
-					default:
-						throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-				}
-			}
-			
-			if (shouldWrite) {
-				winStuff.lastReadProfilistDataIdsJson = json_ids; //i shouldnt have to do this as its passed by reference (and i already set winStuff.lastReadProfilistDataIdsJson at start of func do_writeIdsJson) and it should update as i mod it, but just in case... i do this here
-				resolveObj.neededWrite = true;
-				var promise_writeIdsJson = OS.File.writeAtomic(profToolkit.path_profilistData_idsJson, JSON.stringify(json_ids), {encoding:'utf-8'});
-				promise_writeIdsJson.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_writeIdsJson - ', aVal);
-						// start - do stuff here - promise_writeIdsJson
-						deferredMain_refreshIdsJson.resolve(resolveObj);
-						// end - do stuff here - promise_writeIdsJson
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_writeIdsJson', aReason:aReason};
-						console.warn('Rejected - promise_writeIdsJson - ', rejObj);
-						deferredMain_refreshIdsJson.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_writeIdsJson', aCaught:aCaught};
-						console.error('Caught - promise_writeIdsJson - ', rejObj);
-						deferredMain_refreshIdsJson.reject(rejObj);
-					}
-				);
-			}
-		}
+			do_writeProfStatFile();
+		}		
 	}
 	
-	return deferredMain_refreshIdsJson.promise;
+	var do_writeProfStatFile = function() {
+		var promise_writeProfStatFile = OS.File.writeAtomic(profToolkit.path_profilistData_idsJson, JSON.stringify(profStatObj), {encoding:'utf-8'});
+		promise_writeProfStatFile.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_writeProfStatFile - ', aVal);
+				// start - do stuff here - promise_writeProfStatFile
+				deferredMain_updateProfStatObj.resolve('went all the way through, and succesfully wrote stat file');
+				// end - do stuff here - promise_writeProfStatFile
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_writeProfStatFile', aReason:aReason};
+				console.warn('Rejected - promise_writeProfStatFile - ', rejObj);
+				deferredMain_updateProfStatObj.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_writeProfStatFile', aCaught:aCaught};
+				console.error('Caught - promise_writeProfStatFile - ', rejObj);
+				deferredMain_updateProfStatObj.reject(rejObj);
+			}
+		);
+	};
+	
+	if (markObj) {
+		for (var d in defaultsMarkObj) {
+			if (!(d in markObj)) {
+				markObj[d] = defaultsMarkObj[d];
+			}
+		}
+		var requiredByDevUser = {aProfilePath:1, aStatus:1};
+		for (var k in requiredByDevUser) {
+			if (!(k in markObj)) {
+				throw new Error('Missing required key of "' + k + '" from markObj');
+			}
+		}
+		
+		if (markObj.readFirst) {
+			do_readProfStatFile(true);
+		}
+	} else {
+		do_readProfStatFile();
+	}
+	
+	return deferredMain_updateProfStatObj.promise;
 }
 
 function setSystemAppUserModelID_onAllOpenWin() {
@@ -9435,14 +9352,14 @@ function setSystemAppUserModelID_onAllOpenWin() {
 		case 'wince':
 			if (parseFloat(Services.sysinfo.getProperty('version')) >= 6.1) {
 				// win7+
-				if (winStuff.setSystemAppUserModelID_perWin) {
+				if (OSStuff.setSystemAppUserModelID_perWin) {
 					var DOMWindows = Services.wm.getEnumerator(null);
 					while (DOMWindows.hasMoreElements()) {
 						var aDOMWindow = DOMWindows.getNext();
-						myServices.wt7.setGroupIdForWindow(aDOMWindow, winStuff.setSystemAppUserModelID_perWin);
+						myServices.wt7.setGroupIdForWindow(aDOMWindow, OSStuff.setSystemAppUserModelID_perWin);
 					}
 				} else {
-					console.error('winStuff.setSystemAppUserModelID_perWin is false');
+					console.error('OSStuff.setSystemAppUserModelID_perWin is false');
 				}
 			}
 			break;
@@ -9465,7 +9382,13 @@ function uninstall(aData, aReason) {
 	
 	if (aReason == ADDON_UNINSTALL) {
 		// real uninstall, have to do this becuse this uninstall function triggers for ADDON_DOWNGRADE and ADDON_UPGRADE too
-		refreshIdsJson(false, false, true);
+		// :todo: figure out if ADDON_DISABLE fires on uninstall, because if it does then it will be extra overhead for no reason (in that it will mark prof stat file disabled then mark it uninstalled)
+		updateProfStatObj({ // requires initProfToolkit be done
+			aProfilePath: OS.Constants.Path.profileDir,
+			aStatus: -1,
+			readFirst: true,
+			markOnlyIfDiff: true // its gotta be non--1 right now so a diff will definitely exist
+		});
 	}
 }
 
@@ -9486,7 +9409,7 @@ function getPathToPinnedCut(aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
 	
 	var deferredMain_getPathToPinnedCut = new Deferred();
 	
-	if (!winStuff.isWin7) {
+	if (core.os.version_name != '7+') {
 		deferredMain_getPathToPinnedCut.reject(undefined);
 		return deferredMain_getPathToPinnedCut.promise;
 	}
@@ -9644,7 +9567,7 @@ var _cache_getAllFxBuilds;
 function getAllFxBuilds() {
 	// currently win7+ only
 	
-	if (!winStuff.isWin7) {
+	if (core.os.version_name != '7+') {
 		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
 	} else {
 		if (!_cache_getAllFxBuilds) {
