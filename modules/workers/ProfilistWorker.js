@@ -166,7 +166,7 @@ function makeLauncher(pathsObj) {
 	}
 }
 
-function launchProfile(pathsObj, checkExistanceFirst) {
+function launchProfile(pathsObj, checkExistanceFirst) { // checkExistanceFirst to check if launcher exists first? not used yet
 	// pathsObj should be same as that needed to be passed to makeLauncher
 	switch (core.os.name) {
 		case 'winnt':

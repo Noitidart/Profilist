@@ -3013,7 +3013,8 @@ function tbb_box_click(e) {
 			} else {
 				e.view.PanelUI.toggle();
 				var profName = origTarg.getAttribute('label');
-				console.log('checking if running, either focus or launch profile');
+				/*
+				console.log('checking if running, either focus or launch profile');				
 				var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
 				promise_queryProfileLocked.then(
 					function(aVal) {
@@ -3041,6 +3042,20 @@ function tbb_box_click(e) {
 						console.warn('failed to get status of profName', profName, 'aReason:', aReason);
 					}
 				);
+				*/
+				var profIniKey;
+				for (var p in ini) {
+					if ('num' in ini[p]) {
+						// its a profile
+						if (ini[p].props.Name == profName) {
+							profIniKey = p;
+						}
+					}
+				}
+				if (!profIniKey) {
+					throw new Error('could not find inikey of prof with name "' + profName +'"');
+				}
+				launchProfile(profIniKey);
 			}
 		},
 		'profilist-clone': function() {
