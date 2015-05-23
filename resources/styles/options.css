@@ -78,19 +78,19 @@ div:not(:first-of-type) > span:nth-of-type(1):not(.browse) .browse-icon {
 }
 
 div:not(:first-of-type) > span:nth-of-type(1).release {
-	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/release/release16.png);
+	background-image: url('chrome://profilist/content/resources/images/channel-iconsets/release/release_16.png');
 }
 div:not(:first-of-type) > span:nth-of-type(1).beta {
-	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/beta/beta16.png);
+	background-image: url('chrome://profilist/content/resources/images/channel-iconsets/beta/beta_16.png');
 }
 div:not(:first-of-type) > span:nth-of-type(1).dev {
-	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/dev/dev16.png);
+	background-image: url('chrome://profilist/content/resources/images/channel-iconsets/dev/dev_16.png');
 }
 div:not(:first-of-type) > span:nth-of-type(1).aurora {
-	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/aurora/aurora16.png);
+	background-image: url('chrome://profilist/content/resources/images/channel-iconsets/aurora/aurora_16.png');
 }
 div:not(:first-of-type) > span:nth-of-type(1).nightly {
-	background-image: url(chrome://profilist/content/resources/images/channel-iconsets/nightly/nightly16.png);
+	background-image: url('chrome://profilist/content/resources/images/channel-iconsets/nightly/nightly_16.png');
 }
 
 div:not(:first-of-type) > span:nth-of-type(1) {
@@ -320,17 +320,14 @@ div.warn  > span:nth-of-type(2) > input[type=text] {
 
 
 /*start - pge stuff molded*/
-	body {
-	    font-size: 13px;
-    width: 100%;
-    height: 100%;
+body {
+	font-size: 13px;
     background: none repeat scroll 0% 0% #FFF;
     min-width: 810px;
-margin: 0px;
-padding: 0px;
-font: 74%/1.4em arial,helvetica,sans-serif;
-color: #666;
-
+	margin: 0px;
+	padding: 0px;
+	font: 74%/1.4em arial,helvetica,sans-serif;
+	color: #666;
 }
 
 h1 {
@@ -363,13 +360,12 @@ flex-grow: 1;
 
 .glb-bdy {
 position: relative;
-margin: 0px auto;
 padding: 0px;
-height: 95%;
 display: flex;
 flex-direction: column;
 align-items: center;
 justify-content: center;
+margin-top: 5%;
 }
 
 #login-dialog {

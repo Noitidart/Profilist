@@ -437,7 +437,7 @@ var observers = {
 			loader.style.opacity = 0;
 		}, 300);
 		setTimeout(function() {
-			load_img.src = 'options_resources/loading-done.gif';
+			load_img.src = 'chrome://profilist/content/resources/images/loading-done.gif';
 			loader.style.opacity = 1;
 		}, 400); //do in 100s because 200ms is transition time so opactiy only gets to 0.5 before i go for 1
 		setTimeout(function() {
@@ -455,7 +455,7 @@ var observers = {
 	}
 	
 	function createShortcut(identifier) {
-		load_img.src = 'options_resources/loading.gif';
+		load_img.src = 'chrome://profilist/content/resources/images/loading.gif';
 		
 		loader.style.opacity = 1;
 		var select = shortcutSelect;
