@@ -3375,6 +3375,7 @@ function tbb_box_click(e) {
 						var pickerProcess_updateWindowsLauncherDeskcut = function() {
 							var name_iconToUse = targetedProfSpecs.iconNameObj.str;
 							updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
+							updateIconToPinnedCut(targetedProfileIniKey, name_iconToUse);
 							updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
 							updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
 						};
