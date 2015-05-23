@@ -1,9 +1,6 @@
 'use strict';
 
-// Imports - imported scripts have access to global vars on MainWorker.js, so no need to import within them, like the imported cutils doesnt need to import ctypes_math.jsm as it was already imported in MainWorker.js
-// I don't import ostypes_*.jsm yet as I want to init core first, as they use core stuff like core.os.version_name == 'xp' etc
-importScripts(core.addon.path.content + 'modules/ctypes_math.jsm');
-importScripts(core.addon.path.content + 'modules/cutils.jsm');
+// Non-Custom Path Imports
 importScripts('resource://gre/modules/osfile.jsm');
 importScripts('resource://gre/modules/workers/require.js');
 
@@ -11,7 +8,7 @@ importScripts('resource://gre/modules/workers/require.js');
 const core = { // have to set up the main keys that you want when aCore is merged from mainthread in init
 	addon: {
 		path: {
-			content: 'chrome://nativeshot/content/',
+			content: 'chrome://profilist/content/',
 		}
 	},
 	os: {
@@ -19,6 +16,13 @@ const core = { // have to set up the main keys that you want when aCore is merge
 	},
 	firefox: {}
 };
+
+var OSStuff = {}; // global vars populated by init, based on OS
+
+// Custom Path Imports - imports that use stuff defined in core - imported scripts have access to global vars on MainWorker.js, so no need to import within them, like the imported cutils doesnt need to import ctypes_math.jsm as it was already imported in MainWorker.js
+// I don't import ostypes_*.jsm yet as I want to init core first, as they use core stuff like core.os.version_name == 'xp' etc
+importScripts(core.addon.path.content + 'modules/cutils.jsm');
+importScripts(core.addon.path.content + 'modules/ctypes_math.jsm');
 
 var OSStuff = {}; // global vars populated by init, based on OS
 
@@ -399,6 +403,8 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 	// Path is the value from profiles.ini for the profile you want to target
 	// path_DefProfRt is Services.dirsvc.get('DefProfRt', Ci.nsIFile).path - ChromeWorker's don't have access to it so has to be passed in
 
+	var rezMain; // jsInt
+	
 	if (IsRelative == '1') {
 		var cProfileDirName = OS.Path.basename(OS.Path.normalize(Path));
 		var path_cProfRootDir = OS.Path.join(path_DefProfRt, cProfileDirName);

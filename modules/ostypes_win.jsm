@@ -147,7 +147,7 @@ var winTypes = function() {
 		{ 'dwReserved0': this.DWORD },
 		{ 'dwReserved1': this.DWORD },
 		{ 'cFileName': this.TCHAR.array(OS.Constants.Win.MAX_PATH) },
-		{ 'cAlternateFileName': this.TCHAR.array(14)
+		{ 'cAlternateFileName': this.TCHAR.array(14) }
 	]);
 	
 	// SUPER DUPER ADV STRUCTS

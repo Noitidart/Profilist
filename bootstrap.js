@@ -38,10 +38,8 @@ const core = {
 
 var PromiseWorker;
 var bootstrap = this;
-const NS_HTML = 'http://www.w3.org/1999/xhtml';
-const cui_cssUri = Services.io.newURI(core.addon.path.resources + 'cui.css', null, null);
 
-const myPrefBranch = 'extensions.' + core.name + '@jetpack.';
+const myPrefBranch = 'extensions.' + core.addon.name + '@jetpack.';
 
 const tbb_box_style = '';
 const tbb_style = ''; //old full style::-moz-appearance:none; padding:10px 0 10px 15px; margin-bottom:-1px; border-top:1px solid rgba(24,25,26,0.14); border-bottom:1px solid transparent; border-right:0 none rgb(0,0,0); border-left:0 none rgb(0,0,0);
@@ -80,7 +78,6 @@ const iconsetSizes_Profilist = {
 
 //var pathProfilesIni = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 //var pathProfilesIniBkp = profToolkit.path_iniFile + '.profilist.bkp';
-var ProfilistWorker;
 
 var ini = {UnInitialized:true};
 var devBuilds;
@@ -1286,7 +1283,7 @@ function initProfToolkit() {
 	profToolkit.path_profilistData_iconsets = OS.Path.join(profToolkit.path_profilistData_root, 'iconsets');
 	profToolkit.path_profilistData_launcherIcons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
 	profToolkit.path_profilistData_launcherExes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
-	profToolkit.path_profilistData_idsJson = OS.Path.join(path_profilistData_root, 'ids.json');
+	profToolkit.path_profilistData_idsJson = OS.Path.join(profToolkit.path_profilistData_root, 'ids.json');
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':
@@ -1414,7 +1411,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			var profilistHBoxJSON =
 			['xul:vbox', {id:'profilist_box', class:'', style:''},
 				['xul:stack', {/*key:'profilist_stack'*/},
-					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading',*/ disabled:'true', label:myServices.stringBundle.GetStringFromName('loading-profiles')}]
+					['xul:box', {class:'profilist-tbb-box', id:'profilist-loading', /*key:'profilist-loading',*/ disabled:'true', label:myServices.sb.GetStringFromName('loading-profiles')}]
 				]
 			];
 			var basePNodes = {}; //baseProfilistNodes
@@ -1517,7 +1514,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				
 				//create and add create new profile tbb
 				var elFromJson_createNewProfile = jsonToDOM(
-					['xul:box', {class:'profilist-tbb-box profilist-create', label:myServices.stringBundle.GetStringFromName('create-new-profile'), top:0}]
+					['xul:box', {class:'profilist-tbb-box profilist-create', label:myServices.sb.GetStringFromName('create-new-profile'), top:0}]
 					, aDOMWindow.document
 					, {}
 				);
@@ -1528,12 +1525,25 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				//profToolkit.selectedProfile.iniKey == null then this is a temporary profile
 				/*
 				var elFromJson_currentProfile = jsonToDOM(
-					['xul:box', {class:'profilist-tbb-box profilist-cur-prof', label:myServices.stringBundle.GetStringFromName('temporary-profile'), status:'active', top:0}]
+					['xul:box', {class:'profilist-tbb-box profilist-cur-prof', label:myServices.sb.GetStringFromName('temporary-profile'), status:'active', top:0}]
 					, aDOMWindow.document
 					, {}
 				);
 				*/
 				////// copy/modification/strips of block 8752123154 //except for the he forCustomizationTabInsertItDisabled
+				/*
+				if (profToolkit.selectedProfile.iniKey === null) {
+					// its a temp prof
+					var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile profilist-temp-profile'], status:'active', style:['margin-top:0'], top:0}];
+					elJson[1].label = myServices.sb.GetStringFromName('temporary-profile');
+					var elFromJson = jsonToDOM(	// make jsonToDOM of ini[pb].props
+						elJson
+						, aDOMWindow.document
+						, {}
+					);
+					//elFromJson.addEventListener('click', tbb_box_click, false);
+				}
+				*/
 				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile'], status:'active', style:['margin-top:0'], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
 				if (sIniKey) {
@@ -1562,7 +1572,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					elJson[1].style = elJson[1].style.join('; ');
 				} else {
 					//is temp profile
-					elJson[1].label = myServices.stringBundle.GetStringFromName('temporary-profile');
+					elJson[1].label = myServices.sb.GetStringFromName('temporary-profile');
 				}
 				var elFromJson = jsonToDOM(	// make jsonToDOM of ini[pb].props
 					elJson
@@ -3419,15 +3429,15 @@ function tbb_box_click(e) {
 							}
 							*/
 							try {
-								var errorTxt = myServices.stringBundle.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+								var errorTxt = myServices.sb.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
 							} catch(ex if ex.result == Cr.NS_ERROR_FAILURE) {
 								console.warn('GetStringFromName/formatStringFromName - the `name` on id of `' + 'iconset-picker-error-txt-' + deepestReason[0] + '` doesnt exist');
 							}
 							if (errorTxt) {
 								Services.prompt.alert(
 									cWin,
-									myServices.stringBundle.GetStringFromName('iconset-picker-error-title'),
-									myServices.stringBundle.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+									myServices.sb.GetStringFromName('iconset-picker-error-title'),
+									myServices.sb.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
 								);
 								makePanelClosableOnBlur_doCompleteAnimation();
 								return; //prevent deeper execution
@@ -3442,8 +3452,8 @@ function tbb_box_click(e) {
 							default:
 								Services.prompt.alert(
 									cWin,
-									myServices.stringBundle.GetStringFromName('profilist-error-title'),
-									myServices.stringBundle.formatStringFromName('profilist-error-txt-something', [JSON.stringify(deepestReason)], 1)
+									myServices.sb.GetStringFromName('profilist-error-title'),
+									myServices.sb.formatStringFromName('profilist-error-txt-something', [JSON.stringify(deepestReason)], 1)
 								);
 						}
 						
@@ -4157,6 +4167,7 @@ var windowListener = {
 			}
 			aDOMWindow.Profilist = null;
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+			console.info('cssUri:', cssUri);
 			domWinUtils.loadSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet //NOTE: IMPORTANT: Intermittently this errors, it says illegal value, but when i dump cssUri value its this: `"jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/main.css"` SO i changed cssUri = to core.chrome_path INSTEAD of `core.aData.resourceURI.spec` ill see how that works out ACTUALLY event with chrome_path its doing the same but only on second and after, meaning its not getting unregistered on uninstall
 			
 			pnl.addEventListener('popupshowing', updateOnPanelShowing, false);
@@ -7562,7 +7573,7 @@ function pickerIconset(tWin) {
 		// rejects main if cancelled or no files selected
 		
 		var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
-		fp.init(tWin, myServices.stringBundle.GetStringFromName('iconset-picker-title'), Ci.nsIFilePicker.modeOpenMultiple);
+		fp.init(tWin, myServices.sb.GetStringFromName('iconset-picker-title'), Ci.nsIFilePicker.modeOpenMultiple);
 		fp.appendFilters(Ci.nsIFilePicker.filterImages);
 
 		var startDir = Services.dirsvc.get('UAppData', Ci.nsIFile); // same as OS.Constants.Path.userApplicationDataDir
@@ -7611,18 +7622,18 @@ function pickerIconset(tWin) {
 	var doInform = function() {		
 		switch (cOS) {
 			case 'winnt':
-				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
-				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-win');
+				var title = myServices.sb.GetStringFromName('inform-iconset-title');
+				var msg = myServices.sb.GetStringFromName('inform-iconset-txt-win');
 				break;
 			
 			case 'linux':
-				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
-				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-linux');
+				var title = myServices.sb.GetStringFromName('inform-iconset-title');
+				var msg = myServices.sb.GetStringFromName('inform-iconset-txt-linux');
 				break;
 			
 			case 'darwin':
-				var title = myServices.stringBundle.GetStringFromName('inform-iconset-title');
-				var msg = myServices.stringBundle.GetStringFromName('inform-iconset-txt-mac');
+				var title = myServices.sb.GetStringFromName('inform-iconset-title');
+				var msg = myServices.sb.GetStringFromName('inform-iconset-txt-mac');
 				break;
 				
 			default:
@@ -8948,6 +8959,8 @@ function startup(aData, aReason) {
 	// todo: check tie path, if current path does not match tie path then restart at that path (MAYBE)
 	// todo: if build path is correct then ensure proper icon is applied
 	
+	extendCore();
+	
 	var do_postProfilistStartup_OSSpecific = function() {
 		// start - os specific post-startup stuff
 		switch (cOS) {
@@ -8973,8 +8986,8 @@ function startup(aData, aReason) {
 		PromiseWorker = Cu.import(core.addon.path.modules + 'PromiseWorker.jsm').BasePromiseWorker;
 		var promise_startMainWorker = SIPWorker('ProfilistWorker', core.addon.path.workers + 'ProfilistWorker.js');
 		
-		
-		var promise_iniFirstRead = readIniAndParseObjs();
+		initProfToolkit();
+		var promise_iniFirstRead = readIniAndParseObjs(); // requires initProfToolkit be done
 		
 		var newURIParam = {
 			aURL: core.addon.path.styles + 'main.css',
@@ -8991,12 +9004,12 @@ function startup(aData, aReason) {
 		
 		promiseAllArr_startup = [promise_startMainWorker, promise_iniFirstRead];
 		
-		promiseAllArr_startup.then(
+		var promiseAll_startup = Promise.all(promiseAllArr_startup);
+		promiseAll_startup.then(
 			function(aVal) {
 				console.log('Fullfilled - promiseAllArr_startup - ', aVal);
 				// start - do stuff here - promiseAllArr_startup
-
-					initProfToolkit(); // requires promise_iniFirstRead be done
+				
 					if (profToolkit.selectedProfile.iniKey) {
 						// its not a temp prof
 						updateProfStatObj({ // requires initProfToolkit be done
@@ -9012,9 +9025,9 @@ function startup(aData, aReason) {
 					for (var o in observers) {
 						if (observers[o].preReg) { observers[o].preReg() }
 						Services.obs.addObserver(observers[o].anObserver, o, false);
-						observers[o].WAS_REGGED = true;
 						if (observers[o].postReg) { observers[o].postReg() }
 					}
+					observers[o].WAS_REGGED = true;
 					
 					onResponseEnsureEnabledElseDisabled(); // requires promise_iniFirstRead be done // requires observers addObserver'ed
 					
@@ -9024,14 +9037,14 @@ function startup(aData, aReason) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAllArr_startup', aReason:aReason};
-				console.warn('Rejected - promiseAllArr_startup - ', rejObj);
-				deferred_createProfile.reject(rejObj);
+				console.error('Rejected - promiseAllArr_startup - ', rejObj);
+				//deferred_createProfile.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
 				var rejObj = {name:'promiseAllArr_startup', aCaught:aCaught};
 				console.error('Caught - promiseAllArr_startup - ', rejObj);
-				deferred_createProfile.reject(rejObj);
+				//deferred_createProfile.reject(rejObj);
 			}
 		);
 	};
