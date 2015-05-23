@@ -3783,6 +3783,36 @@ function updateIconToDesktcut(aProfilePath) {
 				
 	console.log('updateIconToDesktcut run - not yet implemented');
 }
+
+function updateIconOSLaunchers(aProfileIniKey) {
+	
+	var deferredMain_updateIconToPinnedCut = new Deferred();
+	
+	// if aProfilePath is default profile update the default launchers too
+	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	var OSPath = getPathToProfileDir(aProfileIniKey);
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				// all
+					// if isDefault, update all default launchers
+				// 7+
+					// update pinned shortcuts
+
+				if (core.os.version_name != '7+') {
+					// update pinned shortcuts
+				}
+				
+			break;
+		default:
+			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+	}
+	
+	return deferredMain_updateIconToPinnedCut.promise;
+}
 // end - functions to update icons at various locations
 
 function iniKeyOfName(theProfileName) {
@@ -8970,6 +9000,8 @@ function startup(aData, aReason) {
 		
 					// apply icon to windows
 					updateIconToAllWindows(profToolkit.selectedProfile.iniKey);
+					updateIconToPinnedCut(profToolkit.selectedProfile.iniKey);
+					
 					
 				break;
 			default:
@@ -9409,7 +9441,108 @@ function uninstall(aData, aReason) {
 
 // end - custom to profilist helper functions
 
-function getPathToPinnedCut(aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
+function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunchCmdPin*/) {
+	// winnt only
+	// searches the folders where shortcuts go if it is pinned
+		// does this by searching if shortcut path includes the profile path
+		// if profile is default it finds shortcuts with the default paths found from registry AND shortcuts with any lower cased launch paths matching any of the paths in ini.General.props['Profilist.dev-builds']);
+	// resolves with array of os paths to pinned cuts that launch aProfileIniKey
+	var deferredMain_getPathToPinnedCut = new Deferred();
+	
+	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	var OSPath = getPathToProfileDir(aProfileIniKey);
+	var path_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+	var path_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
+	
+	var criteriaForMatchingCut = { // i lower case all pushes into here, in case user made his own shortcuts, so i cant trust his casing. and in case the user put wrong casing in devBuilds
+		profileName: [],
+		profilePath: [],
+		buildPathAndNoProfile: []
+	};
+	
+	criteriaForMatchingCut.profileName.push(ini[aProfileIniKey].props.Name.toLowerCase());
+	criteriaForMatchingCut.profileName.push(OSPath.toLowerCase());
+	
+	if (isDefault) {
+		// collect paths to all builds
+		
+		// from registry
+		var fxBuildsFromRegistry = getAllFxBuilds();
+		for (var i=0; i<fxBuildsFromRegistry.length; i++) {
+			var cBuildPath = fxBuildsFromRegistry.Name.toLowerCase();
+			criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
+		}
+		
+		// from Profilist.dev-builds pref
+		var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+		for (var buildId in devBuilds) {
+			var cBuildPath = devBuilds[buildId].toLowerCase();
+			if (criteriaForMatchingCut.buildPathAndNoProfile.indexOf(cBuildPath) == -1) {
+				criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
+			}
+		}
+	}
+		
+	var cutPaths = []; // os paths to cuts found
+	var delegate_collectCutInfos = function(entry) {
+		if (!entry.isDir) {
+			cutPaths.push(entry.path);
+		}
+	};
+	
+	var do_testPaths = function() {
+		var promise_getInfoOnShortcuts = ProfilistWorker.post('winnt_getInfoOnShortcuts', [cutPaths]);
+		promise_getInfoOnShortcuts.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getInfoOnShortcuts - ', aVal);
+				// start - do stuff here - promise_getInfoOnShortcuts
+				var OSPathArr_matchingCuts = [];
+				deferredMain_getPathToPinnedCut.resolve(OSPathArr_matchingCuts);
+				// end - do stuff here - promise_getInfoOnShortcuts
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getInfoOnShortcuts', aReason:aReason};
+				console.warn('Rejected - promise_getInfoOnShortcuts - ', rejObj);
+				deferredMain_getPathToPinnedCut.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getInfoOnShortcuts', aCaught:aCaught};
+				console.error('Caught - promise_getInfoOnShortcuts - ', rejObj);
+				deferredMain_getPathToPinnedCut.reject(rejObj);
+			}
+		);
+		
+	};
+	
+	var promiseAllArr_collectCutInfos = [
+		enumChildEntries(path_dirForNormalPins, delegate_collectCutInfos, 0),
+		enumChildEntries(path_dirForRelaunchCmdPins, delegate_collectCutInfos, 1)
+	];
+	
+	var promiseAll_collectCutInfos = Promise.all(promiseAllArr_collectCutInfos);
+	promiseAll_collectCutInfos.then(
+		function(aVal) {
+			console.log('Fullfilled - promiseAll_collectCutInfos - ', aVal);
+			// start - do stuff here - promiseAll_collectCutInfos
+			do_testPaths();
+			// end - do stuff here - promiseAll_collectCutInfos
+		},
+		function(aReason) {
+			var rejObj = {name:'promiseAll_collectCutInfos', aReason:aReason};
+			console.warn('Rejected - promiseAll_collectCutInfos - ', rejObj);
+			deferredMain_getPathToPinnedCut.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promiseAll_collectCutInfos', aCaught:aCaught};
+			console.error('Caught - promiseAll_collectCutInfos - ', rejObj);
+			deferredMain_getPathToPinnedCut.reject(rejObj);
+		}
+	);
+	
+	return deferredMain_getPathToPinnedCut.promise;
+	///// OLD WAY ////////////////////////////////////////
 	//winnt only
 	// searches the folders where shortcuts go if it is pinned
 		// so reminder: if get null, then know that its not pinned
@@ -9577,13 +9710,16 @@ function getPathToPinnedCut(aProfilePath, dontCheck_dirIfRelaunchCmdPin) {
 };
 
 var _cache_getAllFxBuilds;
-function getAllFxBuilds() {
+function getAllFxBuilds(notFromCache) {
 	// currently win7+ only
+	// gets all the builds found in the registry
+	// returns to array of objects (containing SystemAppUserModelID and path) see image: file:///C:/Users/Vayeate/Pictures/getAllFxBuilds%20resolve.png
 	
 	if (core.os.version_name != '7+') {
 		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
 	} else {
-		if (!_cache_getAllFxBuilds) {
+		if (!_cache_getAllFxBuilds || notFromCache) {
+			_cache_getAllFxBuilds = [];
 			var wrk = Cc['@mozilla.org/windows-registry-key;1'].createInstance(Components.interfaces.nsIWindowsRegKey);
 			var keypath = 'Software\\Mozilla\\' + Services.appinfo.name + '\\TaskBarIDs'; //Services.appinfo.name == appInfo->GetName(appName) // http://mxr.mozilla.org/comm-central/source/mozilla/widget/windows/WinTaskbar.cpp#284
 			try {

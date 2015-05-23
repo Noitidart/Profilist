@@ -173,7 +173,7 @@ function launchPath(fullPath) {
 			throw new Error('os-unsupported');
 	}
 }
-function createShortcut(path_createInDir, str_createWithName, path_linkTo, options) {
+function createShortcut(path_createInDir, str_createWithName, path_linkTo, options={}) {
 	// winnt only
 	
 	/* logic - current */
@@ -242,10 +242,6 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 						//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
 					} else {
 						throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
-					}
-					
-					if (!options) {
-						options = {};
 					}
 					
 					ostypes.HELPER.InitShellLinkAndPersistFileConsts();
@@ -1043,6 +1039,156 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 
 	return rezMain;
 	
+}
+function winnt_getInfoOnShortcuts(arrOSPath) {
+	// winnt only
+	// returns an object key:values are:
+		// win7+ only - SystemAppUserModelID - jsStr
+		// launch path
+		// icon path
+	
+	var references = {
+		propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+	}
+	var doer = function() {
+		var rezObj = {};
+		
+		for (var i=0; i<arrOSPath.length; i++) {
+			
+			console.info('trying to load arrOSPath[i]:', arrOSPath[i]);
+			if (arrOSPath[i].substr(-3) != 'lnk') {
+				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
+				continue;
+			}
+			
+			rezObj[arrOSPath[i]] = {};
+			
+			var hr_Load = references.persistFile.Load(references.persistFilePtr, arrOSPath[i], 0);
+			console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
+			ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+			
+			var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+			var piIcon = ostypes.TYPE.INT();
+			var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
+			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+			rezObj[arrOSPath[i]].OSPath_Icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			
+			var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+			var fFlags = ostypes.CONST.SLGP_RAWPATH;
+			var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
+			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+			rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile);
+			
+			var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
+			var hr_GetArguments = references.shellLink.GetArguments(references.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
+			ostypes.HELPER.checkHRESULT(hr_GetArguments);
+			rezObj[arrOSPath[i]].TargetArgs = cutils.readAsChar8ThenAsChar16(pszArgs);
+			
+			if (core.os.version_name == '7+') {
+				rezObj[arrOSPath[i]].SystemAppUserModelID = ostypes.HELPER.IPropertyStore_GetValue(references.propertyStorePtr, references.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+			}
+		}
+		
+		return rezObj;
+	};
+	return winntShellFile_DoerAndFinalizer(doer, references);
+	
+					//will overwrite existing
+					var promise_checkExists = OS.File.exists(path_create);
+					if (promise_checkExists) {
+						//exists
+						var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
+						console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
+						ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+					} else {
+						if (!path_linkTo) {
+							throw new Error('The shortcut does not exist, therefore a target to link this shortcut to must be provided');
+						}
+					}
+}
+
+function winntShellFile_DoerAndFinalizer(funcDoer, refs) {
+	// helper function for windows, so dont need to coy paste the shell, persistfile, and propertystore initialization everywhere
+	// whatever is returned by funcDoer is returned by winntShellFile_DoerAndFinalizer
+	try {
+		var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
+		console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+		if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx) || cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
+			//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
+		} else {
+			throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
+		}
+		
+		ostypes.HELPER.InitShellLinkAndPersistFileConsts();
+
+		refs.shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
+		var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_ShellLink.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_IShellLink.address(), refs.shellLinkPtr.address());
+		console.info('hr_CoCreateInstance:', hr_CoCreateInstance.toString(), uneval(hr_CoCreateInstance));
+		ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'CoCreateInstance');
+		refs.shellLink = refs.shellLinkPtr.contents.lpVtbl.contents;
+
+		
+		refs.persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
+		var hr_shellLinkQI = refs.shellLink.QueryInterface(refs.shellLinkPtr, ostypes.CONST.IID_IPersistFile.address(), refs.persistFilePtr.address());
+		console.info('hr_shellLinkQI:', hr_shellLinkQI.toString(), uneval(hr_shellLinkQI));
+		ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'QueryInterface (IShellLink->IPersistFile)');
+		refs.persistFile = refs.persistFilePtr.contents.lpVtbl.contents;
+
+		if ('propertyStore' in refs) {
+			ostypes.HELPER.InitPropStoreConsts();
+			refs.propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
+			var hr_shellLinkQI2 = refs.shellLink.QueryInterface(refs.shellLinkPtr, ostypes.CONST.IID_IPropertyStore.address(), refs.propertyStorePtr.address());
+			console.info('hr_shellLinkQI2:', hr_shellLinkQI2.toString(), uneval(hr_shellLinkQI2));
+			ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'QueryInterface (IShellLink->IPropertyStore)');
+			refs.propertyStore = refs.propertyStorePtr.contents.lpVtbl.contents;
+		}
+		
+		return funcDoer();
+		
+	} finally {
+		console.log('doing winntShellFile_DoerAndFinalizer finalization');
+		var sumThrowMsg = [];
+		if (refs.persistFile) {
+			try {
+				refs.persistFile.Release(refs.persistFilePtr);
+			} catch(e) {
+				console.error("Failure releasing refs.persistFile: ", e.toString());
+				sumThrowMsg.push(e.message);
+			}
+		}
+		
+		if (refs.propertyStore) {
+			try {
+				refs.propertyStore.Release(refs.propertyStorePtr);
+			} catch(e) {
+				console.error("Failure releasing refs.propertyStore: ", e.message.toString());
+				sumThrowMsg.push(e.message);
+			}
+		}
+
+		if (refs.shellLink) {
+			try {
+				refs.shellLink.Release(refs.shellLinkPtr);
+			} catch(e) {
+				console.error("Failure releasing refs.shellLink: ", e.message.toString());
+				sumThrowMsg.push(e.message);
+			}
+		}
+		
+		//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
+			try {
+				ostypes.API('CoUninitialize')(); // return void
+			} catch(e) {
+				console.error("Failure calling CoUninitialize: ", e.message.toString());
+				sumThrowMsg.push(e.message);
+			}
+		//}
+		
+		if (sumThrowMsg.length > 0) {
+			throw new Error(sumThrowMsg.join(' |||| '));
+		}
+		console.log('completed winntShellFile_DoerAndFinalizer finalization');
+	}
 }
 // End - Addon Functionality
 
