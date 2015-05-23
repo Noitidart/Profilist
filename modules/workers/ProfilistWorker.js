@@ -111,8 +111,13 @@ function refreshIconAtPath(iconPath) {
 		case 'wince':
 		
 				// returns ostypes.TYPE.VOID
-				//todo get this working with path
-				ostypes.API('SHChangeNotify')(ostypes.CONST.SHCNE_ASSOCCHANGED, ostypes.CONST.SHCNF_IDLIST, null, null); //updates all
+				if (!iconPath) {
+					// refresh all
+					ostypes.API('SHChangeNotify')(ostypes.CONST.SHCNE_ASSOCCHANGED, ostypes.CONST.SHCNF_IDLIST, null, null); //updates all
+				} else {
+					//todo get this working with path
+					ostypes.API('SHChangeNotify')(ostypes.CONST.SHCNE_ASSOCCHANGED, ostypes.CONST.SHCNF_IDLIST, null, null); //updates all
+				}
 				return true;
 				
 			break;
@@ -1040,15 +1045,96 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 	return rezMain;
 	
 }
+
+function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
+	if (!aOptions) {
+		throw new Error('must specify somet things to set in aOptions');
+	}
+	
+	// winnt only
+	// returns true
+	// aOptions should have one or more of the following:
+		// iconPath which is jsStr OSPath // if this is provided then must provide iconIndex, if not provided 0 is used
+		// args command line arguments
+		// appUserModelId // if set this, then all keys are required as the cut has to be remade
+		// desc
+		// path_linkTo // target path
+	
+	if (!aOptions || Object.keys(aOptions).length == 0) {
+		throw new Error('aOptions must be provided!');
+	}
+	if (aOptions.appUserModelId) {
+		if (!aOptions.path_linkTo) {
+			throw new Error('Because appUserModelId is changing devuser must provide path_linkTo and whatever else should be matched on recreate');
+		}
+	}
+	
+	var references = {
+		//propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+	}
+	var doer = function() {
+		for (var i=0; i<arrOSPath.length; i++) {
+			
+			console.info('trying to set on path arrOSPath[i]:', arrOSPath[i]);
+			var ext = arrOSPath[i].substr(-3);
+			if (ext != 'lnk'/* && ext != 'exe'*/) { // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
+				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
+				continue;
+			}
+			
+			if (aOptions.appUserModelId) {
+				// :todo: maybe keep creation time constant, maybe, if recreating causes detachment
+				OS.File.remove(arrOSPath[i]);
+				var hr_SetPath = references.shellLink.SetPath(references.shellLinkPtr, aOptions.path_linkTo);
+				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
+			} else {
+				var hr_Load = references.persistFile.Load(references.persistFilePtr, arrOSPath[i], 0);
+				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+			}
+			
+			if ('args' in aOptions) {
+				var hr_SetArguments = references.shellLink.SetArguments(references.shellLinkPtr, aOptions.args);
+				ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
+			}
+
+			if ('desc' in aOptions) {
+				var hr_SetDescription = references.shellLink.SetDescription(references.shellLinkPtr, aOptions.desc);
+				ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
+			}
+
+			if ('iconPath' in aOptions) {
+				var hr_SetIconLocation = references.shellLink.SetIconLocation(references.shellLinkPtr, aOptions.iconPath, aOptions.iconIndex ? aOptions.iconIndex : 0);
+				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
+			}
+
+			if ('appUserModelId' in aOptions) {
+				var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(references.propertyStorePtr, references.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), aOptions.appUserModelId);		
+				ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
+			}
+			
+			var hr_Save = references.persistFile.Save(references.persistFilePtr, arrOSPath[i], false);
+			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
+			
+			console.log('success save on:', arrOSPath[i]);
+		}
+		
+		refreshIconAtPath(); // refresh all icons
+		
+		return true;
+	};
+	return winntShellFile_DoerAndFinalizer(doer, references);
+}
+
 function winnt_getInfoOnShortcuts(arrOSPath) {
 	// winnt only
 	// returns an object key:values are:
 		// win7+ only - SystemAppUserModelID - jsStr
-		// launch path
+		// target path
+		// target args
 		// icon path
 	
 	var references = {
-		propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+		//propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
 	}
 	var doer = function() {
 		var rezObj = {};
@@ -1056,7 +1142,8 @@ function winnt_getInfoOnShortcuts(arrOSPath) {
 		for (var i=0; i<arrOSPath.length; i++) {
 			
 			console.info('trying to load arrOSPath[i]:', arrOSPath[i]);
-			if (arrOSPath[i].substr(-3) != 'lnk') {
+			var ext = arrOSPath[i].substr(-3);
+			if (ext != 'lnk'/* && ext != 'exe'*/) { // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
 				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
 				continue;
 			}
@@ -1071,40 +1158,27 @@ function winnt_getInfoOnShortcuts(arrOSPath) {
 			var piIcon = ostypes.TYPE.INT();
 			var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
 			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			rezObj[arrOSPath[i]].OSPath_Icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			rezObj[arrOSPath[i]].OSPath_icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
 			
 			var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
 			var fFlags = ostypes.CONST.SLGP_RAWPATH;
 			var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
 			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile);
+			rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
 			
 			var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
 			var hr_GetArguments = references.shellLink.GetArguments(references.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
 			ostypes.HELPER.checkHRESULT(hr_GetArguments);
-			rezObj[arrOSPath[i]].TargetArgs = cutils.readAsChar8ThenAsChar16(pszArgs);
+			rezObj[arrOSPath[i]].TargetArgs = cutils.readAsChar8ThenAsChar16(pszArgs).toLowerCase();
 			
-			if (core.os.version_name == '7+') {
-				rezObj[arrOSPath[i]].SystemAppUserModelID = ostypes.HELPER.IPropertyStore_GetValue(references.propertyStorePtr, references.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
-			}
+			// if (core.os.version_name == '7+') {
+				// rezObj[arrOSPath[i]].SystemAppUserModelID = ostypes.HELPER.IPropertyStore_GetValue(references.propertyStorePtr, references.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+			// }
 		}
 		
 		return rezObj;
 	};
 	return winntShellFile_DoerAndFinalizer(doer, references);
-	
-					//will overwrite existing
-					var promise_checkExists = OS.File.exists(path_create);
-					if (promise_checkExists) {
-						//exists
-						var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
-						console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
-						ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
-					} else {
-						if (!path_linkTo) {
-							throw new Error('The shortcut does not exist, therefore a target to link this shortcut to must be provided');
-						}
-					}
 }
 
 function winntShellFile_DoerAndFinalizer(funcDoer, refs) {

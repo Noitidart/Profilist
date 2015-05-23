@@ -3782,15 +3782,21 @@ function updateIconToDesktcut(aProfilePath) {
 				// if it has correct stuff then it doesnt update
 				
 	console.log('updateIconToDesktcut run - not yet implemented');
+	
+	// for winnt no need, because i create hardlinks, and when i update the icon of the file a hardlink links to, the hardlink icon updates aH!
 }
 
-function updateIconOSLaunchers(aProfileIniKey) {
+function updateIconToPinnedCut(aProfileIniKey, useIconNameStr) {
 	
 	var deferredMain_updateIconToPinnedCut = new Deferred();
 	
 	// if aProfilePath is default profile update the default launchers too
 	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
 	var OSPath = getPathToProfileDir(aProfileIniKey);
+	
+	if (!useIconNameStr) {
+		throw new Error('useIconNameStr is required!');
+	}
 	
 	switch (core.os.name) {
 		case 'winnt':
@@ -3802,9 +3808,107 @@ function updateIconOSLaunchers(aProfileIniKey) {
 				// 7+
 					// update pinned shortcuts
 
-				if (core.os.version_name != '7+') {
+				var OSPath_neededIcon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
+				
+				var promiseAllArr_updateOsLauncherIcons = [];
+				
+				if (core.os.version_name == '7+') {
 					// update pinned shortcuts
+					var deferred_cutsUpdated = new Deferred();
+					promiseAllArr_updateOsLauncherIcons.push(deferred_cutsUpdated.promise);
+					
+					var do_getPinCutPaths = function() {
+						var promise_getPinCutPaths = getPathToPinnedCut(aProfileIniKey);
+						promise_getPinCutPaths.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_getPinCutPaths - ', aVal);
+								// start - do stuff here - promise_getPinCutPaths
+								do_updatePinCutPaths(aVal);
+								// end - do stuff here - promise_getPinCutPaths
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_getPinCutPaths', aReason:aReason};
+								console.warn('Rejected - promise_getPinCutPaths - ', rejObj);
+								deferred_cutsUpdated.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_getPinCutPaths', aCaught:aCaught};
+								console.error('Caught - promise_getPinCutPaths - ', rejObj);
+								deferred_cutsUpdated.reject(rejObj);
+							}
+						);
+					};
+					
+					var do_updatePinCutPaths = function(cutPathsObjWithIconPaths) {
+						// sets icon on pin cut paths that dont have the right icon
+						var OSPathArr_cutNeedingUpdate = [];
+						
+						for (var cutPath in cutPathsObjWithIconPaths) {
+							if (cutPathsObjWithIconPaths[cutPath].OSPath_icon != OSPath_neededIcon) {
+								OSPathArr_cutNeedingUpdate.push(cutPath);
+							}
+						}
+						
+						if (OSPathArr_cutNeedingUpdate.length > 0) {
+							var setOptionsObj = {
+								iconPath: OSPath_neededIcon
+							};
+							var promise_setInfoOnShortcuts = ProfilistWorker.post('winnt_setInfoOnShortcuts', [OSPathArr_cutNeedingUpdate, setOptionsObj]);
+							promise_setInfoOnShortcuts.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_setInfoOnShortcuts - ', aVal);
+									// start - do stuff here - promise_setInfoOnShortcuts
+									deferred_cutsUpdated.resolve(OSPathArr_cutNeedingUpdate.length); // resolve with number if cuts updated
+									// end - do stuff here - promise_setInfoOnShortcuts
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_setInfoOnShortcuts', aReason:aReason};
+									console.warn('Rejected - promise_setInfoOnShortcuts - ', rejObj);
+									deferred_cutsUpdated.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_setInfoOnShortcuts', aCaught:aCaught};
+									console.error('Caught - promise_setInfoOnShortcuts - ', rejObj);
+									deferred_cutsUpdated.reject(rejObj);
+								}
+							);
+						} else {
+							deferred_cutsUpdated.resolve(0); // resolve with number if cuts updated
+						}
+					}
+					
+					do_getPinCutPaths();
+					
 				}
+				
+				if (isDefault) {
+					// sets icon on pin default like firefox.exe
+					var deferred_exeUpdates = new Deferred();
+					promiseAllArr_updateOsLauncherIcons.push(deferred_exeUpdates.promise);
+				}
+				
+				var promiseAll_updateOsLauncherIcons = Promise.all(promiseAllArr_updateOsLauncherIcons);
+				promiseAll_updateOsLauncherIcons.then(
+					function(aVal) {
+						console.log('Fullfilled - promiseAll_updateOsLauncherIcons - ', aVal);
+						// start - do stuff here - promiseAll_updateOsLauncherIcons
+						deferredMain_updateIconToPinnedCut.resolve(true);
+						// end - do stuff here - promiseAll_updateOsLauncherIcons
+					},
+					function(aReason) {
+						var rejObj = {name:'promiseAll_updateOsLauncherIcons', aReason:aReason};
+						console.warn('Rejected - promiseAll_updateOsLauncherIcons - ', rejObj);
+						deferredMain_updateIconToPinnedCut.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promiseAll_updateOsLauncherIcons', aCaught:aCaught};
+						console.error('Caught - promiseAll_updateOsLauncherIcons - ', rejObj);
+						deferredMain_updateIconToPinnedCut.reject(rejObj);
+					}
+				);
 				
 			break;
 		default:
@@ -8999,8 +9103,29 @@ function startup(aData, aReason) {
 			case 'wince':
 		
 					// apply icon to windows
-					updateIconToAllWindows(profToolkit.selectedProfile.iniKey);
-					updateIconToPinnedCut(profToolkit.selectedProfile.iniKey);
+					var promise_getIconName = makeIcon(profToolkit.selectedProfile.iniKey);
+					promise_getIconName.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_getIconName - ', aVal);
+							// start - do stuff here - promise_getIconName
+							var useIconNameStr = aVal.profSpecs.iconNameObj.str;
+							updateIconToAllWindows(profToolkit.selectedProfile.iniKey, useIconNameStr);
+							updateIconToPinnedCut(profToolkit.selectedProfile.iniKey, useIconNameStr);
+							// end - do stuff here - promise_getIconName
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_getIconName', aReason:aReason};
+							console.error('Rejected - promise_getIconName - ', rejObj);
+							deferredMain_updateIconToAllWindows.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_getIconName', aCaught:aCaught};
+							console.error('Caught - promise_getIconName - ', rejObj);
+							deferredMain_updateIconToAllWindows.reject(rejObj);
+						}
+					);
+					
 					
 					
 				break;
@@ -9446,7 +9571,7 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 	// searches the folders where shortcuts go if it is pinned
 		// does this by searching if shortcut path includes the profile path
 		// if profile is default it finds shortcuts with the default paths found from registry AND shortcuts with any lower cased launch paths matching any of the paths in ini.General.props['Profilist.dev-builds']);
-	// resolves with array of os paths to pinned cuts that launch aProfileIniKey
+	// resolves with obj of keys os paths to pinned cuts that launch aProfileIniKey, and value is obj with key OSPath_icon which is jsStr
 	var deferredMain_getPathToPinnedCut = new Deferred();
 	
 	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
@@ -9457,33 +9582,38 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 	var criteriaForMatchingCut = { // i lower case all pushes into here, in case user made his own shortcuts, so i cant trust his casing. and in case the user put wrong casing in devBuilds
 		profileName: [],
 		profilePath: [],
-		buildPathAndNoProfile: []
+		//buildPathAndNoProfile: []
 	};
 	
-	criteriaForMatchingCut.profileName.push(ini[aProfileIniKey].props.Name.toLowerCase());
-	criteriaForMatchingCut.profileName.push(OSPath.toLowerCase());
+	criteriaForMatchingCut.profileName.push('-P "' + ini[aProfileIniKey].props.Name.toLowerCase() + '"');
+	criteriaForMatchingCut.profilePath.push('-profile "' + OSPath.toLowerCase() + '"');
 	
+	var cutPaths = []; // os paths to cuts found
+	
+	/* // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
 	if (isDefault) {
 		// collect paths to all builds
 		
 		// from registry
 		var fxBuildsFromRegistry = getAllFxBuilds();
 		for (var i=0; i<fxBuildsFromRegistry.length; i++) {
-			var cBuildPath = fxBuildsFromRegistry.Name.toLowerCase();
+			var cBuildPath = fxBuildsFromRegistry[i].Name.toLowerCase() + '\\firefox.exe';
 			criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
+			//cutPaths.push(cBuildPath);
 		}
 		
 		// from Profilist.dev-builds pref
-		var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+		var devBuilds = ini.General.props['Profilist.dev-builds'] != '' ? JSON.parse(ini.General.props['Profilist.dev-builds']) : {};
 		for (var buildId in devBuilds) {
 			var cBuildPath = devBuilds[buildId].toLowerCase();
 			if (criteriaForMatchingCut.buildPathAndNoProfile.indexOf(cBuildPath) == -1) {
 				criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
+				//cutPaths.push(cBuildPath);
 			}
 		}
 	}
-		
-	var cutPaths = []; // os paths to cuts found
+	*/
+	
 	var delegate_collectCutInfos = function(entry) {
 		if (!entry.isDir) {
 			cutPaths.push(entry.path);
@@ -9497,6 +9627,40 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 				console.log('Fullfilled - promise_getInfoOnShortcuts - ', aVal);
 				// start - do stuff here - promise_getInfoOnShortcuts
 				var OSPathArr_matchingCuts = [];
+				var matched;
+				for (var cInfo in aVal) {
+					matched = false;
+					for (var i=0; i<criteriaForMatchingCut.profileName.length; i++) {
+						if (aVal[cInfo].TargetArgs.indexOf(criteriaForMatchingCut.profileName[i]) > -1) {
+							OSPathArr_matchingCuts.push(cInfo);
+							matched = true;
+							break;
+						}
+					}
+					if (matched) { continue }
+					
+					for (var i=0; i<criteriaForMatchingCut.profilePath.length; i++) {
+						if (aVal[cInfo].TargetArgs.indexOf(criteriaForMatchingCut.profilePath[i]) > -1) {
+							OSPathArr_matchingCuts[cInfo] = {
+								OSPath_icon: aVal[cInfo].OSPath_icon
+							};
+							matched = true;
+							break;
+						}
+					}
+					if (matched) { continue }
+					/*
+					for (var i=0; i<criteriaForMatchingCut.buildPathAndNoProfile.length; i++) {
+						if (criteriaForMatchingCut.buildPathAndNoProfile[i] == aVal[cInfo].TargetPath && aVal[cInfo].TargetArgs.indexOf('-P') == -1 && aVal[cInfo].TargetArgs.indexOf('-profile') == -1) {
+							// this is a default launcher, and the only reason i would be looping here is is aProfileIniKey is of isDefault profile
+							OSPathArr_matchingCuts.push(cInfo);
+							matched = true;
+							break;
+						}
+					}
+					if (matched) { continue }
+					*/
+				}
 				deferredMain_getPathToPinnedCut.resolve(OSPathArr_matchingCuts);
 				// end - do stuff here - promise_getInfoOnShortcuts
 			},
