@@ -4026,7 +4026,7 @@ function xhr(url, cb) {
     xhr.send(null);
 }
 
-function launchProfile(e, profName, suppressAlert, url) {
+function launchProfileOLD(e, profName, suppressAlert, url) {
 	console.info('in launchProfile');
 	if (!profName) {
 		var el = this;
@@ -6533,10 +6533,30 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 					console.warn('getProfileSpecs when launching, should have set ifRunningThenTakeThat to 0, as should not ever supply launching unless am really launching and i do do that. i test if its running and in that case i switch to its window, else i launch');
 				}
 				specObj.path_exeForProfile = profToolkit.path_exeCur;
-				specObj.channel_exeForProfile = getChannelNameOfProfile(profToolkit.selectedProfile.iniKey); // supports temp profile as iniKey will be null
-				specObj.iconsetId_base = specObj.channel_exeForProfile;
-				makeIconAndLauncherName();
-				deferredMain_getProfileSpecs.resolve(specObj);
+				var promise_doGetChProfName = getChannelNameOfProfile(profToolkit.selectedProfile.iniKey); // supports temp profile as iniKey will be null
+				promise_doGetChProfName.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_doGetChProfName - ', aVal);
+						// start - do stuff here - promise_doGetChProfName
+						specObj.channel_exeForProfile = aVal;
+						specObj.iconsetId_base = specObj.channel_exeForProfile;
+						iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
+						makeIconAndLauncherName();
+						deferredMain_getProfileSpecs.resolve(specObj);
+						// end - do stuff here - promise_doGetChProfName
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_doGetChProfName', aReason:aReason};
+						console.warn('Rejected - promise_doGetChProfName - ', rejObj);
+						deferredMain_getProfileSpecs.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_doGetChProfName', aCaught:aCaught};
+						console.error('Caught - promise_doGetChProfName - ', rejObj);
+						deferredMain_getProfileSpecs.reject(rejObj);
+					}
+				);
 			} else {
 				if (!specObj.isRunning) {
 					var promise_path_to_exeDefaultBrowser = getDefaultBrowserPath();
@@ -6695,7 +6715,7 @@ function getAppNameFromChan(theChName) {
 			return 'Firefox ESR';
 			break;
 		case 'release':
-			return 'Firefox';
+			return 'Mozilla Firefox';
 			break;
 		case 'beta':
 			return 'Firefox Beta';
@@ -6704,7 +6724,7 @@ function getAppNameFromChan(theChName) {
 			return 'Firefox Developer';
 			break;
 		case 'nightly':
-			return 'Nightly';
+			return 'Firefox Nightly';
 			break;
 		default:
 			console.warn('`theChName` of "' + theChName + '" is unidentified, so just returning it proper cased');
@@ -6712,7 +6732,7 @@ function getAppNameFromChan(theChName) {
 	}
 }
 
-function launchProfile(aProfilePath, arrOfArgs) {
+function launchProfile(aProfileIniKey, arrOfArgs) {
 	// arrOfArgs is array of other command line arguments you want it launched with
 	
 	/*** LOGIC ***/
@@ -6728,8 +6748,6 @@ function launchProfile(aProfilePath, arrOfArgs) {
 			// winnt
 				// if tied
 					// make launcher if it doesnt exist with tied build path and icon
-					
-					
 					// ensure icon exists for this (cuz on startup if profilist is installed it changes the icon), if it doesnt, then update launcher and deskcut with it
 					// ensure build path is right on launcher
 					// get build path from ini and nsIProcess launch with that
@@ -6738,6 +6756,16 @@ function launchProfile(aProfilePath, arrOfArgs) {
 					// dont change build path in launcher, launcher doesnt have to exist, but make it (with icon of channel default browser if firefox, if default build not firefox, then use current build) (maybe dont wait for it to complete making)
 					// ensure icon with this channel and badge exist, as if profilist is installed in it, it will change the icon of the windows
 					// nsIProcess launch with build of current executing
+					
+				// REVISIT 052315
+				// if not tied
+					// ensure icon with current execing channel and badge exist
+					// update all launchers to have this icon and target of current execing build
+					// ctypes launch
+				// if tied
+					// ensure icon with tied channel and badge exist
+					// update all launchers to have this icon and target of tied build
+					// ctypes launch
 			// mac
 				// calculate launcherName and update .app to it
 				// ensure .app are matches target launch build
@@ -6765,6 +6793,114 @@ function launchProfile(aProfilePath, arrOfArgs) {
 				// if not tied
 			// else, default to nsIProcess launch with build of current executing
 	
+	var deferredMain_launchProfile = new Deferred();
+	
+	// if (aProfileIniKey == profToolkit.selectedProfile.iniKey) {
+		// deferredMain_launchProfile.reject('cannot try to launch currently running profile, its already running!');
+	// }
+	
+	var do_getProfSpecs = function(aCB) {
+	var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false);
+		promise_cProfSpecs.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
+				// start - do stuff here - promise_cProfSpecs
+				
+					aCB(aVal);
+					
+				// end - do stuff here - promise_cProfSpecs
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
+				console.warn('Rejected - promise_cProfSpecs - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
+				console.error('Caught - promise_cProfSpecs - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_ensureIconExists = function(useIconNameObj, aCB) {
+		var promise_getIconName = makeIcon(aProfileIniKey);
+		promise_getIconName.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getIconName - ', aVal);
+				// start - do stuff here - promise_getIconName
+				
+					aCB();
+					
+				// end - do stuff here - promise_getIconName
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getIconName', aReason:aReason};
+				console.error('Rejected - promise_getIconName - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
+				console.error('Caught - promise_getIconName - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+			do_getProfSpecs(function(cProfSpec) {
+				
+					console.info('cProfSpec:', cProfSpec);
+					
+					var do_sendMsgToLaunch = function() {
+						var pathsObj = {
+							OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
+							OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+							OSPath_targetFile: cProfSpec.path_exeForProfile,
+							jsStr_args: getPathToProfileDir(aProfileIniKey),
+							jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
+						};
+						
+						console.info('ready to send msg to launch, pathsObj:', pathsObj);
+						
+						var promise_doLaunch = ProfilistWorker.post('launchProfile', [pathsObj]);
+						promise_doLaunch.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_doLaunch - ', aVal);
+								// start - do stuff here - promise_doLaunch
+								deferredMain_launchProfile.resolve(true);
+								// end - do stuff here - promise_doLaunch
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_doLaunch', aReason:aReason};
+								console.warn('Rejected - promise_doLaunch - ', rejObj);
+								deferredMain_launchProfile.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
+								console.error('Caught - promise_doLaunch - ', rejObj);
+								deferredMain_launchProfile.reject(rejObj);
+							}
+						);
+
+					};
+					
+					do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
+			});
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+	
+	return deferredMain_launchProfile.promise;
 }
 
 function updateLauncherAndDeskcut(updateReason) {
@@ -9681,6 +9817,7 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 	};
 	
 	var promiseAllArr_collectCutInfos = [
+		enumChildEntries(profToolkit.path_profilistData_launcherExes, delegate_collectCutInfos, 0), // finds launcher, it may not be named properly
 		enumChildEntries(path_dirForNormalPins, delegate_collectCutInfos, 0),
 		enumChildEntries(path_dirForRelaunchCmdPins, delegate_collectCutInfos, 1)
 	];

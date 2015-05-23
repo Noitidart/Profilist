@@ -126,13 +126,63 @@ function refreshIconAtPath(iconPath) {
 	}
 }
 
-function launchPath(fullPath) {
+function makeLauncher(pathsObj) {
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+				
+				
+				var cutDirPath = OS.Path.dirname(pathsObj.OSPath_makeFileAt);
+				var cutFileName = pathsObj.OSPath_makeFileAt.substring(cutDirPath.length+1, pathsObj.OSPath_makeFileAt.length-4);
+				var targetArgs = pathsObj.jsStr_args;
+				var desc = pathsObj.jsStr_desc;
+				
+				var cutOpts = {
+					path_createWithIcon: pathsObj.OSPath_icon,
+					str_createWithDesc: pathsObj.jsStr_desc
+				};
+				
+				if (core.os.version_name == '7+') {
+					console.info('pathsObj.jsStr_args:', pathsObj.jsStr_args);
+					cutOpts.str_createWithAppUserModelId = HashString()(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
+					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
+				}
+				
+				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '"';
+				
+				console.info('cutDirPath:', cutDirPath);
+				console.info('cutFileName:', cutFileName);
+				console.info('cutOpts:', JSON.stringify(cutOpts));
+				
+				makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+				console.log('finished make dir');
+				return createShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function launchProfile(pathsObj, checkExistanceFirst) {
+	// pathsObj should be same as that needed to be passed to makeLauncher
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 		
-				try {
+				//try {
+					// can just do makeLauncher and catch on error, as that does exist check, and i set appUserModelId so if it exists it wont continue
+					
+					var exists = OS.File.exists(pathsObj.OSPath_makeFileAt);
+					
+					if (!exists) {
+						makeLauncher(pathsObj);
+					}
+					console.info('ok shortcut made?');
+					
 					// shellExecEx
 					// http://blogs.msdn.com/b/oldnewthing/archive/2010/11/18/10092914.aspx
 					// i get access denied as it requires STA
@@ -143,7 +193,7 @@ function launchPath(fullPath) {
 					var sei = ostypes.TYPE.SHELLEXECUTEINFO();
 					//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 					sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(fullPath);
+					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(pathsObj.OSPath_makeFileAt);
 					sei.lpFile = cStr;
 					//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 					sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
@@ -154,9 +204,9 @@ function launchPath(fullPath) {
 					
 					//console.info('sei:', sei.toString());
 					//console.log('sei.hInstApp:', sei.hInstApp.toString());
-				} finally {
+				//} finally {
 					//var rez_CoUninitialize = ostypes.API('CoUninitialize')();
-				}
+				//}
 				
 			break;
 		case 'linux':
@@ -231,7 +281,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					path_createWithIcon: OS.Path.join(OS.Constants.Path.desktopDir, 'smiley.ico'), // optional because the icon of the targetFile is used if one is not provided
 					int_createWithIconIndex: 0, // 0 is used if not provided
 					str_createWithAppUserModelId: 'blah', // max 128 characters, no spaces // no systemAppUserModelID is set if not provided
-					str_createWtihArgs: '-P -no-remote', // no args are set if not provided
+					str_createWithArgs: '-P -no-remote', // no args are set if not provided
 					str_createWithDesc: 'this is description i want shown on my shortcut', // no descriptin is set if not provided
 					path_createWithWorkDir: null // i have no idea what a working dir is, but if not provided its not set
 				}
@@ -313,8 +363,8 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 						ostypes.HELPER.checkHRESULT(hr, 'SetWorkingDirectory');
 					}
 
-					if ('str_createWtihArgs' in options) {
-						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, options.str_createWtihArgs);
+					if ('str_createWithArgs' in options) {
+						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, options.str_createWithArgs);
 						console.info('hr_SetArguments:', hr_SetArguments.toString(), uneval(hr_SetArguments));
 						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
 					}
@@ -1274,6 +1324,13 @@ function getTxtDecodr() {
 	}
 	return txtDecodr;
 }
+var txtEncodr; // holds TextDecoder if created
+function getTxtEncodr() {
+	if (!txtEncodr) {
+		txtEncodr = new TextEncoder();
+	}
+	return txtEncodr;
+}
 function read_encoded(path, options) {
 	// async version of read_encoded from bootstrap.js
 	// because the options.encoding was introduced only in Fx30, this function enables previous Fx to use it
@@ -1387,6 +1444,53 @@ function makeDir_Bug934283(path, options) {
 		}
 	};
 	return makeDirRecurse();
+}
+function HashString() {
+	/**
+	 * Javascript implementation of
+	 * https://hg.mozilla.org/mozilla-central/file/0cefb584fd1a/mfbt/HashFunctions.h
+	 * aka. the mfbt hash function.
+	 */ 
+  // Note: >>>0 is basically a cast-to-unsigned for our purposes.
+  const encoder = getTxtEncodr();
+  const kGoldenRatio = 0x9E3779B9;
+
+  // Multiply two uint32_t like C++ would ;)
+  const mul32 = (a, b) => {
+    // Split into 16-bit integers (hi and lo words)
+    let ahi = (a >> 16) & 0xffff;
+    let alo = a & 0xffff;
+    let bhi = (b >> 16) & 0xffff
+    let blo = b & 0xffff;
+    // Compute new hi and lo seperately and recombine.
+    return (
+      (((((ahi * blo) + (alo * bhi)) & 0xffff) << 16) >>> 0) +
+      (alo * blo)
+    ) >>> 0;
+  };
+
+  // kGoldenRatioU32 * (RotateBitsLeft32(aHash, 5) ^ aValue);
+  const add = (hash, val) => {
+    // Note, cannot >> 27 here, but / (1<<27) works as well.
+    let rotl5 = (
+      ((hash << 5) >>> 0) |
+      (hash / (1<<27)) >>> 0
+    ) >>> 0;
+    return mul32(kGoldenRatio, (rotl5 ^ val) >>> 0);
+  }
+
+  return function(text) {
+    // Convert to utf-8.
+    // Also decomposes the string into uint8_t values already.
+    let data = encoder.encode(text);
+
+    // Compute the actual hash
+    let rv = 0;
+    for (let c of data) {
+      rv = add(rv, c | 0);
+    }
+    return rv;
+  };
 }
 // END - Common
 
