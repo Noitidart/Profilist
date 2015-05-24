@@ -103,6 +103,40 @@ function init(objCore) {
 }
 
 // Start - Addon Functionality
+function setWinPPSProps(jsStr_aNativeHandle, transferObj) {
+	// winnt only
+	// transferObj requires keys: RelaunchIconResource, RelaunchCommand, RelaunchDisplayNameResource, IDHash
+	
+	ostypes.HELPER.InitPropStoreConsts();
+	
+	var cHwnd = ostypes.TYPE.HWND(ctypes.UInt64(jsStr_aNativeHandle));
+	var ppsPtr = ostypes.TYPE.IPropertyStore.ptr();
+	var hr_SHGetPropertyStoreForWindow = ostypes.API('SHGetPropertyStoreForWindow')(cHwnd, ostypes.CONST.IID_IPropertyStore.address(), ppsPtr.address());
+	ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'SHGetPropertyStoreForWindow');
+	
+	transferObj.ID = HashString(transferObj.IDHash) + ''; // made string as jsctypes converts it to cstring otherwise it takes it as cint
+	
+	var pps = ppsPtr.contents.lpVtbl.contents;
+	try {
+		//console.log('now setting on', arrWinHandlePtrStrs[i]);
+		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), transferObj.RelaunchIconResource + ',-2'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+		//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_mdn__CHANNEL-REF_beta.ico,-6'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource.address(), transferObj.RelaunchDisplayNameResource);
+		console.error('setting transferObj.RelaunchCommand:', transferObj.RelaunchCommand);
+		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchCommand.address(), transferObj.RelaunchCommand);
+		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), 'PROFILISTDUMMY'); // need to set it away, as the above 3 IPropertyStore_SetValue's only take affect on ID change per msdn docs
+		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), transferObj.ID); // set it to what it really should be
+		//console.log('done set on', arrWinHandlePtrStrs[i]);
+		//ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
+	} catch(ex) {
+		console.error('ex caught when setting IPropertyStore:', ex);
+		throw ex;
+	} finally {
+		pps.Release(ppsPtr);
+	}
+	
+	return true;
+}
 function focusWindow(jsStr_nativeHandlePtr, nativeHandlePtr) {
 	// provide one or the ther (nativeHandlePtr or jsStr_nativeHandlePtr)
 	
@@ -301,7 +335,7 @@ function makeLauncher(pathsObj) {
 					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
 				}
 				
-				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '"';
+				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '" -no-remote';
 				
 				console.info('cutDirPath:', cutDirPath);
 				console.info('cutFileName:', cutFileName);
@@ -318,8 +352,6 @@ function makeLauncher(pathsObj) {
 }
 
 function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to check if launcher exists first? not used yet
-
-	var argsForQueryLocked = [];
 	
 	// pathsObj should be same as that needed to be passed to makeLauncher
 	switch (core.os.name) {
@@ -1267,15 +1299,16 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 	if (!aOptions || Object.keys(aOptions).length == 0) {
 		throw new Error('aOptions must be provided!');
 	}
+	
+	var references = {};
+	
 	if (aOptions.appUserModelId) {
 		if (!aOptions.path_linkTo) {
 			throw new Error('Because appUserModelId is changing devuser must provide path_linkTo and whatever else should be matched on recreate');
 		}
+		references.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
 	}
 	
-	var references = {
-		//propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
-	}
 	var doer = function() {
 		for (var i=0; i<arrOSPath.length; i++) {
 			
@@ -1316,7 +1349,7 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 				ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
 			}
 			
-			var hr_Save = references.persistFile.Save(references.persistFilePtr, arrOSPath[i], false);
+			var hr_Save = references.persistFile.Save(references.persistFilePtr, OS.Path.join(OS.Path.dirname(arrOSPath[i]), aOptions.launcherName + '.lnk'), false);
 			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
 			
 			console.log('success save on:', arrOSPath[i]);

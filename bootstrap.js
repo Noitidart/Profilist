@@ -3390,7 +3390,7 @@ function tbb_box_click(e) {
 						var pickerProcess_updateWindowsLauncherDeskcut = function() {
 							var name_iconToUse = targetedProfSpecs.iconNameObj.str;
 							updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
-							updateIconToPinnedCut(targetedProfileIniKey, name_iconToUse);
+							updateIconToPinnedCut(targetedProfileIniKey, targetedProfSpecs);
 							updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
 							updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
 						};
@@ -3802,7 +3802,7 @@ function updateIconToDesktcut(aProfilePath) {
 	// for winnt no need, because i create hardlinks, and when i update the icon of the file a hardlink links to, the hardlink icon updates aH!
 }
 
-function updateIconToPinnedCut(aProfileIniKey, useIconNameStr) {
+function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 	
 	var deferredMain_updateIconToPinnedCut = new Deferred();
 	
@@ -3810,8 +3810,8 @@ function updateIconToPinnedCut(aProfileIniKey, useIconNameStr) {
 	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
 	var OSPath = getPathToProfileDir(aProfileIniKey);
 	
-	if (!useIconNameStr) {
-		throw new Error('useIconNameStr is required!');
+	if (!useProfSpecs) {
+		throw new Error('useProfSpecs is required!');
 	}
 	
 	switch (core.os.name) {
@@ -3824,7 +3824,7 @@ function updateIconToPinnedCut(aProfileIniKey, useIconNameStr) {
 				// 7+
 					// update pinned shortcuts
 
-				var OSPath_neededIcon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
+				var OSPath_neededIcon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useProfSpecs.iconNameObj.str + '.ico');
 				
 				var promiseAllArr_updateOsLauncherIcons = [];
 				
@@ -3861,15 +3861,20 @@ function updateIconToPinnedCut(aProfileIniKey, useIconNameStr) {
 						var OSPathArr_cutNeedingUpdate = [];
 						
 						for (var cutPath in cutPathsObjWithIconPaths) {
-							if (cutPathsObjWithIconPaths[cutPath].OSPath_icon != OSPath_neededIcon) {
+							//if (cutPathsObjWithIconPaths[cutPath].OSPath_icon != OSPath_neededIcon) { // todo: for perm i should test if args or iconpath or name differs from needed and what it is right now, im not doing it right now cuz i have to go back to winnt_getInfoOnShortcuts and update that, its perf thing so do it probably, so for right now everything will get updated regardless
 								OSPathArr_cutNeedingUpdate.push(cutPath);
-							}
+							//}
 						}
 						
 						if (OSPathArr_cutNeedingUpdate.length > 0) {
 							var setOptionsObj = {
-								iconPath: OSPath_neededIcon
+								iconPath: OSPath_neededIcon,
+								launcherName: useProfSpecs.launcherName,
+								desc: 'Launches ' + getAppNameFromChan(useProfSpecs.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile',
+								args: '-profile "' + getPathToProfileDir(aProfileIniKey) + '" -no-remote',
+								OSPath_targetFile: useProfSpecs.path_exeForProfile
 							};
+							
 							var promise_setInfoOnShortcuts = ProfilistWorker.post('winnt_setInfoOnShortcuts', [OSPathArr_cutNeedingUpdate, setOptionsObj]);
 							promise_setInfoOnShortcuts.then(
 								function(aVal) {
@@ -4246,6 +4251,7 @@ var windowListener = {
 			aDOMWindow.removeEventListener('load', arguments.callee, false);
 			windowListener.loadIntoWindow(aDOMWindow);
 		}, false);
+		windowListener.loadIntoWindowBeforeLoad(aDOMWindow);
 	},
 	onCloseWindow: function (aXULWindow) {},
 	onWindowTitleChange: function (aXULWindow, aNewTitle) {},
@@ -4255,6 +4261,7 @@ var windowListener = {
 		let DOMWindows = Services.wm.getEnumerator(null);
 		while (DOMWindows.hasMoreElements()) {
 			let aDOMWindow = DOMWindows.getNext();
+			windowListener.loadIntoWindowBeforeLoad(aDOMWindow);
 			if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
 				windowListener.loadIntoWindow(aDOMWindow);
 			} else {
@@ -4287,7 +4294,6 @@ var windowListener = {
 		if (!aDOMWindow) {
 			return;
 		}
-		
 		// start - do os specific stuff
 		if (core.os.name == 'darwin') {
 			/*
@@ -4359,6 +4365,88 @@ var windowListener = {
 			var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 			domWinUtils.removeSheet(cssUri, domWinUtils.AUTHOR_SHEET); //0 == agent_sheet 1 == user_sheet 2 == author_sheet
 			delete aDOMWindow.Profilist;
+		}
+	},
+	loadIntoWindowBeforeLoad: function(aDOMWindow) {
+		if (!aDOMWindow) {
+			console.error('no aDOMWindow!!! this is weird shouldnt happen');
+		}
+		
+		switch (core.os.name) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+					
+					var aBaseWindow = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+												.getInterface(Ci.nsIWebNavigation)
+												.QueryInterface(Ci.nsIDocShellTreeItem)
+												.treeOwner
+												.QueryInterface(Ci.nsIInterfaceRequestor)
+												.getInterface(Ci.nsIBaseWindow);
+					var jsStr_aNativeHandle = aBaseWindow.nativeHandle;
+
+					var do_setWinPPSProps = function(cProfSpec) {
+						console.error('mainthread telling RelaunchCommand:', cProfSpec.path_exeForProfile, cProfSpec);
+						var transferObj = {
+							RelaunchIconResource: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'), // im assuming here that the icon exists, :todo: this assumption can be a source of trouble
+							RelaunchCommand: '"' + cProfSpec.path_exeForProfile + '" -profile "' + getPathToProfileDir(profToolkit.selectedProfile.iniKey) + '" -no-remote',
+							RelaunchDisplayNameResource: cProfSpec.launcherName,
+							IDHash: getPathToProfileDir(profToolkit.selectedProfile.iniKey)
+						};
+						var wasFocused = isDOMWindowFocused(aDOMWindow);
+						var promise_setWinPPSProps = ProfilistWorker.post('setWinPPSProps', [jsStr_aNativeHandle, transferObj]);
+						promise_setWinPPSProps.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_setWinPPSProps - ', aVal);
+								// start - do stuff here - promise_setWinPPSProps
+									if (wasFocused) {
+										aDOMWindow.focus(); // cuz when change SystemAppUserModelID it loses focus
+									}
+									console.error('wasFocused:', wasFocused);
+								// end - do stuff here - promise_setWinPPSProps
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_setWinPPSProps', aReason:aReason};
+								console.warn('Rejected - promise_setWinPPSProps - ', rejObj);
+								//consider throw
+								//deferred_createProfile.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_setWinPPSProps', aCaught:aCaught};
+								console.error('Caught - promise_setWinPPSProps - ', rejObj);
+								// consider throw
+								//deferred_createProfile.reject(rejObj);
+							}
+						);
+					}
+					
+					var promise_getSelfSpecs = getProfileSpecs(profToolkit.selectedProfile.iniKey);
+					promise_getSelfSpecs.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_getSelfSpecs - ', aVal);
+							// start - do stuff here - promise_getSelfSpecs
+							do_setWinPPSProps(aVal);
+							// end - do stuff here - promise_getSelfSpecs
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_getSelfSpecs', aReason:aReason};
+							console.error('Rejected - promise_getSelfSpecs - ', rejObj);
+							//consider throw
+							//deferred_createProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_getSelfSpecs', aCaught:aCaught};
+							console.error('Caught - promise_getSelfSpecs - ', rejObj);
+							// consider throw
+							//deferred_createProfile.reject(rejObj);
+						}
+					);
+					
+				break;
+			default:
+				// do nothing
 		}
 	}
 };
@@ -5121,41 +5209,46 @@ function getChannelNameOfExePath(aExePath) {
 	if (_cache_getChannelNameOfExePath[aExePath]) {
 		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]); // note:important: requires tie id to have proper cassing on tie paths
 	} else {
-		var path_channelName;
-		if (cOS != 'darwin') {
-			path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
+		if (aExePath == profToolkit.path_exeCur) {
+			_cache_getChannelNameOfExePath[aExePath] = Services.prefs.getCharPref('app.update.channel');
+			deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]);
 		} else {
-			path_channelName = OS.Path.join(aExePath.substr(0, aExePath.search(/\.app/i)/*.toLowerCase().indexOf('.app')*/ + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
-		}
+			var path_channelName;
+			if (cOS != 'darwin') {
+				path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
+			} else {
+				path_channelName = OS.Path.join(aExePath.substr(0, aExePath.search(/\.app/i)/*.toLowerCase().indexOf('.app')*/ + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
+			}
 
-		var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
-		promise_readChanPref.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_readChanPref - ', aVal);
-				// start - do stuff here - promise_readChanPref
-				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
-				if (!chanVal) {
-					var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
-					deferredMain_getChannelNameOfExePath.reject('regex match failed');
-				} else {
-					chanVal = chanVal[1];
-					_cache_getChannelNameOfExePath[aExePath] = chanVal;
-					deferredMain_getChannelNameOfExePath.resolve(chanVal);
+			var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
+			promise_readChanPref.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_readChanPref - ', aVal);
+					// start - do stuff here - promise_readChanPref
+					var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
+					if (!chanVal) {
+						var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
+						deferredMain_getChannelNameOfExePath.reject('regex match failed');
+					} else {
+						chanVal = chanVal[1];
+						_cache_getChannelNameOfExePath[aExePath] = chanVal;
+						deferredMain_getChannelNameOfExePath.resolve(chanVal);
+					}
+					// end - do stuff here - promise_readChanPref
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_readChanPref', aReason:aReason};
+					console.warn('Rejected - promise_readChanPref - ', rejObj);
+					deferredMain_getChannelNameOfExePath.reject(rejObj);
 				}
-				// end - do stuff here - promise_readChanPref
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_readChanPref', aReason:aReason};
-				console.warn('Rejected - promise_readChanPref - ', rejObj);
-				deferredMain_getChannelNameOfExePath.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
-				console.error('Caught - promise_readChanPref - ', rejObj);
-				deferredMain_getChannelNameOfExePath.reject(rejObj);
-			}
-		);
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
+					console.error('Caught - promise_readChanPref - ', rejObj);
+					deferredMain_getChannelNameOfExePath.reject(rejObj);
+				}
+			);
+		}
 	
 	}
 	
@@ -6433,50 +6526,53 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			makeIconAndLauncherName();
 			deferredMain_getProfileSpecs.resolve(specObj);
 		} else {
-			var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
-			promise_channelForExe.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_channelForExe - ', aVal);
-					// start - do stuff here - promise_channelForExe
-					specObj.channel_exeForProfile = aVal;
-					if (!specObj.iconsetId_base) {
-						specObj.iconsetId_base = aVal;
-						iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
+			var do_postGCNOEP = function(aVal) {
+				specObj.channel_exeForProfile = aVal;
+				if (!specObj.iconsetId_base) {
+					specObj.iconsetId_base = aVal;
+					iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
+				}
+				makeIconAndLauncherName();
+				deferredMain_getProfileSpecs.resolve(specObj);
+			}
+			if (aProfilePath == profToolkit.selectedProfile.iniKey) {
+				do_postGCNOEP(Services.prefs.getCharPref('app.update.channel'));
+			} else {
+				var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
+				promise_channelForExe.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_channelForExe - ', aVal);
+						// start - do stuff here - promise_channelForExe
+						do_postGCNOEP(aVal);
+						// end - do stuff here - promise_channelForExe
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_channelForExe', aReason:aReason};
+						console.warn('Rejected - promise_channelForExe - ', rejObj);
+						deferredMain_getProfileSpecs.reject(rejObj);
 					}
-					makeIconAndLauncherName();
-					deferredMain_getProfileSpecs.resolve(specObj);
-					// end - do stuff here - promise_channelForExe
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_channelForExe', aReason:aReason};
-					console.warn('Rejected - promise_channelForExe - ', rejObj);
-					deferredMain_getProfileSpecs.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_channelForExe', aCaught:aCaught};
-					console.error('Caught - promise_channelForExe - ', rejObj);
-					deferredMain_getProfileSpecs.reject(rejObj);
-				}
-			);
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_channelForExe', aCaught:aCaught};
+						console.error('Caught - promise_channelForExe - ', rejObj);
+						deferredMain_getProfileSpecs.reject(rejObj);
+					}
+				);
+			}
 		}
 	};
 	
 	var useLastUsedExePath = function(_elseCurExePath) {
 		// last used exe path regardless of profilist installed
-		var path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfilePath), 'compatibility.ini');
-		var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
-		
-		promise_readCompatIni.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_readCompatIni - ', aVal);
-				// start - do stuff here - promise_readCompatIni
+		var do_postReadCompat = function(aVal) {
+			if (aProfilePath != profToolkit.selectedProfile.iniKey) {
 				var path_aProfileLastPlatformDir = /^LastPlatformDir=(.*?)$/m.exec(aVal); //aVal.substr(aVal.indexOf(''), aVal.indexOf(// equivalent of Services.dirsvc.get('SrchPlugns', Ci.nsIFile) from within that running profile
 				if (!path_aProfileLastPlatformDir) {
 					deferredMain_getProfileSpecs.reject('regex failed to extract path_aProfileLastPlatformDir');
 				} else {
 					path_aProfileLastPlatformDir = path_aProfileLastPlatformDir[1];
 					if (cOS == 'darwin') {
+						// :todo: test that this block work after i added in the dont readCompatIni if aProfilePath == profToolkit.selectedProfile.iniKey 052415
 						if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
 							var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
 							path_aProfileLastPlatformDir = nsifile_aProfileLastPlatformDir.target;
@@ -6495,33 +6591,49 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 						var endingStr_exeCur = split_exeCur[split_exeCur.length-1];
 						specObj.path_exeForProfile = OS.Path.join(path_aProfileLastPlatformDir, endingStr_exeCur);
 					}
-					getChannelToExePath();
 				}
-				// end - do stuff here - promise_readCompatIni
-			},
-			function(aReason) {
-				var deepestReason = aReasonMax(aReason);
-				if (deepestReason.becauseNoSuchFile) {
-					if (_elseCurExePath) {
-						console.info('no such file for compatability.ini for this profile so resroting to use cur exe path, this profile path:', aProfilePath);
-						specObj.path_exeForProfile = profToolkit.path_exeCur; // current build, of the one executing this func
-						getChannelToExePath();
-						return; // prevent deeper exec, we dont want to reject the deferredMain
-					} else {
-						console.error('no such file, and _elseCurExePath was set to false!!');
+			} else {
+				specObj.path_exeForProfile = aVal;
+			}
+			getChannelToExePath();
+		};
+		
+		if (aProfilePath != profToolkit.selectedProfile.iniKey) {
+			var path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfilePath), 'compatibility.ini');
+			var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
+			promise_readCompatIni.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_readCompatIni - ', aVal);
+					// start - do stuff here - promise_readCompatIni
+						do_postReadCompat(aVal);
+					// end - do stuff here - promise_readCompatIni
+				},
+				function(aReason) {
+					var deepestReason = aReasonMax(aReason);
+					if (deepestReason.becauseNoSuchFile) {
+						if (_elseCurExePath) {
+							console.info('no such file for compatability.ini for this profile so resroting to use cur exe path, this profile path:', aProfilePath);
+							specObj.path_exeForProfile = profToolkit.path_exeCur; // current build, of the one executing this func
+							getChannelToExePath();
+							return; // prevent deeper exec, we dont want to reject the deferredMain
+						} else {
+							console.error('no such file, and _elseCurExePath was set to false!!');
+						}
 					}
+					var rejObj = {name:'promise_readCompatIni', aReason:aReason};
+					console.warn('Rejected - promise_readCompatIni - ', rejObj);
+					deferredMain_getProfileSpecs.reject(rejObj);
 				}
-				var rejObj = {name:'promise_readCompatIni', aReason:aReason};
-				console.warn('Rejected - promise_readCompatIni - ', rejObj);
-				deferredMain_getProfileSpecs.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_readCompatIni', aCaught:aCaught};
-				console.error('Caught - promise_readCompatIni - ', rejObj);
-				deferredMain_getProfileSpecs.reject(rejObj);
-			}
-		);
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_readCompatIni', aCaught:aCaught};
+					console.error('Caught - promise_readCompatIni - ', rejObj);
+					deferredMain_getProfileSpecs.reject(rejObj);
+				}
+			);
+		} else {
+			do_postReadCompat(profToolkit.path_exeCur);
+		}
 	};
 	
 	var postRunCheck = function() {
@@ -6607,34 +6719,41 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 	};
 	
 	var promise_testAProfilePathRunning;
-	if ((!ifRunningThenTakeThat && 'Profilist.tie' in props)/* || launching*/) { // reasons for not to check if aProfilePath is running
+	if (aProfilePath == profToolkit.selectedProfile.iniKey) {
+		specObj.isRunning = 1;
+		//var deferred_skipRunningCheck = new Deferred();
+		//promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
+		//deferred_skipRunningCheck.resolve(null);
+		postRunCheck();
+	} else if ((!ifRunningThenTakeThat && 'Profilist.tie' in props)/* || launching*/) { // reasons for not to check if aProfilePath is running
 		//// i added launching as reason to not check, i should never try to do launching when profile is running, i dont think i will so i added that as a reason to skip test if running
-		var deferred_skipRunningCheck = new Deferred();
-		promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
-		deferred_skipRunningCheck.resolve(null);
+		//var deferred_skipRunningCheck = new Deferred();
+		//promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
+		//deferred_skipRunningCheck.resolve(null);
+		postRunCheck();
 	} else {
 		promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [props.IsRelative, props.Path, profToolkit.rootPathDefault]);
+		promise_testAProfilePathRunning.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
+				// start - do stuff here - promise_testAProfilePathRunning
+				specObj.isRunning = aVal;
+				postRunCheck();
+				// end - do stuff here - promise_testAProfilePathRunning
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
+				console.warn('Rejected - promise_testAProfilePathRunning - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_testAProfilePathRunning', aCaught:aCaught};
+				console.error('Caught - promise_testAProfilePathRunning - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		);
 	}
-	promise_testAProfilePathRunning.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
-			// start - do stuff here - promise_testAProfilePathRunning
-			specObj.isRunning = aVal;
-			postRunCheck();
-			// end - do stuff here - promise_testAProfilePathRunning
-		},
-		function(aReason) {
-			var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
-			console.warn('Rejected - promise_testAProfilePathRunning - ', rejObj);
-			deferredMain_getProfileSpecs.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promise_testAProfilePathRunning', aCaught:aCaught};
-			console.error('Caught - promise_testAProfilePathRunning - ', rejObj);
-			deferredMain_getProfileSpecs.reject(rejObj);
-		}
-	);
 	
 	return deferredMain_getProfileSpecs.promise;
 }
@@ -6810,12 +6929,14 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 	
 	var deferredMain_launchProfile = new Deferred();
 	
-	// if (aProfileIniKey == profToolkit.selectedProfile.iniKey) {
-		// deferredMain_launchProfile.reject('cannot try to launch currently running profile, its already running!');
-	// }
+	if (aProfileIniKey == profToolkit.selectedProfile.iniKey) {
+		Services.prompt.alert(null, 'whaa', 'cannot launch self!!!');
+		deferredMain_launchProfile.reject('cannot try to launch currently running profile, its already running!');
+		return deferredMain_launchProfile.promise;
+	}
 	
 	var do_getProfSpecs = function(aCB) {
-	var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false); // does not check if running
+		var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false); // does not check if running
 		promise_cProfSpecs.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
@@ -9287,9 +9408,9 @@ function startup(aData, aReason) {
 						function(aVal) {
 							console.log('Fullfilled - promise_getIconName - ', aVal);
 							// start - do stuff here - promise_getIconName
-							var useIconNameStr = aVal.profSpecs.iconNameObj.str;
-							updateIconToAllWindows(profToolkit.selectedProfile.iniKey, useIconNameStr);
-							updateIconToPinnedCut(profToolkit.selectedProfile.iniKey, useIconNameStr);
+							var useProfSpecs = aVal.profSpecs; //.iconNameObj.str;
+							updateIconToAllWindows(profToolkit.selectedProfile.iniKey, useProfSpecs.iconNameObj.str);
+							updateIconToPinnedCut(profToolkit.selectedProfile.iniKey, useProfSpecs);
 							// end - do stuff here - promise_getIconName
 						},
 						function(aReason) {
@@ -10662,5 +10783,20 @@ function SIPWorker(workerScopeName, aPath, aCore=core) {
 	
 	return deferredMain_SIPWorker.promise;
 	
+}
+function isDOMWindowFocused(aDOMWindow) {
+	// http://stackoverflow.com/questions/27179766/how-to-test-if-window-is-currently-focused/27323849#27323849
+
+	let childTargetWindow = {};
+	Services.focus.getFocusedElementForWindow(aDOMWindow, true, childTargetWindow);
+	childTargetWindow = childTargetWindow.value;
+
+	let focusedChildWindow = {};
+	if (Services.focus.activeWindow) {
+		Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
+		focusedChildWindow = focusedChildWindow.value;
+	}
+
+	return (focusedChildWindow === childTargetWindow);
 }
 // end - common helper functions
