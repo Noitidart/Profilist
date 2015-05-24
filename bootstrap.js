@@ -4389,7 +4389,7 @@ var windowListener = {
 						console.error('mainthread telling RelaunchCommand:', cProfSpec.path_exeForProfile, cProfSpec);
 						var transferObj = {
 							RelaunchIconResource: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'), // im assuming here that the icon exists, :todo: this assumption can be a source of trouble
-							RelaunchCommand: '"' + cProfSpec.path_exeForProfile + '" -profile "' + getPathToProfileDir(profToolkit.selectedProfile.iniKey) + '" -no-remote',
+							RelaunchCommand: ' "' + cProfSpec.path_exeForProfile + '" -profile "' + getPathToProfileDir(profToolkit.selectedProfile.iniKey) + '" -no-remote', // absolutely no idea why but i had to put a leading space, otherwise the double quotes wouldnt take, and if i didnt use double quotes it wouldnt work either iA this works solid
 							RelaunchDisplayNameResource: cProfSpec.launcherName,
 							IDHash: getPathToProfileDir(profToolkit.selectedProfile.iniKey)
 						};
