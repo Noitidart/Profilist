@@ -1319,13 +1319,25 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 				continue;
 			}
 			
+			// check if need to rename
+			// do not rename if running, otherwise it will blank the icon in the taskbar, real weird
+			var curLauncherName = OS.Path.basename(arrOSPath[i]).substr(arrOSPath[i].length-4);;
+			var neededLauncherName = aOptions.launcherName;
+			if (neededLauncherName != curLauncherName) {
+				useArrI = OS.Path.join(OS.Path.dirname(arrOSPath[i]), aOptions.launcherName + '.lnk')
+				var rename = OS.File.move(arrOSPath[i], useArrI);
+			} else {
+				var useArrI = arrOSPath[i];
+			}
+			
+			
 			if (aOptions.appUserModelId) {
 				// :todo: maybe keep creation time constant, maybe, if recreating causes detachment
 				OS.File.remove(arrOSPath[i]);
 				var hr_SetPath = references.shellLink.SetPath(references.shellLinkPtr, aOptions.path_linkTo);
 				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
 			} else {
-				var hr_Load = references.persistFile.Load(references.persistFilePtr, arrOSPath[i], 0);
+				var hr_Load = references.persistFile.Load(references.persistFilePtr, useArrI, 0);
 				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
 			}
 			
@@ -1349,10 +1361,11 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 				ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
 			}
 			
-			var hr_Save = references.persistFile.Save(references.persistFilePtr, OS.Path.join(OS.Path.dirname(arrOSPath[i]), aOptions.launcherName + '.lnk'), false);
+			var hr_Save = references.persistFile.Save(references.persistFilePtr, useArrI, false);
 			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
 			
 			console.log('success save on:', arrOSPath[i]);
+
 		}
 		
 		refreshIconAtPath(); // refresh all icons
