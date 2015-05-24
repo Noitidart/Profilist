@@ -4041,7 +4041,7 @@ function xhr(url, cb) {
     xhr.send(null);
 }
 
-function launchProfileOLD(e, profName, suppressAlert, url) {
+function OLDlaunchProfile(e, profName, suppressAlert, url) {
 	console.info('in launchProfile');
 	if (!profName) {
 		var el = this;
@@ -6607,8 +6607,8 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 	};
 	
 	var promise_testAProfilePathRunning;
-	if ((!ifRunningThenTakeThat && 'Profilist.tie' in props) || launching) { // reasons for not to check if aProfilePath is running
-		// i added launching as reason to not check, i should never try to do launching when profile is running, i dont think i will so i added that as a reason to skip test if running
+	if ((!ifRunningThenTakeThat && 'Profilist.tie' in props)/* || launching*/) { // reasons for not to check if aProfilePath is running
+		//// i added launching as reason to not check, i should never try to do launching when profile is running, i dont think i will so i added that as a reason to skip test if running
 		var deferred_skipRunningCheck = new Deferred();
 		promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
 		deferred_skipRunningCheck.resolve(null);
@@ -6815,7 +6815,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 	// }
 	
 	var do_getProfSpecs = function(aCB) {
-	var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false);
+	var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false); // does not check if running
 		promise_cProfSpecs.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
@@ -6840,7 +6840,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 	};
 	
 	var do_ensureIconExists = function(useIconNameObj, aCB) {
-		var promise_getIconName = makeIcon(aProfileIniKey);
+		var promise_getIconName = makeIcon(aProfileIniKey, useIconNameObj);
 		promise_getIconName.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_getIconName - ', aVal);
@@ -6873,41 +6873,68 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 				
 					console.info('cProfSpec:', cProfSpec);
 					
-					var do_sendMsgToLaunch = function() {
-						var pathsObj = {
-							OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
-							OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
-							OSPath_targetFile: cProfSpec.path_exeForProfile,
-							jsStr_args: getPathToProfileDir(aProfileIniKey),
-							jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
-						};
-						
-						console.info('ready to send msg to launch, pathsObj:', pathsObj);
-						
-						var promise_doLaunch = ProfilistWorker.post('launchProfile', [pathsObj]);
-						promise_doLaunch.then(
+					if (cProfSpec.isRunning) {
+						// focus most recent window
+						// if non-winnt then isRunning holds pid
+						var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [cProfSpec.isRunning, ini[aProfileIniKey].props.IsRelative, ini[aProfileIniKey].props.Path, profToolkit.rootPathDefault]);
+						// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
+						promise_doFocus.then(
 							function(aVal) {
-								console.log('Fullfilled - promise_doLaunch - ', aVal);
-								// start - do stuff here - promise_doLaunch
+								console.log('Fullfilled - promise_doFocus - ', aVal);
+								// start - do stuff here - promise_doFocus
 								deferredMain_launchProfile.resolve(true);
-								// end - do stuff here - promise_doLaunch
+								// end - do stuff here - promise_doFocus
 							},
 							function(aReason) {
-								var rejObj = {name:'promise_doLaunch', aReason:aReason};
-								console.warn('Rejected - promise_doLaunch - ', rejObj);
+								var rejObj = {name:'promise_doFocus', aReason:aReason};
+								console.warn('Rejected - promise_doFocus - ', rejObj);
 								deferredMain_launchProfile.reject(rejObj);
 							}
 						).catch(
 							function(aCaught) {
-								var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
-								console.error('Caught - promise_doLaunch - ', rejObj);
+								var rejObj = {name:'promise_doFocus', aCaught:aCaught};
+								console.error('Caught - promise_doFocus - ', rejObj);
 								deferredMain_launchProfile.reject(rejObj);
 							}
 						);
+					} else {
+						// prep launch
+						var do_sendMsgToLaunch = function() {
+							var pathsObj = {
+								OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
+								OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+								OSPath_targetFile: cProfSpec.path_exeForProfile,
+								jsStr_args: getPathToProfileDir(aProfileIniKey),
+								jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
+							};
+							
+							console.info('ready to send msg to launch, pathsObj:', pathsObj);
+							
+							var promise_doLaunch = ProfilistWorker.post('launchProfile', [pathsObj]);
+							promise_doLaunch.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_doLaunch - ', aVal);
+									// start - do stuff here - promise_doLaunch
+									deferredMain_launchProfile.resolve(true);
+									// end - do stuff here - promise_doLaunch
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_doLaunch', aReason:aReason};
+									console.warn('Rejected - promise_doLaunch - ', rejObj);
+									deferredMain_launchProfile.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
+									console.error('Caught - promise_doLaunch - ', rejObj);
+									deferredMain_launchProfile.reject(rejObj);
+								}
+							);
 
-					};
-					
-					do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
+						};
+						
+						do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
+					}
 			});
 			
 			break;

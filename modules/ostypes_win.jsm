@@ -6244,6 +6244,17 @@ var winInit = function() {
 				self.TYPE.PWSTR.ptr	// *AppID
 			);
 		},
+		GetTopWindow: function() {
+				/* http://msdn.microsoft.com/en-us/library/ms633514%28VS.85%29.aspx
+				 * HWND WINAPI GetTopWindow(
+				 *   __in_opt_  HWND hWnd
+				 * );
+				 */
+				return lib('user32').declare('GetTopWindow', self.TYPE.WINABI,
+					self.TYPE.HWND, // return
+					self.TYPE.HWND // hWnd
+				);
+		},
 		GetWindow: function() {
 			/* http://msdn.microsoft.com/en-us/library/ms633515%28v=vs.85%29.aspx
 			 * HWND WINAPI GetWindow(
@@ -6257,6 +6268,19 @@ var winInit = function() {
 				self.TYPE.UINT	// wCmd
 			);
 		},
+		GetWindowLongPtr: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633585%28v=vs.85%29.aspx
+			 *	LONG_PTR WINAPI GetWindowLongPtr(
+			 *	  __in_  HWND hWnd,
+			 *	  __in_  int nIndex
+			 *	);
+			 */
+			return lib('user32').declare(is64bit ? (ifdef_UNICODE ? 'GetWindowLongPtrW' : 'GetWindowLongPtrA') : (ifdef_UNICODE ? 'GetWindowLongW' : 'GetWindowLongA'), self.TYPE.WINABI,
+				is64bit ? self.TYPE.LONG_PTR : self.TYPE.LONG,	// return
+				self.TYPE.HWND,									// hWnd
+				self.TYPE.INT									// nIndex
+			);
+		},
 		GetWindowThreadProcessId: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633522%28v=vs.85%29.aspx
 			 * DWORD WINAPI GetWindowThreadProcessId(
@@ -6268,6 +6292,17 @@ var winInit = function() {
 				self.TYPE.DWORD,	// return
 				self.TYPE.HWND,		// hWnd
 				self.TYPE.LPDWORD	// lpdwProcessId
+			);
+		},
+		IsIconic: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633507%28v=vs.85%29.aspx
+			 * BOOL WINAPI IsIconic(
+			 *   __in_ HWND hWnd
+			 * );
+			 */
+			return lib('user32').declare('IsIconic', self.TYPE.WINABI,
+				self.TYPE.BOOL,	// return
+				self.TYPE.HWND	// hWnd
 			);
 		},
 		LoadImage: function() {
@@ -6427,6 +6462,17 @@ var winInit = function() {
 				self.TYPE.FILETIME.ptr		// *lpLastWriteTime
 			);
 		},
+		SetForegroundWindow: function() {
+			/* http://msdn.microsoft.com/en-us/library/ms633539%28v=vs.85%29.aspx
+			 * BOOL WINAPI SetForegroundWindow(
+			 *   __in_ HWND hWnd
+			 * );
+			 */
+			return lib('user32').declare('SetForegroundWindow', self.TYPE.WINABI,
+				self.TYPE.BOOL,	// return
+				self.TYPE.HWND	// hWnd
+			);
+		},
 		SHChangeNotify: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/bb762118%28v=vs.85%29.aspx
 			 * void SHChangeNotify(
@@ -6469,6 +6515,19 @@ var winInit = function() {
 				self.TYPE.REFIID,		// riid
 				ctypes.voidptr_t		// **ppv // i can set this to `self.TYPE.IPropertyStore.ptr.ptr` // however i cannot set this to ctypes.void_t.ptr.ptr i have no iea why, and i thouh `void **ppv` is either void_t.ptr.ptr or ctypes.voidptr_t.ptr // ctypes.voidptr_t as was one here: `void**` the `QueryInterface` also has out argument `void**` and he used `ctypes.voidptr_t` (https://github.com/west-mt/ssbrowser/blob/452e21d728706945ad00f696f84c2f52e8638d08/chrome/content/modules/WindowsShortcutService.jsm#L74)
 			);
+		},
+		ShowWindow: function() {
+				/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633507%28v=vs.85%29.aspx
+				* BOOL WINAPI ShowWindow(
+				*   __in HWND hWnd
+				*   __in INT nCmdShow
+				* );
+				*/
+				return lib('user32').declare('ShowWindow', self.TYPE.WINABI,
+					self.TYPE.BOOL,		// BOOL
+					self.TYPE.HWND,		// hWnd
+					self.TYPE.INT		// nCmdShow
+				);
 		},
 		SHStrDup: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb759924%28v=vs.85%29.aspx

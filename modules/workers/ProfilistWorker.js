@@ -103,6 +103,157 @@ function init(objCore) {
 }
 
 // Start - Addon Functionality
+function focusWindow(jsStr_nativeHandlePtr, nativeHandlePtr) {
+	// provide one or the ther (nativeHandlePtr or jsStr_nativeHandlePtr)
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				if (jsStr_nativeHandlePtr) {
+					console.info('received jsStr_nativeHandlePtr:', jsStr_nativeHandlePtr.toString());
+					var hwnd = ostypes.TYPE.HWND(ctypes.UInt64(jsStr_nativeHandlePtr));
+				} else if (nativeHandlePtr) {
+					console.info('received nativeHandlePtr:', nativeHandlePtr.toString());
+					var hwnd = nativeHandlePtr;
+				} else {
+					throw new Error('must provide one or the other');
+				}
+				
+				console.info('focusing hwnd:', hwnd.toString());
+				
+				if (ostypes.API('IsIconic')(hwnd)) {
+					ostypes.API('ShowWindow')(hwnd, ostypes.CONST.SW_RESTORE);
+				}
+				
+				return ostypes.API('SetForegroundWindow')(hwnd);
+			
+			break;
+		default:
+			throw new Error('os-unsupported'); // if dont do new Error it wont give line number
+	}		
+}
+
+function focusMostRecentWindowOfProfile(pidOfTargetProfile, IsRelative, Path, rootPathDefault) {
+	// if non-winnt then if pidOfTargetProfile is not 0 or null or undefined, then it should be the pid of the running profile, it will then skip a profile locked check // if winnt this is 1, thats what queryProfileLocked returns
+	// if non-winnt and pidOfTargetProfile is not provided then must provide IsRelative Path and rootPathDefault
+	// if winnt then must provide IsRelative Path and rootPathDefault
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+				var tPid = getPidForRunningProfile(IsRelative, Path, rootPathDefault); // targetPID
+				
+				// start find windows
+				
+				var method = 2;
+				
+				if (method == 1) {
+					// behavior research from experimentation
+					// win81 - exact same behavior as method 2
+						// total win iteration regardless of pid, f, is not crazy its 275 in my current experiemnts when i have like 30 windows in taskbar, so i dont fear infinite loop with this method
+						// if all windows not iconic then the first one found with WS_CAPTION and WS_VISIBLE is the most recent
+						// if all windows iconic then the last one found with WS_CAPTION and WS_VISIBLE is the most recent
+							// based on two above and experiment, if two windows, most recent was minimized, then the first win this finds will be the non iconic one which is NOT the most recent one, i dont have any ideas on how to differntiate on which was most recent
+							
+							
+					// http://stackoverflow.com/questions/26103316/hwnds-of-alttab-menu-in-order - my post here on win81 behavior is wrong
+					var PID = ostypes.TYPE.DWORD();
+					var hwndC = ostypes.API('GetTopWindow')(null);
+					var foundInOrder = []; // debug
+					var f = 0; // debug
+					var focusThisHwnd;
+					while (!hwndC.isNull()) {
+						f++; // debug
+						var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwndC, PID.address());
+						if (cutils.jscEqual(rez_GWTPI, 0)) {
+							throw new Error('failed to GetWindowThreadProcessId');
+						}
+							
+						if (cutils.jscEqual(PID, tPid)) {
+							var hwndStyle = ostypes.API('GetWindowLongPtr')(hwndC, ostypes.CONST.GWL_STYLE);
+							if (cutils.jscEqual(hwndStyle, 0)) {
+								throw new Error('Failed to GetWindowLongPtr');
+							}
+							hwndStyle = parseInt(cutils.jscGetDeepest(hwndStyle));
+							
+							// debug block
+							foundInOrder.push([cutils.strOfPtr(hwndC) + ' - ' + debugPrintAllStylesOnIt(hwndStyle)]); //debug
+							if (!focusThisHwnd && (hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
+								foundInOrder.push('the hwnd above this row is what i will focus');
+								focusThisHwnd = hwndC;
+							}
+							// end // debug block
+							/* // debug
+							if ((hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
+								return focusWindow(null, hwndC);
+							}
+							*/
+						}
+						
+						hwndC = ostypes.API('GetWindow')(hwndC, ostypes.CONST.GW_HWNDNEXT);
+					}
+					
+					console.error('debug:', 'method 1', 'total win itered:', f, '\n' + foundInOrder.join('\n') + '\n'); // debug i want to see when the loop ends, and i want to see the different styles on it
+					
+					return focusWindow(null, focusThisHwnd); // debug
+					
+				} else if (method == 2) {
+					// behavior research from experimentation
+					// win81 - exact same behavior as method 1
+						// total win iteration regardless of pid, f, is not crazy its 275 in my current experiemnts when i have like 30 windows in taskbar, so i dont fear infinite loop with this method
+						// if all windows not iconic then the first one found with WS_CAPTION and WS_VISIBLE is the most recent
+						// if all windows iconic then the last one found with WS_CAPTION and WS_VISIBLE is the most recent
+							// based on two above and experiment, if two windows, most recent was minimized, then the first win this finds will be the non iconic one which is NOT the most recent one, i dont have any ideas on how to differntiate on which was most recent
+					var PID = ostypes.TYPE.DWORD();
+					
+					var foundInOrder = []; // debug
+					var f = 0; // debug
+					var focusThisHwnd;
+					
+					var SearchPD = function(hwnd, lparam) {
+						f++;
+						var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
+						//console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
+						if (cutils.jscEqual(PID, tPid)) {
+							var hwndStyle = ostypes.API('GetWindowLongPtr')(hwnd, ostypes.CONST.GWL_STYLE);
+							if (cutils.jscEqual(hwndStyle, 0)) {
+								throw new Error('Failed to GetWindowLongPtr');
+							}
+							hwndStyle = parseInt(cutils.jscGetDeepest(hwndStyle));
+							
+							// debug block
+							foundInOrder.push([cutils.strOfPtr(hwnd) + ' - ' + debugPrintAllStylesOnIt(hwndStyle)]); //debug
+							if (!focusThisHwnd && (hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
+								foundInOrder.push('the hwnd above this row is what i will focus');
+								focusThisHwnd = cutils.strOfPtr(hwnd); // for some reason if i set this to just hwnd, the global var of focusThisHwnd is getting cut shortend to just 0x2 after this enum is complete later on, even though on find it is 0x10200 so weird!!
+							}
+							// end // debug block
+							return true; // keep iterating as debug
+						}
+						
+						return true;
+					}
+					var SearchPD_ptr = ostypes.TYPE.WNDENUMPROC.ptr(SearchPD);
+					var wnd = ostypes.TYPE.LPARAM();
+					var rez_EnuMWindows = ostypes.API('EnumWindows')(SearchPD_ptr, wnd);
+					
+					// debug block
+					console.error('debug:', 'method 2', 'total win itered:', f, '\n' + foundInOrder.join('\n') + '\n'); // debug i want to see when the loop ends, and i want to see the different styles on it
+					return focusWindow(focusThisHwnd, null); // debug
+					// end debug block
+				} else {
+					throw new Error('invalid method');
+				}
+				
+			break;
+		default:
+			throw new Error('os-unsupported'); // if dont do new Error it wont give line number
+	}
+}
+
 function refreshIconAtPath(iconPath) {
 
 	switch (core.os.name) {
@@ -146,7 +297,7 @@ function makeLauncher(pathsObj) {
 				
 				if (core.os.version_name == '7+') {
 					console.info('pathsObj.jsStr_args:', pathsObj.jsStr_args);
-					cutOpts.str_createWithAppUserModelId = HashString()(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
+					cutOpts.str_createWithAppUserModelId = HashString(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
 					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
 				}
 				
@@ -166,7 +317,10 @@ function makeLauncher(pathsObj) {
 	}
 }
 
-function launchProfile(pathsObj, checkExistanceFirst) { // checkExistanceFirst to check if launcher exists first? not used yet
+function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to check if launcher exists first? not used yet
+
+	var argsForQueryLocked = [];
+	
 	// pathsObj should be same as that needed to be passed to makeLauncher
 	switch (core.os.name) {
 		case 'winnt':
@@ -1445,7 +1599,7 @@ function makeDir_Bug934283(path, options) {
 	};
 	return makeDirRecurse();
 }
-function HashString() {
+var HashString = (function (){
 	/**
 	 * Javascript implementation of
 	 * https://hg.mozilla.org/mozilla-central/file/0cefb584fd1a/mfbt/HashFunctions.h
@@ -1491,7 +1645,7 @@ function HashString() {
     }
     return rv;
   };
-}
+})();
 // END - Common
 
 // scratch
@@ -1610,4 +1764,20 @@ function test(tst, tst2) {
 	//*/
 	
 	
+}
+
+// start winnt debug functions
+var WINSTYLE_NAME_TO_HEX = {'WS_BORDER':0x00800000,'WS_CAPTION':0x00C00000,'WS_CHILD':0x40000000,'WS_CHILDWINDOW':0x40000000,'WS_CLIPCHILDREN':0x02000000,'WS_CLIPSIBLINGS':0x04000000,'WS_DISABLED':0x08000000,'WS_DLGFRAME':0x00400000,'WS_GROUP':0x00020000,'WS_HSCROLL':0x00100000,'WS_ICONIC':0x20000000,'WS_MAXIMIZE':0x01000000,'WS_MAXIMIZEBOX':0x00010000,'WS_MINIMIZE':0x20000000,'WS_MINIMIZEBOX':0x00020000,'WS_OVERLAPPED':0x00000000,'WS_POPUP':0x80000000,'WS_SIZEBOX':0x00040000,'WS_SYSMENU':0x00080000,'WS_TABSTOP':0x00010000,'WS_THICKFRAME':0x00040000,'WS_TILED':0x00000000,'WS_VISIBLE':0x10000000,'WS_VSCROLL':0x00200000};
+WINSTYLE_NAME_TO_HEX['WS_OVERLAPPEDWINDOW'] = WINSTYLE_NAME_TO_HEX.WS_OVERLAPPED | WINSTYLE_NAME_TO_HEX.WS_CAPTION | WINSTYLE_NAME_TO_HEX.WS_SYSMENU | WINSTYLE_NAME_TO_HEX.WS_THICKFRAME | WINSTYLE_NAME_TO_HEX.WS_MINIMIZEBOX | WINSTYLE_NAME_TO_HEX.WS_MAXIMIZEBOX;
+WINSTYLE_NAME_TO_HEX['WS_POPUPWINDOW'] = WINSTYLE_NAME_TO_HEX.WS_POPUP | WINSTYLE_NAME_TO_HEX.WS_BORDER | WINSTYLE_NAME_TO_HEX.WS_SYSMENU;
+WINSTYLE_NAME_TO_HEX['WS_TILEDWINDOW'] = WINSTYLE_NAME_TO_HEX.WS_OVERLAPPED | WINSTYLE_NAME_TO_HEX.WS_CAPTION | WINSTYLE_NAME_TO_HEX.WS_SYSMENU | WINSTYLE_NAME_TO_HEX.WS_THICKFRAME | WINSTYLE_NAME_TO_HEX.WS_MINIMIZEBOX | WINSTYLE_NAME_TO_HEX.WS_MAXIMIZEBOX;	
+function debugPrintAllStylesOnIt(jsPrim_theHwndStyles) {
+	var flagsOnIt = [];
+	for (var S in WINSTYLE_NAME_TO_HEX) {
+		if (jsPrim_theHwndStyles & WINSTYLE_NAME_TO_HEX[S]) {
+			flagsOnIt.push(S);
+		}
+	}
+	//console.info('debug', 'all flags on it:', flagsOnIt);
+	return flagsOnIt.join(' | ');
 }
