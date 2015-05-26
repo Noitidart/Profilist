@@ -394,7 +394,7 @@ var observers = {
 							shortcutMade_success();
 						} else {
 							// failed to make shortcut
-							shortcutMade_failed(responseJson.explaination);
+							shortcutMade_failed(responseJson.explanation);
 						}
 					} else {
 						//this client is not the responder to this query-make-desktop-shortcut

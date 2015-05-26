@@ -351,7 +351,7 @@ function makeLauncher(pathsObj) {
 	}
 }
 
-function makeDeskcut(pathsObj) {
+function makeDeskcut(cutInfoObj) {
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
@@ -359,32 +359,30 @@ function makeDeskcut(pathsObj) {
 				// actually no: // dont check existance of launcher, just write/overwrite
 				// check existance of launcher, check its props to ensure they match in pathsObj, if they dont match ten overwrite it with corrections
 				
-				var cutDirPath = OS.Path.dirname(pathsObj.OSPath_makeFileAt);
-				var cutFileName = pathsObj.OSPath_makeFileAt.substring(cutDirPath.length+1, pathsObj.OSPath_makeFileAt.length-4);
-				var targetArgs = pathsObj.jsStr_args;
-				var desc = pathsObj.jsStr_desc;
-				
-				var cutOpts = {
-					path_createWithIcon: pathsObj.OSPath_icon,
-					str_createWithDesc: pathsObj.jsStr_desc
-				};
-				
-				if (core.os.version_name == '7+') {
-					console.info('pathsObj.jsStr_args:', pathsObj.jsStr_args);
-					cutOpts.str_createWithAppUserModelId = HashStringHelper(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
-					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
+				if (!('dirNameLnk' in cutInfoObj)) {
+					throw new Error('makeDeskcut requires path safed dirNameLnk');
+				}
+				if ('renameToName' in cutInfoObj) {
+					throw new Error('makeDeskcut requires that renameToName not be set, because it relies on the fed dirNameLnk');
 				}
 				
-				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '" -no-remote';
+				if (!('exists' in cutInfoObj)) {
+					// `exists` wasnt in obj so check existance, this is required before a hard link can be made
+					cutInfoObj.exists = OS.File.exists(OS.Path.join(cutInfoObj.dir, cutInfoObj.name + '.lnk'));
+				}
 				
-				console.info('cutDirPath:', cutDirPath);
-				console.info('cutFileName:', cutFileName);
-				console.info('cutOpts:', JSON.stringify(cutOpts));
+				if (!cutInfoObj.exists) {
+					if (core.os.version_name == '7+') {
+						if (cutInfoObj.IDHash) {
+							cutInfoObj.appUserModelId = HashStringHelper(cutInfoObj.IDHash) + ''; // make it a jsStr
+						}
+					}
+					//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+					tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutDirPath], OS.Constants.Path.userApplicationDataDir);
+					createShortcuts([cutInfoObj]);
+				}
 				
-				//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
-				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutDirPath], OS.Constants.Path.userApplicationDataDir);
-				console.log('finished make dir');
-				return OLDcreateShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
+				return makeAlias(OS.Path.join(OS.Constants.Path.desktopDir, cutInfoObj.name), cutInfoObj.dirNameLnk);
 			
 			break;
 		default:
@@ -457,7 +455,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 	}
 }
 
-function createShortcuts(aArrOfObjs, ) {
+function createShortcuts(aArrOfObjs) {
 	//aArrOfObjs is array of shortcuts to make each obj is like this:
 	/*
 		{
@@ -479,8 +477,8 @@ function createShortcuts(aArrOfObjs, ) {
 			exists:				// jsBool. set to true or false if you know it exists or not, omit if you dont know and this function will do a check // if set it to true/false and you are wrong, some quirky stuff will happen probably
 			// if cut does not exist, then jsStr_OSPath_targetFile is required
 			
-			updateIfDiff:		// jsBool. default is false. meaning by default it will overwrite. it gets the shortcut properties first, and if different from the ones provided then it will update it, else it will not // currently does not check if descriptions `desc` differ, or if workingDirectory `workDir` differs // also does not check if iconIndex differs. it does but it doesnt use that as a reponse to update it. i should fix this in future. if icon paths are same even though iconIndex's differ, it will not update the iconIndex, :todo:
-			refreshIcon:		// jsInt. default is 0. or omitted meaning dont. if set to 1 then it will refresh at path, if set to 2 it will refresh full windows icon cache
+			updateIfDiff:		// jsBool. default is false. meaning by default it will overwrite. it gets the shortcut properties first, and if different from the ones provided then it will update it, else it will not // currently does not check if descriptions `desc` differ, or if workingDirectory `workDir` differs // also does not check if iconIndex differs. it does but it doesnt use that as a reponse to update it. i should fix this in future. if icon paths are same even though iconIndex's differ, it will not update the iconIndex, :todo: // this means if icon, targetFile, or appUserModelId all match, then even if desc, workingDir, iconindex dont match they will not be updated
+			refreshIcon:		// jsInt. default is 0. or omitted meaning dont. if set to 1 then it will refresh at path, if set to 2 it will refresh full windows icon cache // if icon was not updated then it will not refresh if even refreshicon is set to 1 or 2
 			doPathSafeWith:		// jsStr. default is it wont safe it. so if you dont want to safe it, then omit this
 			renameToName:		// omit if you dont want to rename. otherwise provide a name. without the .lnk. if it is found that the name of the current file doesnt match, then it is renamed. this does not consider updateIfDiff, test is always made, just cause the needed data is already available (the current path, and the new name)
 		}
@@ -491,18 +489,15 @@ function createShortcuts(aArrOfObjs, ) {
 	var refs = {};
 	ostypes.HELPER.InitShellLinkAndPersistFileConsts();
 	
-	for (var i=0; i<aArrOfObjs.length; i++) {
-		if ('appUserModelId' in aArrOfObjs[i]) {
-			refs.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
-			ostypes.HELPER.InitPropStoreConsts();
-			break;
+	if (core.os.version_name == '7+') {
+		// check if we need IPropertyStore
+		for (var i=0; i<aArrOfObjs.length; i++) {
+			if ('appUserModelId' in aArrOfObjs[i]) {
+				refs.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+				ostypes.HELPER.InitPropStoreConsts();
+				break;
+			}
 		}
-	}
-	if (aOptions.appUserModelId) {
-		if (!aOptions.path_linkTo) {
-			throw new Error('Because appUserModelId is changing devuser must provide path_linkTo and whatever else should be matched on recreate');
-		}
-		refs.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
 	}
 	
 	var doer = function() {
@@ -512,22 +507,33 @@ function createShortcuts(aArrOfObjs, ) {
 			
 			var cObj = aArrOfObjs[i];
 			
+			if (core.os.version_name != '7+') {
+				if ('appUserModelId' in cObj) {
+					delete cObj.appUserModelId;
+				}
+			}
+			
 			var needToCreate = false; // if need to create or recreate the file this is set to true. if exist then if just needing to update certain properties then this is false. we start out assuming false.
 			
 			// start path stuff
 			var fullPath;
 			var dir;
 			var name;
-			if (('dir' in cObj && !('name' in cObj)) || ((!('dir' in cObj) && 'name' in cObj))) {
-				throw new Error('In obj ' + i + ' either dir or name was provided. If either is provided MUST provided both');
-			} else {
-				fullPath = OS.Path.join(cObj.dir, cObj.name + '.lnk');
-			}
 			
-			if (!('dir' in cObj) && !('name' in cObj) && !('dirNameLnk' in cObj)) {
-				throw new Error('In obj ' + i + ' neither dir or name was provided SO MUST provide dirNameLnk');
-			} else {
+			if ('dir' in cObj && 'name' in cObj && 'dirNameLnk' in cObj) { // all 3 were provided, so just use dirNameLnk, i dont test if name and dir match that of dirNameLnk, its a devuser issue he shouldnt be stupid
 				fullPath = cObj.dirNameLnk;
+			} else if (!('dir' in cObj) && !('name' in cObj) && !('dirNameLnk' in cObj)) {
+				throw new Error('In obj ' + i + ' NONE of the three were provided. Either provide (dir and name) OR (dirNameLnk)');
+			} else {
+				if ('dirNameLnk' in cObj) {
+					fullPath = cObj.dirNameLnk;
+				} else {
+					if (('dir' in cObj && !('name' in cObj)) || ((!('dir' in cObj) && 'name' in cObj))) {
+						throw new Error('In obj ' + i + ', dirNameLnk was not provided AND either dir or name was provided. MUST provided dir and name ELSE provide dirNameLnk');
+					} else {
+						fullPath = OS.Path.join(cObj.dir, cObj.name + '.lnk');
+					}
+				}
 			}
 			
 			if ('doPathSafeWith' in cObj) {
@@ -631,8 +637,8 @@ function createShortcuts(aArrOfObjs, ) {
 					for (var cP in cPreExisting) {
 						if (cPreExisting[cP] == cObj[cP]) {
 							console.log('will not update ' + cP + ' because preexisting value matches what devuser set value');
-							delete cObj[cP]);
-							delete cPreExisting[cP]);
+							delete cObj[cP];
+							delete cPreExisting[cP];
 						} else {
 							console.log('WILL update ' + cP + ' because preexisting value differs from set value.', 'prexisting:', cPreExisting[cP], 'set to:', cObj[cP]);
 							if (cP == 'appUserModelId') {
@@ -703,7 +709,7 @@ function createShortcuts(aArrOfObjs, ) {
 			console.log('Shortcut succesfully saved on fullPath:', fullPath);
 			// ok end set the settings
 			
-			if ('refreshIcon' in cObj) {
+			if ('refreshIcon' in cObj && 'icon' in cObj) { // `'icon' in cObj` means that icon was updated
 				if (cObj.refreshIcon == 1) {
 					refreshAtPath.push(fullPath);
 				} else if (cObj.refreshIcon == 2) {
@@ -2067,7 +2073,7 @@ var HashString = (function (){
 })();
 
 var _cache_HashStringHelper = {};
-function HashStringHelper = function(aText) {
+function HashStringHelper(aText) {
 	if (!(aText in _cache_HashStringHelper)) {
 		_cache_HashStringHelper = HashString(aText);
 	}

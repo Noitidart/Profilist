@@ -7088,6 +7088,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	
 	// creates desktop shortcut to the launcher
 	// if launcher doesnt exist it makes it first
+	
 	var deferredMain_makeDeskCut = new Deferred();
 	
 	var do_getProfSpecsCheckUse = function(aSpecObj, aIfRunningThenTakeThat, aCB) {
@@ -7095,7 +7096,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 			aCB(aSpecObj);
 			return; // to prevent deeper exec
 		}
-		var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, aIfRunningThenTakeThat, false, false);
+		var promise_cProfSpecs = getProfileSpecs(for_ini_key, aIfRunningThenTakeThat, false, false);
 		promise_cProfSpecs.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
@@ -7108,38 +7109,38 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 			function(aReason) {
 				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
 				console.warn('Rejected - promise_cProfSpecs - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
+				deferredMain_makeDeskCut.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
 				var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
 				console.error('Caught - promise_cProfSpecs - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
+				deferredMain_makeDeskCut.reject(rejObj);
 			}
 		);
 	};
 	
 	var do_ensureIconExists = function(useIconNameObj, aCB) {
-		var promise_getIconName = makeIcon(aProfileIniKey, useIconNameObj);
-		promise_getIconName.then(
+		var promise_ensureIconRdyAndMade = makeIcon(for_ini_key, useIconNameObj);
+		promise_ensureIconRdyAndMade.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_getIconName - ', aVal);
-				// start - do stuff here - promise_getIconName
+				console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
+				// start - do stuff here - promise_ensureIconRdyAndMade
 				
 					aCB();
 					
-				// end - do stuff here - promise_getIconName
+				// end - do stuff here - promise_ensureIconRdyAndMade
 			},
 			function(aReason) {
-				var rejObj = {name:'promise_getIconName', aReason:aReason};
-				console.error('Rejected - promise_getIconName - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
+				var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
+				console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
+				deferredMain_makeDeskCut.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
-				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
-				console.error('Caught - promise_getIconName - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
+				var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
+				console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
+				deferredMain_makeDeskCut.reject(rejObj);
 			}
 		);
 	};
@@ -7154,40 +7155,46 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 
 				do_getProfSpecsCheckUse(useSpecObj, true, function(cProfSpec) {
 					console.info('cProfSpec:', cProfSpec);
-					var do_sendMsgToLaunch = function() {
-						var pathsObj = {
-							OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
-							OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
-							OSPath_targetFile: cProfSpec.path_exeForProfile,
-							jsStr_args: getPathToProfileDir(aProfileIniKey),
-							jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
+					var do_makeTheCut = function() {
+						var cutInfoObj = {
+							// keys for worker__createShortcut
+							dir: profToolkit.path_profilistData_launcherExes,
+							name: cProfSpec.launcherName,
+							dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
+							args: '-profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote',
+							desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[for_ini_key].props.Name + '" Profile',
+							icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+							
+							updateIfDiff: true,
+							refreshIcon: 1,
+							
+							// keys for worker__makeDeskcut
+							IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null
 						};
 						
-						console.info('ready to send msg to launch, pathsObj:', pathsObj);
-						
-						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [pathsObj]);
-						promise_doLaunch.then(
+						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [cutInfoObj]);
+						promise_doMakeDeskcut.then(
 							function(aVal) {
-								console.log('Fullfilled - promise_doLaunch - ', aVal);
-								// start - do stuff here - promise_doLaunch
-								deferredMain_launchProfile.resolve(true);
-								// end - do stuff here - promise_doLaunch
+								console.log('Fullfilled - promise_doMakeDeskcut - ', aVal);
+								// start - do stuff here - promise_doMakeDeskcut
+								deferredMain_makeDeskCut.resolve(true);
+								// end - do stuff here - promise_doMakeDeskcut
 							},
 							function(aReason) {
-								var rejObj = {name:'promise_doLaunch', aReason:aReason};
-								console.warn('Rejected - promise_doLaunch - ', rejObj);
-								deferredMain_launchProfile.reject(rejObj);
+								var rejObj = {name:'promise_doMakeDeskcut', aReason:aReason};
+								console.warn('Rejected - promise_doMakeDeskcut - ', rejObj);
+								deferredMain_makeDeskCut.reject(rejObj);
 							}
 						).catch(
 							function(aCaught) {
-								var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
-								console.error('Caught - promise_doLaunch - ', rejObj);
-								deferredMain_launchProfile.reject(rejObj);
+								var rejObj = {name:'promise_doMakeDeskcut', aCaught:aCaught};
+								console.error('Caught - promise_doMakeDeskcut - ', rejObj);
+								deferredMain_makeDeskCut.reject(rejObj);
 							}
 						);
 
 					};
-					do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
+					do_ensureIconExists(cProfSpec.iconNameObj, do_makeTheCut);
 				});
 
 			break;
@@ -8814,42 +8821,44 @@ function cpClientListener(aSubject, aTopic, aData) {
 			break;
 		/*end - generic not specific to profilist cp comm*/
 		case 'query-make-desktop-shortcut':
-			var promise_makeRequestedCut = makeDeskCut(incomingJson.key_in_ini);
-			promise_makeRequestedCut.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_makeRequestedCut - ', aVal);
-					// start - do stuff here - promise_makeRequestedCut
-					var responseJson = {
-						clientId: incomingJson.clientId,
-						status: 1
-					};
-					cpCommPostJson('response-make-desktop-shortcut', responseJson);
-					// end - do stuff here - promise_makeRequestedCut
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_makeRequestedCut', aReason:aReason};
-					console.warn('Rejected - promise_makeRequestedCut - ', rejObj);
-					var deepestReason = aReasonMax(aReason);
-					var responseJson = {
-						clientId: incomingJson.clientId,
-						status: 0,
-						explaination: deepestReason
-					};
-					cpCommPostJson('response-make-desktop-shortcut', responseJson);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_makeRequestedCut', aCaught:aCaught};
-					console.error('Caught - promise_makeRequestedCut - ', rejObj);
-					var deepestReason = aReasonMax(aCaught);
-					var responseJson = {
-						clientId: incomingJson.clientId,
-						status: 0,
-						explaination: deepestReason
-					};
-					cpCommPostJson('response-make-desktop-shortcut', responseJson);
-				}
-			);
+		
+				var promise_makeRequestedCut = makeDeskCut(incomingJson.key_in_ini);
+				promise_makeRequestedCut.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_makeRequestedCut - ', aVal);
+						// start - do stuff here - promise_makeRequestedCut
+						var responseJson = {
+							clientId: incomingJson.clientId,
+							status: 1
+						};
+						cpCommPostJson('response-make-desktop-shortcut', responseJson);
+						// end - do stuff here - promise_makeRequestedCut
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_makeRequestedCut', aReason:aReason};
+						console.warn('Rejected - promise_makeRequestedCut - ', rejObj);
+						var deepestReason = aReasonMax(aReason);
+						var responseJson = {
+							clientId: incomingJson.clientId,
+							status: 0,
+							explanation: deepestReason
+						};
+						cpCommPostJson('response-make-desktop-shortcut', responseJson);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_makeRequestedCut', aCaught:aCaught};
+						console.error('Caught - promise_makeRequestedCut - ', rejObj);
+						var deepestReason = aReasonMax(aCaught);
+						var responseJson = {
+							clientId: incomingJson.clientId,
+							status: 0,
+							explanation: deepestReason
+						};
+						cpCommPostJson('response-make-desktop-shortcut', responseJson);
+					}
+				);
+				
 			break;
 		case 'query-client-born':
 			if ('client-closing-if-i-no-other-clients-then-shutdown-listeners' in noResponseActiveTimers) {
