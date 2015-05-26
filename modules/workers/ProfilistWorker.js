@@ -343,7 +343,7 @@ function makeLauncher(pathsObj) {
 				
 				makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
 				console.log('finished make dir');
-				return createShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
+				return OLDcreateShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
 			
 			break;
 		default:
@@ -384,7 +384,7 @@ function makeDeskcut(pathsObj) {
 				//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
 				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutDirPath], OS.Constants.Path.userApplicationDataDir);
 				console.log('finished make dir');
-				return createShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
+				return OLDcreateShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
 			
 			break;
 		default:
@@ -456,7 +456,335 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 			throw new Error('os-unsupported');
 	}
 }
-function createShortcut(path_createInDir, str_createWithName, path_linkTo, options={}, aExists) {
+
+function createShortcuts(aArrOfObjs, ) {
+	//aArrOfObjs is array of shortcuts to make each obj is like this:
+	/*
+		{
+			dir:					// jsStr. OSPath. short for OSPath_dirToMakeShortcutFileIn // example: C:\blah
+			name:					// jsStr. short for jsStr_nameOfShortcutFileNoLnk which is name of shortcut file, without the .lnk. if name is not safe for a winnt path, then set doPathSafeWith to a character to replace it with to safe it. // example: cut
+			dirNameLnk:			// jsStr. OSPath. full path with .lnk at end // example: C:\blah\cut.lnk
+			
+			targetFile:			// jsStr. OSPath. optional if the shortcut already exists
+			icon:				// jsStr. OSPath. path to icon to use // ex: C:\blah\rawr.ico
+			iconIndex:			// jsInt. optional. if icon is provided, then iconIndex is used, if omitted but icon is not omitted, default iconIndex of 0 is used
+			args:				// jsStr. arguments that should be applied to targetFile // example: -profile "C:\hi"
+			desc:				// jsStr. text that goes in description. // ex: This is my shortcut yay!
+			
+			workDir:			// jsStr. OSPath. i dont understand the MSDN docs about this but i added it here just in case, omit if you dont need to set a working directory
+			
+			appUserModelId:		// jsStr. if provided, and shortcut exists, then the shortcut is deleted and recreated :todo: add an option to keep creation time constant on recreated shortcut
+			
+			// options
+			exists:				// jsBool. set to true or false if you know it exists or not, omit if you dont know and this function will do a check // if set it to true/false and you are wrong, some quirky stuff will happen probably
+			// if cut does not exist, then jsStr_OSPath_targetFile is required
+			
+			updateIfDiff:		// jsBool. default is false. meaning by default it will overwrite. it gets the shortcut properties first, and if different from the ones provided then it will update it, else it will not // currently does not check if descriptions `desc` differ, or if workingDirectory `workDir` differs // also does not check if iconIndex differs. it does but it doesnt use that as a reponse to update it. i should fix this in future. if icon paths are same even though iconIndex's differ, it will not update the iconIndex, :todo:
+			refreshIcon:		// jsInt. default is 0. or omitted meaning dont. if set to 1 then it will refresh at path, if set to 2 it will refresh full windows icon cache
+			doPathSafeWith:		// jsStr. default is it wont safe it. so if you dont want to safe it, then omit this
+			renameToName:		// omit if you dont want to rename. otherwise provide a name. without the .lnk. if it is found that the name of the current file doesnt match, then it is renamed. this does not consider updateIfDiff, test is always made, just cause the needed data is already available (the current path, and the new name)
+		}
+		
+		MUST provide either (OSPath_dir AND jsStr_name) OR OSPath_dirNameLnk
+	*/
+	
+	var refs = {};
+	ostypes.HELPER.InitShellLinkAndPersistFileConsts();
+	
+	for (var i=0; i<aArrOfObjs.length; i++) {
+		if ('appUserModelId' in aArrOfObjs[i]) {
+			refs.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+			ostypes.HELPER.InitPropStoreConsts();
+			break;
+		}
+	}
+	if (aOptions.appUserModelId) {
+		if (!aOptions.path_linkTo) {
+			throw new Error('Because appUserModelId is changing devuser must provide path_linkTo and whatever else should be matched on recreate');
+		}
+		refs.propertyStore = undefined;  // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
+	}
+	
+	var doer = function() {
+		var refreshAtPath = [];
+		var refreshAllIconNeeded = false; // sets to true if any of the shortcuts in the aArrOfObjs had setting of iconRefresh of 2. also if there is a mix of 1 and 2. at the very end of the loop, if refreshAllIconNeeded still false, then it goes through and refreshes each path
+		for (var i=0; i<aArrOfObjs.length; i++) {
+			
+			var cObj = aArrOfObjs[i];
+			
+			var needToCreate = false; // if need to create or recreate the file this is set to true. if exist then if just needing to update certain properties then this is false. we start out assuming false.
+			
+			// start path stuff
+			var fullPath;
+			var dir;
+			var name;
+			if (('dir' in cObj && !('name' in cObj)) || ((!('dir' in cObj) && 'name' in cObj))) {
+				throw new Error('In obj ' + i + ' either dir or name was provided. If either is provided MUST provided both');
+			} else {
+				fullPath = OS.Path.join(cObj.dir, cObj.name + '.lnk');
+			}
+			
+			if (!('dir' in cObj) && !('name' in cObj) && !('dirNameLnk' in cObj)) {
+				throw new Error('In obj ' + i + ' neither dir or name was provided SO MUST provide dirNameLnk');
+			} else {
+				fullPath = cObj.dirNameLnk;
+			}
+			
+			if ('doPathSafeWith' in cObj) {
+				fullPath = fullPath.replace(/([\\*:?<>|\/\"])/g, cObj.doPathSafeWith);
+			}
+			
+			dir = OS.Path.dirname(fullPath);
+			name = OS.Path.basename(fullPath);
+			name = name.substr(0, name.length - 4); // remove .lnk extension
+			// end path stuff
+			
+			console.log('begin shortcut creation proc on fullPath:', fullPath);
+			
+			if (!('exists' in cObj)) {
+				cObj.exists = OS.File.exists(path_create);
+			}
+			
+			if (!cObj.exists && !('targetFile' in cObj)) {
+				needToCreate = true;
+				throw new Error('In obj ' + i + ' it was marked or it was found that the shortcut file was not pre-existing, so a targetFile MUST be provided, ');
+			}
+
+			if ('renameToName' in cObj) {
+				if ('doPathSafeWith' in cObj) {
+					var renameToName = cObj.renameToName.replace(/([\\*:?<>|\/\"])/g, cObj.doPathSafeWith);
+				} else {
+					var renameToName = cObj.renameToName;
+				}
+			}
+			
+			if (cObj.exists) {
+				// lets see if we should rename it
+				if ('renameToName' in cObj) {
+					if (renameToName != name) {
+						// ok rename it
+						console.log('needing to rename it as old name was "' + name + '" and new name based on devuser set should be "' + renameToName + '"');
+						var fullPathRENAMED = OS.Path.join(dir, renameToName);
+						var rez_rename = OS.File.move(fullPath, fullPathRENAMED);
+						
+						// update fullPath
+						fullPath = fullPathRENAMED;
+						
+						// update name
+						name = renameToName;
+						console.log('fullPath moded due to renameToRename, its is now:', fullPath);
+					}
+				}
+				
+				// ok load it, it exists
+				var hr_Load = refs.persistFile.Load(refs.persistFilePtr, fullPath, 0);
+				//console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
+				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+			} else {
+				if ('renameToname' in cObj) {
+					console.log('it doesnt exist, but devuser set a renameToName so going to use this as name i dont test if name and renameToName match im just taking renameToName', 'name:', name, 'renameToName:', renameToName);
+					name = renameToName;
+					var fullPathRENAMED = OS.Path.join(dir, renameToName);
+					fullPath = fullPathRENAMED;
+					console.log('fullPath moded due to renameToRename, its is now:', fullPath);
+				}
+				needToCreate = true;
+			}
+			
+			if (cObj.exists && cObj.updateIfDiff) {
+				if (cObj.exists) {
+					// fetch current values on shortcut of what devuser wnats to set in obj
+					var cPreExisting = {}; // holds what is currently set on it, based on what was in cObj
+					
+					if ('icon' in cObj) {
+						var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+						var piIcon = ostypes.TYPE.INT();
+						var hr_GetIconLocation = refs.shellLink.GetIconLocation(refs.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
+						ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+						cPreExisting.icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+						/* // i dont check for diff in iconIndex yet
+						if ('iconIndex' in cObj) {
+							cPreExisting.iconIndex = piIcon.value;
+						}
+						*/
+					}
+					
+					if ('targetFile' in cObj) {
+						var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+						var fFlags = ostypes.CONST.SLGP_RAWPATH;
+						var hr_GetPath = refs.shellLink.GetPath(refs.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
+						ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+						cPreExisting.targetFile = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
+					}
+					
+					if ('args' in cObj) {
+						var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
+						var hr_GetArguments = refs.shellLink.GetArguments(refs.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
+						ostypes.HELPER.checkHRESULT(hr_GetArguments);
+						cPreExisting.args = cutils.readAsChar8ThenAsChar16(pszArgs).toLowerCase();
+					}
+					
+					if ('appUserModelId' in cObj) {
+						cPreExisting.appUserModelId = IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+					}
+					
+					for (var cP in cPreExisting) {
+						if (cPreExisting[cP] == cObj[cP]) {
+							console.log('will not update ' + cP + ' because preexisting value matches what devuser set value');
+							delete cObj[cP]);
+							delete cPreExisting[cP]);
+						} else {
+							console.log('WILL update ' + cP + ' because preexisting value differs from set value.', 'prexisting:', cPreExisting[cP], 'set to:', cObj[cP]);
+							if (cP == 'appUserModelId') {
+								needToCreate = true;
+							}
+						}
+					}
+					var somethingToUpdate = false;
+					for (var cP in cPreExisting) {
+						somethingToUpdate = true;
+						break;
+					}
+					if (!somethingToUpdate) {
+						// no need to update this thing at all so go to next cObj
+						continue;
+					}
+				} // else it doenst exist so its going to write it, so obviously everything is different
+			} else {
+				if ('appUserModelId' in cObj) {
+					// so user is not wanting to updateIfDiff, lets check if it prexists, if it does then we have to delete, then recreate shortcut, as we cannot change appUserModelId on existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
+					needToCreate = true;
+					OS.File
+				}			
+			}
+			
+			if (needToCreate && !('targetFile' in cObj)) { // when creating, the minimum needed is a targetFile (and of course fullPath)
+				throw new Error('for obj ' + i + ' it was found it needs to create the shortcut HOWEVER a targetFile was not provided! provide one!');
+			}
+			
+			// ok start the set to the devuser settings in cObj
+			if ('targetFile' in cObj) {
+				var hr_SetPath = refs.shellLink.SetPath(refs.shellLinkPtr, cObj.targetFile);
+				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
+			}
+
+			if ('workDir' in cObj) {
+				var hr_SetWorkingDirectory = refs.shellLink.SetWorkingDirectory(refs.shellLinkPtr, cObj.workDir);
+				ostypes.HELPER.checkHRESULT(hr, 'SetWorkingDirectory');
+			}
+
+			if ('args' in cObj) {
+				var hr_SetArguments = refs.shellLink.SetArguments(refs.shellLinkPtr, cObj.args);
+				ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
+			}
+
+			if ('desc' in cObj) {
+				var hr_SetDescription = refs.shellLink.SetDescription(refs.shellLinkPtr, cObj.desc);
+				ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
+			}
+
+			if ('icon' in cObj) {
+				var hr_SetIconLocation = refs.shellLink.SetIconLocation(refs.shellLinkPtr, cObj.icon, 'iconIndex' in cObj ? cObj.iconIndex : 0);
+				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
+			}
+
+			if ('appUserModelId' in cObj) {
+				var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), cObj.appUserModelId);
+				ostypes.HELPER.checkHRESULT(hr_appUserModelId, 'hr_appUserModelId');
+				
+				//var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+				//console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
+			}
+			
+			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, path_create, false);
+			console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
+			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
+			
+			console.log('Shortcut succesfully saved on fullPath:', fullPath);
+			// ok end set the settings
+			
+			if ('refreshIcon' in cObj) {
+				if (cObj.refreshIcon == 1) {
+					refreshAtPath.push(fullPath);
+				} else if (cObj.refreshIcon == 2) {
+					refreshAllIconNeeded = true;
+				}
+			}
+			
+			console.info('trying to set on path arrOSPath[i]:', arrOSPath[i]);
+			var ext = arrOSPath[i].substr(-3);
+			if (ext != 'lnk'/* && ext != 'exe'*/) { // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
+				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
+				continue;
+			}
+			
+			// check if need to rename
+			// do not rename if running, otherwise it will blank the icon in the taskbar, real weird
+			var curLauncherName = OS.Path.basename(arrOSPath[i]).substr(arrOSPath[i].length-4);;
+			var neededLauncherName = aOptions.launcherName;
+			if (neededLauncherName != curLauncherName) {
+				useArrI = OS.Path.join(OS.Path.dirname(arrOSPath[i]), aOptions.launcherName + '.lnk')
+				var rename = OS.File.move(arrOSPath[i], useArrI);
+			} else {
+				var useArrI = arrOSPath[i];
+			}
+			
+			
+			if (aOptions.appUserModelId) {
+				// :todo: maybe keep creation time constant, maybe, if recreating causes detachment
+				OS.File.remove(arrOSPath[i]);
+				var hr_SetPath = refs.shellLink.SetPath(refs.shellLinkPtr, aOptions.path_linkTo);
+				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
+			} else {
+				var hr_Load = refs.persistFile.Load(refs.persistFilePtr, useArrI, 0);
+				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
+			}
+			
+			if ('args' in aOptions) {
+				var hr_SetArguments = refs.shellLink.SetArguments(refs.shellLinkPtr, aOptions.args);
+				ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
+			}
+
+			if ('desc' in aOptions) {
+				var hr_SetDescription = refs.shellLink.SetDescription(refs.shellLinkPtr, aOptions.desc);
+				ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
+			}
+
+			if ('iconPath' in aOptions) {
+				var hr_SetIconLocation = refs.shellLink.SetIconLocation(refs.shellLinkPtr, aOptions.iconPath, aOptions.iconIndex ? aOptions.iconIndex : 0);
+				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
+			}
+
+			if ('appUserModelId' in aOptions) {
+				var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), aOptions.appUserModelId);		
+				ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
+			}
+			
+			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, useArrI, false);
+			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
+			
+			console.log('success save on:', arrOSPath[i]);
+
+		}
+		
+		if (refreshAllIconNeeded) {
+			refreshIconAtPath(); // pass null arg to get all icons to refresh
+			// dont care if any of the cObj's requested path refresh, as refresh whole cache was done so it will get all of those
+		} else {
+			// as not refreshing whole icon cache, check if any paths requested refresh and if they did then refresh them
+			if (refreshAtPath.length > 0) {
+				for (var i=0; i<refreshAtPath.length; i++) {
+					refreshIconAtPath(refreshAtPath[i]);
+				}
+			}
+		}
+		
+		return true;
+	};
+	return winntShellFile_DoerAndFinalizer(doer, refs);
+}
+
+function OLDcreateShortcut(path_createInDir, str_createWithName, path_linkTo, options={}, aExists) {
 	// winnt only
 	// set aExists to true or false if you know if it exists or not. this skips the exists check. one less call
 	
@@ -582,7 +910,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 						}
 					}
 
-					if (path_linkTo && !aExists) { // required
+					if (path_linkTo) { // required
 						var hr_SetPath = shellLink.SetPath(shellLinkPtr, path_linkTo);
 						console.info('hr_SetPath:', hr_SetPath.toString(), uneval(hr_SetPath));
 						ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
