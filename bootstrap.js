@@ -7083,12 +7083,126 @@ function updateLauncherAndDeskcut(updateReason) {
 		// nix
 }
 
-function makeDeskCut(for_ini_key, dontCheckIfLauncherIsCorrect_justCutToIt) {
+function makeDeskCut(for_ini_key, useSpecObj) {
 	// returns promise
 	
 	// creates desktop shortcut to the launcher
 	// if launcher doesnt exist it makes it first
+	var deferredMain_makeDeskCut = new Deferred();
 	
+	var do_getProfSpecsCheckUse = function(aSpecObj, aIfRunningThenTakeThat, aCB) {
+		if (aSpecObj) {
+			aCB(aSpecObj);
+			return; // to prevent deeper exec
+		}
+		var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, aIfRunningThenTakeThat, false, false);
+		promise_cProfSpecs.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
+				// start - do stuff here - promise_cProfSpecs
+				
+					aCB(aVal);
+					
+				// end - do stuff here - promise_cProfSpecs
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
+				console.warn('Rejected - promise_cProfSpecs - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
+				console.error('Caught - promise_cProfSpecs - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_ensureIconExists = function(useIconNameObj, aCB) {
+		var promise_getIconName = makeIcon(aProfileIniKey, useIconNameObj);
+		promise_getIconName.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getIconName - ', aVal);
+				// start - do stuff here - promise_getIconName
+				
+					aCB();
+					
+				// end - do stuff here - promise_getIconName
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getIconName', aReason:aReason};
+				console.error('Rejected - promise_getIconName - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
+				console.error('Caught - promise_getIconName - ', rejObj);
+				deferredMain_launchProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	// ensure icon is ready for this
+	var promise_ensureIcon = makeIcon()
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+
+				do_getProfSpecsCheckUse(useSpecObj, true, function(cProfSpec) {
+					console.info('cProfSpec:', cProfSpec);
+					var do_sendMsgToLaunch = function() {
+						var pathsObj = {
+							OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
+							OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+							OSPath_targetFile: cProfSpec.path_exeForProfile,
+							jsStr_args: getPathToProfileDir(aProfileIniKey),
+							jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
+						};
+						
+						console.info('ready to send msg to launch, pathsObj:', pathsObj);
+						
+						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [pathsObj]);
+						promise_doLaunch.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_doLaunch - ', aVal);
+								// start - do stuff here - promise_doLaunch
+								deferredMain_launchProfile.resolve(true);
+								// end - do stuff here - promise_doLaunch
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_doLaunch', aReason:aReason};
+								console.warn('Rejected - promise_doLaunch - ', rejObj);
+								deferredMain_launchProfile.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
+								console.error('Caught - promise_doLaunch - ', rejObj);
+								deferredMain_launchProfile.reject(rejObj);
+							}
+						);
+
+					};
+					do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
+				});
+
+			break;
+		default:
+			// nothing special
+			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+	}
+	
+	return deferredMain_makeDeskCut.promise;
+	
+	/////////////// OLD WAY
+	// returns promise
+	
+	// creates desktop shortcut to the launcher
+	// if launcher doesnt exist it makes it first
 	var deferredMain_makeDeskCut = new Deferred();
 	
 	var resolveObj = {

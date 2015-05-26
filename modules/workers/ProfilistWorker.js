@@ -351,6 +351,48 @@ function makeLauncher(pathsObj) {
 	}
 }
 
+function makeDeskcut(pathsObj) {
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				// actually no: // dont check existance of launcher, just write/overwrite
+				// check existance of launcher, check its props to ensure they match in pathsObj, if they dont match ten overwrite it with corrections
+				
+				var cutDirPath = OS.Path.dirname(pathsObj.OSPath_makeFileAt);
+				var cutFileName = pathsObj.OSPath_makeFileAt.substring(cutDirPath.length+1, pathsObj.OSPath_makeFileAt.length-4);
+				var targetArgs = pathsObj.jsStr_args;
+				var desc = pathsObj.jsStr_desc;
+				
+				var cutOpts = {
+					path_createWithIcon: pathsObj.OSPath_icon,
+					str_createWithDesc: pathsObj.jsStr_desc
+				};
+				
+				if (core.os.version_name == '7+') {
+					console.info('pathsObj.jsStr_args:', pathsObj.jsStr_args);
+					cutOpts.str_createWithAppUserModelId = HashStringHelper(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
+					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
+				}
+				
+				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '" -no-remote';
+				
+				console.info('cutDirPath:', cutDirPath);
+				console.info('cutFileName:', cutFileName);
+				console.info('cutOpts:', JSON.stringify(cutOpts));
+				
+				//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutDirPath], OS.Constants.Path.userApplicationDataDir);
+				console.log('finished make dir');
+				return createShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+
 function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to check if launcher exists first? not used yet
 	
 	// pathsObj should be same as that needed to be passed to makeLauncher
@@ -414,8 +456,9 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 			throw new Error('os-unsupported');
 	}
 }
-function createShortcut(path_createInDir, str_createWithName, path_linkTo, options={}) {
+function createShortcut(path_createInDir, str_createWithName, path_linkTo, options={}, aExists) {
 	// winnt only
+	// set aExists to true or false if you know if it exists or not. this skips the exists check. one less call
 	
 	/* logic - current */
 	// regardless of existance and if str_createWithAppUserModelId is set, it tries to overwrite whatever was provided
@@ -525,8 +568,10 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 					var path_create = OS.Path.join(path_createInDir, str_createWithName + '.lnk');
 					
 					//will overwrite existing
-					var promise_checkExists = OS.File.exists(path_create);
-					if (promise_checkExists) {
+					if (aExists !== true && aExists !== false) {
+						var aExists = OS.File.exists(path_create);
+					}
+					if (aExists) {
 						//exists
 						var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
 						console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
@@ -537,7 +582,7 @@ function createShortcut(path_createInDir, str_createWithName, path_linkTo, optio
 						}
 					}
 
-					if (path_linkTo) { // required
+					if (path_linkTo && !aExists) { // required
 						var hr_SetPath = shellLink.SetPath(shellLinkPtr, path_linkTo);
 						console.info('hr_SetPath:', hr_SetPath.toString(), uneval(hr_SetPath));
 						ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
@@ -1692,6 +1737,14 @@ var HashString = (function (){
     return rv;
   };
 })();
+
+var _cache_HashStringHelper = {};
+function HashStringHelper = function(aText) {
+	if (!(aText in _cache_HashStringHelper)) {
+		_cache_HashStringHelper = HashString(aText);
+	}
+	return _cache_HashStringHelper[aText];
+}
 // END - Common
 
 // scratch
