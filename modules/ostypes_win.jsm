@@ -6059,7 +6059,8 @@ var winInit = function() {
 		
 		INFOTIPSIZE: 1024,
 		E_FAIL: 0x80004005,
-		SLGP_RAWPATH: 0x4
+		ERROR_ALREADY_EXISTS: 183,
+		SLGP_RAWPATH: 0x4,
 	};
 	
 	var _lib = {}; // cache for lib

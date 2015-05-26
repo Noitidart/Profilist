@@ -382,7 +382,7 @@ function makeDeskcut(cutInfoObj) {
 					createShortcuts([cutInfoObj]);
 				}
 				
-				return makeAlias(OS.Path.join(OS.Constants.Path.desktopDir, cutInfoObj.name), cutInfoObj.dirNameLnk);
+				return makeAlias(OS.Path.join(OS.Constants.Path.desktopDir, cutInfoObj.name + '.lnk'), cutInfoObj.dirNameLnk); // when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
 			
 			break;
 		default:
@@ -597,7 +597,7 @@ function createShortcuts(aArrOfObjs) {
 				needToCreate = true;
 			}
 			
-			if (cObj.exists && cObj.updateIfDiff) {
+			if (cObj.updateIfDiff) {
 				if (cObj.exists) {
 					// fetch current values on shortcut of what devuser wnats to set in obj
 					var cPreExisting = {}; // holds what is currently set on it, based on what was in cObj
@@ -634,34 +634,48 @@ function createShortcuts(aArrOfObjs) {
 						cPreExisting.appUserModelId = IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
 					}
 					
-					for (var cP in cPreExisting) {
-						if (cPreExisting[cP] == cObj[cP]) {
-							console.log('will not update ' + cP + ' because preexisting value matches what devuser set value');
-							delete cObj[cP];
-							delete cPreExisting[cP];
-						} else {
-							console.log('WILL update ' + cP + ' because preexisting value differs from set value.', 'prexisting:', cPreExisting[cP], 'set to:', cObj[cP]);
-							if (cP == 'appUserModelId') {
-								needToCreate = true;
+					if ('appUserModelId' in cPreExisting && cPreExisting.appUserModelId != cObj.appUserModelId) {
+						// start copy block link65484651
+						// delete currently existing one and mark for needToCreate as cannot update appUserModelid of existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
+						var rez_delete = OS.File.remove(fullPath);
+						console.log('as have to update appUserModelId have to delete, so now setting exists to false, but no one after this block uses it so i really dont have to');
+						cObj.exists = false;
+						needToCreate = true;
+						// end copy block link65484651
+					} else {
+						delete cObj.appUserModelId; // can delete these as i know they match based on if of this else
+						delete cPreExisting.appUserModelId;
+						for (var cP in cPreExisting) {
+							if (cPreExisting[cP] == cObj[cP]) {
+								console.log('will not update ' + cP + ' because preexisting value matches what devuser set value');
+								delete cObj[cP];
+								delete cPreExisting[cP];
 							}
 						}
-					}
-					var somethingToUpdate = false;
-					for (var cP in cPreExisting) {
-						somethingToUpdate = true;
-						break;
-					}
-					if (!somethingToUpdate) {
-						// no need to update this thing at all so go to next cObj
-						continue;
+						var somethingToUpdate = false;
+						for (var cP in cPreExisting) {
+							somethingToUpdate = true;
+							break;
+						}
+						if (!somethingToUpdate) {
+							// no need to update this thing at all so go to next cObj
+							continue;
+						}
 					}
 				} // else it doenst exist so its going to write it, so obviously everything is different
 			} else {
-				if ('appUserModelId' in cObj) {
-					// so user is not wanting to updateIfDiff, lets check if it prexists, if it does then we have to delete, then recreate shortcut, as we cannot change appUserModelId on existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
-					needToCreate = true;
-					OS.File
-				}			
+				if (cObj.exists) {
+					if ('appUserModelId' in cObj) {
+						// so user is not wanting to updateIfDiff, lets check if it prexists, if it does then we have to delete, then recreate shortcut, as we cannot change appUserModelId on existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
+						// start copy block link65484651
+						// delete currently existing one and mark for needToCreate as cannot update appUserModelid of existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
+						var rez_delete = OS.File.remove(fullPath);
+						console.log('as have to update appUserModelId have to delete, so now setting exists to false, but no one after this block uses it so i really dont have to');
+						cObj.exists = false;
+						needToCreate = true;
+						// end copy block link65484651
+					}
+				} // else it doenst exist so its going to write it, so obviously everything is different
 			}
 			
 			if (needToCreate && !('targetFile' in cObj)) { // when creating, the minimum needed is a targetFile (and of course fullPath)
@@ -1087,6 +1101,7 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 }
 
 function makeAlias(path_create, path_target) {
+	console.error('in makeAlias:', 'path_create:', path_create, 'path_target:', path_target);
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
@@ -1096,12 +1111,20 @@ function makeAlias(path_create, path_target) {
 				// creates a hard link
 				// directory must be different otherwise hard link fails to make, it makes a blank file, clicking it, pops open the windows "use what program to open this" thing
 				// names can be different. // update of icon name or target path updates to the other. // update of file name does not propogate to the other
-				
+					// when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
 				// path_create and path_target must include extenions
 				
 				var rez_CreateHardLink = ostypes.API('CreateHardLink')(path_create, path_target, null);
 				console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
-				if (ctypes.winLastError != 0) { console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError); }
+				if (ctypes.winLastError != 0) {
+					if (ctypes.winLastError == ostypes.CONST.ERROR_ALREADY_EXISTS) {
+						// it already exists so it was already made so just return true
+						console.log('CreateHardLink got winLastError for already existing, its rez was:', rez_CreateHardLink, 'but lets return true as if hard link was already made then no need to make again, all hardlinks update right away to match all from what it is hard linekd to');
+						return true
+					}
+					console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
+					throw new Error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
+				}
 				return rez_CreateHardLink;
 			
 			break;
