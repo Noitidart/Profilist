@@ -119,12 +119,17 @@ function setWinPPSProps(jsStr_aNativeHandle, transferObj) {
 	var pps = ppsPtr.contents.lpVtbl.contents;
 	try {
 		//console.log('now setting on', arrWinHandlePtrStrs[i]);
+		console.info('setting RelaunchIconResource:', transferObj.RelaunchIconResource + ',-2');
 		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), transferObj.RelaunchIconResource + ',-2'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
 		//var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchIconResource.address(), 'C:\\Users\\Vayeate\\AppData\\Roaming\\Mozilla\\Firefox\\profilist_data\\launcher_icons\\BADGE-ID_mdn__CHANNEL-REF_beta.ico,-6'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+		console.info('setting RelaunchDisplayNameResource:', transferObj.RelaunchDisplayNameResource);
 		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchDisplayNameResource.address(), transferObj.RelaunchDisplayNameResource);
-		console.error('setting transferObj.RelaunchCommand:', transferObj.RelaunchCommand);
+		console.info('setting transferObj.RelaunchCommand:', transferObj.RelaunchCommand);
 		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_RelaunchCommand.address(), transferObj.RelaunchCommand);
+		
+		console.info('setting transferObj.ID to DUMMY');
 		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), 'PROFILISTDUMMY'); // need to set it away, as the above 3 IPropertyStore_SetValue's only take affect on ID change per msdn docs
+		console.info('setting transferObj.ID:', transferObj.ID);
 		var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_AppUserModel_ID.address(), transferObj.ID); // set it to what it really should be
 		//console.log('done set on', arrWinHandlePtrStrs[i]);
 		//ostypes.HELPER.checkHRESULT(hr_IPSSetValue, 'IPropertyStore_SetValue PKEY_AppUserModel_ID');
@@ -1462,12 +1467,15 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 	
 }
 
-function getPtrStrToWinOfProf(aProfilePID, allWin) {
+function getPtrStrToWinOfProf(aProfilePID, allWin, visWinOnly) {
 	// have to use one of the profile PID obtaining methods before using this function (on nix/max can use queryProfileLocked) (windows has to use getPidForProfile)
 	// dont be an idiot, dont run this function when not running, but if you do this it will go through everything and find no window and return null, but be smart, its much better perf to use the isRunning function (queryProfileLocked) first, especially on windows
 	
 	// resolves to string of ptr of window handle
 		// if allWin is true then an array of all string of ptr of windows of the pid
+	// if allWin is false, and visWinOnly is true
+		// it will return the first found handle regardless of visibility, so it ingore visWinOnly
+		// if allWin is true, then it returns array with strPtrs of only visible windows
 	// aProfilePID should be jsInt
 	
 	console.log(['aProfilePID: ', aProfilePID, aProfilePID.toString()].join(' '));
@@ -1489,7 +1497,24 @@ function getPtrStrToWinOfProf(aProfilePID, allWin) {
 					console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
 					if (PID.value == aProfilePID) {
 						found = true;
-						arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+						if (visWinOnly) {
+							// test if visible
+							var hwndStyle = ostypes.API('GetWindowLongPtr')(hwnd, ostypes.CONST.GWL_STYLE);
+							if (cutils.jscEqual(hwndStyle, 0)) {
+								throw new Error('Failed to GetWindowLongPtr');
+							}
+							hwndStyle = parseInt(cutils.jscGetDeepest(hwndStyle));
+							
+							// debug block
+							if ((hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
+								arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+							} else {
+								// win not visible
+							}
+						} else {
+							// i dont care if its vis or not
+							arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+						}
 						if (!allWin) {
 							return false;
 						} else {

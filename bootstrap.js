@@ -3477,6 +3477,7 @@ function tbb_box_click(e) {
 					}
 				).catch(
 					function(aCaught) {
+						console.error('caught pickerIconset');
 						Services.prompt.alert(null, 'profilist', 'in catching');
 						var rejObj = {name:'promise_pickerProcess', aCaught:aCaught};
 						console.error('Caught - promise_pickerProcess - ', rejObj);
@@ -3679,7 +3680,9 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 												  .QueryInterface(Ci.nsIInterfaceRequestor)
 												  .getInterface(Ci.nsIBaseWindow);
 							cWinHandlePtrStr.push(aBaseWin.nativeHandle);
+							setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWin);
 						}
+						
 						do_theApply();
 					} else {
 						// test if profile at aProfilePath is running
@@ -3716,12 +3719,13 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 						};
 						
 						var do_getWinHandleForPid = function(aProfPID) {
-							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true]);
+							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true, true]);
 							promise_getWinHandleForPid.then(
 								function(aVal) {
 									console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
 									// start - do stuff here - promise_getWinHandleForPid
 									// aVal is a string to pointer on success, else it is 0
+										// i set allWin to true so it will be a an array of strings
 									if (!aVal) {
 										// no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`
 										deferredMain_updateIconToAllWindows.resolve(false);
@@ -4241,6 +4245,99 @@ function customizationending(e) {
 
 var lastMaxStackHeight = 0;
 
+var _cache_useOsSetObj = {};
+const _cache_expiryTime_useOsSetObj = 1000;
+function setWinPPSProps(aProfIniKey, useOsSetObj, aNativeHandlePtrStr_OR_aDOMWindow) {
+	// aDOMWindow only used by if setWinPPSProps on self. meaning if triggering on self profile
+	
+	var deferredMain_setWinPPSProps = new Deferred();
+	
+	var cDOMWindow;
+	var cNativeHandlePtrStr;
+	if (typeof aNativeHandlePtrStr_OR_aDOMWindow == 'string') {
+		// its aNativeHandlePtrStr
+		cNativeHandlePtrStr = aNativeHandlePtrStr_OR_aDOMWindow
+	} else {
+		// its aDOMWindow
+		cDOMWindow = aNativeHandlePtrStr_OR_aDOMWindow;
+		var cBaseWindow = cDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+									.getInterface(Ci.nsIWebNavigation)
+									.QueryInterface(Ci.nsIDocShellTreeItem)
+									.treeOwner
+									.QueryInterface(Ci.nsIInterfaceRequestor)
+									.getInterface(Ci.nsIBaseWindow);
+		cNativeHandlePtrStr = cBaseWindow.nativeHandle;
+	}
+	
+	// win7+ only
+	if (core.os.version_name != '7+') {
+		deferredMain_setWinPPSProps.reject('win7+ only');
+		return deferredMain_setWinPPSProps.promise;
+	}
+
+	var do_setItOnWin = function(aOSSetObj) {
+		if (cDOMWindow) {
+			var wasFocused = isDOMWindowFocused(cDOMWindow);
+		}
+		
+		var promise_setWinPPSProps = ProfilistWorker.post('setWinPPSProps', [cNativeHandlePtrStr, _cache_useOsSetObj[aProfIniKey].cacheVal]);
+		promise_setWinPPSProps.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_setWinPPSProps - ', aVal);
+				// start - do stuff here - promise_setWinPPSProps
+					if (wasFocused) {
+						cDOMWindow.focus(); // cuz when change SystemAppUserModelID it loses focus
+					}
+					console.error('wasFocused:', wasFocused);
+				// end - do stuff here - promise_setWinPPSProps
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_setWinPPSProps', aReason:aReason};
+				console.warn('Rejected - promise_setWinPPSProps - ', rejObj);
+				//consider throw
+				//deferred_createProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_setWinPPSProps', aCaught:aCaught};
+				console.error('Caught - promise_setWinPPSProps - ', rejObj);
+				// consider throw
+				//deferred_createProfile.reject(rejObj);
+			}
+		);
+	};
+	
+	var do_createTransferObj = function(cProfSpec) {
+		_cache_useOsSetObj[aProfIniKey] = {
+			cacheVal: {
+				RelaunchIconResource: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'), // im assuming here that the icon exists, :todo: this assumption can be a source of trouble
+				RelaunchCommand: ' "' + cProfSpec.path_exeForProfile + '" -profile "' + getPathToProfileDir(profToolkit.selectedProfile.iniKey) + '" -no-remote', // absolutely no idea why but i had to put a leading space, otherwise the double quotes wouldnt take, and if i didnt use double quotes it wouldnt work either iA this works solid
+				RelaunchDisplayNameResource: cProfSpec.launcherName,
+				IDHash: getPathToProfileDir(profToolkit.selectedProfile.iniKey)
+			},
+			cacheTime: new Date().getTime()
+		};
+		do_setItOnWin(_cache_useOsSetObj[aProfIniKey]);
+	};
+	
+	if (!useOsSetObj) {
+		if (aProfIniKey in _cache_useOsSetObj) {
+			if (new Date().getTime() - _cache_useOsSetObj[aProfIniKey].cacheTime < _cache_expiryTime_useOsSetObj) {
+				// cached val is within _cache_expiryTime_useOsSetObj (i initally set this to 1sec) old
+				do_setItOnWin(_cache_useOsSetObj[aProfIniKey]);
+			} else {
+				do_getProfSpecsCheckUse_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
+			}
+		} else {
+			do_getProfSpecsCheckUse_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
+		}
+	} else {
+		do_setItOnWin(useOsSetObj);
+	}
+	
+	return deferredMain_setWinPPSProps.promise;
+}
+
 /*start - windowlistener*/
 var windowListener = {
 	//DO NOT EDIT HERE
@@ -4377,72 +4474,7 @@ var windowListener = {
 			case 'winmo':
 			case 'wince':
 					
-					var aBaseWindow = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor)
-												.getInterface(Ci.nsIWebNavigation)
-												.QueryInterface(Ci.nsIDocShellTreeItem)
-												.treeOwner
-												.QueryInterface(Ci.nsIInterfaceRequestor)
-												.getInterface(Ci.nsIBaseWindow);
-					var jsStr_aNativeHandle = aBaseWindow.nativeHandle;
-
-					var do_setWinPPSProps = function(cProfSpec) {
-						console.error('mainthread telling RelaunchCommand:', cProfSpec.path_exeForProfile, cProfSpec);
-						var transferObj = {
-							RelaunchIconResource: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'), // im assuming here that the icon exists, :todo: this assumption can be a source of trouble
-							RelaunchCommand: ' "' + cProfSpec.path_exeForProfile + '" -profile "' + getPathToProfileDir(profToolkit.selectedProfile.iniKey) + '" -no-remote', // absolutely no idea why but i had to put a leading space, otherwise the double quotes wouldnt take, and if i didnt use double quotes it wouldnt work either iA this works solid
-							RelaunchDisplayNameResource: cProfSpec.launcherName,
-							IDHash: getPathToProfileDir(profToolkit.selectedProfile.iniKey)
-						};
-						var wasFocused = isDOMWindowFocused(aDOMWindow);
-						var promise_setWinPPSProps = ProfilistWorker.post('setWinPPSProps', [jsStr_aNativeHandle, transferObj]);
-						promise_setWinPPSProps.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_setWinPPSProps - ', aVal);
-								// start - do stuff here - promise_setWinPPSProps
-									if (wasFocused) {
-										aDOMWindow.focus(); // cuz when change SystemAppUserModelID it loses focus
-									}
-									console.error('wasFocused:', wasFocused);
-								// end - do stuff here - promise_setWinPPSProps
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_setWinPPSProps', aReason:aReason};
-								console.warn('Rejected - promise_setWinPPSProps - ', rejObj);
-								//consider throw
-								//deferred_createProfile.reject(rejObj);
-							}
-						).catch(
-							function(aCaught) {
-								var rejObj = {name:'promise_setWinPPSProps', aCaught:aCaught};
-								console.error('Caught - promise_setWinPPSProps - ', rejObj);
-								// consider throw
-								//deferred_createProfile.reject(rejObj);
-							}
-						);
-					}
-					
-					var promise_getSelfSpecs = getProfileSpecs(profToolkit.selectedProfile.iniKey);
-					promise_getSelfSpecs.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_getSelfSpecs - ', aVal);
-							// start - do stuff here - promise_getSelfSpecs
-							do_setWinPPSProps(aVal);
-							// end - do stuff here - promise_getSelfSpecs
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_getSelfSpecs', aReason:aReason};
-							console.error('Rejected - promise_getSelfSpecs - ', rejObj);
-							//consider throw
-							//deferred_createProfile.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_getSelfSpecs', aCaught:aCaught};
-							console.error('Caught - promise_getSelfSpecs - ', rejObj);
-							// consider throw
-							//deferred_createProfile.reject(rejObj);
-						}
-					);
+					setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWindow); // returns promise
 					
 				break;
 			default:
@@ -7083,6 +7115,63 @@ function updateLauncherAndDeskcut(updateReason) {
 		// nix
 }
 
+// start - CB helpers for promises, CB's are called on success
+// so far using with makeDeskcut
+var do_getProfSpecsCheckUse_WithCB = function(aDeferred, aProfIniKey, aSpecObj, aIfRunningThenTakeThat, aCB) {
+	if (aSpecObj) {
+		aCB(aSpecObj);
+		return; // to prevent deeper exec
+	}
+	var promise_cProfSpecs = getProfileSpecs(aProfIniKey, aIfRunningThenTakeThat, false, false);
+	promise_cProfSpecs.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_cProfSpecs - ', aVal);
+			// start - do stuff here - promise_cProfSpecs
+			
+				aCB(aVal);
+				
+			// end - do stuff here - promise_cProfSpecs
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
+			console.warn('Rejected - promise_cProfSpecs - ', rejObj);
+			aDeferred.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
+			console.error('Caught - promise_cProfSpecs - ', rejObj);
+			aDeferred.reject(rejObj);
+		}
+	);
+};
+
+var do_ensureIconExists_withCB = function(aDeferred, aProfIniKey, useIconNameObj, aCB) {
+	var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, useIconNameObj);
+	promise_ensureIconRdyAndMade.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
+			// start - do stuff here - promise_ensureIconRdyAndMade
+			
+				aCB();
+				
+			// end - do stuff here - promise_ensureIconRdyAndMade
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
+			console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
+			aDeferred.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
+			console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
+			aDeferred.reject(rejObj);
+		}
+	);
+};
+// end - CB helpers for promises
+
 function makeDeskCut(for_ini_key, useSpecObj) {
 	// returns promise
 	
@@ -7090,60 +7179,6 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	// if launcher doesnt exist it makes it first
 	
 	var deferredMain_makeDeskCut = new Deferred();
-	
-	var do_getProfSpecsCheckUse = function(aSpecObj, aIfRunningThenTakeThat, aCB) {
-		if (aSpecObj) {
-			aCB(aSpecObj);
-			return; // to prevent deeper exec
-		}
-		var promise_cProfSpecs = getProfileSpecs(for_ini_key, aIfRunningThenTakeThat, false, false);
-		promise_cProfSpecs.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
-				// start - do stuff here - promise_cProfSpecs
-				
-					aCB(aVal);
-					
-				// end - do stuff here - promise_cProfSpecs
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
-				console.warn('Rejected - promise_cProfSpecs - ', rejObj);
-				deferredMain_makeDeskCut.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
-				console.error('Caught - promise_cProfSpecs - ', rejObj);
-				deferredMain_makeDeskCut.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_ensureIconExists = function(useIconNameObj, aCB) {
-		var promise_ensureIconRdyAndMade = makeIcon(for_ini_key, useIconNameObj);
-		promise_ensureIconRdyAndMade.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
-				// start - do stuff here - promise_ensureIconRdyAndMade
-				
-					aCB();
-					
-				// end - do stuff here - promise_ensureIconRdyAndMade
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
-				console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
-				deferredMain_makeDeskCut.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
-				console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
-				deferredMain_makeDeskCut.reject(rejObj);
-			}
-		);
-	};
 	
 	// ensure icon is ready for this
 	var promise_ensureIcon = makeIcon()
@@ -7153,7 +7188,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 		case 'winmo':
 		case 'wince':
 
-				do_getProfSpecsCheckUse(useSpecObj, true, function(cProfSpec) {
+				do_getProfSpecsCheckUse_WithCB(deferredMain_makeDeskCut, for_ini_key, useSpecObj, true, function(cProfSpec) {
 					console.info('cProfSpec:', cProfSpec);
 					var do_makeTheCut = function() {
 						var cutInfoObj = {
@@ -7194,7 +7229,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 						);
 
 					};
-					do_ensureIconExists(cProfSpec.iconNameObj, do_makeTheCut);
+					do_ensureIconExists_withCB(deferredMain_makeDeskCut, for_ini_key, cProfSpec.iconNameObj, do_makeTheCut);
 				});
 
 			break;
