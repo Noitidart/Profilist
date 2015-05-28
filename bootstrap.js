@@ -1521,6 +1521,11 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				//{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create profilist-do_not_auto_remove', addEventListener:['click',createUnnamedProfile,false], style:tbb_style}
 				elFromJson_createNewProfile.addEventListener('click', tbb_box_click, false);
 				PStack.appendChild(elFromJson_createNewProfile);
+				var SMItem_profilistClone = aDOMWindow.document.getAnonymousElementByAttribute(elFromJson_createNewProfile, 'class', 'profilist-clone'); // getAnon must go after PStack.appendChild as anon nodes dont come in until its added to doc
+				console.error('info SMItem_profilistClone:', SMItem_profilistClone);
+				SMItem_profilistClone.addEventListener('mouseenter', function() {
+					tbb_msg('Clone Profile', 2, aDOMWindow, elFromJson_createNewProfile, SMItem_profilistClone, null);
+				}, false);
 				
 				//profToolkit.selectedProfile.iniKey == null then this is a temporary profile
 				/*
@@ -2993,6 +2998,178 @@ function subleave(e) {
 	*/
 }
 
+function clear_all_tbb_msg() {
+	// see checkAndExecPanelHidUnloaders
+}
+
+function tbb_msg(strMsg, intType, aDOMWindow, aTBBBox, aSMItem, aCB) {
+	// aSMItem is the submenu item clicked
+	// strMsg is message to show
+		// if strMsg is == 'input' then it fades out in the input
+	// intType is if it should time fade out, or wait for user to hit enter or escape
+		// 0 - timeout
+			// aCB should be number of ms to timeout after
+		// 1 - enter/esc listener
+			// aCB is a callback to run on if enter is pressed or escape pressed, so only for intType 1
+		// 2 - mouse out restore
+		
+		console.log('tbb_msg');
+		var cDoc = aDOMWindow.document;
+		var cWin = aDOMWindow;
+		
+		///// rename method
+		/*
+		if (aTBBBox.classList.contains('profilist-edit')) {
+			//close it
+			console.log('need to close');
+			checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+		} else {
+			console.log('need to open');
+			checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close whatever was open
+			// open it
+			
+			//sub init
+			var inputEl = cDoc.getAnonymousElementByAttribute(aTBBBox, 'class', 'profilist-input');
+			var subBox = origTarg.parentNode;
+			inputEl.value = box.getAttribute('label');
+			var icon = origTarg;
+			var numVisIcons = (subBox.clientWidth) / 18;
+			var numIconClicked = Math.ceil(e.layerX / 18);
+			console.log('layerX:', e.layerX, 'clientWidth:', subBox.clientWidth);
+			console.log('numIconClicked:', numIconClicked, 'numVisIcons:', numVisIcons);
+			//when 3 icons visible, origTarg.parentNode (submenu box) width is 54 in fully stretched
+				// can click on 1-18 which is furthest in icon. 19-36 is 2nd. 37-54 is last
+			//end sub init
+			
+			//origTarg.parentNode is the submenu box
+			icon.classList.add('profilist-sub-clicked');
+			//subBox.style.width = (subBox.clientWidth - (numIconClicked * 18)) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+			subBox.style.width = (numIconClicked * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+			box.classList.add('profilist-edit');
+			console.log('inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
+			cWin.setTimeout(function() {
+				// this is needed for labels that are elipsiid, meaning they take the whole width, and collapsing the submenu to just one icon gave it more room
+				if (icon.classList.contains('profilist-sub-clicked')) {
+					console.log('postTimeout inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
+					inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
+					// it seems like if i modify the width while its in animation, it doesnt complete the first trans in .5s then take another .5s to do from that finished to the new one, subhanallah this is awesome! // so i just need to re-set the width before it completes
+				}
+			}, 300); // the 300 is the ms it takes for the width of subBox css to complete, from main.css
+			inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
+			
+			inputEl.addEventListener('transitionend', function(e) {
+				//console.log('e.propertyName:', e.propertyName);
+				if (e.propertyName != 'background-color') { return }
+				//console.log('bgcolor so carrying on');
+				inputEl.removeEventListener('transitionend', arguments.callee, false);
+				//inputEl.select();
+				inputEl.focus();
+			}, false);
+			
+			var closeIt = function() {
+					//close it
+					inputEl.blur();
+					inputEl.value = box.getAttribute('label');
+					inputEl.selectionStart = 0;
+					inputEl.selectionEnd = 0;
+					cWin.removeEventListener('keydown', renameKeyListener, true);
+					subBox.style.width = '';
+					box.classList.remove('profilist-edit');
+					inputEl.style.clip = '';
+					icon.classList.remove('profilist-sub-clicked');
+			};
+			panelHidUnloaders.push({
+				view: cWin,
+				name: 'profilist-sub-clicked',
+				func: closeIt
+			});
+			
+			var renameKeyListener = function(e) {
+				console.log('key pressed, e.keyCode = ', e.keyCode);
+				if (e.keyCode == 27) {
+					e.preventDefault();
+					e.stopPropagation();
+					checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+				} else if (e.keyCode == 13) {
+					box.setAttribute('label', inputEl.value);
+					checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
+					e.preventDefault();
+					e.stopPropagation();						
+				}
+			}
+			cWin.addEventListener('keydown', renameKeyListener, true);
+		}
+		
+		*/
+		
+		//////////////////////// del method
+		if (aTBBBox.classList.contains('profilist-tbb-msg-being-handled')) {
+			// return, msg already showing
+		} else {
+				// open it
+				aSMItem.classList.add('profilist-sub-clicked');
+				var lblEl = cDoc.getAnonymousElementByAttribute(aTBBBox, 'class', 'toolbarbutton-text');	
+				var lblElOrigVal = lblEl.value;
+				
+				if (intType == 2) {
+					// mouseout restore
+					// var nodeNum = Array.prototype.slice.call(aTBBBox.childNodes).indexOf(aSMItem);
+					// console.error('nodeNum:', nodeNum);
+					// console.log('origTarg.parentNode:', aSMItem);
+					//aSMItem.parentNode.style.width = ((nodeNum+1) * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
+					aTBBBox.classList.add('profilist-edit');
+					aTBBBox.classList.add('profilist-tbb-msg-being-handled');
+					lblEl.style.transition = 'opacity 250ms';
+					lblEl.style.opacity = '0'; 
+					var postFadeItOut = function() {
+						lblEl.removeEventListener('transitionend', arguments.callee, false);
+						lblEl.value = strMsg;
+						lblEl.style.opacity = '1';
+						console.error('transition ended');
+					};
+					lblEl.addEventListener('transitionend', postFadeItOut, false);
+					
+					var restoreIt = function() {
+							// moved from
+							lblEl.style.opacity = '0';
+							cWin.setTimeout(function() {
+								aTBBBox.classList.remove('profilist-edit');
+							}, 100);
+							lblEl.addEventListener('transitionend', postFadeItOut, false);
+							//aSMItem.style.width = '';
+							lblEl.addEventListener('transitionend', function() {
+								lblEl.removeEventListener('transitionend', arguments.callee, false);
+								lblEl.value = lblElOrigVal; //aTBBBox.getAttribute('label'); // for rename only
+								lblEl.style.opacity = '1';
+								lblEl.addEventListener('transitionend', function() {
+									// moved to
+									//aSMItem.classList.remove('profilist-sub-clicked');
+									aTBBBox.classList.remove('profilist-tbb-msg-being-handled');
+									// moved to
+									
+									lblEl.removeEventListener('transitionend', arguments.callee, false);
+									lblEl.style.transition = '';
+									console.error('transition ended');
+								}, false);
+							}, false);
+					};
+					panelHidUnloaders.push({
+						view: cWin,
+						name: 'profilist-sub-clicked',
+						func: restoreIt
+					});
+					
+					aSMItem.addEventListener('mouseleave', function(e) {
+						aSMItem.removeEventListener('mouseleave', arguments.callee, false);
+						restoreIt();
+					}, false);
+				}
+
+			}
+			
+			
+}
+
 function tbb_box_click(e) {
 	console.log('tbb_box_click e.origTarg:', e.originalTarget);
 	var origTarg = e.originalTarget;
@@ -3060,6 +3237,9 @@ function tbb_box_click(e) {
 		},
 		'profilist-clone': function() {
 			console.log('wiggle for clone');
+			tbb_msg('Pick a profile...', 0, origTarg.ownerDocument.defaultView, box, origTarg, function() {
+				console.error('tbb_msg timed out');
+			});
 		},
 		'profilist-inactive-del': function() {
 			var nameOfProfileToDelete = box.getAttribute('label');

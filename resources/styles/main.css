@@ -289,6 +289,10 @@ this is kind of nice think about it
 	width: /*calc(1*18px)*/ 18px; /* 18px is the width of the images */
 }
 
+.profilist-tbb-box.profilist-edit .profilist-submenu {
+	opacity: 1;
+}
+
 .profilist-tbb-box:hover .profilist-submenu,
 .profilist-edit .profilist-submenu {
 	opacity: 1;
