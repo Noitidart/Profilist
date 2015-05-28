@@ -367,24 +367,33 @@ function makeDeskcut(cutInfoObj) {
 				if (!('dirNameLnk' in cutInfoObj)) {
 					throw new Error('makeDeskcut requires path safed dirNameLnk');
 				}
+				if (!('dir' in cutInfoObj)) {
+					throw new Error('makeDeskcut requires path safed dir'); // and createShortcut requires name if i provide dir, so make sure to provide name as well
+				}
 				if ('renameToName' in cutInfoObj) {
 					throw new Error('makeDeskcut requires that renameToName not be set, because it relies on the fed dirNameLnk');
 				}
 				
-				if (!('exists' in cutInfoObj)) {
-					// `exists` wasnt in obj so check existance, this is required before a hard link can be made
-					cutInfoObj.exists = OS.File.exists(OS.Path.join(cutInfoObj.dir, cutInfoObj.name + '.lnk'));
-				}
-				
-				if (!cutInfoObj.exists) {
-					if (core.os.version_name == '7+') {
-						if (cutInfoObj.IDHash) {
-							cutInfoObj.appUserModelId = HashStringHelper(cutInfoObj.IDHash) + ''; // make it a jsStr
-						}
+				if (!cutInfoObj.DontCheckExistsJustWriteOverwrite) {
+					if (!('exists' in cutInfoObj)) {
+						// `exists` wasnt in obj so check existance, this is required before a hard link can be made
+						cutInfoObj.exists = OS.File.exists(OS.Path.join(cutInfoObj.dir, cutInfoObj.name + '.lnk'));
 					}
-					//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
-					tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutDirPath], OS.Constants.Path.userApplicationDataDir);
-					createShortcuts([cutInfoObj]);
+					
+					if (!cutInfoObj.exists) {
+						if (core.os.version_name == '7+') {
+							if (cutInfoObj.IDHash) {
+								cutInfoObj.appUserModelId = HashStringHelper(cutInfoObj.IDHash) + ''; // make it a jsStr
+							}
+						}
+						//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+						tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutInfoObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
+						createShortcuts([cutInfoObj]);
+					}
+				} else {
+						//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+						tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutInfoObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
+						createShortcuts([cutInfoObj]);					
 				}
 				
 				return makeAlias(OS.Path.join(OS.Constants.Path.desktopDir, cutInfoObj.name + '.lnk'), cutInfoObj.dirNameLnk); // when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
@@ -462,6 +471,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 
 function createShortcuts(aArrOfObjs) {
 	//aArrOfObjs is array of shortcuts to make each obj is like this:
+	// temporarily: appUserModelId is only used if it has to needToCreate. the stuff is written though, so uncomment the commented out test in the updateIfDiff section and comment out the if exists check before the appUserModelId setting // link787845
 	/*
 		{
 			dir:					// jsStr. OSPath. short for OSPath_dirToMakeShortcutFileIn // example: C:\blah
@@ -553,7 +563,7 @@ function createShortcuts(aArrOfObjs) {
 			console.log('begin shortcut creation proc on fullPath:', fullPath);
 			
 			if (!('exists' in cObj)) {
-				cObj.exists = OS.File.exists(path_create);
+				cObj.exists = OS.File.exists(fullPath);
 			}
 			
 			if (!cObj.exists && !('targetFile' in cObj)) {
@@ -592,7 +602,7 @@ function createShortcuts(aArrOfObjs) {
 				//console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
 				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
 			} else {
-				if ('renameToname' in cObj) {
+				if ('renameToName' in cObj) {
 					console.log('it doesnt exist, but devuser set a renameToName so going to use this as name i dont test if name and renameToName match im just taking renameToName', 'name:', name, 'renameToName:', renameToName);
 					name = renameToName;
 					var fullPathRENAMED = OS.Path.join(dir, renameToName);
@@ -634,11 +644,11 @@ function createShortcuts(aArrOfObjs) {
 						ostypes.HELPER.checkHRESULT(hr_GetArguments);
 						cPreExisting.args = cutils.readAsChar8ThenAsChar16(pszArgs).toLowerCase();
 					}
-					
+					/* link787845
 					if ('appUserModelId' in cObj) {
 						cPreExisting.appUserModelId = IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
 					}
-					
+					*/
 					if ('appUserModelId' in cPreExisting && cPreExisting.appUserModelId != cObj.appUserModelId) {
 						// start copy block link65484651
 						// delete currently existing one and mark for needToCreate as cannot update appUserModelid of existing shortcut: http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
@@ -713,15 +723,17 @@ function createShortcuts(aArrOfObjs) {
 				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
 			}
 
-			if ('appUserModelId' in cObj) {
-				var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), cObj.appUserModelId);
-				ostypes.HELPER.checkHRESULT(hr_appUserModelId, 'hr_appUserModelId');
-				
-				//var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
-				//console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
+			if (!cObj.exists) { // this logic is link787845, the contents within is not linked to link787845 so if remove this just remove the if logic and curly, the content within should remain
+				if ('appUserModelId' in cObj) {
+					var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), cObj.appUserModelId);
+					ostypes.HELPER.checkHRESULT(hr_appUserModelId, 'hr_appUserModelId');
+					
+					//var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
+					//console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
+				}
 			}
 			
-			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, path_create, false);
+			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, fullPath, false);
 			console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
 			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
 			
@@ -735,60 +747,6 @@ function createShortcuts(aArrOfObjs) {
 					refreshAllIconNeeded = true;
 				}
 			}
-			
-			console.info('trying to set on path arrOSPath[i]:', arrOSPath[i]);
-			var ext = arrOSPath[i].substr(-3);
-			if (ext != 'lnk'/* && ext != 'exe'*/) { // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
-				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
-				continue;
-			}
-			
-			// check if need to rename
-			// do not rename if running, otherwise it will blank the icon in the taskbar, real weird
-			var curLauncherName = OS.Path.basename(arrOSPath[i]).substr(arrOSPath[i].length-4);;
-			var neededLauncherName = aOptions.launcherName;
-			if (neededLauncherName != curLauncherName) {
-				useArrI = OS.Path.join(OS.Path.dirname(arrOSPath[i]), aOptions.launcherName + '.lnk')
-				var rename = OS.File.move(arrOSPath[i], useArrI);
-			} else {
-				var useArrI = arrOSPath[i];
-			}
-			
-			
-			if (aOptions.appUserModelId) {
-				// :todo: maybe keep creation time constant, maybe, if recreating causes detachment
-				OS.File.remove(arrOSPath[i]);
-				var hr_SetPath = refs.shellLink.SetPath(refs.shellLinkPtr, aOptions.path_linkTo);
-				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
-			} else {
-				var hr_Load = refs.persistFile.Load(refs.persistFilePtr, useArrI, 0);
-				ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
-			}
-			
-			if ('args' in aOptions) {
-				var hr_SetArguments = refs.shellLink.SetArguments(refs.shellLinkPtr, aOptions.args);
-				ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
-			}
-
-			if ('desc' in aOptions) {
-				var hr_SetDescription = refs.shellLink.SetDescription(refs.shellLinkPtr, aOptions.desc);
-				ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
-			}
-
-			if ('iconPath' in aOptions) {
-				var hr_SetIconLocation = refs.shellLink.SetIconLocation(refs.shellLinkPtr, aOptions.iconPath, aOptions.iconIndex ? aOptions.iconIndex : 0);
-				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
-			}
-
-			if ('appUserModelId' in aOptions) {
-				var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(refs.propertyStorePtr, refs.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), aOptions.appUserModelId);		
-				ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
-			}
-			
-			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, useArrI, false);
-			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
-			
-			console.log('success save on:', arrOSPath[i]);
 
 		}
 		

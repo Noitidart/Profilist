@@ -7199,12 +7199,14 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 							args: '-profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote',
 							desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[for_ini_key].props.Name + '" Profile',
 							icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+							targetFile: cProfSpec.path_exeForProfile,
 							
 							updateIfDiff: true,
 							refreshIcon: 1,
 							
 							// keys for worker__makeDeskcut
-							IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null
+							IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null,
+							DontCheckExistsJustWriteOverwrite: true
 						};
 						
 						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [cutInfoObj]);
