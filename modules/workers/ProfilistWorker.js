@@ -1022,10 +1022,13 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 					rezMain = 0;
 					aOSFile.close();
 				} catch (ex) {
-					if (ex.winLastError == 32) {
+					if (ex.winLastError == ostypes.CONST.ERROR_SHARING_VIOLATION) {
 						//its locked
 						rezMain = 1;
+					} else if (ex.winLastError == ostypes.CONST.ERROR_FILE_NOT_FOUND) {
+						rezMain = 0; // if it doesnt exist, this is very likely due to it being an unlaunched profile so return that it is unlocked //:todo: do equivalent for fnctl for nix/mac
 					} else {
+						console.error('ex:', ex);
 						throw new Error('Could not open profile lock file and it was NOT locked. Path of lock file: "' + path_lock + '" ex: "' + ex + '"');
 					}
 				}

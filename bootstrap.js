@@ -113,6 +113,7 @@ Profilist.defaultProfileIsRelative - (not outside of props as if deafultProfileP
 Profilist.currentThisBuildsIconPath
 */
 var profStatObj;
+const repCharForSafePath = '-';
 
 // Lazy Imports
 const myServices = {};
@@ -743,8 +744,23 @@ function saltName(aName) {
 	return kSaltString + '.' + aName;
 }
 /*end - salt generator*/
+function getSafedForOSPath(aStr) {
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				return aStr.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath);
+				
+			break;
+		default:
+		
+				return aStr.replace(/\//g, repCharForSafePath);
+	}
+}
 function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refreshIni) {
 	// returns promise
+		// resolves to aProfIniKey for newly created profile
 	// if want to make an absolute path profile, then absolutProfile_pathToParentDir should be path to directoy we want the profile folder created ELSE null
 	// the dir at absolutProfile_pathToParentDir MUST EXSIT	
 	
@@ -759,21 +775,22 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			var LCased_theProfileName = theProfileName.toLowerCase();
 			var NProfiles = 0;
 			for (var p in ini) {
+				if (!('num' in ini[p])) { continue }
 				if (ini[p].props.Name.toLowerCase() == LCased_theProfileName) {
 					console.warn('The profile name of "' + theProfileName + '" is already taken.');
-					deferred_createProfile.reject('The profile name of "' + theProfileName + '" is already taken.');
+					deferred_createProfile.reject('ERROR: Name already taken');
 					return; // just to stop further execution into this postRefreshIni function
 				}
 				NProfiles++;
 			}
 			
 			// generate folder path to create based on theProfileName
-			var theDirName = saltName(theProfileName.replace(/([\\*:?<>|\/\"])/g, '-')); // ensure the folder name generated based on theProfileName works on the os file directory system
+			var theDirName = saltName(getSafedForOSPath(theProfileName)); // ensure the folder name generated based on theProfileName works on the os file directory system
 			var theRootPath;
 			var theLocalPath;
 			if (!absolutProfile_pathToParentDir) {
-				theRootPath = OS.Path.join(profToolkit.rootPathDefault, dirName);
-				theLocalPath = OS.Path.join(profToolkit.localPathDefault, dirName);
+				theRootPath = OS.Path.join(profToolkit.rootPathDefault, theDirName);
+				theLocalPath = OS.Path.join(profToolkit.localPathDefault, theDirName);
 			} else {
 				// absolute path profiles dont have a seperate local dir
 				theRootPath = OS.Path.join(absolutProfile_pathToParentDir, theDirName);
@@ -786,7 +803,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 				if (!absolutProfile_pathToParentDir) {
 					//get relative path
 					var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
-					var IniPathStr = FileUtils.getFile('DefProfRt', [dirName]);
+					var IniPathStr = FileUtils.getFile('DefProfRt', [theDirName]);
 					var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
 					//end get relative path
 				} else {
@@ -809,7 +826,8 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 					function(aVal) {
 						console.log('Fullfilled - promise_updateIniFile - ', aVal);
 						// update then write ini
-						deferred_createProfile.resolve('Profile "' + theProfileName + '" succesfully created');
+						//deferred_createProfile.resolve('Profile "' + theProfileName + '" succesfully created');
+						deferred_createProfile.resolve(PathToWriteToIni);
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_updateIniFile', aReason:aReason};
@@ -834,6 +852,11 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			var deferred_writeTimesJson = new Deferred();
 			promiseAllArr_make.push(deferred_writeTimesJson.promise);
 			
+			if (!absolutProfile_pathToParentDir) {
+				var promise_makeLocal = OS.File.makeDir(theLocalPath);
+				promiseAllArr_make.push(promise_makeLocal);
+			}
+			
 			// set up to do the promise_writeTimes
 			promise_makeRoot.then(
 				function(aVal) {
@@ -843,8 +866,8 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 						var timeJsonPath = OS.Path.join(theRootPath, 'times.json');
 						var promise_writeAtomicTimes = OS.File.writeAtomic(timeJsonPath, writeStrForTimesJson, {tmpPath: timeJsonPath + '.profilist.tmp', encoding:'utf-8'});
 						promise_writeAtomicTimes.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_writeAtomicTimes - ', aVal);
+							function(aVal2) {
+								console.log('Fullfilled - promise_writeAtomicTimes - ', aVal2);
 								// do stuff here
 								deferred_writeTimesJson.resolve('times json succesfully written');
 							},
@@ -866,10 +889,6 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			// dont need the reject or catch as these promise all go to promiseAll_make
 			// end set up to do the promise_writeTimes
 			
-			if (absolutProfile_pathToParentDir) {
-				var deferred_makeLocal = new Deferred();
-				promiseAllArr_make.push(deferred_makeLocal.promise);
-			}
 			var promiseAll_make = Promise.all(promiseAllArr_make);			
 			promiseAll_make.then(
 				function(aVal) {
@@ -897,36 +916,15 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 	};
 	// end - set up function for post ini read
 	
-	// start - setup post read ini stuff
-	var deferred_waitReadIni = new Deferred();
-	deferred_waitReadIni.then(
-		function(aVal) {
-			console.log('Fullfilled - deferred_waitReadIni - ', aVal);
-			postRefreshIni();
-		},
-		function(aReason) {
-			var rejObj = {name:'deferred_waitReadIni', aReason:aReason};
-			console.error('Rejected - deferred_waitReadIni - ', rejObj);
-			deferred_createProfile.reject(rejObj); //throw rejObj;
-		}
-	).catch(
-		function(aCaught) {
-			console.error('Caught - deferred_waitReadIni - ', aCaught);
-			var rejObj = {name:'deferred_waitReadIni', aCaught:aCaught};
-			deferred_createProfile.reject(rejObj); // throw aCaught;
-		}
-	);
-	// end - setup post read ini stuff
-	
 	// start - figure out and based on do refresh ini
 	if (!refreshIni) {
-		deferred_waitReadIni.resolve('no refresh arg set');
+		postRefreshIni();
 	} else {
 		var promise_refreshIni = readIniAndParseObjs();
 		promise_refreshIni.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_refreshIni - ', aVal);
-				deferred_waitReadIni.resolve('ini refreshed'); // go to post waitReadIni
+				postRefreshIni();
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_refreshIni', aReason:aReason};
@@ -3042,14 +3040,14 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			// hndlr.cb.ms - required, ms to tbb_msg_close after
 			// hndlr.cb.ontimeout - optional, callback to do, first arg is hndlr
 		// restoreStyleKeyPress - enter/esc listener
-			// hndlr.cb.onconfrim - optional, callback when enter is keydowned, first arg is hndlr, second is e
+			// hndlr.cb.onconfrim - optional, callback when enter is keydowned, first arg is hndlr, second is e, third is userInputVal what he typed
 			// hndlr.cb.oncancel - optional, callback when esc is keydowned, first arg is hndlr, second is e
 		// restoreStyleMouseLeave - mouse out restore
 			// aCB not set up for this yet
 		// restoreStyleDefault - when panel closes, or stack collapses
 			// all styles support restore default callback
 			// onrestore - optional, callback when calling restoreFunc, first arg is hndlr
-	// make callbacks return false if you do a tbb_msg with an overwrite in them, otherwise it will exec the restoreFunction
+	// make callbacks return true if you do a tbb_msg with an overwrite in them, otherwise it will exec the restoreFunction, also set aOverwrite arg to true well i think that i need to, may not.
 	// cCB was originally a callback but after designing it turned out i need that as a transfer obj
 	
 		console.log('tbb_msg');
@@ -3094,6 +3092,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					hndlr.restoring = true;
 					console.error('in panel state open restore proc');
 					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
+						// copy block link 58632101400
 						if (hndlr.MORPHED) {
 							console.error('had morphed');
 							hndlr.domLbl.style.visibility = '';
@@ -3103,6 +3102,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 							hndlr.domInput.style.opacity = '0';
 						}
 						hndlr.domInput.style.clip = 'rect(-1px, -1px, 25px, -1px)';
+						// end copy block link 58632101400
 					} else {
 						console.error('2 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 						hndlr.domLbl.style.opacity = '0';
@@ -3130,8 +3130,8 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					}
 					hndlr.domInput.blur();
 					if (hndlr.cb && hndlr.cb.oncancel) {
-						var overwrit = hndlr.cb.oncancel(hndlr);
-						if (!overwrit) { return } // restore handler overwrit
+						var overwrit = hndlr.cb.oncancel(hndlr, e);
+						if (overwrit) { return } // restore handler overwrit
 					}
 					hndlr.restoreFunc();
 				} else if (e.keyCode == 13) {
@@ -3139,15 +3139,16 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 					e.preventDefault();
 					e.stopPropagation();
+					var userInputVal = hndlr.domInput.value;
 					if (hndlr.MORPHED) {
 						hndlr.domInput.selectionStart = 0;
 						hndlr.domInput.selectionEnd = 0;
-						hndlr.domLbl.setAttribute('value', hndlr.domInput.value);
+						hndlr.domLbl.setAttribute('value', userInputVal);
 					}
 					hndlr.domInput.blur();
 					if (hndlr.cb && hndlr.cb.onconfirm) {
-						var overwrit = hndlr.cb.onconfirm(hndlr);
-						if (!overwrit) { return } // restore handler overwrit
+						var overwrit = hndlr.cb.onconfirm(hndlr, e, userInputVal);
+						if (overwrit) { return } // restore handler overwrit
 					}
 					hndlr.restoreFunc();
 				}
@@ -3229,18 +3230,35 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 							hndlr.domInput.focus();
 						}
 					} else if (hndlr.lastLblVal_onTransEnd == 'INPUT') {
+						// copy of block link 2345133455
 						// input removed
 						// bring back tbbtext
+						delete hndlr.IF_DEVUSER_OVERWRITES_BEFORE_THIS_FADES_OUT_THEN_INPUTTRANSHANDLER_WILL_FIND_NEITHER_SO_IN_THAT_CASE_FADEIN_TBB;
 						console.error('GOING TO NON-RESTORE-LBL FROM INPUT, input trans end', 'propertyname', e.propertyName);
 						hndlr.domLbl.style.visibility = '';
 						hndlr.domLbl.style.opacity = 1;
+						hndlr.domLbl.value = hndlr.nextLblVal_onTransEnd;
+						// end copy of block link 2345133455
+					} else {
+						console.warn('neither next nor last were INPUT');
+						if (hndlr.IF_DEVUSER_OVERWRITES_BEFORE_THIS_FADES_OUT_THEN_INPUTTRANSHANDLER_WILL_FIND_NEITHER_SO_IN_THAT_CASE_FADEIN_TBB) {
+							delete hndlr.IF_DEVUSER_OVERWRITES_BEFORE_THIS_FADES_OUT_THEN_INPUTTRANSHANDLER_WILL_FIND_NEITHER_SO_IN_THAT_CASE_FADEIN_TBB;
+							// copy of block link 2345133455
+							// input removed
+							// bring back tbbtext
+							console.error('GOING TO NON-RESTORE-LBL FROM INPUT, input trans end', 'propertyname', e.propertyName);
+							hndlr.domLbl.style.visibility = '';
+							hndlr.domLbl.style.opacity = 1;
+							hndlr.domLbl.value = hndlr.nextLblVal_onTransEnd;
+							// end copy of block link 2345133455
+						}
 					}
 				}
 			};
 			hndlr.timeoutHandler = function() {
 				if (hndlr.cb && hndlr.cb.ontimeout) {
 					var overwrit = hndlr.cb.ontimeout(hndlr);
-					if (!overwrit) { return } // restore handler overwrit
+					if (overwrit) { return } // restore handler overwrit
 				}
 				hndlr.restoreFunc();
 			};
@@ -3265,7 +3283,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				hndlr.restoreStyleDefault = true;
 				hndlr.restoreStyleKeyPress = true;
 				hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, true);
-			} else if (aRestoreStyle = 'restoreStyleTimeout') {
+			} else if (aRestoreStyle == 'restoreStyleTimeout') {
 				hndlr.restoreStyleDefault = true;
 				hndlr.restoreStyleTimeout = true;
 				hndlr.timer = hndlr.domWindow.setTimeout(hndlr.timeoutHandler, hndlr.cb.ms);
@@ -3312,7 +3330,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// remove the other handlers
 					if (hndlr.restoreStyleKeyPress) {
 						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
-						delete hndlr.restoreStyleMouseLeave;
+						delete hndlr.restoreStyleKeyPress;
 						console.error('overwrit key handler');						
 					}
 					if (hndlr.restoreStyleTimeout) {
@@ -3354,7 +3372,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					}
 					if (hndlr.restoreStyleKeyPress) {
 						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
-						delete hndlr.restoreStyleMouseLeave;
+						delete hndlr.restoreStyleKeyPress;
 						console.error('overwrit key handler');
 					}
 				}
@@ -3363,7 +3381,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		
 		// open it logic
 		if (hndlr.nextLblVal_onTransEnd == aNewLblVal) {
-			// no need to open its already open at that msg
+			console.log('no need to open its already open at that msg');
 		} else {
 			if (aNewLblVal == 'INPUT' && hndlr.origLblVal == hndlr.cb.initInputWithValue) {
 				hndlr.MORPHED = true;
@@ -3387,7 +3405,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				}
 			} else {
 				if (aNewLblVal == 'INPUT') {
-					// prep for fade in, as not doing morph
+					console.log('prep for fade in, as not doing morph');
 					hndlr.domInput.value = hndlr.cb.initInputWithValue;
 					hndlr.domInput.setAttribute('placeholder', 'Enter name for new profile');
 					console.error('3 setting opacity to 0 here on handlerName:', hndlr.handlerName);
@@ -3400,10 +3418,31 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					hndlr.domLbl.style.opacity = 0;
 					console.error('4 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 				} else {
-					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
-					hndlr.nextLblVal_onTransEnd = aNewLblVal;
-					hndlr.domLbl.style.opacity = 0;
-					console.error('5 setting opacity to 0 here on handlerName:', hndlr.handlerName);
+					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
+						// input is currently showing
+						hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
+						hndlr.nextLblVal_onTransEnd = aNewLblVal;
+						//hndlr.domLbl.style.opacity = 0;
+						console.error('6 setting opacity to 0 here on handlerName:', hndlr.handlerName);
+						// copy block link 58632101400
+						if (hndlr.MORPHED) {
+							console.error('had morphed');
+							hndlr.domLbl.style.visibility = '';
+							hndlr.domInput.style.clip = 'rect(-1px, -1px, 25px, -1px)';
+						} else {
+							console.error('had faded in, so fade it out');
+							console.error('1 setting opacity to 0 here on handlerName:', hndlr.handlerName);
+							hndlr.domInput.style.opacity = '0';
+							console.log('expect inputTransHandler to set domLbl opacity to 1 and its value after fade out is complete');
+							hndlr.IF_DEVUSER_OVERWRITES_BEFORE_THIS_FADES_OUT_THEN_INPUTTRANSHANDLER_WILL_FIND_NEITHER_SO_IN_THAT_CASE_FADEIN_TBB = true;
+						}
+						// end copy block link 58632101400
+					} else {
+						hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
+						hndlr.nextLblVal_onTransEnd = aNewLblVal;
+						hndlr.domLbl.style.opacity = 0;
+						console.error('5 setting opacity to 0 here on handlerName:', hndlr.handlerName);
+					}
 				}
 			}
 		}
@@ -3430,7 +3469,129 @@ function tbb_box_click(e) {
 			} else if (classList.contains('profilist-create')) {
 				console.log('create new profile');
 				tbb_msg_close(null, cWin);
-				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:''}, true);
+				var cCB = {
+					initInputWithValue:'',
+					onconfirm: function(aHndlr, aEvent, aInput) {
+						// if hold ctrl, it launches on create
+						// if hold shift+alt it creates profile at absolute path
+						//console.error('got onconfirm aInput:', aInput);
+						
+						var do_checkCustPath = function() {
+							if (aEvent.altKey && aEvent.shiftKey) {
+								// create absolute path profile
+								var dirpath = OS.Path.dirname(aInput);
+								var profname = OS.Path.basename(aInput);
+								if (dirpath == profname) {
+									tbb_msg('create-prof', 'error: invalid path', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+										ms: 3000,
+										ontimeout: function() {
+											// send back to input with path val
+											cCB.initInputWithValue = aInput;
+											tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+											return true;
+										}
+									} , true);
+								} else if (profname == '') {
+									tbb_msg('create-prof', 'error: final dir must be profile name', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+										ms: 3000,
+										ontimeout: function() {
+											// send back to input with path val
+											cCB.initInputWithValue = aInput;
+											tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+											return true;
+										}
+									} , true);
+								} else {
+									var promise_dirpathExists = OS.File.exists(dirpath);
+									promise_dirpathExists.then(
+										function(aVal) {
+											console.log('Fullfilled - promise_dirpathExists - ', aVal);
+											// start - do stuff here - promise_dirpathExists
+											if (!aVal) {
+												tbb_msg('create-prof', 'error: directory path does not exist', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+													ms: 3000,
+													ontimeout: function() {
+														// send back to input with path val
+														cCB.initInputWithValue = aInput;
+														tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+														return true;
+													}
+												} , true);
+											} else {
+												do_create(profname, dirpath);
+											}
+											// end - do stuff here - promise_dirpathExists
+										},
+										function(aReason) {
+											var rejObj = {name:'promise_dirpathExists', aReason:aReason};
+
+											var deepestReason = aReasonMax(aReason);
+											tbb_msg('create-prof', 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+												ms: 3000
+											}, true);
+											
+											console.warn('Rejected - promise_dirpathExists - ', rejObj);
+											//deferred_createProfile.reject(rejObj);
+										}
+									).catch(
+										function(aCaught) {
+											var rejObj = {name:'promise_dirpathExists', aCaught:aCaught};
+											console.error('Caught - promise_dirpathExists - ', rejObj);
+											//deferred_createProfile.reject(rejObj);
+										}
+									);
+								}
+							} else {
+								do_create(aInput, null);
+							}
+						};
+						var do_create = function(theprofname, theabspath) {
+							var promise_createProf = createProfileNew(theprofname, theabspath, true);
+							promise_createProf.then(
+								function(aVal) {
+									// aVal is aProfIniKey
+									console.log('Fullfilled - promise_createProf - ', aVal);
+									// start - do stuff here - promise_createProf
+									tbb_msg('create-prof', 'ok prof made', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+										ms: 3000,
+										ontimeout: function() {
+											console.error(':todo: add tbb gui here');
+										}
+									}, true);
+									if (aEvent.ctrlKey) {
+										// launch on create
+										launchProfile(aVal);
+									} else {
+										console.error(':todo: ok need to add to gui here');
+									}
+									// end - do stuff here - promise_createProf
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_createProf', aReason:aReason};
+									
+									var deepestReason = aReasonMax(aReason);
+									tbb_msg('create-prof', 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+										ms: 3000
+									}, true);
+									
+									console.warn('Rejected - promise_createProf - ', rejObj);
+									//deferred_createProfile.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_createProf', aCaught:aCaught};
+									console.error('Caught - promise_createProf - ', rejObj);
+									//deferred_createProfile.reject(rejObj);
+								}
+							);
+						};
+						tbb_msg('create-prof', 'creating...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, {onrestore:function(){ console.log('creating overwrit'); return true }}, true);
+						//cWin.setTimeout(function(){do_checkCustPath()}, 5000);
+						do_checkCustPath();
+						return true;
+					}
+				};
+				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 			} else {
 				var profName = origTarg.getAttribute('label');
 				var profIniKey = getIniKeyFromProfName(profName);
@@ -3477,7 +3638,7 @@ function tbb_box_click(e) {
 			
 			var cCB = {
 				onconfirm: function() {
-					tbb_msg('del-profile-' + cProfName, 'Deleting...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, { onrestore:function(){return true}	}, true);
+					tbb_msg('del-profile-' + cProfName, 'Deleting...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, { onrestore:function(){ return true } }, true);
 					var promise_delProf = deleteProfile(cProfIniKey, true);
 					promise_delProf.then(
 						function(aVal) {
@@ -3486,7 +3647,8 @@ function tbb_box_click(e) {
 							tbb_msg('del-profile-' + cProfName, 'ok profile deleted', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
 								ms: 3000,
 								ontimeout: function() {
-									box.parentNode.removeChild(box);
+									//box.parentNode.removeChild(box);
+									console.error(':todo: del gui panel dom');
 									// should animate this removal, maybe refresh stack dom
 								}
 							}, true);
@@ -3527,91 +3689,6 @@ function tbb_box_click(e) {
 			console.log('rename, cProfIniKey:', cProfName);
 			tbb_msg_close('ren-profile-' + cProfName, cWin, true);
 			tbb_msg('ren-profile-' + cProfName, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:cProfName}, false);
-			/*
-			var cDoc = origTarg.ownerDocument;
-			var cWin = cDoc.defaultView;
-			
-			if (box.classList.contains('profilist-edit')) {
-				//close it
-				console.log('need to close');
-				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
-			} else {
-				console.log('need to open');
-				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close whatever was open
-				// open it
-				
-				//sub init
-				var inputEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'profilist-input');
-				var subBox = origTarg.parentNode;
-				inputEl.value = box.getAttribute('label');
-				var icon = origTarg;
-				var numVisIcons = (subBox.clientWidth) / 18;
-				var numIconClicked = Math.ceil(e.layerX / 18);
-				console.log('layerX:', e.layerX, 'clientWidth:', subBox.clientWidth);
-				console.log('numIconClicked:', numIconClicked, 'numVisIcons:', numVisIcons);
-				//when 3 icons visible, origTarg.parentNode (submenu box) width is 54 in fully stretched
-					// can click on 1-18 which is furthest in icon. 19-36 is 2nd. 37-54 is last
-				//end sub init
-				
-				//origTarg.parentNode is the submenu box
-				icon.classList.add('profilist-sub-clicked');
-				//subBox.style.width = (subBox.clientWidth - (numIconClicked * 18)) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
-				subBox.style.width = (numIconClicked * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
-				box.classList.add('profilist-edit');
-				console.log('inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
-				cWin.setTimeout(function() {
-					// this is needed for labels that are elipsiid, meaning they take the whole width, and collapsing the submenu to just one icon gave it more room
-					if (icon.classList.contains('profilist-sub-clicked')) {
-						console.log('postTimeout inputEl.offsetWidth:', inputEl.offsetWidth, inputEl.parentNode.clientWidth);
-						inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
-						// it seems like if i modify the width while its in animation, it doesnt complete the first trans in .5s then take another .5s to do from that finished to the new one, subhanallah this is awesome! // so i just need to re-set the width before it completes
-					}
-				}, 300); // the 300 is the ms it takes for the width of subBox css to complete, from main.css
-				inputEl.style.clip = 'rect(-1px, ' + (inputEl.offsetWidth+1) + 'px, 25px, -1px)';
-				
-				inputEl.addEventListener('transitionend', function(e) {
-					//console.log('e.propertyName:', e.propertyName);
-					if (e.propertyName != 'background-color') { return }
-					//console.log('bgcolor so carrying on');
-					inputEl.removeEventListener('transitionend', arguments.callee, false);
-					//inputEl.select();
-					inputEl.focus();
-				}, false);
-				
-				var closeIt = function() {
-						//close it
-						inputEl.blur();
-						inputEl.value = box.getAttribute('label');
-						inputEl.selectionStart = 0;
-						inputEl.selectionEnd = 0;
-						cWin.removeEventListener('keydown', renameKeyListener, true);
-						subBox.style.width = '';
-						box.classList.remove('profilist-edit');
-						inputEl.style.clip = '';
-						icon.classList.remove('profilist-sub-clicked');
-				};
-				panelHidUnloaders.push({
-					view: cWin,
-					name: 'profilist-sub-clicked',
-					func: closeIt
-				});
-				
-				var renameKeyListener = function(e) {
-					console.log('key pressed, e.keyCode = ', e.keyCode);
-					if (e.keyCode == 27) {
-						e.preventDefault();
-						e.stopPropagation();
-						checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
-					} else if (e.keyCode == 13) {
-						box.setAttribute('label', inputEl.value);
-						checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // close self
-						e.preventDefault();
-						e.stopPropagation();						
-					}
-				}
-				cWin.addEventListener('keydown', renameKeyListener, true);
-			}
-			*/
 		},
 		'profilist-dev-build': function() {
 			console.log('change build');
@@ -4138,7 +4215,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 										deferredMain_updateIconToAllWindows.resolve(false);
 									} else {
 										winntPathToWatchedFile = {
-											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, aProfilePath.replace(/([\\*:?<>|\/\"])/g, '-') + '.json'),
+											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, aProfilePath.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath) + '.json'),
 											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
 										};
 										cWinHandlePtrStr = aVal;
@@ -5546,7 +5623,7 @@ function activated(e) {
 		case 'winmo':
 		case 'wince':
 			// check if 
-			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, profToolkit.selectedProfile.iniKey.replace(/([\\*:?<>|\/\"])/g, '-') + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
+			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, profToolkit.selectedProfile.iniKey.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
 			var promise_checkWmSeticoned = read_encoded(fullFilePathToWM_SETICON, {encoding:'utf8'});
 			promise_checkWmSeticoned.then(
 				function(aVal) {
@@ -6586,7 +6663,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					plist_val = plist_val.replace(/<key>CFBundleIdentifier<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
 						// this function replaces the bundle identifier
 						// on macs the Profilist.launcher key holds the bundle identifier
-						return a.replace(b, bundleIdentifer/*.replace(/[^a-z\.0-9]/ig, '-')*/); //no need for the replace as its all numbers, but i left it here so i know whats allowed in a bundle-identifier
+						return a.replace(b, bundleIdentifer/*.replace(/[^a-z\.0-9]/ig, repCharForSafePath)*/); //no need for the replace as its all numbers, but i left it here so i know whats allowed in a bundle-identifier
 						//The bundle identifier string identifies your application to the system. This string must be a uniform type identifier (UTI) that contains only alphanumeric (A-Z,a-z,0-9), hyphen (-), and period (.) characters. The string should also be in reverse-DNS format. For example, if your companyâ€™s domain is Ajax.com and you create an application named Hello, you could assign the string com.Ajax.Hello as your applicationâ€™s bundle identifier. The bundle identifier is used in validating the application signature. source (apple developer: https://developer.apple.com/library/ios/#documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html#//apple_ref/doc/uid/10000123i-CH101-SW1)
 						//An identifier used by iOS and Mac OS X to recognize any future updates to your app. Your Bundle ID must be registered with Apple and unique to your app. Bundle IDs are app-type specific (either iOS or Mac OS X). The same Bundle ID cannot be used for both iOS and Mac OS X apps. source https://itunesconnect.apple.com/docs/iTunesConnect_DeveloperGuide.pdf
 					});
@@ -7869,7 +7946,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 		if (cOS == 'darwin') { //note:debug added in winnt
 			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
 			/*
-			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, '-')"
+			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, repCharForSafePath)"
 				// if its avail, then `ini[for_ini_key].props['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key].props['Profilist.launcher-basename']`
 		
 			//now whenever profile is renamed, then check if launcher
@@ -8039,9 +8116,9 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 function getLauncherName(for_ini_key, theChName) {
 	var theProfName_safedForPath;
 	if (cOS == 'winnt') {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, '-')
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath)
 	} else {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, '-'); //for mac and nix
+		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, repCharForSafePath); //for mac and nix
 	}
 	return getAppNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 }
@@ -8440,7 +8517,7 @@ function pickerIconset(tWin) {
 					// append and/or increment `-#`
 					var matchTest = iconsetId.match(/(.*)-(\d)$/m);
 					if (matchTest) {
-						iconsetId = matchTest[1] + '-' + (parseInt(matchTest[2]) + 1);
+						iconsetId = matchTest[1] + repCharForSafePath + (parseInt(matchTest[2]) + 1);
 					} else {
 						iconsetId += '-1';
 					}
@@ -8520,7 +8597,7 @@ function pickerIconset(tWin) {
 						var thisLeafName = OS.Path.basename(loaded_imgObj[size].OSPath);
 						thisLeafName = thisLeafName.substr(0, thisLeafName.lastIndexOf('.'));
 						thisLeafName = thisLeafName.replace(new RegExp(size, 'g'), '');
-						thisLeafName = thisLeafName.replace(patt_winSafe, '-'); //note: possible issue, i should replace special chars, as in mac and nix can use all chars, but in windows it cant, so this reduces portability, but replacing \W should fix this // use this `.replace(/([\\*:?<>|\/\"])/g, '-')` to make windows file name safe// make windows safe
+						thisLeafName = thisLeafName.replace(patt_winSafe, repCharForSafePath); //note: possible issue, i should replace special chars, as in mac and nix can use all chars, but in windows it cant, so this reduces portability, but replacing \W should fix this // use this `.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath)` to make windows file name safe// make windows safe
 						thisLeafName = patt_trimLeadingTrailingNonWord.exec(thisLeafName);// trim trailing and leading non word characters
 
 						if (thisLeafName === null) { continue } // its null if thisLeafName pre exec was empty string, or a string of all non word characters

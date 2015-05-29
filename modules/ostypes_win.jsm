@@ -6061,6 +6061,8 @@ var winInit = function() {
 		E_FAIL: 0x80004005,
 		ERROR_ALREADY_EXISTS: 183,
 		SLGP_RAWPATH: 0x4,
+		ERROR_FILE_NOT_FOUND: 2,
+		ERROR_SHARING_VIOLATION: 32
 	};
 	
 	var _lib = {}; // cache for lib
