@@ -3076,6 +3076,13 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.nextLblVal_onTransEnd = 0;
 			hndlr.lastLblVal_onTransEnd = 0;
 			hndlr.restoreFunc = function() {
+				if (hndlr.restoreStyleMouseLeave) {
+					// remove mouse leave handler if we had added one
+					hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+				}
+				if (hndlr.restoreStyleKeyPress) {
+					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, false);
+				}
 				if (hndlr.domWindow.PanelUI.panel.state == 'open') {
 					hndlr.restoring = true;
 					console.error('in panel state open restore proc');
@@ -3085,21 +3092,16 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 							hndlr.domLbl.style.visibility = '';
 						} else {
 							console.error('had faded');
+							console.error('1 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 							hndlr.domInput.style.opacity = '0';
 						}
 						hndlr.domInput.style.clip = 'rect(-1px, -1px, 25px, -1px)';
 					} else {
+						console.error('2 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 						hndlr.domLbl.style.opacity = '0';
 					}
 					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
 					hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
-					if (hndlr.restoreStyleMouseLeave) {
-						// remove mouse leave handler if we had added one
-						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
-					}
-					if (hndlr.restoreStyleKeyPress) {
-						hndlr.domWindow.removeEventListener('keypress', hndlr.keyRestoreFunc, false);
-					}
 					hndlr.domWindow.setTimeout(function() {
 						hndlr.tbbBox.classList.remove('profilist-edit');
 					}, 100);
@@ -3122,6 +3124,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.keyRestoreFunc = function(e) {
 				if (e.keyCode == 27) {
 					// escape
+					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 					e.preventDefault();
 					e.stopPropagation();
 					if (hndlr.MORPHED) {
@@ -3139,6 +3142,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					hndlr.restoreFunc();
 				} else if (e.keyCode == 13) {
 					// enter
+					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 					e.preventDefault();
 					e.stopPropagation();
 					if (hndlr.MORPHED) {
@@ -3280,7 +3284,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						console.error('overwrit mouse handler');
 					}
 					if (hndlr.restoreStyleKeyPress) {
-						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, true);
+						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit key handler');						
 					}
@@ -3297,7 +3301,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				if (aOverwrite) {
 					// remove the other handlers
 					if (hndlr.restoreStyleKeyPress) {
-						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, true);
+						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit key handler');						
 					}
@@ -3351,16 +3355,20 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// prep for fade in, as not doing morph
 					hndlr.domInput.value = aCB.initInputWithValue;
 					hndlr.domInput.setAttribute('placeholder', 'Enter name for new profile');
+					console.error('3 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 					hndlr.domInput.style.opacity = '0';
 					hndlr.domInput.style.width = '280px';
 					hndlr.domInput.style.transition = 'opacity 250ms';
 					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
 					hndlr.nextLblVal_onTransEnd = aNewLblVal;
+					
 					hndlr.domLbl.style.opacity = 0;
+					console.error('4 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 				} else {
 					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
 					hndlr.nextLblVal_onTransEnd = aNewLblVal;
 					hndlr.domLbl.style.opacity = 0;
+					console.error('5 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 				}
 			}
 		}
