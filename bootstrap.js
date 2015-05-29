@@ -372,7 +372,7 @@ current builds icon if dev mode is enabled
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_writeIniAndBkpIfDiff', aReason:aReason};
-							console.warn('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
+							console.error('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
 							deferred_riapoMAIN.reject(rejObj);
 						}
 					).catch(
@@ -390,7 +390,7 @@ current builds icon if dev mode is enabled
 			},
 			function(aReason) {
 				var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aReason:aReason};
-				console.warn('Rejected - deferred_readIniAndMaybeBkp.promise - ', rejObj);
+				console.error('Rejected - deferred_readIniAndMaybeBkp.promise - ', rejObj);
 				deferred_riapoMAIN.reject(rejObj);
 			}
 		).catch(
@@ -536,13 +536,13 @@ current builds icon if dev mode is enabled
 							},
 							function(aReason) {
 								var rejObj = {name:'promise_readIniBkp', aReason:aReason, extra:'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.'}; //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
-								console.warn('Rejected - promise_readIniBkp - ', rejObj);
+								console.error('Rejected - promise_readIniBkp - ', rejObj);
 								
 								var deepestReason = aReasonMax(aReason);
 								if (deepestReason.becauseNoSuchFile) {
 									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
 									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
-									console.warn('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
+									console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
 									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
 								} else {
 									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
@@ -567,7 +567,7 @@ current builds icon if dev mode is enabled
 								if (aReason.becauseNoSuchFile) {
 									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
 									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
-									console.warn('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
+									console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
 									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
 								} else {
 									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
@@ -586,7 +586,7 @@ current builds icon if dev mode is enabled
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_readIni', aReason:aReason};
-				console.warn('Rejected - promise_readIni - ', rejObj);
+				console.error('Rejected - promise_readIni - ', rejObj);
 				deferred_riapoMAIN.reject(rejObj);
 			}
 		).catch(
@@ -813,7 +813,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_updateIniFile', aReason:aReason};
-						console.warn('Rejected - promise_updateIniFile - ', rejObj);
+						console.error('Rejected - promise_updateIniFile - ', rejObj);
 						deferred_createProfile.reject(rejObj);
 					}
 				).catch(
@@ -850,7 +850,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 							},
 							function(aReason) {
 								var rejObj = {name:'promise_writeAtomicTimes', aReason:aReason};
-								console.warn('Rejected - promise_writeAtomicTimes - ', rejObj);
+								console.error('Rejected - promise_writeAtomicTimes - ', rejObj);
 								deferred_writeTimesJson.reject(rejObj);
 							}
 						).catch(
@@ -879,7 +879,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 				},
 				function(aReason) {
 					var rejObj = {name:'promiseAll_make', aReason:aReason};
-					console.warn('Rejected - promiseAll_make - ', rejObj);
+					console.error('Rejected - promiseAll_make - ', rejObj);
 					deferred_createProfile.reject(rejObj); //throw rejObj;
 				}
 			).catch(
@@ -906,7 +906,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 		},
 		function(aReason) {
 			var rejObj = {name:'deferred_waitReadIni', aReason:aReason};
-			console.warn('Rejected - deferred_waitReadIni - ', rejObj);
+			console.error('Rejected - deferred_waitReadIni - ', rejObj);
 			deferred_createProfile.reject(rejObj); //throw rejObj;
 		}
 	).catch(
@@ -930,7 +930,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_refreshIni', aReason:aReason};
-				console.warn('Rejected - promise_refreshIni - ', rejObj);
+				console.error('Rejected - promise_refreshIni - ', rejObj);
 				deferred_createProfile.reject(rejObj); //throw rejObj;
 			}
 		).catch(
@@ -990,7 +990,7 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_updateIniFile', aReason:aReason};
-				console.warn('Rejected - promise_updateIniFile - ', rejObj);
+				console.error('Rejected - promise_updateIniFile - ', rejObj);
 				deferred_renameProfile.reject(rejObj);
 			}
 		).catch(
@@ -1012,7 +1012,7 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 		},
 		function(aReason) {
 			var rejObj = {name:'deferred_waitReadIni', aReason:aReason};
-			console.warn('Rejected - deferred_waitReadIni - ', rejObj);
+			console.error('Rejected - deferred_waitReadIni - ', rejObj);
 			deferred_renameProfile.reject(rejObj); //throw rejObj;
 		}
 	).catch(
@@ -1036,7 +1036,7 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_refreshIni', aReason:aReason};
-				console.warn('Rejected - promise_refreshIni - ', rejObj);
+				console.error('Rejected - promise_refreshIni - ', rejObj);
 				deferred_renameProfile.reject(rejObj); //throw rejObj;
 			}
 		).catch(
@@ -1052,14 +1052,15 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 	return deferred_renameProfile.promise;
 }
 
-function deleteProfile(theProfileName, refreshIni) {
+function deleteProfile(aProfIniKey, refreshIni) {
 	// returns promise
 	
 	var deferred_deleteProfile = new Deferred(); // function promise return
 	
-	if (theProfileName.toLowerCase() == profToolkit.selectedProfile.name.toLowerCase()) {
+	var theProfileName = ini[aProfIniKey].props.Name;
+	if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
 		console.warn('"' + theProfileName + '" - is this profile, cannot delete a profile that is in use.');
-		deferred_deleteProfile.reject('"' + theProfileName + '" - is this profile, cannot delete a profile that is in use.');
+		deferred_deleteProfile.reject(myServices.sb.GetStringFromName('temporary-profile') + ' ' + myServices.sb.GetStringFromName('profile-in-use'));
 		return deferred_deleteProfile.promise; // have to return the promise here, even though this return is mostly to prevent further executing into function, but we havent returned the promise yet so have to here
 	}
 	
@@ -1086,12 +1087,16 @@ function deleteProfile(theProfileName, refreshIni) {
 			function(aVal) {
 				console.log('Fullfilled - promiseAll_doDel - ', aVal);
 				// start - remove from bootstrap ini then update ini
+				console.info('ini pre num mod:', JSON.stringify(ini));
 				for (var p in ini) {
+					if (!('num' in ini[p])) { continue }
 					if (ini[p].num > ini[theIdenter].num) { // this expects .num to be parsed
 						ini[p].num--; // this expects .num to be parsed
 					}
 				}
+				console.info('ini post num mod:', JSON.stringify(ini));
 				delete ini[theIdenter];
+				console.info('ini post num mod and del:', JSON.stringify(ini));
 
 				// write ini
 				var promise_updateIniFile = writeIniAndBkp();
@@ -1103,7 +1108,7 @@ function deleteProfile(theProfileName, refreshIni) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_updateIniFile', aReason:aReason};
-						console.warn('Rejected - promise_updateIniFile - ', rejObj);
+						console.error('Rejected - promise_updateIniFile - ', rejObj);
 						deferred_deleteProfile.reject(rejObj);
 					}
 				).catch(
@@ -1117,7 +1122,7 @@ function deleteProfile(theProfileName, refreshIni) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_doDel', aReason:aReason};
-				console.warn('Rejected - promiseAll_doDel - ', rejObj);
+				console.error('Rejected - promiseAll_doDel - ', rejObj);
 				deferred_deleteProfile.reject(rejObj);
 			}
 		).catch(
@@ -1132,18 +1137,15 @@ function deleteProfile(theProfileName, refreshIni) {
 	
 	// setup postRefreshIni
 	var postRefreshIni = function() {
-		var LCased_theProfileName = theProfileName.toLowerCase();
-		var iniIdentifier = null;
-		for (var p in ini) {
-			if (ini[p].props.Name.toLowerCase() == LCased_theProfileName) {
-				iniIdentifier = p;
-			}
-		}
+		var iniIdentifier = aProfIniKey;
+		
+		/*
 		if (iniIdentifier === null) {
 			console.warn('Could not find a profile with the name of "' + theProfileName + '" - so nothing to delete.');
 			deferred_deleteProfile.reject('Could not find a profile with the name of "' + theProfileName + '" - so nothing to delete.');
 			return; // just to stop further execution into this function
 		}
+		*/
 		
 		// check if profile is in use
 		var promise_profInUseCheck = ProfilistWorker.post('queryProfileLocked', [ini[iniIdentifier].props.IsRelative, ini[iniIdentifier].props.Path, profToolkit.rootPathDefault]);
@@ -1153,15 +1155,14 @@ function deleteProfile(theProfileName, refreshIni) {
 				// do stuff here
 				if (aVal) {
 					// aVal is true if locked
-					deferred_deleteProfile.reject('"' + theProfileName + '" - is currently running, cannot delete a profile that is in use.');
-					return; // to prevent further execution into func
+					deferred_deleteProfile.reject(myServices.sb.GetStringFromName('error') + ' ' + myServices.sb.GetStringFromName('profile-in-use')); // '"' + theProfileName + '" - is currently running, cannot delete a profile that is in use.'
 				} else {
 					doDeletion(iniIdentifier);
 				}
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_profInUseCheck', aReason:aReason};
-				console.warn('Rejected - promise_profInUseCheck - ', rejObj);
+				console.error('Rejected - promise_profInUseCheck - ', rejObj);
 				deferred_deleteProfile.reject(rejObj);
 			}
 		).catch(
@@ -1174,40 +1175,20 @@ function deleteProfile(theProfileName, refreshIni) {
 	}
 	// end setup postRefreshIni
 	
-	// start - setup post read ini stuff
-	var deferred_waitReadIni = new Deferred();
-	deferred_waitReadIni.then(
-		function(aVal) {
-			console.log('Fullfilled - deferred_waitReadIni - ', aVal);
-			postRefreshIni();
-		},
-		function(aReason) {
-			var rejObj = {name:'deferred_waitReadIni', aReason:aReason};
-			console.warn('Rejected - deferred_waitReadIni - ', rejObj);
-			deferred_deleteProfile.reject(rejObj); //throw rejObj;
-		}
-	).catch(
-		function(aCaught) {
-			console.error('Caught - deferred_waitReadIni - ', aCaught);
-			var rejObj = {name:'deferred_waitReadIni', aCaught:aCaught};
-			deferred_deleteProfile.reject(rejObj); // throw aCaught;
-		}
-	);
-	// end - setup post read ini stuff
-	
 	// start - figure out and based on do refresh ini
 	if (!refreshIni) {
-		deferred_waitReadIni.resolve('no refresh arg set');
+		postRefreshIni();
+		//deferred_waitReadIni.resolve('no refresh arg set');
 	} else {
 		var promise_refreshIni = readIniAndParseObjs();
 		promise_refreshIni.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_refreshIni - ', aVal);
-				deferred_waitReadIni.resolve('ini refreshed'); // go to post waitReadIni
+				postRefreshIni();
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_refreshIni', aReason:aReason};
-				console.warn('Rejected - promise_refreshIni - ', rejObj);
+				console.error('Rejected - promise_refreshIni - ', rejObj);
 				deferred_deleteProfile.reject(rejObj); //throw rejObj;
 			}
 		).catch(
@@ -1470,6 +1451,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				}, false);
 				PBox.style.height = expandedheight + 'px';
 				PBox.classList.add('profilist-hovered');
+				updateRunningIcons(aDOMWindow);
 			}, false);
 			PBox.addEventListener('mouseleave', function(e_ML) {
 				e_ML.stopPropagation();
@@ -1477,6 +1459,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				PBox.style.height = collapsedheight + 'px';
 				PBox.classList.remove('profilist-hovered');
 				checkAndExecPanelHidUnloaders(aDOMWindow);
+				tbb_msg_close(null, aDOMWindow);
 			}, false);
 	} else {
 		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
@@ -1824,72 +1807,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			
 			//10. update running icons
 			//var PTbbBoxes = PStack.childNodes;
-			var promiseAllArr_updateStatuses = [];
-			for (var p in ini) {
-				if ('num' in ini[p]) {
-					if (p == profToolkit.selectedProfile.iniKey) { // alt to `if (ini[p].props.Name == profToolkit.selectedProfile.name) {`
-						console.log('profile', p, 'is the active profile so in use duh', 'prof name:', ini[p].props.Name);
-						continue;
-					}
-					var promise_profLokChk = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
-					promiseAllArr_updateStatuses.push(promise_profLokChk);
-					
-					let hoisted_p = p;
-					promise_profLokChk.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_profLokChk - ', aVal);
-							// start - do stuff here - promise_profLokChk
-							//aVal is TRUE if LOCKED
-							//aVal is FALSE if NOT locked
-							if (aVal) {
-								console.info('profile', objBoot[hoisted_p].props.Name, 'is IN USE');
-								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
-								PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'active');
-							} else {
-								console.info('profile', objBoot[hoisted_p].props.Name, 'is NOT in use');
-								//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
-								PStack.childNodes[getChildNodeI(hoisted_p, objBoot, PStack)].setAttribute('status', 'inactive');
-							}
-							
-							console.log('Success promise_profLokChk num: ' + objBoot[hoisted_p].num + ' and name: ' + objBoot[hoisted_p].props.Name);
-							// end - do stuff here - promise_profLokChk
-						}/*,
-						function(aReason) {
-							var rejObj = {name:'promise_profLokChk', aReason:aReason};
-							console.warn('Rejected - promise_profLokChk - ', rejObj);
-							//deferred_updateOnPanelShowing.reject(rejObj);
-							//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .reject will handle it
-						}*/
-					)/*.catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_profLokChk', aCaught:aCaught};
-							console.error('Caught - promise_profLokChk - ', rejObj);
-							//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .catch will handle it
-						}
-					);*/
-				}
-			}
-			
-			var promiseAll_updateStatuses = Promise.all(promiseAllArr_updateStatuses);			
-			promiseAll_updateStatuses.then(
-				function(aVal) {
-					console.log('Fullfilled - promiseAll_updateStatuses - ', aVal);
-					// start - do stuff here - promiseAll_updateStatuses
-					//deferred_updateOnPanelShowing.resolve('dom stuff and status updating done'); // optional, see link5143646250
-					// end - do stuff here - promiseAll_updateStatuses
-				},
-				function(aReason) {
-					var rejObj = {name:'promiseAll_updateStatuses', aReason:aReason};
-					console.warn('Rejected - promiseAll_updateStatuses - ', rejObj);
-					//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promiseAll_updateStatuses', aCaught:aCaught};
-					console.error('Caught - promiseAll_updateStatuses - ', rejObj);
-					//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
-				}
-			);
+			updateRunningIcons(aDOMWindow)
 			
 			/* // i dont think i need this, updatePanel's purpose is just to take ini to dom
 			// start - im not sure if i need to writeIniAndBkpIfDiff here
@@ -1918,7 +1836,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_uopsReadIni', aReason:aReason};
-			console.warn('Rejected - promise_uopsReadIni - ', rejObj);
+			console.error('Rejected - promise_uopsReadIni - ', rejObj);
 			deferred_updateOnPanelShowing.reject(rejObj);
 		}
 	).catch(
@@ -1973,6 +1891,77 @@ function getChildNodeI(key, obj, stack) {
 		}
 	}
 	return childNodeI;
+}
+
+function updateRunningIcons(aDOMWindow) {
+	// doesnt return anything, just does it
+	var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM;
+	var promiseAllArr_updateStatuses = [];
+	for (var p in objWin) {
+		if ('num' in ini[p]) {
+			if (p == profToolkit.selectedProfile.iniKey) { // alt to `if (ini[p].props.Name == profToolkit.selectedProfile.name) {`
+				console.log('profile', p, 'is the active profile so in use duh', 'prof name:', ini[p].props.Name);
+				continue;
+			}
+			var promise_profLokChk = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
+			promiseAllArr_updateStatuses.push(promise_profLokChk);
+
+			let hoisted_p = p;
+			promise_profLokChk.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_profLokChk - ', aVal);
+					// start - do stuff here - promise_profLokChk
+					//aVal is TRUE if LOCKED
+					//aVal is FALSE if NOT locked
+					if (aVal) {
+						console.info('profile', objWin[hoisted_p].props.Name, 'is IN USE');
+						//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
+						aDOMWindow.Profilist.PStack.childNodes[getChildNodeI(hoisted_p, objWin, aDOMWindow.Profilist.PStack)].setAttribute('status', 'active');
+					} else {
+						console.info('profile', objWin[hoisted_p].props.Name, 'is NOT in use');
+						//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
+						aDOMWindow.Profilist.PStack.childNodes[getChildNodeI(hoisted_p, objWin, aDOMWindow.Profilist.PStack)].setAttribute('status', 'inactive');
+					}
+					
+					console.log('Success promise_profLokChk num: ' + objWin[hoisted_p].num + ' and name: ' + objWin[hoisted_p].props.Name);
+					// end - do stuff here - promise_profLokChk
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_profLokChk', aReason:aReason};
+					console.error('Rejected - promise_profLokChk - ', rejObj);
+					//deferred_updateOnPanelShowing.reject(rejObj);
+					//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .reject will handle it
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_profLokChk', aCaught:aCaught};
+					console.error('Caught - promise_profLokChk - ', rejObj);
+					//deferred_updateOnPanelShowing.reject(rejObj); //no need, Promise.all .catch will handle it
+				}
+			);
+		}
+	}
+	
+	var promiseAll_updateStatuses = Promise.all(promiseAllArr_updateStatuses);			
+	promiseAll_updateStatuses.then(
+		function(aVal) {
+			console.log('Fullfilled - promiseAll_updateStatuses - ', aVal);
+			// start - do stuff here - promiseAll_updateStatuses
+			//deferred_updateOnPanelShowing.resolve('dom stuff and status updating done'); // optional, see link5143646250
+			// end - do stuff here - promiseAll_updateStatuses
+		},
+		function(aReason) {
+			var rejObj = {name:'promiseAll_updateStatuses', aReason:aReason};
+			console.error('Rejected - promiseAll_updateStatuses - ', rejObj);
+			//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promiseAll_updateStatuses', aCaught:aCaught};
+			console.error('Caught - promiseAll_updateStatuses - ', rejObj);
+			//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
+		}
+	);
 }
 
 function cssBackgroundUrl_for_devBuildExePath(exePath) {
@@ -3048,16 +3037,28 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 	// aSMItem is the submenu item clicked
 	// aNewLblVal is message to show
 		// if aNewLblVal is == 'input' then it fades out in the input
-	// intType is if it should time fade out, or wait for user to hit enter or escape
-		// 0 - timeout
-			// aCB should be number of ms to timeout after
-		// 1 - enter/esc listener
-			// aCB is a callback to run on if enter is pressed or escape pressed, so only for intType 1
-		// 2 - mouse out restore
-		
+	// aRestoreStyle is a string
+		// restoreStyleTimeout - timeout
+			// hndlr.cb.ms - required, ms to tbb_msg_close after
+			// hndlr.cb.ontimeout - optional, callback to do, first arg is hndlr
+		// restoreStyleKeyPress - enter/esc listener
+			// hndlr.cb.onconfrim - optional, callback when enter is keydowned, first arg is hndlr, second is e
+			// hndlr.cb.oncancel - optional, callback when esc is keydowned, first arg is hndlr, second is e
+		// restoreStyleMouseLeave - mouse out restore
+			// aCB not set up for this yet
+		// restoreStyleDefault - when panel closes, or stack collapses
+			// all styles support restore default callback
+			// onrestore - optional, callback when calling restoreFunc, first arg is hndlr
+	// make callbacks return false if you do a tbb_msg with an overwrite in them, otherwise it will exec the restoreFunction
+	// cCB was originally a callback but after designing it turned out i need that as a transfer obj
+	
 		console.log('tbb_msg');
 		var cDoc = aDOMWindow.document;
 		var cWin = aDOMWindow;
+		
+		if (cWin.PanelUI.panel.state != 'open') {
+			throw new Error('will not send tbb_msg as panel is not open');
+		}
 		
 		var hndlr;
 		if (!(aHandlerName in tbb_msg_restore_handlers)) {
@@ -3075,13 +3076,19 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.origLblVal = lbl.getAttribute('value');
 			hndlr.nextLblVal_onTransEnd = 0;
 			hndlr.lastLblVal_onTransEnd = 0;
+			hndlr.cb = aCB;
 			hndlr.restoreFunc = function() {
+				if (hndlr.cb && hndlr.cb.onrestore) {
+					var overwrit = hndlr.cb.onrestore(hndlr);
+					console.error('ran onrestore and got:', overwrit);
+					if (overwrit) { return }
+				}
 				if (hndlr.restoreStyleMouseLeave) {
 					// remove mouse leave handler if we had added one
 					hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
 				}
 				if (hndlr.restoreStyleKeyPress) {
-					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, false);
+					hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 				}
 				if (hndlr.domWindow.PanelUI.panel.state == 'open') {
 					hndlr.restoring = true;
@@ -3107,17 +3114,6 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					}, 100);
 				} else {
 					hndlr.finalizeRestore();
-					/*
-					hndlr.domLbl.removeEventListener('transitionend', hndlr.transHandler, false);
-					hndlr.domInput.removeEventListener('transitionend', hndlr.inputTransHandler, false);
-					hndlr.domLbl.style.visibility = '';
-					hndlr.domLbl.style.opacity = '1';
-					hndlr.domInput.style.clip = '';
-					hndlr.domInput.style.opacity = '';
-					hndlr.domInput.style.transition = '';
-					hndlr.domLbl.style.transition = '';
-					delete tbb_msg_restore_handlers[hndlr.handlerName];
-					*/
 					console.error('tbb restore proc completed and handler destroyed VIA PANEL CLOSED METHOD');
 				}
 			};
@@ -3133,12 +3129,10 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						hndlr.domLbl.value = hndlr.domInput.value;
 					}
 					hndlr.domInput.blur();
-					if (aCB && aCB.oncancel) {
-						aCB.oncancel(hndlr);
+					if (hndlr.cb && hndlr.cb.oncancel) {
+						var overwrit = hndlr.cb.oncancel(hndlr);
+						if (!overwrit) { return } // restore handler overwrit
 					}
-					// copy link 41058460
-					//hndlr.domInput.blur();
-					// end link 41058460
 					hndlr.restoreFunc();
 				} else if (e.keyCode == 13) {
 					// enter
@@ -3151,12 +3145,10 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						hndlr.domLbl.setAttribute('value', hndlr.domInput.value);
 					}
 					hndlr.domInput.blur();
-					if (aCB && aCB.onconfirm) {
-						aCB.onconfirm(hndlr);
+					if (hndlr.cb && hndlr.cb.onconfirm) {
+						var overwrit = hndlr.cb.onconfirm(hndlr);
+						if (!overwrit) { return } // restore handler overwrit
 					}
-					// copy link 41058460
-					//hndlr.domInput.blur();
-					// end link 41058460
 					hndlr.restoreFunc();
 				}
 			},
@@ -3245,6 +3237,13 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					}
 				}
 			};
+			hndlr.timeoutHandler = function() {
+				if (hndlr.cb && hndlr.cb.ontimeout) {
+					var overwrit = hndlr.cb.ontimeout(hndlr);
+					if (!overwrit) { return } // restore handler overwrit
+				}
+				hndlr.restoreFunc();
+			};
 			
 			hndlr.domLbl.style.transition = 'opacity 250ms'; // i match opacity time to that of submenu fade out time
 			hndlr.domLbl.addEventListener('transitionend', hndlr.transHandler, false);
@@ -3266,12 +3265,19 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				hndlr.restoreStyleDefault = true;
 				hndlr.restoreStyleKeyPress = true;
 				hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, true);
+			} else if (aRestoreStyle = 'restoreStyleTimeout') {
+				hndlr.restoreStyleDefault = true;
+				hndlr.restoreStyleTimeout = true;
+				hndlr.timer = hndlr.domWindow.setTimeout(hndlr.timeoutHandler, hndlr.cb.ms);
 			}
 			
 		} else {
 			console.error('need to overwrite restore logic');
 			hndlr = tbb_msg_restore_handlers[aHandlerName];			
 			// restore logic
+			if (aOverwrite) {
+				hndlr.cb = aCB;
+			}
 			if (aRestoreStyle == 'restoreStyleDefault') {
 				// let blur/panel hide (called default) handle closing (which i call restoring) message
 				hndlr.restoreStyleDefault = true;
@@ -3286,7 +3292,11 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					if (hndlr.restoreStyleKeyPress) {
 						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
 						delete hndlr.restoreStyleMouseLeave;
-						console.error('overwrit key handler');						
+						console.error('overwrit key handler');
+					}
+					if (hndlr.restoreStyleTimeout) {
+						delete hndlr.restoreStyleTimeout;
+						hndlr.domWindow.clearTimeout(hndlr.timer);
 					}
 				}
 			} else if (aRestoreStyle == 'restoreStyleMouseLeave') {
@@ -3305,6 +3315,10 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit key handler');						
 					}
+					if (hndlr.restoreStyleTimeout) {
+						delete hndlr.restoreStyleTimeout;
+						hndlr.domWindow.clearTimeout(hndlr.timer);
+					}
 				}
 			} else if (aRestoreStyle == 'restoreStyleKeyPress') {
 				if (hndlr.restoreStyleKeyPress) {
@@ -3322,6 +3336,27 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit mouse handler');
 					}
+					if (hndlr.restoreStyleTimeout) {
+						delete hndlr.restoreStyleTimeout;
+						hndlr.domWindow.clearTimeout(hndlr.timer);
+					}
+				}
+			} else if (aRestoreStyle == 'restoreStyleTimeout') {
+				hndlr.restoreStyleDefault = true;
+				hndlr.restoreStyleTimeout = true;
+				hndlr.timer = hndlr.domWindow.setTimeout(hndlr.timeoutHandler, hndlr.cb.ms);
+				if (aOverwrite) {
+					// if aOverwrite == true then remove the the other handlers
+					if (hndlr.restoreStyleMouseLeave) {
+						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit mouse handler');
+					}
+					if (hndlr.restoreStyleKeyPress) {
+						hndlr.domWindow.removeEventListener('keydown', hndlr.keyRestoreFunc, true);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit key handler');
+					}
 				}
 			}
 		}
@@ -3330,10 +3365,10 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		if (hndlr.nextLblVal_onTransEnd == aNewLblVal) {
 			// no need to open its already open at that msg
 		} else {
-			if (aNewLblVal == 'INPUT' && hndlr.origLblVal == aCB.initInputWithValue) {
+			if (aNewLblVal == 'INPUT' && hndlr.origLblVal == hndlr.cb.initInputWithValue) {
 				hndlr.MORPHED = true;
 				// morph
-				if (hndlr.origLblVal == aCB.initInputWithValue) {
+				if (hndlr.origLblVal == hndlr.cb.initInputWithValue) {
 					// morph
 					/*
 					hndlr.domInput.addEventListener('transitionend', function() {
@@ -3353,7 +3388,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			} else {
 				if (aNewLblVal == 'INPUT') {
 					// prep for fade in, as not doing morph
-					hndlr.domInput.value = aCB.initInputWithValue;
+					hndlr.domInput.value = hndlr.cb.initInputWithValue;
 					hndlr.domInput.setAttribute('placeholder', 'Enter name for new profile');
 					console.error('3 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 					hndlr.domInput.style.opacity = '0';
@@ -3398,19 +3433,7 @@ function tbb_box_click(e) {
 				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:''}, true);
 			} else {
 				var profName = origTarg.getAttribute('label');
-
-				var profIniKey;
-				for (var p in ini) {
-					if ('num' in ini[p]) {
-						// its a profile
-						if (ini[p].props.Name == profName) {
-							profIniKey = p;
-						}
-					}
-				}
-				if (!profIniKey) {
-					throw new Error('could not find inikey of prof with name "' + profName +'"');
-				}
+				var profIniKey = getIniKeyFromProfName(profName);
 				
 				if (cWin.Profilist.PBox.classList.contains('profilist-cloning')) {
 					tbb_msg('clone-profile', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:'Copy of ' + profName}, true);
@@ -3447,68 +3470,60 @@ function tbb_box_click(e) {
 		},
 		'profilist-inactive-del': function() {
 			var cProfName = box.getAttribute('label');
+			var cProfIniKey = getIniKeyFromProfName(cProfName);
+			
 			console.log('delete, cProfName:', cProfName);
 			tbb_msg_close('del-profile-' + cProfName, cWin, true);
-			tbb_msg('del-profile-' + cProfName, 'All profile files will be deleted. Are you sure?', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 			
-			/*
-			var cDoc = origTarg.ownerDocument;
-			var cWin = cDoc.defaultView;
-			var lblEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'toolbarbutton-text');			
-			if (box.classList.contains('profilist-edit')) {
-				// cancel it so restore it
-				checkAndExecPanelHidUnloaders(cWin, 'profilist-sub-clicked'); // restore self
-			} else {
-				// open it
-				origTarg.classList.add('profilist-sub-clicked');
-				var nodeNum = Array.prototype.slice.call(box.childNodes).indexOf(origTarg);
-				console.log('origTarg.parentNode:', origTarg.parentNode);
-				origTarg.parentNode.style.width = ((nodeNum+1) * 18) + 'px'; // get 18 from css `.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {`
-				box.classList.add('profilist-edit');
-				lblEl.style.transition = 'opacity 250ms';
-				lblEl.style.opacity = '0';
-				cWin.setTimeout(function() {
-					lblEl.value = 'ENTER = Confirm  ESC = Cancel';
-					lblEl.style.opacity = '1';
-				}, 250);
-				
-				var restoreIt = function() {
-						origTarg.parentNode.style.width = '';
-						box.classList.remove('profilist-edit');
-						origTarg.classList.remove('profilist-sub-clicked');
-						lblEl.style.opacity = '0';
-						cWin.setTimeout(function() {
-							lblEl.value = box.getAttribute('label');
-							lblEl.style.opacity = '1';
-						}, 250);
-						cWin.setTimeout(function() {
-							lblEl.style.transition = '';
-						}, 500);
-				};
-				panelHidUnloaders.push({
-					view: cWin,
-					name: 'profilist-sub-clicked',
-					func: restoreIt
-				});
+			var cCB = {
+				onconfirm: function() {
+					tbb_msg('del-profile-' + cProfName, 'Deleting...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, { onrestore:function(){return true}	}, true);
+					var promise_delProf = deleteProfile(cProfIniKey, true);
+					promise_delProf.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_delProf - ', aVal);
+							// start - do stuff here - promise_delProf
+							tbb_msg('del-profile-' + cProfName, 'ok profile deleted', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+								ms: 3000,
+								ontimeout: function() {
+									box.parentNode.removeChild(box);
+									// should animate this removal, maybe refresh stack dom
+								}
+							}, true);
+							// end - do stuff here - promise_delProf
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_delProf', aReason:aReason};
+							
+							tbb_msg('del-profile-' + cProfName, aReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+								ms: 3000
+							}, true);
+							
+							console.error('Rejected - promise_delProf - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_delProf', aCaught:aCaught};
+							console.error('Caught - promise_delProf - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					);
+					return true; // as i do a tbb_msg in here, so true tells it to not exec its own restoreFunc
+				}
 			}
 			
-			/*
-			var promise_deleteProf = deleteProfile(0, nameOfProfileToDelete);
-			promise_deleteProf.then(
-				function() {
-					console.log('succesfully deleted prof');
-				},
-				function(aReason) {
-					console.error('deleting profile failed for aReason:', aReason);
-				}
-			);
-			*/
+			tbb_msg('del-profile-' + cProfName, myServices.sb.GetStringFromName('confirm-delete'), 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 		},
 		'profilist-default': function() {
-			console.log('set this profile as default');			
+			console.log('set this profile as default');
+			var cProfName = box.getAttribute('label');
+			var cProfIniKey = getIniKeyFromProfName(cProfName);
 		},
 		'profilist-rename': function() {
 			var cProfName = box.getAttribute('label');
+			var cProfIniKey = getIniKeyFromProfName(cProfName);
+			
 			console.log('rename, cProfIniKey:', cProfName);
 			tbb_msg_close('ren-profile-' + cProfName, cWin, true);
 			tbb_msg('ren-profile-' + cProfName, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:cProfName}, false);
@@ -3767,7 +3782,7 @@ function tbb_box_click(e) {
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_pickerProcess_makeIcon', aReason:aReason};
-									console.warn('Rejected - promise_pickerProcess_makeIcon - ', rejObj);
+									console.error('Rejected - promise_pickerProcess_makeIcon - ', rejObj);
 									//deferred_createProfile.reject(rejObj);
 								}
 							).catch(
@@ -3823,7 +3838,7 @@ function tbb_box_click(e) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_pickerProcess', aReason:aReason};
-						console.warn('Rejected - promise_pickerProcess - ', rejObj);
+						console.error('Rejected - promise_pickerProcess - ', rejObj);
 						var deepestReason = aReasonMax(aReason);
 						console.info('deepestReason:', deepestReason);
 						if (Object.prototype.toString.call(deepestReason) === '[object Array]') {
@@ -3915,7 +3930,7 @@ function tbb_box_click(e) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_doBadgeProc', aReason:aReason};
-					console.warn('Rejected - promise_doBadgeProc - ', rejObj);
+					console.error('Rejected - promise_doBadgeProc - ', rejObj);
 					postPromise();
 				}
 			).catch(
@@ -4046,7 +4061,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
-							console.warn('Rejected - promise_changeIconForWindows - ', rejObj);
+							console.error('Rejected - promise_changeIconForWindows - ', rejObj);
 							deferredMain_updateIconToAllWindows.reject(rejObj);
 						}
 					).catch(
@@ -4098,7 +4113,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_pidOfProfile', aReason:aReason};
-									console.warn('Rejected - promise_pidOfProfile - ', rejObj);
+									console.error('Rejected - promise_pidOfProfile - ', rejObj);
 									deferredMain_updateIconToAllWindows.reject(rejObj);
 								}
 							).catch(
@@ -4133,7 +4148,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
-									console.warn('Rejected - promise_getWinHandleForPid - ', rejObj);
+									console.error('Rejected - promise_getWinHandleForPid - ', rejObj);
 									deferredMain_updateIconToAllWindows.reject(rejObj);
 								}
 							).catch(
@@ -4240,7 +4255,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 							},
 							function(aReason) {
 								var rejObj = {name:'promise_getPinCutPaths', aReason:aReason};
-								console.warn('Rejected - promise_getPinCutPaths - ', rejObj);
+								console.error('Rejected - promise_getPinCutPaths - ', rejObj);
 								deferred_cutsUpdated.reject(rejObj);
 							}
 						).catch(
@@ -4281,7 +4296,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_setInfoOnShortcuts', aReason:aReason};
-									console.warn('Rejected - promise_setInfoOnShortcuts - ', rejObj);
+									console.error('Rejected - promise_setInfoOnShortcuts - ', rejObj);
 									deferred_cutsUpdated.reject(rejObj);
 								}
 							).catch(
@@ -4316,7 +4331,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promiseAll_updateOsLauncherIcons', aReason:aReason};
-						console.warn('Rejected - promiseAll_updateOsLauncherIcons - ', rejObj);
+						console.error('Rejected - promiseAll_updateOsLauncherIcons - ', rejObj);
 						deferredMain_updateIconToPinnedCut.reject(rejObj);
 					}
 				).catch(
@@ -4685,7 +4700,7 @@ function setWinPPSProps(aProfIniKey, useOsSetObj, aNativeHandlePtrStr_OR_aDOMWin
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_setWinPPSProps', aReason:aReason};
-				console.warn('Rejected - promise_setWinPPSProps - ', rejObj);
+				console.error('Rejected - promise_setWinPPSProps - ', rejObj);
 				//consider throw
 				//deferred_createProfile.reject(rejObj);
 			}
@@ -5555,7 +5570,7 @@ function activated(e) {
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_removeWinIcons_thenSetLong', aReason:aReason};
-							console.warn('Rejected - promise_removeWinIcons_thenSetLong - ', rejObj);
+							console.error('Rejected - promise_removeWinIcons_thenSetLong - ', rejObj);
 							//deferred_createProfile.reject(rejObj);
 						}
 					).catch(
@@ -5573,7 +5588,7 @@ function activated(e) {
 						return;
 					}
 					var rejObj = {name:'promise_checkWmSeticoned', aReason:aReason};
-					console.warn('Rejected - promise_checkWmSeticoned - ', rejObj);
+					console.error('Rejected - promise_checkWmSeticoned - ', rejObj);
 					//deferred_createProfile.reject(rejObj);
 				}
 			).catch(
@@ -5662,7 +5677,7 @@ function getChannelNameOfExePath(aExePath) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_readChanPref', aReason:aReason};
-					console.warn('Rejected - promise_readChanPref - ', rejObj);
+					console.error('Rejected - promise_readChanPref - ', rejObj);
 					deferredMain_getChannelNameOfExePath.reject(rejObj);
 				}
 			).catch(
@@ -5728,7 +5743,7 @@ function getChannelNameOfProfile(for_ini_key) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_readChanPref', aReason:aReason};
-					console.warn('Rejected - promise_readChanPref - ', rejObj);
+					console.error('Rejected - promise_readChanPref - ', rejObj);
 					deferred_getChannelNameOfProfile.reject(rejObj);
 				}
 			).catch(
@@ -5813,7 +5828,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 						},
 						function(aReason) {
 							var rejObj = {name:'promiseAll_itrSubdirs', aReason:aReason, pathToDir: pathToDir, aExtra: 'meaning finished iterating all entries INCLUDING subitering subdirs in dir of pathToDir'};
-							console.warn('Rejected - promiseAll_itrSubdirs - ', rejObj);
+							console.error('Rejected - promiseAll_itrSubdirs - ', rejObj);
 							deferred_enumChildEntries.reject(rejObj);
 						}
 					).catch(
@@ -5833,7 +5848,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 				if (aReason.winLastError == 2) {
 					rejObj.probableReason = 'targetPath dir doesnt exist';
 				}
-				console.warn('Rejected - promise_batch - ', rejObj);
+				console.error('Rejected - promise_batch - ', rejObj);
 				deferred_enumChildEntries.reject(rejObj);
 			}
 		).catch(
@@ -5924,7 +5939,7 @@ function duplicateDirAndContents(pathToSrcDir, pathToDestDir, max_depth, targetD
 					},
 					function(aReason) {
 						var rejObj = {name:'promiseAll_madeForCurDepth', aReason:aReason};
-						console.warn('Rejected - promiseAll_madeForCurDepth - ', rejObj);
+						console.error('Rejected - promiseAll_madeForCurDepth - ', rejObj);
 						deferred_duplicateDirAndContents.reject(rejObj);
 					}
 				).catch(
@@ -5941,7 +5956,7 @@ function duplicateDirAndContents(pathToSrcDir, pathToDestDir, max_depth, targetD
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_collectAllPathsInSrcDir', aReason:aReason};
-			console.warn('Rejected - promise_collectAllPathsInSrcDir - ', rejObj);
+			console.error('Rejected - promise_collectAllPathsInSrcDir - ', rejObj);
 			deferred_duplicateDirAndContents.reject(rejObj);
 		}
 	).catch(
@@ -5970,7 +5985,7 @@ function delAliasThenMake(pathTrg, pathMake) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_makeAlias', aReason:aReason};
-				console.warn('Rejected - promise_makeAlias - ', rejObj);
+				console.error('Rejected - promise_makeAlias - ', rejObj);
 				deferred_delAliasThenMake.reject(rejObj);
 			}
 		).catch(
@@ -5992,7 +6007,7 @@ function delAliasThenMake(pathTrg, pathMake) {
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_deleteThisAlias', aReason:aReason};
-			console.warn('Rejected - promise_deleteThisAlias - ', rejObj);
+			console.error('Rejected - promise_deleteThisAlias - ', rejObj);
 			deferred_delAliasThenMake.reject(rejObj);
 		}
 	).catch(
@@ -6045,7 +6060,7 @@ function getProfId(aProfilePath, preProfToolkitInit) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_readTimes', aReason:aReason};
-				console.warn('Rejected - promise_readTimes - ', rejObj);
+				console.error('Rejected - promise_readTimes - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -6141,7 +6156,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
-					console.warn('Rejected - promise_MLgetProfSpecs - ', rejObj);
+					console.error('Rejected - promise_MLgetProfSpecs - ', rejObj);
 					deferredMain_makeIcon.reject(rejObj);
 				}
 			).catch(
@@ -6177,7 +6192,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_launcherExist', aReason:aReason};
-				console.warn('Rejected - promise_launcherExist - ', rejObj);
+				console.error('Rejected - promise_launcherExist - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -6224,7 +6239,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
-				console.warn('Rejected - promiseAll_preCreate - ', rejObj);
+				console.error('Rejected - promiseAll_preCreate - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -6311,7 +6326,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_removeDummy', aReason:aReason};
-							console.warn('Rejected - promise_removeDummy - ', rejObj);
+							console.error('Rejected - promise_removeDummy - ', rejObj);
 							//deferred_reflectMods.reject(rejObj);
 						}
 					).catch(
@@ -6335,7 +6350,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_makeDummy', aReason:aReason};
-						console.warn('Rejected - promise_makeDummy - ', rejObj);
+						console.error('Rejected - promise_makeDummy - ', rejObj);
 						//deferred_reflectMods.reject(rejObj);
 					}
 				).catch(
@@ -6368,7 +6383,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_updateIni', aReason:aReason};
-					console.warn('Rejected - promise_updateIni - ', rejObj);
+					console.error('Rejected - promise_updateIni - ', rejObj);
 					deferred_makeLauncher.reject(rejObj);
 				}
 			).catch(
@@ -6403,7 +6418,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_makeMac', aReason:aReason};
-				console.warn('Rejected - promiseAll_makeMac - ', rejObj);
+				console.error('Rejected - promiseAll_makeMac - ', rejObj);
 				deferred_makeLauncher.reject(rejObj);
 			}
 		).catch(
@@ -6481,7 +6496,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 				},
 				function(aReason) {
 					var rejObj = {name:'promiseAll_makeLauncherDirAndFiles', aReason:aReason};
-					console.warn('Rejected - promiseAll_makeLauncherDirAndFiles - ', rejObj);
+					console.error('Rejected - promiseAll_makeLauncherDirAndFiles - ', rejObj);
 					deferred_makeLauncherDirAndFiles.reject(rejObj);
 				}
 			).catch(
@@ -6517,7 +6532,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 						},
 						function(aReason) {
 							var rejObj = {name:'promiseAll_copyAsAliases', aReason:aReason};
-							console.warn('Rejected - promiseAll_copyAsAliases - ', rejObj);
+							console.error('Rejected - promiseAll_copyAsAliases - ', rejObj);
 							deferred_copyContents.reject(rejObj);
 						}
 					).catch(
@@ -6540,7 +6555,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_getFxAppContentsFilePaths', aReason:aReason};
-						console.warn('Rejected - promise_getFxAppContentsFilePaths - ', rejObj);
+						console.error('Rejected - promise_getFxAppContentsFilePaths - ', rejObj);
 						deferred_copyContents.reject(rejObj);
 					}
 				).catch(
@@ -6587,7 +6602,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_writeModedString', aReason:aReason};
-							console.warn('Rejected - promise_writeModedString - ', rejObj);
+							console.error('Rejected - promise_writeModedString - ', rejObj);
 							deferred_writeModdedPlist.reject(rejObj);
 						}
 					).catch(
@@ -6611,7 +6626,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_readPlist', aReason:aReason};
-						console.warn('Rejected - promise_readPlist - ', rejObj);
+						console.error('Rejected - promise_readPlist - ', rejObj);
 						deferred_writeModdedPlist.reject(rejObj);
 					}
 				).catch(
@@ -6663,7 +6678,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_makeTopLevelDirs', aReason:aReason};
-						console.warn('Rejected - promise_makeTopLevelDirs - ', rejObj);
+						console.error('Rejected - promise_makeTopLevelDirs - ', rejObj);
 						deferred_makeLauncherDirAndFiles.reject(rejObj);
 					}
 				).catch(
@@ -6726,7 +6741,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_makeTheIconAsItDNE', aReason:aReason};
-									console.warn('Rejected - promise_makeTheIconAsItDNE - ', rejObj);
+									console.error('Rejected - promise_makeTheIconAsItDNE - ', rejObj);
 									deferred_writeIcon.reject(rejObj);
 								}
 							).catch(
@@ -6738,7 +6753,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 							);
 						} else {
 							var rejObj = {name:'promise_copyIcon', aReason:aReason};
-							console.warn('Rejected - promise_copyIcon - ', rejObj);
+							console.error('Rejected - promise_copyIcon - ', rejObj);
 							deferred_writeIcon.reject(rejObj);
 						}
 					}
@@ -6771,7 +6786,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_setPermsScript', aReason:aReason};
-							console.warn('Rejected - promise_setPermsScript - ', rejObj);
+							console.error('Rejected - promise_setPermsScript - ', rejObj);
 							deferred_writeExecAndPermIt.reject(rejObj);
 						}
 					).catch(
@@ -6809,7 +6824,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_writeExec', aReason:aReason};
-						console.warn('Rejected - promise_writeExec - ', rejObj);
+						console.error('Rejected - promise_writeExec - ', rejObj);
 						writeExecAndPermIt.reject(rejObj);
 					}
 				).catch(
@@ -6848,7 +6863,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_getChName', aReason:aReason};
-				console.warn('Rejected - promise_getChName - ', rejObj);
+				console.error('Rejected - promise_getChName - ', rejObj);
 				deferred_makeLauncher.reject(rejObj);
 			}
 		).catch(
@@ -6972,7 +6987,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_channelForExe', aReason:aReason};
-						console.warn('Rejected - promise_channelForExe - ', rejObj);
+						console.error('Rejected - promise_channelForExe - ', rejObj);
 						deferredMain_getProfileSpecs.reject(rejObj);
 					}
 				).catch(
@@ -7045,7 +7060,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 						}
 					}
 					var rejObj = {name:'promise_readCompatIni', aReason:aReason};
-					console.warn('Rejected - promise_readCompatIni - ', rejObj);
+					console.error('Rejected - promise_readCompatIni - ', rejObj);
 					deferredMain_getProfileSpecs.reject(rejObj);
 				}
 			).catch(
@@ -7098,7 +7113,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_doGetChProfName', aReason:aReason};
-						console.warn('Rejected - promise_doGetChProfName - ', rejObj);
+						console.error('Rejected - promise_doGetChProfName - ', rejObj);
 						deferredMain_getProfileSpecs.reject(rejObj);
 					}
 				).catch(
@@ -7123,7 +7138,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 						},
 						function(aReason) {
 							var rejObj = {name:'promise_path_to_exeDefaultBrowser', aReason:aReason};
-							console.warn('Rejected - promise_path_to_exeDefaultBrowser - ', rejObj);
+							console.error('Rejected - promise_path_to_exeDefaultBrowser - ', rejObj);
 							deferredMain_getProfileSpecs.reject(rejObj);
 						}
 					).catch(
@@ -7167,7 +7182,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
-				console.warn('Rejected - promise_testAProfilePathRunning - ', rejObj);
+				console.error('Rejected - promise_testAProfilePathRunning - ', rejObj);
 				deferredMain_getProfileSpecs.reject(rejObj);
 			}
 		).catch(
@@ -7372,7 +7387,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
-				console.warn('Rejected - promise_cProfSpecs - ', rejObj);
+				console.error('Rejected - promise_cProfSpecs - ', rejObj);
 				deferredMain_launchProfile.reject(rejObj);
 			}
 		).catch(
@@ -7432,7 +7447,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 							},
 							function(aReason) {
 								var rejObj = {name:'promise_doFocus', aReason:aReason};
-								console.warn('Rejected - promise_doFocus - ', rejObj);
+								console.error('Rejected - promise_doFocus - ', rejObj);
 								deferredMain_launchProfile.reject(rejObj);
 							}
 						).catch(
@@ -7465,7 +7480,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 								},
 								function(aReason) {
 									var rejObj = {name:'promise_doLaunch', aReason:aReason};
-									console.warn('Rejected - promise_doLaunch - ', rejObj);
+									console.error('Rejected - promise_doLaunch - ', rejObj);
 									deferredMain_launchProfile.reject(rejObj);
 								}
 							).catch(
@@ -7526,7 +7541,7 @@ var do_getProfSpecsCheckUse_WithCB = function(aDeferred, aProfIniKey, aSpecObj, 
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
-			console.warn('Rejected - promise_cProfSpecs - ', rejObj);
+			console.error('Rejected - promise_cProfSpecs - ', rejObj);
 			aDeferred.reject(rejObj);
 		}
 	).catch(
@@ -7611,7 +7626,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 							},
 							function(aReason) {
 								var rejObj = {name:'promise_doMakeDeskcut', aReason:aReason};
-								console.warn('Rejected - promise_doMakeDeskcut - ', rejObj);
+								console.error('Rejected - promise_doMakeDeskcut - ', rejObj);
 								deferredMain_makeDeskCut.reject(rejObj);
 							}
 						).catch(
@@ -7713,7 +7728,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
-					console.warn('Rejected - promise_MLgetProfSpecs - ', rejObj);
+					console.error('Rejected - promise_MLgetProfSpecs - ', rejObj);
 					deferredMain_makeIcon.reject(rejObj);
 				}
 			).catch(
@@ -7749,7 +7764,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_launcherExist', aReason:aReason};
-				console.warn('Rejected - promise_launcherExist - ', rejObj);
+				console.error('Rejected - promise_launcherExist - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -7796,7 +7811,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
-				console.warn('Rejected - promiseAll_preCreate - ', rejObj);
+				console.error('Rejected - promiseAll_preCreate - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -7873,7 +7888,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_doMakeLauncher', aReason:aReason};
-						console.warn('Rejected - promise_doMakeLauncher - ', rejObj);
+						console.error('Rejected - promise_doMakeLauncher - ', rejObj);
 						deferred_makeDeskCut.reject(rejObj);
 					}
 				).catch(
@@ -7901,7 +7916,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 						//	deferred_makeDeskCut.resolve('desktop shortcut already exists'); //should never happen as i del first
 						//} else {
 							var rejObj = {name:'promise_makeDeskAlias', aReason:aReason};
-							console.warn('Rejected - promise_makeDeskAlias - ', rejObj);
+							console.error('Rejected - promise_makeDeskAlias - ', rejObj);
 							deferred_makeDeskCut.reject(rejObj);
 						//}
 					}
@@ -7999,7 +8014,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_getChName', aReason:aReason};
-				console.warn('Rejected - promise_getChName - ', rejObj);
+				console.error('Rejected - promise_getChName - ', rejObj);
 				deferred_makeDeskCut.reject(rejObj);
 			}
 		).catch(
@@ -8234,7 +8249,7 @@ function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 		},
 		function(aReason) {
 			var rejObj = {name:'promiseAll_loadImgs', aReason:aReason};
-			console.warn('Rejected - promiseAll_loadImgs - ', rejObj);
+			console.error('Rejected - promiseAll_loadImgs - ', rejObj);
 			//deferredMain_loadImagePaths.reject(rejObj);
 			// i dont reject main here because i plan to make the individual promise in promiseAllArr_loadImgs to have a .then and its reject should reject main
 		}
@@ -8314,7 +8329,7 @@ function pickerIconset(tWin) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promiseAllArr_writePngs.promise', aReason:aReason};
-					console.warn('Rejected - promiseAllArr_writePngs - ', rejObj);
+					console.error('Rejected - promiseAllArr_writePngs - ', rejObj);
 					refDeferred.reject(rejObj);
 				}
 			).catch(
@@ -8385,7 +8400,7 @@ function pickerIconset(tWin) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_scaleAndWriteAll', aReason:aReason};
-				console.warn('Rejected - promiseAll_scaleAndWriteAll - ', rejObj);
+				console.error('Rejected - promiseAll_scaleAndWriteAll - ', rejObj);
 				deferredMain_pickerIconset.reject(rejObj);
 			}
 		).catch(
@@ -8432,7 +8447,7 @@ function pickerIconset(tWin) {
 					ensureNameAvailable();
 				} else {
 					var rejObj = {name:'promise_makeIconsetDir', aReason:aReason};
-					console.warn('Rejected - promise_makeIconsetDir - ', rejObj);
+					console.error('Rejected - promise_makeIconsetDir - ', rejObj);
 					deferredMain_pickerIconset.reject(rejObj);
 				}
 			}
@@ -8535,7 +8550,7 @@ function pickerIconset(tWin) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_doImgLoads', aReason:aReason};
-				console.warn('Rejected - promise_doImgLoads - ', rejObj);
+				console.error('Rejected - promise_doImgLoads - ', rejObj);
 				deferredMain_pickerIconset.reject(rejObj);
 			}
 		).catch(
@@ -8881,7 +8896,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_refIco', aReason:aReason};
-						console.warn('Rejected - promise_refIco - ', rejObj);
+						console.error('Rejected - promise_refIco - ', rejObj);
 						deferredMain_makeIcon.reject(rejObj);
 					}
 				).catch(
@@ -8908,7 +8923,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_writeIco', aReason:aReason};
-					console.warn('Rejected - promise_writeIco - ', rejObj);
+					console.error('Rejected - promise_writeIco - ', rejObj);
 					deferredMain_makeIcon.reject(rejObj);
 				}
 			).catch(
@@ -8967,7 +8982,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_iconPrexists', aReason:aReason};
-				console.warn('Rejected - promise_iconPrexists - ', rejObj);
+				console.error('Rejected - promise_iconPrexists - ', rejObj);
 				deferredMain_makeIcon.reject(rejObj);
 			}
 		).catch(
@@ -8997,7 +9012,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_dcipealbabs', aReason:aReason};
-				console.warn('Rejected - promiseAll_dcipealbabs - ', rejObj);
+				console.error('Rejected - promiseAll_dcipealbabs - ', rejObj);
 				deferred_createProfile.reject(rejObj);
 			}
 		).catch(
@@ -9025,7 +9040,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_profSpecsToGetIconNameObj', aReason:aReason};
-					console.warn('Rejected - promise_profSpecsToGetIconNameObj - ', rejObj);
+					console.error('Rejected - promise_profSpecsToGetIconNameObj - ', rejObj);
 					deferredMain_makeIcon.reject(rejObj);
 				}
 			).catch(
@@ -9092,6 +9107,21 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 	return deferredMain_makeIcon.promise;
 }
 /* end - makeIcon */
+
+function getIniKeyFromProfName(aProfName) {
+	// case sensitive
+	
+	for (var p in ini) {
+		if ('num' in ini[p]) {
+			// its a profile
+			if (ini[p].props.Name == aProfName) {
+				return p;
+			}
+		}
+	}
+	
+	throw new Error('could not find inikey of prof with name "' + aProfName +'"');
+}
 
 /* start - control panel server/client communication */
 const subDataSplitter = ':~:~:~:'; //note: must match splitter const used in client //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
@@ -9265,7 +9295,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_makeRequestedCut', aReason:aReason};
-						console.warn('Rejected - promise_makeRequestedCut - ', rejObj);
+						console.error('Rejected - promise_makeRequestedCut - ', rejObj);
 						var deepestReason = aReasonMax(aReason);
 						var responseJson = {
 							clientId: incomingJson.clientId,
@@ -9584,7 +9614,7 @@ function showPick4Badging(win) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promiseAllArr_writePngs.promise', aReason:aReason};
-					console.warn('Rejected - promiseAllArr_writePngs - ', rejObj);
+					console.error('Rejected - promiseAllArr_writePngs - ', rejObj);
 					refDeferred.reject(rejObj);
 				}
 			).catch(
@@ -9646,7 +9676,7 @@ function showPick4Badging(win) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_scaleAndWriteAll', aReason:aReason};
-				console.warn('Rejected - promiseAll_scaleAndWriteAll - ', rejObj);
+				console.error('Rejected - promiseAll_scaleAndWriteAll - ', rejObj);
 				deferred_badgeProcess.reject(rejObj);
 			}
 		).catch(
@@ -9683,7 +9713,7 @@ function showPick4Badging(win) {
 			},
 			function(aReason) {
 				var rejObj = {name:'deferred_badgeProcess', aReason:aReason};
-				console.warn('Rejected - deferred_badgeProcess - ', rejObj);
+				console.error('Rejected - deferred_badgeProcess - ', rejObj);
 				if (msgsToUser.length >0) {
 					Services.prompt.alert(win, 'Profilist - Badging Failed', msgsToUser.join('\n'));
 				}
@@ -9725,7 +9755,7 @@ function showPick4Badging(win) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promiseAll_loadAllImgs', aReason:aReason};
-				console.warn('Rejected - promiseAll_loadAllImgs - ', rejObj);
+				console.error('Rejected - promiseAll_loadAllImgs - ', rejObj);
 				deferred_badgeProcess.reject('Should never get here, I never reject it');
 			}
 		).catch(
@@ -9883,7 +9913,7 @@ function mac_doPathsOverride() {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_readThisPathsFile', aReason:aReason};
-				console.warn('Rejected - promise_readThisPathsFile - ', rejObj);
+				console.error('Rejected - promise_readThisPathsFile - ', rejObj);
 				deferred_mac_doPathsOverride.reject(rejObj);
 			}
 		).catch(
@@ -10075,7 +10105,7 @@ function startup(aData, aReason) {
 					},
 					function(aReason) {
 						var rejObj = {name:'promise_overridePaths', aReason:aReason};
-						console.warn('Rejected - promise_overridePaths - ', rejObj);
+						console.error('Rejected - promise_overridePaths - ', rejObj);
 						Services.prompt.alert(Services.wm.getMostRecentWindow(null), 'Profilist - Critical Error', 'Profilist failed to startup in this Mac OS X launcher, you can only use Profilist from non-shortcut paths, report this to developer at noitidart@gmail.com as this is very bad and should be fixed');
 					}
 				).catch(
@@ -10210,7 +10240,7 @@ function getProfStat(aProfilePath, dontRefreshStatObj) {
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_updateProfStatObj', aReason:aReason};
-					console.warn('Rejected - promise_updateProfStatObj - ', rejObj);
+					console.error('Rejected - promise_updateProfStatObj - ', rejObj);
 					deferredMain_getProfStat.reject(rejObj);
 				}
 			).catch(
@@ -10288,7 +10318,7 @@ function updateProfStatObj(markObj) {
 					}
 				} else {
 					var rejObj = {name:'promise_readProfStatFile', aReason:aReason};
-					console.warn('Rejected - promise_readProfStatFile - ', rejObj);
+					console.error('Rejected - promise_readProfStatFile - ', rejObj);
 					deferredMain_updateProfStatObj.reject(rejObj);
 				}
 			}
@@ -10331,7 +10361,7 @@ function updateProfStatObj(markObj) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_writeProfStatFile', aReason:aReason};
-				console.warn('Rejected - promise_writeProfStatFile - ', rejObj);
+				console.error('Rejected - promise_writeProfStatFile - ', rejObj);
 				deferredMain_updateProfStatObj.reject(rejObj);
 			}
 		).catch(
@@ -10518,7 +10548,7 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_getInfoOnShortcuts', aReason:aReason};
-				console.warn('Rejected - promise_getInfoOnShortcuts - ', rejObj);
+				console.error('Rejected - promise_getInfoOnShortcuts - ', rejObj);
 				deferredMain_getPathToPinnedCut.reject(rejObj);
 			}
 		).catch(
@@ -10547,7 +10577,7 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 		},
 		function(aReason) {
 			var rejObj = {name:'promiseAll_collectCutInfos', aReason:aReason};
-			console.warn('Rejected - promiseAll_collectCutInfos - ', rejObj);
+			console.error('Rejected - promiseAll_collectCutInfos - ', rejObj);
 			deferredMain_getPathToPinnedCut.reject(rejObj);
 		}
 	).catch(
@@ -10709,7 +10739,7 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 		  },
 		  function(aReason) {
 			var rejObj = {name:'promiseAll_checkContainedPinFiles', aReason:aReason};
-			console.warn('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
+			console.error('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
 			deferredMain_getPathToPinnedCut.reject(rejObj);
 		  }
 		).catch(
@@ -10858,7 +10888,7 @@ function makeDir_Bug934283(path, options) {
 					aReason: aReason,
 					curPath: pathExistsForCertain
 				};
-				console.warn('Rejected - ' + rejObj.promiseName + ' - ', rejObj);
+				console.error('Rejected - ' + rejObj.promiseName + ' - ', rejObj);
 				deferred_makeDir_Bug934283.reject(rejObj);
 			}
 		).catch(
@@ -10899,7 +10929,7 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_retryAttempt', aReason:aReason};
-				console.warn('Rejected - promise_retryAttempt - ', rejObj);
+				console.error('Rejected - promise_retryAttempt - ', rejObj);
 				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
 			}
 		).catch(
@@ -10939,7 +10969,7 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_makeDirsRecurse', aReason:aReason};
-				console.warn('Rejected - promise_makeDirsRecurse - ', rejObj);
+				console.error('Rejected - promise_makeDirsRecurse - ', rejObj);
 				if (aReason.becauseNoSuchFile) {
 					console.log('make dirs then do retryAttempt');
 					makeDirs();
@@ -10966,7 +10996,7 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_initialAttempt', aReason:aReason};
-			console.warn('Rejected - promise_initialAttempt - ', rejObj);
+			console.error('Rejected - promise_initialAttempt - ', rejObj);
 			if (aReason.becauseNoSuchFile) {
 				console.log('make dirs then do secondAttempt');
 				makeDirs();
@@ -11027,7 +11057,7 @@ function read_encoded(path, options) {
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_readIt', aReason:aReason};
-			console.warn('Rejected - promise_readIt - ', rejObj);
+			console.error('Rejected - promise_readIt - ', rejObj);
 			deferred_read_encoded.reject(rejObj);
 		}
 	).catch(
@@ -11063,7 +11093,7 @@ function immediateChildPaths(path_dir) {
 		},
 		function(aReason) {
 			var rejObj = {name:'promise_collectChildPaths', aReason:aReason};
-			console.warn('Rejected - promise_collectChildPaths - ', rejObj);
+			console.error('Rejected - promise_collectChildPaths - ', rejObj);
 			deferred_immediateChildPaths.reject(rejObj);
 		}
 	).catch(
@@ -11236,7 +11266,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 							var rejObj = {name:'promiseAll_itrSubdirs', aReason:aReason};
 							rejObj.aExtra = 'meaning finished iterating all entries INCLUDING subitering subdirs in dir of pathToDir';
 							rejobj.pathToDir = pathToDir;
-							console.warn('Rejected - promiseAll_itrSubdirs - ', rejObj);
+							console.error('Rejected - promiseAll_itrSubdirs - ', rejObj);
 							deferredMain_enumChildEntries.reject(rejObj);
 						}
 					).catch(
@@ -11256,7 +11286,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 				if (aReason.winLastError == 2) {
 					rejObj.probableReason = 'directory at pathToDir doesnt exist';
 				}
-				console.warn('Rejected - promise_batch - ', rejObj);
+				console.error('Rejected - promise_batch - ', rejObj);
 				deferredMain_enumChildEntries.reject(rejObj);
 			}
 		).catch(
@@ -11318,7 +11348,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core) {
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_initWorker', aReason:aReason};
-				console.warn('Rejected - promise_initWorker - ', rejObj);
+				console.error('Rejected - promise_initWorker - ', rejObj);
 				deferredMain_SIPWorker.reject(rejObj);
 			}
 		).catch(

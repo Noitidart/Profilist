@@ -924,7 +924,7 @@ function OLDcreateShortcut(path_createInDir, str_createWithName, path_linkTo, op
 					}
 
 					if ('str_createWithAppUserModelId' in options) {
-						if (promise_checkExists) {
+						if (aExists) {
 							console.error('cannot update System.AppUserModel.ID, you specified it should though, so throwing warning as it will not update it'); // trying to update while it exists returns HRESULT of -2147287035 which is STG_E_ACCESSDENIED
 						} else {
 							var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), options.str_createWithAppUserModelId);		
