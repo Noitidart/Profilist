@@ -3002,14 +3002,15 @@ function subleave(e) {
 	*/
 }
 
-function tbb_msg_close(aHandlerName, aDOMWindow/*, aRestoreStyleStr*/) {
+function tbb_msg_close(aHandlerName, aDOMWindow, allButThisHandler/*, aRestoreStyleStr*/) {
 	// if aHandlerName is null then all things in tbb_msg_restore_handlers are restored
 		// if aHandlerName is null and aDOMWindow is provided, then all things in tbb_msg_restore_handlers with matching DOMWindow are restored
 	
 	// if aRestoreStyleStr is set, if that key is not found, then it will not restore it
 	
 	// see checkAndExecPanelHidUnloaders
-	if (aHandlerName) {
+	if (aHandlerName && !allButThisHandler) {
+		console.error('closing specific handler name', aHandlerName);
 		/*
 		if (aRestoreStyleStr && aRestoreStyleStr in tbb_msg_restore_handlers[aHandlerName]) {
 			console.error('aRestoreStyleStr was set to ', aRestoreStyleStr, 'but it this style wasnt found in handler', aHandlerName, 'so will not restore func on it');
@@ -3023,6 +3024,9 @@ function tbb_msg_close(aHandlerName, aDOMWindow/*, aRestoreStyleStr*/) {
 		tbb_msg_restore_handlers[aHandlerName].restoreFunc();
 	} else {
 		for (var h in tbb_msg_restore_handlers) {
+			if (allButThisHandler && h == aHandlerName) {
+				continue;
+			}
 			if (aDOMWindow && tbb_msg_restore_handlers[h].domWindow != aDOMWindow) {
 				continue;
 			}
@@ -3032,6 +3036,7 @@ function tbb_msg_close(aHandlerName, aDOMWindow/*, aRestoreStyleStr*/) {
 				return;
 			}
 			*/
+			console.error('destroying from all iter');
 			tbb_msg_restore_handlers[h].restoreFunc();
 		}
 	}
@@ -3094,7 +3099,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			};
 			
 			hndlr.domLbl.style.transition = 'opacity 250ms'; // i match opacity time to that of submenu fade out time
-			hndlr.domLbl.addEventListener('transitionend', hndlr.transHandler , false);
+			hndlr.domLbl.addEventListener('transitionend', hndlr.transHandler, false);
 			hndlr.smItem.classList.add('profilist-sub-clicked');
 			hndlr.tbbBox.classList.add('profilist-edit');
 			
@@ -3120,8 +3125,9 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				if (aOverwrite) {
 					// if aOverwrite == true then remove the the other handlers
 					if (hndlr.restoreStyleMouseLeave) {
-						delete hndlr.restoreStyleMouseLeave;
 						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit mouse handler');
 					}
 				}
 			} else if (aRestoreStyle == 'restoreStyleMouseLeave') {
@@ -3218,7 +3224,7 @@ function tbb_box_click(e) {
 		},
 		'profilist-clone': function() {
 			if ('clone-profile' in tbb_msg_restore_handlers) {
-				if (tbb_msg_restore_handlers['clone-profile'].nextLblVal_onTransEnd == 'Pick a profile...'){ 
+				if (tbb_msg_restore_handlers['clone-profile'].nextLblVal_onTransEnd == 'Pick a profile...') { 
 					// cancel clone
 					tbb_msg_close('clone-profile', cWin);
 					cWin.Profilist.PBox.classList.remove('profilist-cloning');
@@ -3227,6 +3233,7 @@ function tbb_box_click(e) {
 					// enter pick profile
 					console.log('wiggle for clone');
 					cWin.Profilist.PBox.classList.add('profilist-cloning');
+					tbb_msg_close('clone-profile', cWin, true);
 					tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 				}
 			} else {
@@ -3234,6 +3241,7 @@ function tbb_box_click(e) {
 				// enter pick profile
 				console.log('wiggle for clone');
 				cWin.Profilist.PBox.classList.add('profilist-cloning');
+				tbb_msg_close('clone-profile', cWin, true);
 				tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 			}				
 		},
@@ -3241,6 +3249,9 @@ function tbb_box_click(e) {
 			var nameOfProfileToDelete = box.getAttribute('label');
 			console.log('delete, prof name:', nameOfProfileToDelete);
 			
+			tbb_msg('del-profile', 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			
+			/*
 			var cDoc = origTarg.ownerDocument;
 			var cWin = cDoc.defaultView;
 			var lblEl = cDoc.getAnonymousElementByAttribute(box, 'class', 'toolbarbutton-text');			
