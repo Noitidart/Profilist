@@ -14,6 +14,31 @@
 }
 /* end - get the background image from proflist_box to dev-build */
 
+/* start cloning styles*/
+#profilist_box.profilist-cloning .profilist-tbb-box:not(.profilist-create) .profilist-submenu{
+	display: none;
+}
+
+@keyframes profilist-wiggle-profiles {
+  0% {
+	transform: rotate(0deg);
+  }
+  25% {
+	transform: rotate(1deg);
+  }
+  50% {
+	transform: rotate(0deg);
+  }
+  75% {
+	transform: rotate(-1deg);
+  }
+}
+#profilist_box.profilist-cloning .profilist-tbb-box:not(.profilist-create) .toolbarbutton-text {
+	animation: profilist-wiggle-profiles 250ms infinite;
+	transform-origin: 50% 50%;
+}
+/* end cloning styles*/
+
 .profilist-display-stack {
 	margin: 0;
 	padding: 0;

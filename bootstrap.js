@@ -1526,7 +1526,9 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				var SMItem_profilistClone = aDOMWindow.document.getAnonymousElementByAttribute(elFromJson_createNewProfile, 'class', 'profilist-clone'); // getAnon must go after PStack.appendChild as anon nodes dont come in until its added to doc
 				console.error('info SMItem_profilistClone:', SMItem_profilistClone);
 				SMItem_profilistClone.addEventListener('mouseenter', function() {
-					tbb_msg('clone-profile', 'Clone Profile', 'restoreStyleMouseLeave', aDOMWindow, elFromJson_createNewProfile, SMItem_profilistClone, null, false);
+					if (!('clone-profile' in tbb_msg_restore_handlers)) {
+						tbb_msg('clone-profile', 'Clone Profile', 'restoreStyleMouseLeave', aDOMWindow, elFromJson_createNewProfile, SMItem_profilistClone, null, false);
+					} // else { // already handled so dont do it. cuz if its on "Pick a profile..." it iwll then overwrite message with "Clone Profile" on mouseenter
 				}, false);
 				
 				//profToolkit.selectedProfile.iniKey == null then this is a temporary profile
@@ -3014,10 +3016,14 @@ function tbb_msg_close(aHandlerName, aDOMWindow/*, aRestoreStyleStr*/) {
 			return;
 		}
 		*/
+		if (aDOMWindow && tbb_msg_restore_handlers[aHandlerName].domWindow != aDOMWindow) {
+			// DOMWin doesnt match
+			return;
+		}
 		tbb_msg_restore_handlers[aHandlerName].restoreFunc();
 	} else {
 		for (var h in tbb_msg_restore_handlers) {
-			if (aDOMWindow && tbb_msg_restore_handlers.domWindow != aDOMWindow) {
+			if (aDOMWindow && tbb_msg_restore_handlers[h].domWindow != aDOMWindow) {
 				continue;
 			}
 			/*
@@ -3105,25 +3111,32 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			
 		} else {
 			console.error('need to overwrite restore logic');
-			hndlr = tbb_msg_restore_handlers[aHandlerName];
-			/*
-			
+			hndlr = tbb_msg_restore_handlers[aHandlerName];			
 			// restore logic
-			if (aRestoreStyle == 0) {
+			if (aRestoreStyle == 'restoreStyleDefault') {
 				// let blur/panel hide (called default) handle closing (which i call restoring) message
 				hndlr.restoreStyleDefault = true;
+				// cannot test hndlr.restoreStyleDefault because if it has that, it like has others like restoreStyleMouseLeave
 				if (aOverwrite) {
-					// if aOverwrite == true then remove the mouseout handler if it had one
-					delete hndlr.restoreStyleMouseLeave;
-					hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+					// if aOverwrite == true then remove the the other handlers
+					if (hndlr.restoreStyleMouseLeave) {
+						delete hndlr.restoreStyleMouseLeave;
+						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+					}
 				}
-			} else if (aRestoreStyle == 'restoreStyleMouseLeave' && !(aRestoreStyle in hndlr)) {
-				// default AND mouse restore style
-				hndlr.restoreStyleDefault = true;
-				hndlr.restoreStyleMouseLeave = true;
-				hndlr.smItem.addEventListener('mouseleave', hndlr.restoreFunc, false);
+			} else if (aRestoreStyle == 'restoreStyleMouseLeave') {
+				if (hndlr.restoreStyleMouseLeave) {
+					// already has restoreStyleMouseLeave so dont do it
+				} else {
+					// default AND mouse restore style
+					hndlr.restoreStyleDefault = true;
+					hndlr.restoreStyleMouseLeave = true;
+					hndlr.smItem.addEventListener('mouseleave', hndlr.restoreFunc, false);
+				}
+				if (aOverwrite) {
+					// remove the other handlers
+				}
 			}
-			*/
 		}
 		
 		// open it logic
@@ -3145,6 +3158,8 @@ function tbb_box_click(e) {
 	var className;
 	var classList = origTarg.classList;
 
+	var cDoc = origTarg.ownerDocument;
+	var cWin = cDoc.defaultView;
 	
 	var classAction = {
 		'profilist-tbb-box': function() {
@@ -3202,8 +3217,25 @@ function tbb_box_click(e) {
 			}
 		},
 		'profilist-clone': function() {
-			console.log('wiggle for clone');
-			tbb_msg('Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			if ('clone-profile' in tbb_msg_restore_handlers) {
+				if (tbb_msg_restore_handlers['clone-profile'].nextLblVal_onTransEnd == 'Pick a profile...'){ 
+					// cancel clone
+					tbb_msg_close('clone-profile', cWin);
+					cWin.Profilist.PBox.classList.remove('profilist-cloning');
+				} else {
+					// copy of block link123121
+					// enter pick profile
+					console.log('wiggle for clone');
+					cWin.Profilist.PBox.classList.add('profilist-cloning');
+					tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+				}
+			} else {
+				// copy of block link123121
+				// enter pick profile
+				console.log('wiggle for clone');
+				cWin.Profilist.PBox.classList.add('profilist-cloning');
+				tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			}				
 		},
 		'profilist-inactive-del': function() {
 			var nameOfProfileToDelete = box.getAttribute('label');
