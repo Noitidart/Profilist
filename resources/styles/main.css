@@ -160,13 +160,10 @@ this is kind of nice think about it
 	opacity: 1;
 }
 
-.profilist-tbb-box.profilist-edit .toolbarbutton-text {
-	opacity: 0;
-	/*margin-left: 3px;*/
-	transition: opacity 0s ease 0.8s;/*, margin-left 0.2s ease 0.22s*/
+
+.profilist-tbb-box .toolbarbutton-text {
 	pointer-events: none;
 }
-
 .profilist-tbb-box .profilist-input {
 	pointer-events: none;
 	font-size: inherit;

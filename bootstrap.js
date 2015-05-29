@@ -3063,6 +3063,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		if (!(aHandlerName in tbb_msg_restore_handlers)) {
 			// it wasnt open so initalize it
 			var lbl = cDoc.getAnonymousElementByAttribute(aTBBBox, 'class', 'toolbarbutton-text');
+			var input = cDoc.getAnonymousElementByAttribute(aTBBBox, 'class', 'profilist-input');
 			tbb_msg_restore_handlers[aHandlerName] = {};
 			hndlr = tbb_msg_restore_handlers[aHandlerName];
 			hndlr.handlerName = aHandlerName;
@@ -3070,8 +3071,9 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.smItem = aSMItem;
 			hndlr.tbbBox = aTBBBox;
 			hndlr.domLbl = lbl;
-			hndlr.nextLblVal_onTransEnd = '0';
+			hndlr.domInput = input;
 			hndlr.origLblVal = lbl.getAttribute('value');
+			hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
 			hndlr.restoreFunc = function() {
 				hndlr.domLbl.style.opacity = '0';
 				hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
@@ -3079,15 +3081,55 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// remove mouse leave handler if we had added one
 					hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
 				}
+				if (hndlr.restoreStyleKeyPress) {
+					hndlr.domInput.style.transition = '';
+					hndlr.domWindow.removeEventListener('keypress', hndlr.keyRestoreFunc, false);
+				}
 				hndlr.restoring = true;
 				hndlr.domWindow.setTimeout(function() {
 					hndlr.tbbBox.classList.remove('profilist-edit');
 				}, 100);
 			};
+			hndlr.keyRestoreFunc = function(e) {
+				if (e.keyCode == 27) {
+					// escape
+					e.preventDefault();
+					e.stopPropagation();
+					if (aCB && aCB.oncancel) {
+						aCB.oncancel(hndlr);
+					}
+					// copy link 41058460
+					hndlr.domInput.blur();
+					hndlr.domInput.style.clip = '';
+					// end link 41058460
+					hndlr.restoreFunc();
+				} else if (e.keyCode == 13) {
+					// enter
+					e.preventDefault();
+					e.stopPropagation();
+					if (aCB && aCB.onconfirm) {
+						aCB.onconfirm(hndlr);
+					}
+					// copy link 41058460
+					hndlr.domInput.blur();
+					hndlr.domInput.style.clip = '';
+					// end link 41058460
+					hndlr.restoreFunc();
+				}
+			},
 			hndlr.transHandler = function(e) {
+				console.error('text trans end', 'propertyname:', e.propertyName);
 				if (e.target.style.opacity < 1) {
-					e.target.style.opacity = 1;
-					hndlr.domLbl.value = hndlr.nextLblVal_onTransEnd;
+					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
+						console.error('fade in input');
+						// fade it in
+						hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+						hndlr.domInput.style.opacity = '1';
+					} else {
+						e.target.style.opacity = 1;
+						hndlr.domLbl.value = hndlr.nextLblVal_onTransEnd;
+						console.error('set new val to:', hndlr.nextLblVal_onTransEnd);
+					}
 				} else {
 					if (hndlr.restoring) {
 						// restore was requested and now restore has completed, so do restore completion proc
@@ -3097,9 +3139,26 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					}
 				}
 			};
+			hndlr.inputTransHandler = function(e) {
+				if (hndlr.INPUT) {
+					console.error('input trans end', 'propertyname', e.propertyName);
+					if (e.propertyName == 'color' || e.propertyName == 'opacity') {
+						// color is for end of morph
+						// opacity is for end of fade in
+						hndlr.domLbl.style.visibility = 'hidden';
+						hndlr.domInput.selectionStart = 0;
+						hndlr.domInput.selectionEnd = 0;
+						hndlr.domInput.focus();
+					}
+				} else if (hndlr.INPUT_OFF) {
+					console.error('input trans end', 'propertyname', e.propertyName);
+					hndlr.domLbl.style.visibility = '';
+				}
+			};
 			
 			hndlr.domLbl.style.transition = 'opacity 250ms'; // i match opacity time to that of submenu fade out time
 			hndlr.domLbl.addEventListener('transitionend', hndlr.transHandler, false);
+			hndlr.domInput.addEventListener('transitionend', hndlr.inputTransHandler, false);
 			hndlr.smItem.classList.add('profilist-sub-clicked');
 			hndlr.tbbBox.classList.add('profilist-edit');
 			
@@ -3112,6 +3171,11 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				hndlr.restoreStyleDefault = true;
 				hndlr.restoreStyleMouseLeave = true;
 				hndlr.smItem.addEventListener('mouseleave', hndlr.restoreFunc, false);
+			} else if (aRestoreStyle == 'restoreStyleKeyPress') {
+				// default AND key restore style
+				hndlr.restoreStyleDefault = true;
+				hndlr.restoreStyleKeyPress = true;
+				hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, false);
 			}
 			
 		} else {
@@ -3129,6 +3193,11 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit mouse handler');
 					}
+					if (hndlr.restoreStyleKeyPress) {
+						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, false);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit key handler');						
+					}
 				}
 			} else if (aRestoreStyle == 'restoreStyleMouseLeave') {
 				if (hndlr.restoreStyleMouseLeave) {
@@ -3141,6 +3210,28 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				}
 				if (aOverwrite) {
 					// remove the other handlers
+					if (hndlr.restoreStyleKeyPress) {
+						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, false);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit key handler');						
+					}
+				}
+			} else if (aRestoreStyle == 'restoreStyleKeyPress') {
+				if (hndlr.restoreStyleKeyPress) {
+					// already has restoreStyleKeyPress so dont do it
+				} else {
+					// default AND key restore style
+					hndlr.restoreStyleDefault = true;
+					hndlr.restoreStyleKeyPress = true;
+					hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, false);
+				}
+				if (aOverwrite) {
+					// remove the other handlers
+					if (hndlr.restoreStyleMouseLeave) {
+						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+						delete hndlr.restoreStyleMouseLeave;
+						console.error('overwrit mouse handler');
+					}
 				}
 			}
 		}
@@ -3149,8 +3240,46 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		if (hndlr.nextLblVal_onTransEnd == aNewLblVal) {
 			// no need to open its already open at that msg
 		} else {
-			hndlr.nextLblVal_onTransEnd = aNewLblVal;
-			hndlr.domLbl.style.opacity = 0;
+			if (aNewLblVal == 'INPUT') {
+				delete hndlr.INPUT_OFF;
+				hndlr.INPUT = true;
+			} else {
+				if (hndlr.INPUT) {
+					hndlr.INPUT_OFF;
+				}
+				delete hndlr.INPUT;
+			}
+			if (aNewLblVal == 'INPUT' && hndlr.origLblVal == aCB.initInputWithValue) {
+				// morph
+				if (hndlr.origLblVal == aCB.initInputWithValue) {
+					// morph
+					/*
+					hndlr.domInput.addEventListener('transitionend', function() {
+						hndlr.domInput.removeEventListener('transitionend', arguments.callee, false);
+						//if (hndlr.smItem.classList.contains('profilist-sub-clicked')) {
+							// this is needed for labels that are elipsiid, meaning they take the whole width, and collapsing the submenu to just one icon gave it more room
+							hndlr.domInput.removeEventListener('transitionend', arguments.callee, false);
+							hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+						//}
+					}, false);
+					*/
+					hndlr.domInput.setAttribute('placeholder', 'Enter new name for this profile');
+					hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+				}
+			} else {
+				if (aNewLblVal == 'INPUT') {
+					// prep for fade in, as not doing morph
+					hndlr.domInput.value = aCB.initInputWithValue;
+					hndlr.domInput.setAttribute('placeholder', 'Enter new name to create profile with');
+					hndlr.domInput.style.opacity = '0';
+					hndlr.domInput.style.width = '300px';
+					hndlr.domInput.style.transition = 'opacity 250ms';
+					hndlr.domLbl.style.opacity = 0;
+				} else {
+					hndlr.nextLblVal_onTransEnd = aNewLblVal;
+					hndlr.domLbl.style.opacity = 0;
+				}
+			}
 		}
 		
 }
@@ -3174,39 +3303,10 @@ function tbb_box_click(e) {
 				console.log('do nothing as its the active profile - maybe rename?');
 			} else if (classList.contains('profilist-create')) {
 				console.log('create new profile');
+				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:''}, true);
 			} else {
-				e.view.PanelUI.toggle();
 				var profName = origTarg.getAttribute('label');
-				/*
-				console.log('checking if running, either focus or launch profile');				
-				var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
-				promise_queryProfileLocked.then(
-					function(aVal) {
-						//aVal is TRUE if LOCKED
-						//aVal is FALSE if NOT locked
-						if (aVal === 1) {
-							console.log('profile', profName, 'is IN USE so FOCUS it');
-							var promise_FMRWOP = ProfilistWorker.post('focusMostRecentWinOfProfile', [ini[profName].props.IsRelative, ini[profName].props.Path, profToolkit.rootPathDefault]);
-							promise_FMRWOP.then(
-								function() {
-									console.log('succesfully focused most recent window');
-								},
-								function(aReason) {
-									console.error('failed to focus most recent window, aReason:', aReason);
-								}
-							);
-						} else if (aVal === 0) {
-							console.log('profile', profName, 'is NOT in use so LAUNCH it');
-							launchProfile(null, profName);
-						} else {
-							throw new Error('huh??? should not get here');
-						}
-					},
-					function(aReason) {
-						console.warn('failed to get status of profName', profName, 'aReason:', aReason);
-					}
-				);
-				*/
+
 				var profIniKey;
 				for (var p in ini) {
 					if ('num' in ini[p]) {
@@ -3219,7 +3319,15 @@ function tbb_box_click(e) {
 				if (!profIniKey) {
 					throw new Error('could not find inikey of prof with name "' + profName +'"');
 				}
-				launchProfile(profIniKey);
+				
+				if (cWin.Profilist.PBox.classList.contains('profilist-cloning')) {
+					tbb_msg('clone-profile', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:'Copy of ' + profName}, true);
+					//e.preventDefault(); // prevent panel from closing // not needed panel doesnt close anyways dont know why
+					console.error('cloning', profName);
+				} else {
+					e.view.PanelUI.toggle();// hide panel
+					launchProfile(profIniKey);
+				}
 			}
 		},
 		'profilist-clone': function() {
@@ -3246,10 +3354,10 @@ function tbb_box_click(e) {
 			}				
 		},
 		'profilist-inactive-del': function() {
-			var nameOfProfileToDelete = box.getAttribute('label');
-			console.log('delete, prof name:', nameOfProfileToDelete);
+			var cProfIniKey = box.getAttribute('label');
+			console.log('delete, cProfIniKey:', cProfIniKey);
 			
-			tbb_msg('del-profile', 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			tbb_msg('del-profile-' + cProfIniKey, 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 			
 			/*
 			var cDoc = origTarg.ownerDocument;
@@ -3308,7 +3416,11 @@ function tbb_box_click(e) {
 			console.log('set this profile as default');			
 		},
 		'profilist-rename': function() {
-			console.log('open rename this one or close');
+			var cProfName = box.getAttribute('label');
+			console.log('rename, cProfIniKey:', cProfName);
+			
+			tbb_msg('ren-profile-' + cProfName, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:cProfName}, false);
+			/*
 			var cDoc = origTarg.ownerDocument;
 			var cWin = cDoc.defaultView;
 			
@@ -3392,6 +3504,7 @@ function tbb_box_click(e) {
 				}
 				cWin.addEventListener('keydown', renameKeyListener, true);
 			}
+			*/
 		},
 		'profilist-dev-build': function() {
 			console.log('change build');
