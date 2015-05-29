@@ -3073,22 +3073,51 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.domLbl = lbl;
 			hndlr.domInput = input;
 			hndlr.origLblVal = lbl.getAttribute('value');
-			hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
+			hndlr.nextLblVal_onTransEnd = 0;
+			hndlr.lastLblVal_onTransEnd = 0;
 			hndlr.restoreFunc = function() {
-				hndlr.domLbl.style.opacity = '0';
-				hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
-				if (hndlr.restoreStyleMouseLeave) {
-					// remove mouse leave handler if we had added one
-					hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
-				}
-				if (hndlr.restoreStyleKeyPress) {
+				if (hndlr.domWindow.PanelUI.panel.state == 'open') {
+					hndlr.restoring = true;
+					console.error('in panel state open restore proc');
+					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
+						if (hndlr.MORPHED) {
+							console.error('had morphed');
+							hndlr.domLbl.style.visibility = '';
+						} else {
+							console.error('had faded');
+							hndlr.domInput.style.opacity = '0';
+						}
+						hndlr.domInput.style.clip = 'rect(-1px, -1px, 25px, -1px)';
+					} else {
+						hndlr.domLbl.style.opacity = '0';
+					}
+					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
+					hndlr.nextLblVal_onTransEnd = hndlr.origLblVal;
+					if (hndlr.restoreStyleMouseLeave) {
+						// remove mouse leave handler if we had added one
+						hndlr.smItem.removeEventListener('mouseleave', hndlr.restoreFunc, false);
+					}
+					if (hndlr.restoreStyleKeyPress) {
+						hndlr.domWindow.removeEventListener('keypress', hndlr.keyRestoreFunc, false);
+					}
+					hndlr.domWindow.setTimeout(function() {
+						hndlr.tbbBox.classList.remove('profilist-edit');
+					}, 100);
+				} else {
+					hndlr.finalizeRestore();
+					/*
+					hndlr.domLbl.removeEventListener('transitionend', hndlr.transHandler, false);
+					hndlr.domInput.removeEventListener('transitionend', hndlr.inputTransHandler, false);
+					hndlr.domLbl.style.visibility = '';
+					hndlr.domLbl.style.opacity = '1';
+					hndlr.domInput.style.clip = '';
+					hndlr.domInput.style.opacity = '';
 					hndlr.domInput.style.transition = '';
-					hndlr.domWindow.removeEventListener('keypress', hndlr.keyRestoreFunc, false);
+					hndlr.domLbl.style.transition = '';
+					delete tbb_msg_restore_handlers[hndlr.handlerName];
+					*/
+					console.error('tbb restore proc completed and handler destroyed VIA PANEL CLOSED METHOD');
 				}
-				hndlr.restoring = true;
-				hndlr.domWindow.setTimeout(function() {
-					hndlr.tbbBox.classList.remove('profilist-edit');
-				}, 100);
 			};
 			hndlr.keyRestoreFunc = function(e) {
 				if (e.keyCode == 27) {
@@ -3099,8 +3128,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						aCB.oncancel(hndlr);
 					}
 					// copy link 41058460
-					hndlr.domInput.blur();
-					hndlr.domInput.style.clip = '';
+					//hndlr.domInput.blur();
 					// end link 41058460
 					hndlr.restoreFunc();
 				} else if (e.keyCode == 13) {
@@ -3111,12 +3139,25 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						aCB.onconfirm(hndlr);
 					}
 					// copy link 41058460
-					hndlr.domInput.blur();
-					hndlr.domInput.style.clip = '';
+					//hndlr.domInput.blur();
 					// end link 41058460
 					hndlr.restoreFunc();
 				}
 			},
+			hndlr.finalizeRestore = function() {
+				hndlr.domLbl.removeEventListener('transitionend', hndlr.transHandler, false);
+				hndlr.domLbl.style.transition = '';
+				hndlr.domLbl.style.visibility = '';
+				hndlr.domLbl.style.opacity = '1';
+				
+				hndlr.domInput.removeEventListener('transitionend', hndlr.inputTransHandler, false);
+				hndlr.domInput.style.transition = '';
+				hndlr.domInput.style.clip = '';
+				hndlr.domInput.style.opacity = '';
+				
+				delete tbb_msg_restore_handlers[hndlr.handlerName];
+				console.error('deteld handlerName of', hndlr.handlerName, 'remaining:', tbb_msg_restore_handlers);
+			}
 			hndlr.transHandler = function(e) {
 				console.error('text trans end', 'propertyname:', e.propertyName);
 				if (e.target.style.opacity < 1) {
@@ -3133,26 +3174,59 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				} else {
 					if (hndlr.restoring) {
 						// restore was requested and now restore has completed, so do restore completion proc
-						hndlr.domLbl.removeEventListener('transitionend', hndlr.transHandler, false);
-						delete tbb_msg_restore_handlers[hndlr.handlerName];
+						console.error('restoring text transend', e.propertyName);
+						hndlr.finalizeRestore();
 						console.error('tbb restore proc completed and handler destroyed');
 					}
 				}
 			};
 			hndlr.inputTransHandler = function(e) {
-				if (hndlr.INPUT) {
-					console.error('input trans end', 'propertyname', e.propertyName);
-					if (e.propertyName == 'color' || e.propertyName == 'opacity') {
-						// color is for end of morph
-						// opacity is for end of fade in
-						hndlr.domLbl.style.visibility = 'hidden';
-						hndlr.domInput.selectionStart = 0;
-						hndlr.domInput.selectionEnd = 0;
-						hndlr.domInput.focus();
+				if (hndlr.restoring) {
+					/* restoring and morphing in order
+						"input trans end RESTORING" "propertyname" "opacity" bootstrap.js:3176
+						"input trans end RESTORING" "propertyname" "background-color" bootstrap.js:3176
+						"input trans end RESTORING" "propertyname" "clip" bootstrap.js:3176
+						"GOING TO INPUT, input trans end" "propertyname" "clip" bootstrap.js:3190
+						"GOING TO INPUT, input trans end" "propertyname" "background-color" bootstrap.js:3190
+						"GOING TO INPUT, input trans end" "propertyname" "color"
+					*/
+					if (hndlr.lastLblVal_onTransEnd == 'INPUT') {
+						console.error('input trans end RESTORING', 'propertyname', e.propertyName);
+						if (e.propertyName == 'clip') {
+							//hndlr.domLbl.style.opacity = 1;
+							// because the the domLbl was visibility hidden, we dont set opacity back to 1 on that, thats what the issue was
+							hndlr.finalizeRestore();
+						} else if (e.propertyName == 'opacity') {
+							hndlr.domLbl.style.opacity = 1;
+						}
+						/*
+						hndlr.domLbl.style.opacity = 1;
+						hndlr.domLbl.style.visibility = '';
+						hndlr.domInput.style.opacity = '';
+						hndlr.domInput.style.width = '';
+						*/
+						//hndlr.domInput.style[e.propertyName] = '';
+					} // else it is going to do anim as the css for this is not inline, it is in file, but these anims are meaningless as INPUT was never showing
+				} else {
+					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
+						console.error('GOING TO INPUT, input trans end', 'propertyname', e.propertyName);
+						if (e.propertyName == 'color' || e.propertyName == 'opacity') {
+							// color last propertyName is for end of morph
+							// opacity is last propertyname for end of fade in
+							if (e.propertyName == 'color') { // can do hndlr.MORPHED
+								hndlr.domLbl.style.visibility = 'hidden';
+							}
+							hndlr.domInput.selectionStart = 0;
+							hndlr.domInput.selectionEnd = 0;
+							hndlr.domInput.focus();
+						}
+					} else if (hndlr.lastLblVal_onTransEnd == 'INPUT') {
+						// input removed
+						// bring back tbbtext
+						console.error('GOING TO NON-RESTORE-LBL FROM INPUT, input trans end', 'propertyname', e.propertyName);
+						hndlr.domLbl.style.visibility = '';
+						hndlr.domLbl.style.opacity = 1;
 					}
-				} else if (hndlr.INPUT_OFF) {
-					console.error('input trans end', 'propertyname', e.propertyName);
-					hndlr.domLbl.style.visibility = '';
 				}
 			};
 			
@@ -3240,16 +3314,8 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		if (hndlr.nextLblVal_onTransEnd == aNewLblVal) {
 			// no need to open its already open at that msg
 		} else {
-			if (aNewLblVal == 'INPUT') {
-				delete hndlr.INPUT_OFF;
-				hndlr.INPUT = true;
-			} else {
-				if (hndlr.INPUT) {
-					hndlr.INPUT_OFF;
-				}
-				delete hndlr.INPUT;
-			}
 			if (aNewLblVal == 'INPUT' && hndlr.origLblVal == aCB.initInputWithValue) {
+				hndlr.MORPHED = true;
 				// morph
 				if (hndlr.origLblVal == aCB.initInputWithValue) {
 					// morph
@@ -3263,6 +3329,8 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						//}
 					}, false);
 					*/
+					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
+					hndlr.nextLblVal_onTransEnd = aNewLblVal;
 					hndlr.domInput.setAttribute('placeholder', 'Enter new name for this profile');
 					hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
 				}
@@ -3270,12 +3338,15 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				if (aNewLblVal == 'INPUT') {
 					// prep for fade in, as not doing morph
 					hndlr.domInput.value = aCB.initInputWithValue;
-					hndlr.domInput.setAttribute('placeholder', 'Enter new name to create profile with');
+					hndlr.domInput.setAttribute('placeholder', 'Enter name for new profile');
 					hndlr.domInput.style.opacity = '0';
-					hndlr.domInput.style.width = '300px';
+					hndlr.domInput.style.width = '280px';
 					hndlr.domInput.style.transition = 'opacity 250ms';
+					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
+					hndlr.nextLblVal_onTransEnd = aNewLblVal;
 					hndlr.domLbl.style.opacity = 0;
 				} else {
+					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
 					hndlr.nextLblVal_onTransEnd = aNewLblVal;
 					hndlr.domLbl.style.opacity = 0;
 				}
@@ -3303,6 +3374,7 @@ function tbb_box_click(e) {
 				console.log('do nothing as its the active profile - maybe rename?');
 			} else if (classList.contains('profilist-create')) {
 				console.log('create new profile');
+				tbb_msg_close(null, cWin);
 				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:''}, true);
 			} else {
 				var profName = origTarg.getAttribute('label');
@@ -3354,10 +3426,10 @@ function tbb_box_click(e) {
 			}				
 		},
 		'profilist-inactive-del': function() {
-			var cProfIniKey = box.getAttribute('label');
-			console.log('delete, cProfIniKey:', cProfIniKey);
-			
-			tbb_msg('del-profile-' + cProfIniKey, 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			var cProfName = box.getAttribute('label');
+			console.log('delete, cProfName:', cProfName);
+			tbb_msg_close('del-profile-' + cProfName, cWin, true);
+			tbb_msg('del-profile-' + cProfName, 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 			
 			/*
 			var cDoc = origTarg.ownerDocument;
@@ -3418,7 +3490,7 @@ function tbb_box_click(e) {
 		'profilist-rename': function() {
 			var cProfName = box.getAttribute('label');
 			console.log('rename, cProfIniKey:', cProfName);
-			
+			tbb_msg_close('ren-profile-' + cProfName, cWin, true);
 			tbb_msg('ren-profile-' + cProfName, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:cProfName}, false);
 			/*
 			var cDoc = origTarg.ownerDocument;
