@@ -3124,6 +3124,12 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// escape
 					e.preventDefault();
 					e.stopPropagation();
+					if (hndlr.MORPHED) {
+						hndlr.domInput.selectionStart = 0;
+						hndlr.domInput.selectionEnd = 0;
+						hndlr.domLbl.value = hndlr.domInput.value;
+					}
+					hndlr.domInput.blur();
 					if (aCB && aCB.oncancel) {
 						aCB.oncancel(hndlr);
 					}
@@ -3135,6 +3141,12 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// enter
 					e.preventDefault();
 					e.stopPropagation();
+					if (hndlr.MORPHED) {
+						hndlr.domInput.selectionStart = 0;
+						hndlr.domInput.selectionEnd = 0;
+						hndlr.domLbl.setAttribute('value', hndlr.domInput.value);
+					}
+					hndlr.domInput.blur();
 					if (aCB && aCB.onconfirm) {
 						aCB.onconfirm(hndlr);
 					}
@@ -3249,7 +3261,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				// default AND key restore style
 				hndlr.restoreStyleDefault = true;
 				hndlr.restoreStyleKeyPress = true;
-				hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, false);
+				hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, true);
 			}
 			
 		} else {
@@ -3268,7 +3280,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						console.error('overwrit mouse handler');
 					}
 					if (hndlr.restoreStyleKeyPress) {
-						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, false);
+						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, true);
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit key handler');						
 					}
@@ -3285,7 +3297,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 				if (aOverwrite) {
 					// remove the other handlers
 					if (hndlr.restoreStyleKeyPress) {
-						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, false);
+						hndlr.domWindow.removeEventListener('keydown', hndlr.restoreFunc, true);
 						delete hndlr.restoreStyleMouseLeave;
 						console.error('overwrit key handler');						
 					}
@@ -3297,7 +3309,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					// default AND key restore style
 					hndlr.restoreStyleDefault = true;
 					hndlr.restoreStyleKeyPress = true;
-					hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, false);
+					hndlr.domWindow.addEventListener('keydown', hndlr.keyRestoreFunc, true);
 				}
 				if (aOverwrite) {
 					// remove the other handlers
@@ -3429,7 +3441,7 @@ function tbb_box_click(e) {
 			var cProfName = box.getAttribute('label');
 			console.log('delete, cProfName:', cProfName);
 			tbb_msg_close('del-profile-' + cProfName, cWin, true);
-			tbb_msg('del-profile-' + cProfName, 'All profile files will be deleted. Are you sure?', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+			tbb_msg('del-profile-' + cProfName, 'All profile files will be deleted. Are you sure?', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
 			
 			/*
 			var cDoc = origTarg.ownerDocument;
