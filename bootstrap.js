@@ -991,36 +991,29 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 	return deferred_createProfile.promise;
 }
 
-function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
+function renameProfile(aProfIniKey, theProfileNewName, refreshIni) {
 	// returns promise
 	
 	var deferred_renameProfile = new Deferred(); // function promise return
 	
+	var theProfileCurrentName = ini[aProfIniKey].props.Name;
+	
 	// setup postRefreshIni
 	var postRefreshIni = function() {
 		// start by looping through to find profile in ini and also check if new name is available (as in not taken by another)
-		var LCased_theProfileCurrentName = theProfileCurrentName.toLowerCase();
 		var LCased_theProfileNewName = theProfileNewName.toLowerCase();
-		var iniIdentifier = null;
+		var iniIdentifier = aProfIniKey;
+		var theIdenter = aProfIniKey;
 		var newNameTaken = false;
 		for (var p in ini) {
+			if (!('num' in ini[p])) { continue }
 			var LCased_iteratedProfileName = ini[p].props.Name.toLowerCase();
-			if (LCased_iteratedProfileName == LCased_theProfileCurrentName) {
-				iniIdentifier = p;
-			}
 			if (LCased_iteratedProfileName == LCased_theProfileNewName) {
 				newNameTaken = true;
+				console.warn('Another profile already has the new name of "' + theProfileNewName + '" - so cannot rename the profile of "' + theProfileCurrentName + '".');
+				deferred_renameProfile.reject('name-taken');
+				return; // just to stop further execution into this function				
 			}
-		}
-		if (iniIdentifier === null) {
-			console.warn('Could not find a profile with the name of "' + theProfileCurrentName + '" - so nothing to rename.');
-			deferred_renameProfile.reject('Could not find a profile with the name of "' + theProfileCurrentName + '" - so nothing to rename.');
-			return; // just to stop further execution into this function
-		}
-		if (newNameTaken === null) {
-			console.warn('Another profile already has the new name of "' + theProfileNewName + '" - so cannot rename the profile of "' + theProfileCurrentName + '".');
-			deferred_renameProfile.reject('Another profile already has the new name of "' + theProfileNewName + '" - so cannot rename the profile of "' + theProfileCurrentName + '".');
-			return; // just to stop further execution into this function
 		}
 		
 		// rename in bootstrap ini
@@ -1031,7 +1024,7 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 		promise_updateIniFile.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_updateIniFile - ', aVal);
-				deferred_renameProfile.resolve('Profile "' + theProfileCurrentNameName + '" succesfully renamed to "' + theProfileNewName + '"');
+				deferred_renameProfile.resolve('Profile "' + theProfileCurrentName + '" succesfully renamed to "' + theProfileNewName + '"');
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_updateIniFile', aReason:aReason};
@@ -1048,36 +1041,15 @@ function renameProfile(theProfileCurrentName, theProfileNewName, refreshIni) {
 	};
 	// end - setup postRefreshIni
 	
-	// start - setup post read ini stuff
-	var deferred_waitReadIni = new Deferred();
-	deferred_waitReadIni.then(
-		function(aVal) {
-			console.log('Fullfilled - deferred_waitReadIni - ', aVal);
-			postRefreshIni();
-		},
-		function(aReason) {
-			var rejObj = {name:'deferred_waitReadIni', aReason:aReason};
-			console.error('Rejected - deferred_waitReadIni - ', rejObj);
-			deferred_renameProfile.reject(rejObj); //throw rejObj;
-		}
-	).catch(
-		function(aCaught) {
-			console.error('Caught - deferred_waitReadIni - ', aCaught);
-			var rejObj = {name:'deferred_waitReadIni', aCaught:aCaught};
-			deferred_renameProfile.reject(rejObj); // throw aCaught;
-		}
-	);
-	// end - setup post read ini stuff
-	
 	// start - figure out and based on do refresh ini
 	if (!refreshIni) {
-		deferred_waitReadIni.resolve('no refresh arg set');
+		postRefreshIni();
 	} else {
 		var promise_refreshIni = readIniAndParseObjs();
 		promise_refreshIni.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_refreshIni - ', aVal);
-				deferred_waitReadIni.resolve('ini refreshed'); // go to post waitReadIni
+				postRefreshIni();
 			},
 			function(aReason) {
 				var rejObj = {name:'promise_refreshIni', aReason:aReason};
@@ -3131,7 +3103,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.domLbl = lbl;
 			hndlr.domInput = input;
 			hndlr.origLblVal = lbl.getAttribute('value');
-			console.error('SEEEET ORIG LABEL HERE');
+			console.error('SEEEET ORIG LABEL HERE to ', hndlr.origLblVal);
 			hndlr.nextLblVal_onTransEnd = 0;
 			hndlr.lastLblVal_onTransEnd = 0;
 			hndlr.cb = aCB;
@@ -3243,6 +3215,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						console.error('set new val to:', hndlr.nextLblVal_onTransEnd);
 					}
 				} else {
+					delete hndlr.MORPHED;
 					if (hndlr.restoring) {
 						// restore was requested and now restore has completed, so do restore completion proc
 						console.error('restoring text transend', e.propertyName);
@@ -3467,6 +3440,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+hndlr.submenuWidth) + 'px, 25px, -1px)';
 				}
 			} else {
+				delete hndlr.MORPHED;
 				if (aNewLblVal == 'INPUT') {
 					console.log('prep for fade in, as not doing morph');
 					hndlr.domInput.value = hndlr.cb.initInputWithValue;
@@ -3812,8 +3786,76 @@ function tbb_box_click(e) {
 			var cProfIniKey = getIniKeyFromProfName(cProfName);
 			
 			console.log('rename, cProfIniKey:', cProfName);
-			tbb_msg_close('ren-profile-' + cProfName, cWin, true);
-			tbb_msg('ren-profile-' + cProfName, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:cProfName}, false);
+			tbb_msg_close('ren-profile-' + cProfIniKey, cWin, true);
+			
+			var cCB = {
+				initInputWithValue: cProfName,
+				onconfirm: function(aHndlr, aEvent, aInput) {
+					/*
+					tbb_msg('ren-profile-' + cProfIniKey, 'renaming...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, {
+						onrestore: function() {
+							return true;
+						}
+					}, true);
+					*/
+					console.log('override origLblVal here with renamed val, on fail it should go to previous val which is cProfName');
+					aHndlr.origLblVal = aInput;
+					box.setAttribute('label', aInput);
+					
+					var promise_renIt = renameProfile(cProfIniKey, aInput, true);
+					promise_renIt.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_renIt - ', aVal);
+							// start - do stuff here - promise_renIt
+							/*
+							aHndlr.origLblVal = aInput;
+							tbb_msg('ren-profile-' + cProfIniKey, 'ok profile renamed', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+								ms: 3000,
+								ontimeout: function() {
+									//box.parentNode.removeChild(box);
+									console.error(':todo: del gui panel dom');
+									// should animate this removal, maybe refresh stack dom
+								}
+							}, true);
+							*/
+							// end - do stuff here - promise_renIt
+						},
+						function(aReason) {
+							
+							console.log('override origLblVal back to cProfName as rename was rejected');
+							aHndlr.origLblVal = cProfName;
+							box.setAttribute('label', cProfName); // let restore handler do this
+							aHndlr.domLbl.setAttribute('value', aInput);
+							//hndlr.domLbl.setAttribute('value', hndlr.nextLblVal_onTransEnd);
+							
+							tbb_msg('ren-profile-' + cProfIniKey, aReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+								ms: 3000,
+								ontimeout: function() {
+									//box.parentNode.removeChild(box);
+									console.error(':todo: del gui panel dom');
+									if (aReason == 'name-taken') {
+										tbb_msg('ren-profile-' + cProfIniKey, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+									}
+									return true;
+									// should animate this removal, maybe refresh stack dom
+								}
+							}, true);
+							
+							var rejObj = {name:'promise_renIt', aReason:aReason};
+							console.warn('Rejected - promise_renIt - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_renIt', aCaught:aCaught};
+							console.error('Caught - promise_renIt - ', rejObj);
+							//deferred_createProfile.reject(rejObj);
+						}
+					);
+				}
+			};
+			
+			tbb_msg('ren-profile-' + cProfIniKey, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, false);
 		},
 		'profilist-dev-build': function() {
 			console.log('change build');
