@@ -1027,6 +1027,8 @@ function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 						rezMain = 1;
 					} else if (ex.winLastError == ostypes.CONST.ERROR_FILE_NOT_FOUND) {
 						rezMain = 0; // if it doesnt exist, this is very likely due to it being an unlaunched profile so return that it is unlocked //:todo: do equivalent for fnctl for nix/mac
+					} else if (ex.winLastError == ostypes.CONST.ERROR_PATH_NOT_FOUND) {
+						rezMain = 0; // path not even there, this is weird shouldnt happen, but if its not there obviously the profile doesnt exist so nothing in use so just return 0
 					} else {
 						console.error('ex:', ex);
 						throw new Error('Could not open profile lock file and it was NOT locked. Path of lock file: "' + path_lock + '" ex: "' + ex + '"');
@@ -1944,9 +1946,6 @@ function read_encoded(path, options) {
 		return aVal;
 	}
 }
-function writeDirsFrom_tileLastThenWriteAtomic() {
-	
-}
 
 function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir) {
 	// sync version of the one from bootstrap
@@ -2088,6 +2087,136 @@ function HashStringHelper(aText) {
 	}
 	return _cache_HashStringHelper[aText];
 }
+
+function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
+	// sync version of https://gist.github.com/Noitidart/0104294ce25386e4788f
+	// C:\Users\Vayeate\Pictures\enumChildEntires sync version varviewer.png
+	// if delegate returns true, then enumChildEntries returns the entry it ended on
+	/* dig techqniue if max_depth 3:
+	root > SubDir1
+	root > SubDir2
+	root > SubDir1 > SubSubDir1
+	root > SubDir1 > SubSubDir2
+	root > SubDir1 > SubSubDir3
+	root > SubDir2 > SubSubDir1
+	root > SubDir2 > SubSubDir1 > SubSubSubDir1
+	// so it digs deepest into all level X then goes X+1 then goes X+2
+		1 "C:\Users\Vayeate\Desktop\p\p in" ProfilistWorker.js:2092:2
+		2 "C:\Users\Vayeate\Desktop\p\p in\a0" ProfilistWorker.js:2092:2
+		2 "C:\Users\Vayeate\Desktop\p\p in\a1" ProfilistWorker.js:2092:2
+		3 "C:\Users\Vayeate\Desktop\p\p in\a0\b" ProfilistWorker.js:2092:2
+		3 "C:\Users\Vayeate\Desktop\p\p in\a1\b1" ProfilistWorker.js:2092:2
+		4 "C:\Users\Vayeate\Desktop\p\p in\a1\b1\o"
+	*/
+	var depth = 0;
+	// at root pathDir
+	if (runDelegateOnRoot) {
+		var entry = {
+			isDir: true,
+			name: OS.Path.basename(pathToDir),
+			path: pathToDir
+		};
+		var rez_delegate = delegate(entry, -1);
+		if (rez_delegate) {
+			return entry;
+		}
+	}
+	
+	if (max_depth === 0) {
+		console.log('only wanted to run delegate on root, done');
+		return true; // max_depth reached
+	}
+	
+	var subdirs = {}; // key is level int, and val is arr of all entries within
+	subdirs[0] = [pathToDir];
+	while (true) {
+		depth++;
+		if (max_depth === null || max_depth === undefined) {
+			// go till iterate all
+		} else {
+			if (depth > max_depth) {
+				// finished iterating over all files/dirs at depth of max_depth
+				// depth here will be max_depth + 1
+				console.log('finished running delegate on all files/dirs up to max_depth of', max_depth, 'depth was:', (depth-1));
+				return true;
+			}
+		}
+		subdirs[depth] = []; // holds OSPath's of subdirs
+		var sLen = subdirs[depth-1].length;
+		if (sLen == 0) {
+			return true; // didnt reach max_depth but finished iterating all subdirs
+		}
+		for (var h=0; h<sLen; h++) {
+			try {
+				var iterrator = new OS.File.DirectoryIterator(subdirs[depth-1][h]);
+				var aVal = iterrator.nextBatch();
+			} finally {
+				iterrator.close();
+			}
+			for (var i=0; i<aVal.length; i++) {
+				if (aVal[i].isDir) {
+					subdirs[depth].push(aVal[i].path);
+				}
+				var rez_delegate_on_child = delegate(aVal[i], depth);
+				if (rez_delegate_on_child) {
+					return aVal[i];
+				}
+			}
+		}
+		// finished running delegate on all items at this depth and delegate never returned true
+	}
+}
+
+function copyDir(aSrcDir, aTargetDir) {
+	// in aTargetDir, the folder aSrcDir will be copied and pasted into
+	// aTargetDir must exist
+	
+	var aSrcDirBasename = OS.Path.dirname(aSrcDir);
+	var bl = aSrcDirBasename.length;
+	var delegateCopy = function(aEntry, aDepth) {
+		var relativeFromASrcDir = aEntry.path.substr(bl);
+		var targetPath = aTargetDir + relativeFromASrcDir;
+		console.info(aDepth, aEntry.path, targetPath);
+		
+		if (aEntry.isDir) {
+			OS.File.makeDir(targetPath);
+		} else {
+			OS.File.copy(aEntry.path, targetPath);
+		}
+	}
+	
+	enumChildEntries(aSrcDir, delegateCopy, null, true); // null to max_depth so it gets all
+	
+	return true;
+}
+
+function copyDirAs(aSrcDir, aTargetDir, pasteAsDirName) {
+	// copies aSrcDir to aTargetDir, but changes aSrcDir name to pasteAsDirName
+	// aTargetDir must exist
+	
+	// in aTargetDir, the folder aSrcDir will be copied and pasted into
+	var newSrcDirBasename = OS.Path.join(aTargetDir, pasteAsDirName);
+	
+	aTargetDir = OS.Path.join(aTargetDir, pasteAsDirName);
+	var pasteDirAs = OS.File.makeDir(aTargetDir);
+	
+	var bl = aSrcDir.length;
+	var delegateCopy = function(aEntry, aDepth) {
+		var relativeFromASrcDir = aEntry.path.substr(bl);
+		var targetPath = aTargetDir + relativeFromASrcDir;
+		console.info(aDepth, aEntry.path, targetPath);
+		
+		if (aEntry.isDir) {
+			OS.File.makeDir(targetPath);
+		} else {
+			OS.File.copy(aEntry.path, targetPath);
+		}
+	}
+	
+	enumChildEntries(aSrcDir, delegateCopy, null, false); // null to max_depth so it gets all, dont run on root
+	
+	return true;
+}
 // END - Common
 
 // scratch
@@ -2207,6 +2336,27 @@ function test(tst, tst2) {
 	
 	
 }
+
+function testEnum(path) {
+	var del = function(aEntry, aDepth) {
+		console.info(aDepth, aEntry);
+	}
+	
+	enumChildEntries(path, del, null, true);
+	/*
+var XPIScope = Cu.import('resource://gre/modules/addons/XPIProvider.jsm');
+var scope = XPIScope.XPIProvider.bootstrapScopes['Profilist@jetpack'];
+scope.ProfilistWorker.post('testEnum', [OS.Path.join(OS.Constants.Path.desktopDir, 'p')]).then(
+  x => console.log('x:', x),
+  y => console.error('y:', y)
+).catch(
+  z => console.error('z:', z)
+);
+
+	*/
+}
+
+// end scratch
 
 // start winnt debug functions
 var WINSTYLE_NAME_TO_HEX = {'WS_BORDER':0x00800000,'WS_CAPTION':0x00C00000,'WS_CHILD':0x40000000,'WS_CHILDWINDOW':0x40000000,'WS_CLIPCHILDREN':0x02000000,'WS_CLIPSIBLINGS':0x04000000,'WS_DISABLED':0x08000000,'WS_DLGFRAME':0x00400000,'WS_GROUP':0x00020000,'WS_HSCROLL':0x00100000,'WS_ICONIC':0x20000000,'WS_MAXIMIZE':0x01000000,'WS_MAXIMIZEBOX':0x00010000,'WS_MINIMIZE':0x20000000,'WS_MINIMIZEBOX':0x00020000,'WS_OVERLAPPED':0x00000000,'WS_POPUP':0x80000000,'WS_SIZEBOX':0x00040000,'WS_SYSMENU':0x00080000,'WS_TABSTOP':0x00010000,'WS_THICKFRAME':0x00040000,'WS_TILED':0x00000000,'WS_VISIBLE':0x10000000,'WS_VSCROLL':0x00200000};

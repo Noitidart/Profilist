@@ -114,7 +114,7 @@ Profilist.currentThisBuildsIconPath
 */
 var profStatObj;
 const repCharForSafePath = '-';
-
+var cloneProfIniKey;
 // Lazy Imports
 const myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
@@ -758,7 +758,7 @@ function getSafedForOSPath(aStr) {
 				return aStr.replace(/\//g, repCharForSafePath);
 	}
 }
-function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refreshIni) {
+function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refreshIni, aIniKeyToClone) {
 	// returns promise
 		// resolves to aProfIniKey for newly created profile
 	// if want to make an absolute path profile, then absolutProfile_pathToParentDir should be path to directoy we want the profile folder created ELSE null
@@ -788,11 +788,24 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			var theDirName = saltName(getSafedForOSPath(theProfileName)); // ensure the folder name generated based on theProfileName works on the os file directory system
 			var theRootPath;
 			var theLocalPath;
+			
+			var OSPath_theRootDir;
+			var OSPath_theRootBase;
+			var OSPath_theLocalDir;
+			var OSPath_theLocalBase;
+			
 			if (!absolutProfile_pathToParentDir) {
+				OSPath_theRootDir = profToolkit.rootPathDefault;
+				OSPath_theRootBase = theDirName;
+				OSPath_theLocalDir = profToolkit.localPathDefault;
+				OSPath_theLocalBase = theDirName;
+				
 				theRootPath = OS.Path.join(profToolkit.rootPathDefault, theDirName);
 				theLocalPath = OS.Path.join(profToolkit.localPathDefault, theDirName);
 			} else {
 				// absolute path profiles dont have a seperate local dir
+				OSPath_theRootDir = absolutProfile_pathToParentDir;
+				OSPath_theRootBase = theDirName;
 				theRootPath = OS.Path.join(absolutProfile_pathToParentDir, theDirName);
 			}
 			
@@ -817,6 +830,15 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 						Name: theProfileName,
 						IsRelative: absolutProfile_pathToParentDir ? 0 : 1,
 						Path: PathToWriteToIni
+					}
+				}
+				
+				if (aIniKeyToClone) {
+					// this loop copies Profilist. props of profile to clone from, so like badge, and tie
+					for (var p in ini[aIniKeyToClone].props) {
+						if (p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+							ini[PathToWriteToIni][p] = ini[aIniKeyToClone].props[p];
+						}
 					}
 				}
 				
@@ -846,46 +868,71 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 			
 			var promiseAllArr_make = [];
 			
-			var promise_makeRoot = OS.File.makeDir(theRootPath);
-			promiseAllArr_make.push(promise_makeRoot);
-			
-			var deferred_writeTimesJson = new Deferred();
-			promiseAllArr_make.push(deferred_writeTimesJson.promise);
-			
-			if (!absolutProfile_pathToParentDir) {
-				var promise_makeLocal = OS.File.makeDir(theLocalPath);
-				promiseAllArr_make.push(promise_makeLocal);
+			if (!aIniKeyToClone) {
+				// make root dir
+				var promise_makeRoot = OS.File.makeDir(theRootPath);
+				promiseAllArr_make.push(promise_makeRoot);
+				
+				var deferred_writeTimesJson = new Deferred();
+				promiseAllArr_make.push(deferred_writeTimesJson.promise);
+				
+				if (!absolutProfile_pathToParentDir) {
+					// making absolute path dir
+					var promise_makeLocal = OS.File.makeDir(theLocalPath);
+					promiseAllArr_make.push(promise_makeLocal);
+				}
+				
+				// set up to do the promise_writeTimes in root dir
+				promise_makeRoot.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_makeRoot - ', aVal);
+						// start - writeTimes promise
+							var writeStrForTimesJson = '{\n"created": ' + new Date().getTime() + '}\n';
+							var timeJsonPath = OS.Path.join(theRootPath, 'times.json');
+							var promise_writeAtomicTimes = OS.File.writeAtomic(timeJsonPath, writeStrForTimesJson, {tmpPath: timeJsonPath + '.profilist.tmp', encoding:'utf-8'});
+							promise_writeAtomicTimes.then(
+								function(aVal2) {
+									console.log('Fullfilled - promise_writeAtomicTimes - ', aVal2);
+									// do stuff here
+									deferred_writeTimesJson.resolve('times json succesfully written');
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_writeAtomicTimes', aReason:aReason};
+									console.error('Rejected - promise_writeAtomicTimes - ', rejObj);
+									deferred_writeTimesJson.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									console.error('Caught - promise_writeAtomicTimes - ', aCaught);
+									var rejObj = {name:'promise_writeAtomicTimes', aCaught:aCaught};
+									deferred_writeTimesJson.reject(rejObj);
+								}
+							);
+						// end - writeTimes promise
+					}
+				);
+			} else {
+				// figure out dir paths that we are going to clone
+				var cloneProfileDirPaths = getPathToProfileDir(aIniKeyToClone, true);
+				var promise_cloneRoot = ProfilistWorker.post('copyDirAs', [cloneProfileDirPaths.OSPath_root, OSPath_theRootDir, OSPath_theRootBase]);
+				promiseAllArr_make.push(promise_makeRoot);
+
+				if (!absolutProfile_pathToParentDir) {
+					// clone target is a relative profile SO needs local dir SOOO copy the local dir IF clone source is a Relative profile ELSE create a local dir
+					// im hoping that things work fine if i clone a Relative to Absolute profile AND if clone a Absolute to a Relative
+					if ('OSPath_local' in cloneProfileDirPaths) {
+						// clone source is a Relative profile SO copy local
+						var promise_cloneLocal = ProfilistWorker.post('copyDirAs', [cloneProfileDirPaths.OSPath_local, OSPath_theLocalDir, OSPath_theLocalBase]);
+						promiseAllArr_make.push(promise_cloneLocal);
+					} else {
+						// clone source is an Absolute profile SO create local
+						var promise_makeLocal = OS.File.makeDir(theLocalPath);
+						promiseAllArr_make.push(promise_makeLocal);
+					}
+				}
 			}
 			
-			// set up to do the promise_writeTimes
-			promise_makeRoot.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_makeRoot - ', aVal);
-					// start - writeTimes promise
-						var writeStrForTimesJson = '{\n"created": ' + new Date().getTime() + '}\n';
-						var timeJsonPath = OS.Path.join(theRootPath, 'times.json');
-						var promise_writeAtomicTimes = OS.File.writeAtomic(timeJsonPath, writeStrForTimesJson, {tmpPath: timeJsonPath + '.profilist.tmp', encoding:'utf-8'});
-						promise_writeAtomicTimes.then(
-							function(aVal2) {
-								console.log('Fullfilled - promise_writeAtomicTimes - ', aVal2);
-								// do stuff here
-								deferred_writeTimesJson.resolve('times json succesfully written');
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_writeAtomicTimes', aReason:aReason};
-								console.error('Rejected - promise_writeAtomicTimes - ', rejObj);
-								deferred_writeTimesJson.reject(rejObj);
-							}
-						).catch(
-							function(aCaught) {
-								console.error('Caught - promise_writeAtomicTimes - ', aCaught);
-								var rejObj = {name:'promise_writeAtomicTimes', aCaught:aCaught};
-								deferred_writeTimesJson.reject(rejObj);
-							}
-						);
-					// end - writeTimes promise
-				}
-			);
+
 			// dont need the reject or catch as these promise all go to promiseAll_make
 			// end set up to do the promise_writeTimes
 			
@@ -1346,6 +1393,10 @@ function updateOnPanelHid(e) {
 	
 }
 
+var collapseTimer = 0;
+var expandTimer = 0;
+const collapseDelay = 500;
+const expandDelay = 300;
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTabInsertItDisabled) { //returns promise
 	//does not fire when entering customize mode
 	console.error('entered');
@@ -1431,33 +1482,41 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				if (PStack.lastChild.hasAttribute('disabled')) {
 					return;
 				}
-				e_ME.stopPropagation();
-				expandedheight = PStack.childNodes.length * PUIsync_height;
-				PBox.addEventListener('transitionend', function(e_ETE) {
-					PBox.removeEventListener('transitionend', arguments.callee, false);
-					e_ETE.stopPropagation();
-					console.log('PBox height transed');
-					// start test if overflowing to show custom scroll bar
-					console.info('PUI.boxObject.height:', PUI.boxObject.height);
-					console.info('PBox.boxObject.height:', PBox.boxObject.height);
-					if (PUI.boxObject.height < PBox.boxObject.height) {
-						console.log('need to show scroll bar');
-					} else {
-						console.log('no need 4 scrollbar');
-					}
-					// end test if overflowing to show custom scroll bar
-				}, false);
-				PBox.style.height = expandedheight + 'px';
-				PBox.classList.add('profilist-hovered');
-				updateRunningIcons(aDOMWindow);
+				// aDOMWindow.clearTimeout(collapseTimer);
+				// aDOMWindow.clearTimeout(expandTimer);
+				// expandTimer = aDOMWindow.setTimeout(function() {
+					e_ME.stopPropagation();
+					expandedheight = PStack.childNodes.length * PUIsync_height;
+					PBox.addEventListener('transitionend', function(e_ETE) {
+						PBox.removeEventListener('transitionend', arguments.callee, false);
+						e_ETE.stopPropagation();
+						console.log('PBox height transed');
+						// start test if overflowing to show custom scroll bar
+						console.info('PUI.boxObject.height:', PUI.boxObject.height);
+						console.info('PBox.boxObject.height:', PBox.boxObject.height);
+						if (PUI.boxObject.height < PBox.boxObject.height) {
+							console.log('need to show scroll bar');
+						} else {
+							console.log('no need 4 scrollbar');
+						}
+						// end test if overflowing to show custom scroll bar
+					}, false);
+					PBox.style.height = expandedheight + 'px';
+					PBox.classList.add('profilist-hovered');
+					updateRunningIcons(aDOMWindow);
+				// }, expandDelay);
 			}, false);
 			PBox.addEventListener('mouseleave', function(e_ML) {
 				e_ML.stopPropagation();
 				if (PBox.classList.contains('profilist-keep-open')) { return }
-				PBox.style.height = collapsedheight + 'px';
-				PBox.classList.remove('profilist-hovered');
-				checkAndExecPanelHidUnloaders(aDOMWindow);
-				tbb_msg_close(null, aDOMWindow);
+				// aDOMWindow.clearTimeout(collapseTimer);
+				// aDOMWindow.clearTimeout(expandTimer);
+				// collapseTimer = aDOMWindow.setTimeout(function() {
+					PBox.classList.remove('profilist-hovered');
+					PBox.style.height = collapsedheight + 'px';
+					checkAndExecPanelHidUnloaders(aDOMWindow);
+					tbb_msg_close(null, aDOMWindow);
+				// }, collapseDelay);
 			}, false);
 	} else {
 		//note: maybe desired enhancement, rather then do getElementById everytime to get profilist_box i can store it in the window object, but that increases memory ~LINK678132
@@ -1508,7 +1567,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				console.error('info SMItem_profilistClone:', SMItem_profilistClone);
 				SMItem_profilistClone.addEventListener('mouseenter', function() {
 					if (!('clone-profile' in tbb_msg_restore_handlers)) {
-						tbb_msg('clone-profile', 'Clone Profile', 'restoreStyleMouseLeave', aDOMWindow, elFromJson_createNewProfile, SMItem_profilistClone, null, false);
+						tbb_msg('clone-profile', 'Clone Profile', 'restoreStyleMouseLeave', aDOMWindow, elFromJson_createNewProfile, SMItem_profilistClone, {onrestore:function(){if(PBox.classList.contains('profilist-cloning')){return true}}}, false);
 					} // else { // already handled so dont do it. cuz if its on "Pick a profile..." it iwll then overwrite message with "Clone Profile" on mouseenter
 				}, false);
 				
@@ -3072,9 +3131,11 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 			hndlr.domLbl = lbl;
 			hndlr.domInput = input;
 			hndlr.origLblVal = lbl.getAttribute('value');
+			console.error('SEEEET ORIG LABEL HERE');
 			hndlr.nextLblVal_onTransEnd = 0;
 			hndlr.lastLblVal_onTransEnd = 0;
 			hndlr.cb = aCB;
+			hndlr.submenuWidth = 2;
 			hndlr.restoreFunc = function() {
 				if (hndlr.cb && hndlr.cb.onrestore) {
 					var overwrit = hndlr.cb.onrestore(hndlr);
@@ -3097,7 +3158,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 							console.error('had morphed');
 							hndlr.domLbl.style.visibility = '';
 						} else {
-							console.error('had faded');
+							console.error('had faded in, so fade it out, and its inputTransHandler should set val of domLbl and bring its opacity to 1');
 							console.error('1 setting opacity to 0 here on handlerName:', hndlr.handlerName);
 							hndlr.domInput.style.opacity = '0';
 						}
@@ -3117,6 +3178,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					console.error('tbb restore proc completed and handler destroyed VIA PANEL CLOSED METHOD');
 				}
 			};
+			console.error('rrrrr:', hndlr.submenuWidth);
 			hndlr.keyRestoreFunc = function(e) {
 				if (e.keyCode == 27) {
 					// escape
@@ -3173,11 +3235,11 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 					if (hndlr.nextLblVal_onTransEnd == 'INPUT') {
 						console.error('fade in input');
 						// fade it in
-						hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+						hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+hndlr.submenuWidth) + 'px, 25px, -1px)';
 						hndlr.domInput.style.opacity = '1';
 					} else {
 						e.target.style.opacity = 1;
-						hndlr.domLbl.value = hndlr.nextLblVal_onTransEnd;
+						hndlr.domLbl.setAttribute('value', hndlr.nextLblVal_onTransEnd);
 						console.error('set new val to:', hndlr.nextLblVal_onTransEnd);
 					}
 				} else {
@@ -3208,6 +3270,7 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						} else if (e.propertyName == 'opacity') {
 							hndlr.domLbl.style.opacity = 1;
 						}
+						hndlr.domLbl.setAttribute('value', hndlr.origLblVal);
 						/*
 						hndlr.domLbl.style.opacity = 1;
 						hndlr.domLbl.style.visibility = '';
@@ -3394,14 +3457,14 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 						//if (hndlr.smItem.classList.contains('profilist-sub-clicked')) {
 							// this is needed for labels that are elipsiid, meaning they take the whole width, and collapsing the submenu to just one icon gave it more room
 							hndlr.domInput.removeEventListener('transitionend', arguments.callee, false);
-							hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+							hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+hndlr.submenuWidth) + 'px, 25px, -1px)';
 						//}
 					}, false);
 					*/
 					hndlr.lastLblVal_onTransEnd = hndlr.nextLblVal_onTransEnd;
 					hndlr.nextLblVal_onTransEnd = aNewLblVal;
 					hndlr.domInput.setAttribute('placeholder', 'Enter new name for this profile');
-					hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+1) + 'px, 25px, -1px)';
+					hndlr.domInput.style.clip = 'rect(-1px, ' + (hndlr.domInput.offsetWidth+hndlr.submenuWidth) + 'px, 25px, -1px)';
 				}
 			} else {
 				if (aNewLblVal == 'INPUT') {
@@ -3466,11 +3529,41 @@ function tbb_box_click(e) {
 			if (classList.contains('perm-hover')) {
 				//e.view.document.documentElement.click();
 				console.log('do nothing as its the active profile - maybe rename?');
-			} else if (classList.contains('profilist-create')) {
-				console.log('create new profile');
-				tbb_msg_close(null, cWin);
+			} else if (classList.contains('profilist-create') || cWin.Profilist.PBox.classList.contains('profilist-cloning-picking')) {
+				var hasCloning = cWin.Profilist.PBox.classList.contains('profilist-cloning-picking');
+				if (hasCloning && classList.contains('profilist-create')) {
+					// fool clicked on "Pick a profile..." what an idiot
+					return;
+				}
+				var cInitVal = '';
+				if (hasCloning && !classList.contains('profilist-create')) {
+					var profName = origTarg.getAttribute('label');
+					var profIniKey = getIniKeyFromProfName(profName);
+				
+					cWin.Profilist.PBox.classList.remove('profilist-cloning-picking');
+					cloneProfIniKey = profIniKey;
+					console.log('this guy but no returns so why not restore properly?');
+
+					cInitVal = 'Copy of ' + profName;
+					console.log('cloning', profName);
+				}
+				var aId_tabmsg;
+				
+				var tbbFinalizer = function() {};
+				if (cloneProfIniKey) {
+					console.log('clone new profile');
+					aId_tabmsg = 'clone-profile';
+				} else {
+					console.log('create new profile');
+					aId_tabmsg = 'create-prof';
+					classList.add('profilist-hide-clone');
+					tbbFinalizer = function() {
+						classList.add('profilist-hide-clone');
+					};
+				}
+				tbb_msg_close(aId_tabmsg, cWin, true);
 				var cCB = {
-					initInputWithValue:'',
+					initInputWithValue: cInitVal,
 					onconfirm: function(aHndlr, aEvent, aInput) {
 						// if hold ctrl, it launches on create
 						// if hold shift+alt it creates profile at absolute path
@@ -3482,22 +3575,22 @@ function tbb_box_click(e) {
 								var dirpath = OS.Path.dirname(aInput);
 								var profname = OS.Path.basename(aInput);
 								if (dirpath == profname) {
-									tbb_msg('create-prof', 'error: invalid path', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+									tbb_msg(aId_tabmsg, 'error: invalid path', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
 										ms: 3000,
 										ontimeout: function() {
 											// send back to input with path val
 											cCB.initInputWithValue = aInput;
-											tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+											tbb_msg(aId_tabmsg, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 											return true;
 										}
 									} , true);
 								} else if (profname == '') {
-									tbb_msg('create-prof', 'error: final dir must be profile name', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+									tbb_msg(aId_tabmsg, 'error: final dir must be profile name', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
 										ms: 3000,
 										ontimeout: function() {
 											// send back to input with path val
 											cCB.initInputWithValue = aInput;
-											tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+											tbb_msg(aId_tabmsg, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 											return true;
 										}
 									} , true);
@@ -3508,17 +3601,17 @@ function tbb_box_click(e) {
 											console.log('Fullfilled - promise_dirpathExists - ', aVal);
 											// start - do stuff here - promise_dirpathExists
 											if (!aVal) {
-												tbb_msg('create-prof', 'error: directory path does not exist', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+												tbb_msg(aId_tabmsg, 'error: directory path does not exist', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
 													ms: 3000,
 													ontimeout: function() {
 														// send back to input with path val
 														cCB.initInputWithValue = aInput;
-														tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+														tbb_msg(aId_tabmsg, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 														return true;
 													}
 												} , true);
 											} else {
-												do_create(profname, dirpath);
+												do_create(profname, dirpath, cloneProfIniKey);
 											}
 											// end - do stuff here - promise_dirpathExists
 										},
@@ -3526,8 +3619,9 @@ function tbb_box_click(e) {
 											var rejObj = {name:'promise_dirpathExists', aReason:aReason};
 
 											var deepestReason = aReasonMax(aReason);
-											tbb_msg('create-prof', 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
-												ms: 3000
+											tbb_msg(aId_tabmsg, 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+												ms: 3000,
+												onrestore: tbbFinalizer
 											}, true);
 											
 											console.warn('Rejected - promise_dirpathExists - ', rejObj);
@@ -3542,21 +3636,23 @@ function tbb_box_click(e) {
 									);
 								}
 							} else {
-								do_create(aInput, null);
+								do_create(aInput, null, cloneProfIniKey);
 							}
 						};
-						var do_create = function(theprofname, theabspath) {
-							var promise_createProf = createProfileNew(theprofname, theabspath, true);
+						var do_create = function(theprofname, theabspath, cloneofinikey) {
+							cloneProfIniKey = null;
+							var promise_createProf = createProfileNew(theprofname, theabspath, true, cloneofinikey);
 							promise_createProf.then(
 								function(aVal) {
 									// aVal is aProfIniKey
 									console.log('Fullfilled - promise_createProf - ', aVal);
 									// start - do stuff here - promise_createProf
-									tbb_msg('create-prof', 'ok prof made', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+									tbb_msg(aId_tabmsg, 'ok prof made', 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
 										ms: 3000,
 										ontimeout: function() {
 											console.error(':todo: add tbb gui here');
-										}
+										},
+										onrestore: tbbFinalizer
 									}, true);
 									if (aEvent.ctrlKey) {
 										// launch on create
@@ -3570,8 +3666,9 @@ function tbb_box_click(e) {
 									var rejObj = {name:'promise_createProf', aReason:aReason};
 									
 									var deepestReason = aReasonMax(aReason);
-									tbb_msg('create-prof', 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
-										ms: 3000
+									tbb_msg(aId_tabmsg, 'error: ' + deepestReason, 'restoreStyleTimeout', origTarg.ownerDocument.defaultView, box, origTarg, {
+										ms: 3000,
+										onrestore: tbbFinalizer
 									}, true);
 									
 									console.warn('Rejected - promise_createProf - ', rejObj);
@@ -3585,49 +3682,77 @@ function tbb_box_click(e) {
 								}
 							);
 						};
-						tbb_msg('create-prof', 'creating...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, {onrestore:function(){ console.log('creating overwrit'); return true }}, true);
+						tbb_msg(aId_tabmsg, 'creating...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, {onrestore:function(){ console.log('creating overwrit'); return true }}, true);
 						//cWin.setTimeout(function(){do_checkCustPath()}, 5000);
 						do_checkCustPath();
 						return true;
+					},
+					oncancel: function() {
+						console.log('dont return, continue to normal restore');
 					}
 				};
-				tbb_msg('create-prof', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
+				console.log('bringing up cCB input');
+				tbb_msg(aId_tabmsg, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, true);
 			} else {
 				var profName = origTarg.getAttribute('label');
 				var profIniKey = getIniKeyFromProfName(profName);
 				
-				if (cWin.Profilist.PBox.classList.contains('profilist-cloning')) {
-					tbb_msg('clone-profile', 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {initInputWithValue:'Copy of ' + profName}, true);
-					//e.preventDefault(); // prevent panel from closing // not needed panel doesnt close anyways dont know why
-					console.error('cloning', profName);
-				} else {
 					e.view.PanelUI.toggle();// hide panel
 					launchProfile(profIniKey);
-				}
+					
 			}
 		},
 		'profilist-clone': function() {
-			if ('clone-profile' in tbb_msg_restore_handlers) {
-				if (tbb_msg_restore_handlers['clone-profile'].nextLblVal_onTransEnd == 'Pick a profile...') { 
-					// cancel clone
-					tbb_msg_close('clone-profile', cWin);
-					cWin.Profilist.PBox.classList.remove('profilist-cloning');
+			var cloneOnCancel = function() {
+				cWin.Profilist.PBox.classList.remove('profilist-cloning-picking');
+				cWin.Profilist.PBox.classList.remove('profilist-cloning');
+			};
+			var cloneOnConfirm = function() {
+				cWin.Profilist.PBox.classList.remove('profilist-cloning-picking');
+				return true;
+			};
+			var cloneOnRestore = function() {
+				// didnt keypress confirm or cancel, but restoring so do it an dont return
+				cWin.Profilist.PBox.classList.remove('profilist-cloning-picking');
+				cWin.Profilist.PBox.classList.remove('profilist-cloning');
+			}
+			/*
+			var remWigg = function() {
+				cWin.Profilist.PBox.classList.remove('profilist-cloning-picking');
+				if (cloneProfIniKey) {
+					// user confirmed
+					return true;
 				} else {
-					// copy of block link123121
-					// enter pick profile
-					console.log('wiggle for clone');
-					cWin.Profilist.PBox.classList.add('profilist-cloning');
-					tbb_msg_close('clone-profile', cWin, true);
-					tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
+					// user canceled
+					cWin.Profilist.PBox.classList.remove('profilist-cloning');
 				}
-			} else {
-				// copy of block link123121
+			};
+			*/
+			var enterPickProfile = function() {
 				// enter pick profile
 				console.log('wiggle for clone');
 				cWin.Profilist.PBox.classList.add('profilist-cloning');
+				cWin.Profilist.PBox.classList.add('profilist-cloning-picking');
 				tbb_msg_close('clone-profile', cWin, true);
-				tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleDefault', origTarg.ownerDocument.defaultView, box, origTarg, null, true);
-			}				
+				cloneProfIniKey = null;
+				tbb_msg('clone-profile', 'Pick a profile...', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, {
+					onconfirm: cloneOnConfirm,
+					oncancel: cloneOnCancel,
+					onrestore: cloneOnRestore
+				}, true);
+			};
+			if ('clone-profile' in tbb_msg_restore_handlers) {
+				if (tbb_msg_restore_handlers['clone-profile'].nextLblVal_onTransEnd == 'Clone Profile') { 
+					enterPickProfile();
+				} else {
+					// cancel clone
+					tbb_msg_close('clone-profile', cWin);
+					cWin.Profilist.PBox.classList.remove('profilist-cloning');
+				}
+			} else {
+				// copy of block link123121
+				enterPickProfile();
+			}
 		},
 		'profilist-inactive-del': function() {
 			var cProfName = box.getAttribute('label');
@@ -5838,110 +5963,6 @@ function getChannelNameOfProfile(for_ini_key) {
 
 
 // start - helper functions for makeLauncher Darwin
-function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, depth) {
-	// IMPORTANT: as dev calling this functiopn `depth` arg must ALWAYS be null/undefined (dont even set it to 0). this arg is meant for internal use for iteration
-	// `delegate` is required
-	// pathToDir is required, it is string
-	// max_depth should be set to null/undefined/<0 if you want to enumerate till every last bit is enumerated. paths will be iterated to including max_depth.
-	// if runDelegateOnRoot, then delegate runs on the root path with depth arg of -1
-	// this function iterates all elements at depth i, then after all done then it iterates all at depth i + 1, and then so on
-	// if arg of `runDelegateOnRoot` is true then minimum depth is -1 (and is of the root), otherwise min depth starts at 0, contents of root
-
-	var deferred_enumChildEntries = new Deferred();
-	var promise_enumChildEntries = deferred_enumChildEntries.promise;
-
-	if (depth === undefined || depth === undefined) {
-		// at root pathDir
-		depth = 0;
-		if (runDelegateOnRoot) {
-			var entry = {
-				isDir: true,
-				name: OS.Path.basename(pathToDir),
-				path: pathToDir
-			};
-			var rez_delegate = delegate(entry, -1);
-			if (rez_delegate) {
-				deferred_enumChildEntries.resolve(entry);
-				return promise_enumChildEntries; // to break out of this func, as if i dont break here it will go on to iterate through this dir
-			}
-		}
-	} else {
-		depth++;
-	}
-	
-	if ((max_depth === null || max_depth === undefined) || ( depth <= max_depth)) {
-		var iterrator = new OS.File.DirectoryIterator(pathToDir);
-		var subdirs = [];
-		var promise_batch = iterrator.nextBatch();
-		
-		promise_batch.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_batch - ', aVal);
-				// start - do stuff here - promise_batch
-				for (var i = 0; i < aVal.length; i++) {
-					if (aVal[i].isDir) {
-						subdirs.push(aVal[i]);
-					}
-					var rez_delegate_on_root = delegate(aVal[i], depth);
-					if (rez_delegate_on_root) {
-						deferred_enumChildEntries.resolve(aVal[i]);
-						return promise_enumChildEntries; //to break out of this if loop i cant use break, because it will get into the subdir digging, so it will not see the `return promise_enumChildEntries` after this if block so i have to return promise_enumChildEntries here
-					}
-				}
-				// finished running delegate on all items at this depth and delegate never returned true
-
-				if (subdirs.length > 0) {
-					var promiseArr_itrSubdirs = [];
-					for (var i = 0; i < subdirs.length; i++) {
-						promiseArr_itrSubdirs.push(enumChildEntries(subdirs[i].path, delegate, max_depth, null, depth)); //the runDelegateOnRoot arg doesnt matter here anymore as depth arg is specified
-					}
-					var promiseAll_itrSubdirs = Promise.all(promiseArr_itrSubdirs);
-					promiseAll_itrSubdirs.then(
-						function(aVal) {
-							console.log('Fullfilled - promiseAll_itrSubdirs - ', aVal);
-							// start - do stuff here - promiseAll_itrSubdirs
-							deferred_enumChildEntries.resolve('done iterating all - including subdirs iteration is done - in pathToDir of: ' + pathToDir);
-							// end - do stuff here - promiseAll_itrSubdirs
-						},
-						function(aReason) {
-							var rejObj = {name:'promiseAll_itrSubdirs', aReason:aReason, pathToDir: pathToDir, aExtra: 'meaning finished iterating all entries INCLUDING subitering subdirs in dir of pathToDir'};
-							console.error('Rejected - promiseAll_itrSubdirs - ', rejObj);
-							deferred_enumChildEntries.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promiseAll_itrSubdirs', aCaught:aCaught, pathToDir: pathToDir};
-							console.error('Caught - promiseAll_itrSubdirs - ', rejObj);
-							deferred_enumChildEntries.reject(rejObj);
-						}
-					);
-				} else {
-					deferred_enumChildEntries.resolve('done iterating all - no subdirs - in pathToDir of: ' + pathToDir);
-				}
-				// end - do stuff here - promise_batch
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_batch', aReason:aReason};
-				if (aReason.winLastError == 2) {
-					rejObj.probableReason = 'targetPath dir doesnt exist';
-				}
-				console.error('Rejected - promise_batch - ', rejObj);
-				deferred_enumChildEntries.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_batch', aCaught:aCaught};
-				console.error('Caught - promise_batch - ', rejObj);
-				deferred_enumChildEntries.reject(rejObj);
-			}
-		);
-	} else {
-		deferred_enumChildEntries.resolve('max depth exceeded, so will not do it, at pathToDir of: ' + pathToDir);
-	}
-
-	return promise_enumChildEntries;
-}
-
 function escapeRegExp(text) {
 	if (!arguments.callee.sRE) {
 		var specials = ['/', '.', '*', '+', '?', '|', '(', ')', '[', ']', '{', '}', '\\'];
@@ -7342,19 +7363,36 @@ function getPathToBuildByTie(tie_id) {
 	}
 }
 
-function getPathToProfileDir(for_ini_key) {
+function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
+	// returns root dir
+	// if set objOfRootAndLocal to true, it returns an object, and the object holds two keys. root for rootdir of prof. and local IF it is a IsRelative=1 prof.
+	
 	if (!(for_ini_key in ini)) {
 		throw new Error('getPathToProfileDir for_ini_key "' + for_ini_key + '" not found in ini');
 	}
 	
-	if (for_ini_key == profToolkit.selectedProfile.iniKey) {
-		return profToolkit.selectedProfile.rootDirPath;
-	}
-	
-	if (ini[for_ini_key].props.IsRelative == '1') {
-		return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)));
+	if (!objOfRootAndLocal) {
+		if (for_ini_key == profToolkit.selectedProfile.iniKey) {
+			return profToolkit.selectedProfile.rootDirPath;
+		}
+		
+		if (ini[for_ini_key].props.IsRelative == '1') {
+			return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)));
+		} else {
+			return ini[for_ini_key].props.Path;
+		}
 	} else {
-		return ini[for_ini_key].props.Path;
+		var rezObj = {};
+		if (ini[for_ini_key].props.IsRelative == '1') {
+			// root and local
+			var theDirName = OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path));
+			rezObj.OSPath_root = OS.Path.join(profToolkit.rootPathDefault, theDirName);
+			rezObj.OSPath_local = OS.Path.join(profToolkit.localPathDefault, theDirName);
+		} else {
+			// just a root dir
+			rezObj.OSPath_root = ini[for_ini_key].props.Path;
+		}
+		return rezObj;
 	}
 }
 
@@ -11163,18 +11201,21 @@ function immediateChildPaths(path_dir) {
 	var promise_collectChildPaths = itr_pathDir.forEach(callback_collectChildPaths);
 	promise_collectChildPaths.then(
 		function(aVal) {
+			itr_pathDir.close();
 			console.log('Fullfilled - promise_collectChildPaths - ', aVal);
 			// start - do stuff here - promise_collectChildPaths
 			deferred_immediateChildPaths.resolve(paths_children);
 			// end - do stuff here - promise_collectChildPaths
 		},
 		function(aReason) {
+			itr_pathDir.close();
 			var rejObj = {name:'promise_collectChildPaths', aReason:aReason};
 			console.error('Rejected - promise_collectChildPaths - ', rejObj);
 			deferred_immediateChildPaths.reject(rejObj);
 		}
 	).catch(
 		function(aCaught) {
+			itr_pathDir.close();
 			var rejObj = {name:'promise_collectChildPaths', aCaught:aCaught};
 			console.error('Caught - promise_collectChildPaths - ', rejObj);
 			deferred_immediateChildPaths.reject(rejObj);
@@ -11312,6 +11353,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 		// :TODO: iterrator.close() somewhere!! maybe here as i dont use iterrator anymore after .nextBatch()
 		promise_batch.then(
 			function(aVal) {
+				iterrator.close();
 				console.log('Fullfilled - promise_batch - ', aVal);
 				// start - do stuff here - promise_batch
 				for (var i = 0; i < aVal.length; i++) {
@@ -11359,6 +11401,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 				// end - do stuff here - promise_batch
 			},
 			function(aReason) {
+				iterrator.close();
 				var rejObj = {name:'promise_batch', aReason:aReason};
 				if (aReason.winLastError == 2) {
 					rejObj.probableReason = 'directory at pathToDir doesnt exist';
@@ -11368,6 +11411,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, dep
 			}
 		).catch(
 			function(aCaught) {
+				iterrator.close();
 				var rejObj = {name:'promise_batch', aCaught:aCaught};
 				console.error('Caught - promise_batch - ', rejObj);
 				deferredMain_enumChildEntries.reject(rejObj);

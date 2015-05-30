@@ -6062,7 +6062,8 @@ var winInit = function() {
 		ERROR_ALREADY_EXISTS: 183,
 		SLGP_RAWPATH: 0x4,
 		ERROR_FILE_NOT_FOUND: 2,
-		ERROR_SHARING_VIOLATION: 32
+		ERROR_SHARING_VIOLATION: 32,
+		ERROR_PATH_NOT_FOUND: 3
 	};
 	
 	var _lib = {}; // cache for lib

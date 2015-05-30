@@ -15,7 +15,7 @@
 /* end - get the background image from proflist_box to dev-build */
 
 /* start cloning styles*/
-#profilist_box.profilist-cloning .profilist-tbb-box:not(.profilist-create) .profilist-submenu{
+#profilist_box.profilist-cloning.profilist-cloning-picking .profilist-tbb-box:not(.profilist-create) .profilist-submenu{
 	display: none;
 }
 
@@ -33,7 +33,7 @@
 	transform: rotate(-1deg);
   }
 }
-#profilist_box.profilist-cloning .profilist-tbb-box:not(.profilist-create) .toolbarbutton-text {
+#profilist_box.profilist-cloning.profilist-cloning-picking .profilist-tbb-box:not(.profilist-create) .toolbarbutton-text {
 	animation: profilist-wiggle-profiles 250ms infinite;
 	transform-origin: 50% 50%;
 }
@@ -155,6 +155,17 @@ this is kind of nice think about it
 #profilist_box .profilist-tbb-box.profilist-edit .profilist-submenu {
 	/*width: 54px !important;*/
 }
+/*
+#profilist_box:not(.profilist-cloning) .profilist-tbb-box.profilist-create.profilist-edit .profilist-submenu {
+	opacity: 0;
+	pointer-events: none;
+}
+*/
+
+.profilist-hide-clone'.profilist-submenu {
+	opacity: 0;
+}
+
 .profilist-tbb-box .toolbarbutton-text {
 	transition: opacity 0s;
 	opacity: 1;
