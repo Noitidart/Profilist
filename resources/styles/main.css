@@ -391,6 +391,8 @@ this is kind of nice think about it
 	width: 18px;
 	/*transition: opacity 150ms ease 150ms, width 150ms, padding 150ms;*/
 	/*/*transition: opacity 300ms;*/
+	transition: visibility 0ms linear 300ms;
+	visibility: visible;
 }
 
 .profilist-tbb-box.profilist-tied .profilist-submenu box.profilist-dots {
@@ -431,14 +433,24 @@ this is kind of nice think about it
 	overflow: hidden;
 }
 
-#profilist_box:not(.profilist-show-is-default) .profilist-is-default {
-	display: none;
+.profilist-show-is-default[isdefault]:not(:hover) .profilist-is-default {
+	opacity: 1;
+	visibility: visible;
+	transition: visibility 300ms;
+	display: block;
+}
+.profilist-show-is-default[isdefault]:not(:hover) .profilist-submenu  {
+	opacity: 1;
+}
+.profilist-show-is-default[isdefault]:not(:hover) .profilist-dots  {
+	visibility: hidden;
+	transition: visibility 0ms linear 0ms;
 }
 
 
 
 .profilist-submenu box:not(.profilist-dots) {
-	filter: url(filters.svg#grayscale);
+	/*filter: url("chrome://profilist/content/resources/styles/filters.svg#grayscale");*/
 	opacity: .2;
 	transition: opacity 300ms;
 	cursor: pointer;
@@ -478,11 +490,28 @@ this is kind of nice think about it
 .profilist-default {
 	background: url(chrome://profilist/content/resources/images/bullet_gray.png) no-repeat center center transparent;
 }
+
+[isdefault] .profilist-default {
+	background: url(chrome://profilist/content/resources/images/bullet_blue.png) no-repeat center center transparent;
+}
+
+/*
+[isdefault]:hover .profilist-is-default {
+	display: none;
+}
+*/
+
 .profilist-is-default {
 	/*used to show which other profile is the current default one when user hovers over ".profilist-default"*/
 	/* list-style-image: url(chrome://profilist/content/resources/images/bullet_blue.png); */
 	background: url(chrome://profilist/content/resources/images/bullet_blue.png) no-repeat center center transparent;
+	display: none;
+	opacity: 0;
+	pointer-events: none;
+	visibility: hidden;
+	transition: visibility 300ms;
 }
+
 .profilist-dev-safe {
 	/* list-style-image: url(chrome://profilist/content/resources/images/bullet_wrench.png); */
 	background: url(chrome://profilist/content/resources/images/bullet_wrench.png) no-repeat center center transparent;
@@ -494,7 +523,7 @@ this is kind of nice think about it
 	background-position: center center;
 	background-color: transparent;
 	/*background: url(chrome://branding/content/icon16.png) no-repeat center center transparent;*/
-	filter: url(filters.svg#grayscale);
+	filter: url("chrome://profilist/content/resources/styles/filters.svg#grayscale");
 }
 	/*
 	.profilist-tbb-box.profilist-tied-release .profilist-dev-build {

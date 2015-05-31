@@ -334,7 +334,11 @@ current builds icon if dev mode is enabled
 					}
 				} else {
 					//its 0
-					delete iniObj_thatAffectDOM[defaultProfilePath].props.Default;
+					if (defaultProfilePath) {
+						delete iniObj_thatAffectDOM[defaultProfilePath].props.Default;
+					} else {
+						// proper for profilist logic, there is no profile marked default and StartWithLastProfile is 0
+					}
 				}
 				
 				iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM);
@@ -744,18 +748,20 @@ function saltName(aName) {
 	return kSaltString + '.' + aName;
 }
 /*end - salt generator*/
+var _getSafedForOSPath_pattWIN = /([\\*:?<>|\/\"])/g;
+var _getSafedForOSPath_pattNIXMAC = /\//g;
 function getSafedForOSPath(aStr) {
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 		
-				return aStr.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath);
+				return aStr.replace(_getSafedForOSPath_pattWIN, repCharForSafePath);
 				
 			break;
 		default:
 		
-				return aStr.replace(/\//g, repCharForSafePath);
+				return aStr.replace(_getSafedForOSPath_pattNIXMAC, repCharForSafePath);
 	}
 }
 function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refreshIni, aIniKeyToClone) {
@@ -1221,6 +1227,88 @@ function deleteProfile(aProfIniKey, refreshIni) {
 	return deferred_deleteProfile.promise;
 }
 
+function defaultProfile(aProfIniKey, refreshIni) {
+	// sets/unsets default profile
+	// if aProfIniKey is already default, it unsets it, and sets StartWithLastProfile to 0
+		// else it makes it default, and finds what was perviously default and unsets that, and sets StartWithLastProfile to 1
+	// returns promise
+	
+	var deferred_defaultProfile = new Deferred(); // function promise return
+	
+	var theProfileCurrentName = ini[aProfIniKey].props.Name;
+	
+	// setup postRefreshIni
+	var postRefreshIni = function() {
+		// start by looping through to find profile in ini and also check if new name is available (as in not taken by another)
+		var cDefaultProfInfo = getDefaultIniKeyInObj(ini);
+		
+		if (cDefaultProfInfo !== null) {
+			if (cDefaultProfInfo.iniKey == aProfIniKey) {
+				// unset self from being default
+				delete ini[aProfIniKey].props.Default;
+				ini.General.props.StartWithLastProfile = 0;
+			} else {
+				// unset other from being default
+				delete ini[cDefaultProfInfo.iniKey].props.Default;
+				ini[aProfIniKey].props.Default = 1;
+				ini.General.props.StartWithLastProfile = 1;
+			}
+		} else {
+			//nothing was set to default my logic follows that StartWithLastProfile should be 0
+			ini[aProfIniKey].props.Default = 1;
+			ini.General.props.StartWithLastProfile = 1;
+		}
+
+		// write ini
+		var promise_updateIniFile = writeIniAndBkp();
+		promise_updateIniFile.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_updateIniFile - ', aVal);
+				deferred_defaultProfile.resolve('Profile succesfuly marked as default');
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_updateIniFile', aReason:aReason};
+				console.error('Rejected - promise_updateIniFile - ', rejObj);
+				deferred_defaultProfile.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_updateIniFile - ', aCaught);
+				var rejObj = {name:'promise_updateIniFile', aCaught:aCaught};
+				deferred_defaultProfile.reject(rejObj);
+			}
+		);
+	};
+	// end - setup postRefreshIni
+	
+	// start - figure out and based on do refresh ini
+	if (!refreshIni) {
+		postRefreshIni();
+	} else {
+		var promise_refreshIni = readIniAndParseObjs();
+		promise_refreshIni.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_refreshIni - ', aVal);
+				postRefreshIni();
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_refreshIni', aReason:aReason};
+				console.error('Rejected - promise_refreshIni - ', rejObj);
+				deferred_defaultProfile.reject(rejObj); //throw rejObj;
+			}
+		).catch(
+			function(aCaught) {
+				console.error('Caught - promise_refreshIni - ', aCaught);
+				var rejObj = {name:'promise_refreshIni', aCaught:aCaught};
+				deferred_defaultProfile.reject(rejObj); // throw aCaught;
+			}
+		);
+	}
+	// end - figure out and based on do refresh ini
+	
+	return deferred_defaultProfile.promise;
+}
+
 function initProfToolkit() {
 //	console.log('in initProfToolkit');
 	
@@ -1604,6 +1692,11 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				////// end copy/modification/strips of block 8752123154
 				
 				PStack.appendChild(elFromJson);
+				var boxAnons = elFromJson.ownerDocument.getAnonymousNodes(elFromJson);
+				var setdefault = boxAnons[1].querySelector('.profilist-default');
+				//console.info('setdefault', setdefault);
+				setdefault.addEventListener('mouseenter', subenter, false);
+				setdefault.addEventListener('mouseleave', subleave, false);
 			}
 			
 			var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM; //just to short form it
@@ -1812,6 +1905,11 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								var childNodeI = getChildNodeI(pb, objBoot, PStack);
 								console.log('doing insert of:', childNodeI);
 								PStack.insertBefore(elFromJson, PStack.childNodes[childNodeI]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
+								var boxAnons = elFromJson.ownerDocument.getAnonymousNodes(elFromJson);
+								var setdefault = boxAnons[1].querySelector('.profilist-default');
+								//console.info('setdefault', setdefault);
+								setdefault.addEventListener('mouseenter', subenter, false);
+								setdefault.addEventListener('mouseleave', subleave, false);
 							} else {
 								console.warn('pb is unrecognized', 'pb:', pb);
 								continue;
@@ -1903,6 +2001,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 }
 
 function getChildNodeI(key, obj, stack) {
+	// remember to always + 1 to get the actual child node i, i dont know why its like that but yea it is
 	if ('num' in obj[key]) {
 		if (profToolkit.selectedProfile.iniKey && key == profToolkit.selectedProfile.iniKey) {
 			var childNodeI = stack.childNodes.length - 1; // this works but its too much weird thinking about it, it wont hold true if there are more then General and all rest are Profile blocks in ini `Object.keys(obj).length;` // get the profilist-cur-prof element // last element in stack
@@ -2599,7 +2698,7 @@ function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
 			//var badge = tbb.ownerDocument.getAnonymousElementByAttribute(tbb, 'class', 'profilist-badge');
 			var setdefault = boxAnons[1].querySelector('.profilist-default');
 			//console.log('badge', badge);
-			//console.log('setdefault', setdefault);
+			console.error('setdefault', setdefault);
 
 			//badge.addEventListener('mouseenter', subenter, false);
 			setdefault.addEventListener('mouseenter', subenter, false);
@@ -2979,8 +3078,28 @@ function properactive(e) {
 	}
 }
 
+var _subenter_lastMarkedChildI = null;
+var _subenter_markTimeout = 0;
+var _subenter_marked = false;
 function subenter(e) {
+	
 	console.log('set default enter');
+	var smItem = e.originalTarget; // was origTarg
+	var box = e.target;
+	var domDoc = box.ownerDocument;
+	var domWin = domDoc.defaultView;
+	
+	var cDefaultProfInfo = getDefaultIniKeyInObj(null, domWin);
+	if (cDefaultProfInfo !== null) {
+		_subenter_lastMarkedChildI = cDefaultProfInfo.childNodeI;
+		_subenter_markTimeout = domWin.setTimeout(function() {
+			console.log('marking show on child node i:', _subenter_lastMarkedChildI);
+			domWin.Profilist.PStack.childNodes[_subenter_lastMarkedChildI].classList.add('profilist-show-is-default');
+			_subenter_marked = true;
+		}, 300); //so we wait for previous submenu width animation to finish in case it happend
+	} else {
+		_subenter_lastMarkedChildI = null;
+	}
 	/*
 	var origTarg = e.originalTarget;
 	var box = e.target;
@@ -3001,10 +3120,27 @@ function subenter(e) {
 		console.log('added', obj);
 	}
 	*/
+	
 }
 
 function subleave(e) {
 	console.log('set default leave');
+	var smItem = e.originalTarget; // was origTarg
+	var box = e.target;
+	var domDoc = box.ownerDocument;
+	var domWin = domDoc.defaultView;
+
+	if (_subenter_lastMarkedChildI !== null) {
+		console.log('UNmarking show on child node i:', _subenter_lastMarkedChildI);
+		domWin.clearTimeout(_subenter_markTimeout);
+		if (_subenter_marked) {
+			_subenter_marked = false;
+			domWin.Profilist.PStack.childNodes[_subenter_lastMarkedChildI].classList.remove('profilist-show-is-default');
+		} else {
+			console.log('it was not sucesfully marked so no need to dom unmark it');
+		}
+		_subenter_lastMarkedChildI = null;
+	}
 	/*
 	var origTarg = e.originalTarget;
 	var box = e.target;
@@ -3486,6 +3622,41 @@ function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, a
 		
 }
 
+function getDefaultIniKeyInObj(iniObj, aDOMWindow) {
+	// returns ini key of default, null if no default is selected
+		// if want position of child then pass in aDOMWindow and dont pass iniObj, it will use the iniObj of the win
+
+	// returns obj. with key of iniKey and childNodeI if requested by setting aDOMWindow
+	
+	if (aDOMWindow) {
+		iniObj = aDOMWindow.Profilist.iniObj_thatAffectDOM;
+	}
+	var cDefaultIniKey = null;
+	for (var p in iniObj) {
+		if (!('num' in iniObj[p])) { continue }
+		if ('Default' in iniObj[p].props && iniObj[p].props.Default == '1') {
+			cDefaultIniKey = p;
+			break;
+		}
+	}
+	
+	if (cDefaultIniKey === null) {
+		return null; // no default selected
+	}
+		
+	var rezObj = {};
+	rezObj.iniKey = cDefaultIniKey;
+	
+	if (aDOMWindow) {
+		rezObj.childNodeI = getChildNodeI(cDefaultIniKey, iniObj, aDOMWindow.Profilist.PStack); // was TbbI
+		console.info('obj el num of cur default is:', iniObj[cDefaultIniKey].num, 'getChildNodeI:', rezObj.childNodeI);
+	} else {
+		console.info('no default profile selected');
+	}
+	
+	return rezObj;
+}
+
 function tbb_box_click(e) {
 	console.log('tbb_box_click e.origTarg:', e.originalTarget);
 	var origTarg = e.originalTarget;
@@ -3780,6 +3951,68 @@ function tbb_box_click(e) {
 			console.log('set this profile as default');
 			var cProfName = box.getAttribute('label');
 			var cProfIniKey = getIniKeyFromProfName(cProfName);
+			
+			var winObj = cWin.Profilist.iniObj_thatAffectDOM;
+			
+			var cDefaultProfInfo = getDefaultIniKeyInObj(null, cWin);
+
+			var zeroingDefault = false; // meaning im unseting default
+			var restoreOnRej;
+			if (cDefaultProfInfo !== null) {
+				cWin.Profilist.PStack.childNodes[cDefaultProfInfo.childNodeI].removeAttribute('isdefault');
+				if (cDefaultProfInfo.iniKey == cProfIniKey) {
+					box.removeAttribute('isdefault'); //classList.remove('profilist-tbb-is-default');
+					zeroingDefault = true;
+					restoreOnRej = function() {
+						cWin.Profilist.PStack.childNodes[cDefaultProfInfo.childNodeI].setAttribute('isdefault', 1);
+						box.setAttribute('isdefault', 1);
+					};
+				} else {
+					box.setAttribute('isdefault', 1); // box.classList.add('profilist-tbb-is-default');
+					restoreOnRej = function() {
+						cWin.Profilist.PStack.childNodes[cDefaultProfInfo.childNodeI].setAttribute('isdefault', 1);
+						box.removeAttribute('isdefault');
+					};
+				}
+			} else {
+				console.info('no default profile selected'); // so user is obviously setting this clicked on one to the default
+				box.setAttribute('isdefault', 1);
+				restoreOnRej = function() {
+					box.removeAttribute('isdefault');
+				};
+			}
+			
+			var promise_makeDefault = defaultProfile(cProfIniKey, true);
+			promise_makeDefault.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_makeDefault - ', aVal);
+					// start - do stuff here - promise_makeDefault
+					if (cDefaultProfInfo !== null) {
+						delete cWin.Profilist.iniObj_thatAffectDOM[cDefaultProfInfo.iniKey].props.Default;
+					}
+					if (zeroingDefault) {
+						delete cWin.Profilist.iniObj_thatAffectDOM[cProfIniKey].props.Default;
+					} else {
+						cWin.Profilist.iniObj_thatAffectDOM[cProfIniKey].props.Default = 1;
+					}
+					//cWin.Profilist.iniObj_thatAffectDOM.General.props['Profilist.defaultProfilePath'] = cProfIniKey;
+					//cWin.Profilist.iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIsRelative']
+					// end - do stuff here - promise_makeDefault
+				},
+				function(aReason) {
+					// restore old default, i only handle dom restore and setting from this func, ini setting happens from the defualtProfile func
+					restoreOnRej();
+					var rejObj = {name:'promise_makeDefault', aReason:aReason};
+					console.error('Rejected - promise_makeDefault - ', rejObj);
+					//deferred_createProfile.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_makeDefault', aCaught:aCaught};
+					console.error('Caught - promise_makeDefault - ', rejObj);
+					//deferred_createProfile.reject(rejObj);
+				}
+			);
 		},
 		'profilist-rename': function() {
 			var cProfName = box.getAttribute('label');
@@ -4382,7 +4615,7 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 										deferredMain_updateIconToAllWindows.resolve(false);
 									} else {
 										winntPathToWatchedFile = {
-											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, aProfilePath.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath) + '.json'),
+											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfilePath) + '.json'),
 											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
 										};
 										cWinHandlePtrStr = aVal;
@@ -5790,7 +6023,7 @@ function activated(e) {
 		case 'winmo':
 		case 'wince':
 			// check if 
-			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, profToolkit.selectedProfile.iniKey.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
+			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(profToolkit.selectedProfile.iniKey) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
 			var promise_checkWmSeticoned = read_encoded(fullFilePathToWM_SETICON, {encoding:'utf8'});
 			promise_checkWmSeticoned.then(
 				function(aVal) {
@@ -8194,12 +8427,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	return deferred_makeDeskCut.promise;
 }
 function getLauncherName(for_ini_key, theChName) {
-	var theProfName_safedForPath;
-	if (cOS == 'winnt') {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath)
-	} else {
-		theProfName_safedForPath = ini[for_ini_key].props.Name.replace(/\//g, repCharForSafePath); //for mac and nix
-	}
+	var theProfName_safedForPath = getSafedForOSPath(ini[for_ini_key].props.Name);
 	return getAppNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 }
 // end - shortcut creation
@@ -8677,7 +8905,7 @@ function pickerIconset(tWin) {
 						var thisLeafName = OS.Path.basename(loaded_imgObj[size].OSPath);
 						thisLeafName = thisLeafName.substr(0, thisLeafName.lastIndexOf('.'));
 						thisLeafName = thisLeafName.replace(new RegExp(size, 'g'), '');
-						thisLeafName = thisLeafName.replace(patt_winSafe, repCharForSafePath); //note: possible issue, i should replace special chars, as in mac and nix can use all chars, but in windows it cant, so this reduces portability, but replacing \W should fix this // use this `.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath)` to make windows file name safe// make windows safe
+						thisLeafName = getSafedForOSPath(thisLeafName); //note: possible issue, i should replace special chars, as in mac and nix can use all chars, but in windows it cant, so this reduces portability, but replacing \W should fix this // use this `.replace(/([\\*:?<>|\/\"])/g, repCharForSafePath)` to make windows file name safe// make windows safe
 						thisLeafName = patt_trimLeadingTrailingNonWord.exec(thisLeafName);// trim trailing and leading non word characters
 
 						if (thisLeafName === null) { continue } // its null if thisLeafName pre exec was empty string, or a string of all non word characters
