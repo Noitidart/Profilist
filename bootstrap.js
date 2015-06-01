@@ -1427,18 +1427,6 @@ function initProfToolkit() {
 	*/
 }
 
-var panelHidUnloaders = [];
-function checkAndExecPanelHidUnloaders(cDOMWin, specificName) {
-	for (var i=0; i<panelHidUnloaders.length; i++) {
-		if (!specificName || (specificName && panelHidUnloaders[i].name == specificName)) {
-			if (panelHidUnloaders[i].view == cDOMWin) {
-				panelHidUnloaders[i].func();
-				panelHidUnloaders.splice(i, 1);
-				i--;
-			}
-		}
-	}
-}
 function updateOnPanelHid(e) {
 	// do these actions on hid because like if we dont close it, then if user goes to customize, then it remains open blah blah ya
 	//console.log('execing updateOnPanelHid, e:', e); //todo: figure out why its called so much
@@ -1448,7 +1436,6 @@ function updateOnPanelHid(e) {
 	DOMWin.Profilist.PBox.style.height = collapsedheight + 'px';
 	DOMWin.Profilist.PBox.classList.remove('profilist-hovered');
 	
-	checkAndExecPanelHidUnloaders(DOMWin);
 	tbb_msg_close(null, DOMWin);
 	
 }
@@ -1563,7 +1550,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					}, false);
 					PBox.style.height = expandedheight + 'px';
 					PBox.classList.add('profilist-hovered');
-					updateRunningIcons(aDOMWindow);
+					updateStatusImgs(aDOMWindow);
 				// }, expandDelay);
 			}, false);
 			PBox.addEventListener('mouseleave', function(e_ML) {
@@ -1574,7 +1561,6 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				// collapseTimer = aDOMWindow.setTimeout(function() {
 					PBox.classList.remove('profilist-hovered');
 					PBox.style.height = collapsedheight + 'px';
-					checkAndExecPanelHidUnloaders(aDOMWindow);
 					tbb_msg_close(null, aDOMWindow);
 				// }, collapseDelay);
 			}, false);
@@ -1622,6 +1608,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				);
 				//{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create profilist-do_not_auto_remove', addEventListener:['click',createUnnamedProfile,false], style:tbb_style}
 				elFromJson_createNewProfile.addEventListener('click', tbb_box_click, false);
+				elFromJson_createNewProfile.addEventListener('mousedown', properactive, false);
 				PStack.appendChild(elFromJson_createNewProfile);
 				var SMItem_profilistClone = aDOMWindow.document.getAnonymousElementByAttribute(elFromJson_createNewProfile, 'class', 'profilist-clone'); // getAnon must go after PStack.appendChild as anon nodes dont come in until its added to doc
 				console.error('info SMItem_profilistClone:', SMItem_profilistClone);
@@ -1904,6 +1891,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								//assuming that as we go through objBoot they are in asc order of .num
 								var childNodeI = getChildNodeI(pb, objBoot, PStack);
 								console.log('doing insert of:', childNodeI);
+								elFromJson.addEventListener('mousedown', properactive, false);
 								PStack.insertBefore(elFromJson, PStack.childNodes[childNodeI]); // note: assuming: no need to do `PStack.childNodes[objBoot[pb].num + 1] ? PStack.childNodes[objBoot[pb].num + 1] : PStack.childNodes[PStack.childNodes.length - 1]` because there always has to be at least "create new button" element, so profile button is never inserted as last child
 								var boxAnons = elFromJson.ownerDocument.getAnonymousNodes(elFromJson);
 								var setdefault = boxAnons[1].querySelector('.profilist-default');
@@ -1934,7 +1922,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			
 			//10. update running icons
 			//var PTbbBoxes = PStack.childNodes;
-			updateRunningIcons(aDOMWindow)
+			updateStatusImgs(aDOMWindow)
 			
 			/* // i dont think i need this, updatePanel's purpose is just to take ini to dom
 			// start - im not sure if i need to writeIniAndBkpIfDiff here
@@ -1977,27 +1965,6 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 	
 	console.error('returning the upos deferred.promise');
 	return deferred_updateOnPanelShowing.promise;
-	
-	//////////////////////////// start - old stuff
-	/* old stuff
-		var updateIni = 1;
-		if (dontUpdateIni) {
-			updateIni = 0;
-		}
-
-		//win.setTimeout(function() { updateProfToolkit(updateIni, 1, win); }, 5000); //was testing to see how it handles when os.file takes long time to read
-		updateProfToolkit(updateIni, 1, win).then(
-			function() {
-				console.log('update statuses of proflies now');
-				updateDomProfileStatuses(stack);
-				//return Promise.resolve('updateProfToolkit success');
-			},
-			function() {
-				throw new Error('updateProfToolkit failed');
-			}
-		);
-	old stuff */
-	//////////////////////////// end - old stuff
 }
 
 function getChildNodeI(key, obj, stack) {
@@ -2021,7 +1988,7 @@ function getChildNodeI(key, obj, stack) {
 	return childNodeI;
 }
 
-function updateRunningIcons(aDOMWindow) {
+function updateStatusImgs(aDOMWindow) {
 	// doesnt return anything, just does it
 	var objWin = aDOMWindow.Profilist.iniObj_thatAffectDOM;
 	var promiseAllArr_updateStatuses = [];
@@ -2116,701 +2083,6 @@ function cssBackgroundUrl_for_devBuildExePath(exePath) {
 	} */
 }
 
-function updateDomProfileStatuses(pb_stack) {
-	var tbb_boxes = pb_stack.childNodes;
-	console.log(tbb_boxes);
-	var tbb_boxes_name_to_i = {}
-	Array.prototype.forEach.call(tbb_boxes, function(tbb_box, i) {
-	  var profName = tbb_box.getAttribute('label');
-	  if (profName in ini && 'num' in ini[profName]) {
-		tbb_boxes_name_to_i[profName] = i;
-	  }
-	});
-	Object.keys(ini).forEach(function(p) {
-		if ('num' in ini[p]) {
-			if (p == profToolkit.selectedProfile.name) {
-				console.log('profile', p, 'is the active profile so in use duh');
-				return; //continue;
-			}
-			var promise_queryProfileLocked = ProfilistWorker.post('queryProfileLocked', [ini[p].props.IsRelative, ini[p].props.Path, profToolkit.rootPathDefault]);
-			promise_queryProfileLocked.then(
-				function(aVal) {
-					//aVal is TRUE if LOCKED
-					//aVal is FALSE if NOT locked
-					if (aVal) {
-						console.log('profile', p, 'is IN USE');
-						tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
-					} else {
-						console.log('profile', p, 'is NOT in use');
-						tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
-					}
-				},
-				function(aReason) {
-					console.warn('failed to get status of profName', p, 'aReason:', aReason);
-				}
-			);
-		}
-	});
-}
-
-function updateProfToolkit(refreshIni, refreshStack, iDOMWindow) {
-//is promise
-	try {
-		if (refreshIni == 1) {
-			var promise = readIni();
-			return promise.then(
-				function() {
-					return updateProfToolkit(0, refreshStack).then(
-						function() {
-							return Promise.resolve('updateProfToolkit success');
-						},
-						function() {
-							return Promise.reject('updateProfToolkit failed');
-						}
-					);
-				},
-				function(aRejectReason) {
-	//				console.error('Failed to refresh ini object from file on deleteProfile');
-					return Promise.reject(aRejectReason.message);
-				}
-			);
-		} else {
-			if (profToolkit.rootPathDefault === 0) {
-	//			console.log('initing prof toolkit');
-				if (refreshStack !== 0) {
-					refreshStack = true;
-				}
-	//			console.log('initing prof toolkit');
-				initProfToolkit();
-	//			console.log('init done');
-			}
-			var profileCount = 0;
-			profToolkit.profiles = {};
-			var selectedProfileNameFound = false;
-			var pathsInIni = [];
-			for (var p in ini) {
-				if ('num' in ini[p]) {
-					profileCount++;
-					pathsInIni.push(ini[p].props.Path);
-				}
-				if (!selectedProfileNameFound && profToolkit.selectedProfile.name !== 0 && ini[p].Name == profToolkit.selectedProfile.name) {
-					selectedProfileNameFound = true;
-				}
-			}
-			profToolkit.profileCount = profileCount;
-			profToolkit.pathsInIni = pathsInIni;
-			
-			var prefNames = myPrefListener.watchBranches[myPrefBranch].prefNames;
-			var writeIniForNewPrefs = false;
-			for (var pref_name_in_obj in prefNames) {
-				var prefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj];
-				var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
-				if (pref_name_in_ini in ini.General.props) {
-					var value_in_ini = ini.General.props[pref_name_in_ini];
-					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						//value_in_ini = value_in_ini == 'false' ? false : value_in_ini == 'true' ? true : value_in_ini;
-						if (typeof(value_in_ini) != 'boolean') {
-						  if (value_in_ini == 'false') {
-							value_in_ini = false;
-						  } else if (value_in_ini == 'true') {
-							value_in_ini = true;
-						  } else {
-							throw new Error('not a boolean');
-						  }
-						}
-					}
-					if (prefObj.value != value_in_ini) {
-						console.log('value of pref_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
-						console.log('value_in_ini:', value_in_ini);
-						console.log('value_in_tree:', prefObj.value);
-						prefObj.setval(value_in_ini, false);
-						console.log('setval done');
-					} else {
-						console.log('ini and tree values match on pref_name:', pref_name_in_obj, prefObj.value, value_in_ini);
-					}
-				} else {
-					ini.General.props[pref_name_in_ini] = prefObj.value;
-					writeIniForNewPrefs = true;
-					console.log('pref_name_in_ini of ', pref_name_in_ini, ' is not in ini so using prefObj.value of ', prefObj.value, ' and set it in the ini obj but didnt write it', 'ini.General:', ini.General);
-				}
-			}
-			if (writeIniForNewPrefs) {
-				//i decided against writing the ini when programatically determined they are missing, so will just use default prefs
-				/*
-				var promise89 = writeIni();
-				promise89.then(
-					function() {
-						console.log('succesfully wrote ini for storing new prefs');
-					},
-					function() {
-						console.error('FAILED to write ini to store new prefs, no big though i think as it will just use the default values in ini obj in runtime');
-					}
-				);
-				*/
-			}
-			/*
-			for (var g in ini.General.props) {
-				if (g.substr(0, 10) == 'Profilist.') {
-					var pref_name_in_ini = g.substr(10);
-					var prefObj = myPrefListener.watchBranches['extensions.Profilist@jetpack'].prefNames[pref_name_in_ini];
-					console.log('pref_name_in_ini:', pref_name_in_ini);
-					var value_in_ini = ini.General.props[g];
-					if (prefObj.type == Ci.nsIPrefBranch.PREF_BOOL) {
-						//value_in_ini = ['false', false, 0].indexOf(value_in_ini) > -1 ? false : true;
-						if (typeof(value_in_ini) != 'boolean') {
-						  if (value_in_ini == 'false') {
-							value_in_ini = false;
-						  } else if (value_in_ini == 'true') {
-							value_in_ini = true;
-						  } else {
-							throw new Error('not a boolean');
-						  }
-						}
-					}
-					if (prefObj.value != ini.General.props[g]) {
-						console.log('value of prev_name_in_ini in tree does not equal that of in ini so update tree to value of ini');
-						console.log('value_in_ini:', ini.General.props[g]);
-						console.log('value_in_tree:', prefObj.value);
-						
-						prefObj.setval(value_in_ini);
-						console.log('setval done');
-					}
-				}
-			}
-			*/
-	//		console.info('profToolkit.selectedProfile.name = ', profToolkit.selectedProfile.name);
-	//		console.info('selectedProfileNameFound = ', selectedProfileNameFound);
-
-			if (!selectedProfileNameFound) {
-	//			console.log('looking for selectedProfile name');
-				for (var p in ini) {
-					if (!('IsRelative' in ini[p].props)) {
-	//					console.warn('skipping ini[p] because no IsRelative prop', 'ini[p]=', ini[p], 'p=', p)
-						continue;
-					}
-					if (ini[p].props.IsRelative == '1') {
-	//					console.log('ini[p] is relative',ini[p]);
-						var iniDirName = OS.Path.basename(OS.Path.normalize(ini[p].props.Path));
-						
-	//					console.info('rel iniDirName=', iniDirName);
-	//					console.info('rel profToolkit.selectedProfile.rootDirName=', profToolkit.selectedProfile.rootDirName);
-	//					console.info('rel profToolkit.selectedProfile.localDirName=', profToolkit.selectedProfile.localDirName);
-
-						if (iniDirName == profToolkit.selectedProfile.rootDirName) {
-	//						console.log('iniDirName matches profToolkit.selectedProfile.rootDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-							profToolkit.selectedProfile.name = ini[p].props.Name;
-							break;
-						}
-						if (iniDirName == profToolkit.selectedProfile.localDirName) {
-	//						console.log('iniDirName matches profToolkit.selectedProfile.localDirName so set selectedProfile.name to this ini[p].Name', 'iniDirName', iniDirName, 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-							profToolkit.selectedProfile.name = ini[p].props.Name;
-							break;
-						}
-					} else {
-	//					console.log('ini[p] is absolute',ini[p]);
-	//					console.info('abs ini[p].props.Path=', ini[p].props.Path);
-	//					console.info('abs profToolkit.selectedProfile.rootDirPath=', profToolkit.selectedProfile.rootDirPath);
-	//					console.info('abs profToolkit.selectedProfile.localDirPath=', profToolkit.selectedProfile.localDirPath);
-						
-						if (ini[p].props.Path == profToolkit.selectedProfile.rootDirPath) {
-	//						console.log('ini[p].Path matches profToolkit.selectedProfile.rootDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-							profToolkit.selectedProfile.name = ini[p].props.Name;
-							break;
-						}
-						if (ini[p].props.Path == profToolkit.selectedProfile.localDirPath) {
-	//						console.log('ini[p].Path matches profToolkit.selectedProfile.localDirPath so set selectedProfile.name to this ini[p].Name', 'ini[p]=', ini[p], 'profToolkit=', profToolkit);
-							profToolkit.selectedProfile.name = ini[p].props.Name;
-							break;
-						}
-					}
-				}
-				//profToolkit.selectedProfile.name = 1;
-				if (!profToolkit.selectedProfile.name) {
-	//				console.log('selectedProfile.name not found so I ASSUME IT IS A TEMP PROFILE')
-	//				console.log('trying to change label')
-					var profilistLoadingT = Services.wm.getMostRecentWindow('navigator:browser').document.getElementById('profilist-loading');
-					if (profilistLoadingT) {
-	//					console.log('profilistLoadingT found')
-						profilistLoadingT.setAttribute('label', 'Temporary Profile');
-						profilistLoadingT.setAttribute('id', 'profilistTempProfile');
-						profilistLoadingT.classList.add('profilist-do_not_auto_remove');
-						return Promise.reject('Using Temporary Profile - Profilist will not work');
-					}
-				}
-	//			console.log('selectedProfile searching proc done');
-			}
-			
-			
-			if (refreshStack) {
-				updateStackDOMJson_basedOnToolkit(false, iDOMWindow);
-			}
-			
-			return Promise.resolve('success');
-		}
-	} catch(ex) {
-		console.error('Promise Rejected `updateProfToolkit` - ', ex);
-		return Promise.reject('Promise Rejected `updateProfToolkit` - ' + ex);
-	}
-}
-
-function updateStackDOMJson_basedOnToolkit(dontUpdateStack, iDOMWindow) { //and based on ini as well
-//			console.log('updating stackDOMJson based on profToolkit AND ini');
-			var stackUpdated = false; //if splice in anything new in or anything old out then set this to true, if true then run dom update
-			if (stackDOMJson.length == 0) {
-//				console.log('stackDOMJson is 0 length', stackDOMJson);
-//				console.log('profToolkit=',profToolkit);
-				stackDOMJson = [
-					{identifier:'[label="Create New Profile"]', label:'Create New Profile', class:'profilist-tbb-box profilist-create profilist-do_not_auto_remove', addEventListener:['click',createUnnamedProfile,false], style:tbb_style},
-					{identifier:'[path="' + ini[profToolkit.selectedProfile.name].props.Path + '"]', label:profToolkit.selectedProfile.name, class:'profilist-tbb-box', status:'active', addEventListener:['click', makeRename, false], style:tbb_style, props:{profpath:ini[profToolkit.selectedProfile.name].props.Path}}
-				];
-				var profNamesCurrentlyInMenu = [ini[profToolkit.selectedProfile.name].props.Path];
-				stackUpdated = true;
-			} else {
-//				console.log('stackDOMJson has more than 0 length so:', stackDOMJson);
-				var profNamesCurrentlyInMenu = [];
-				for (var i=0; i<stackDOMJson.length; i++) {
-					var m = stackDOMJson[i];
-					if ('props' in m && 'profpath' in m.props) {
-						if (profToolkit.pathsInIni.indexOf(m.props.profpath) == -1) {
-							//this is in the stack object but no longer exists so need to remove
-//							console.log('m.props.profpath is not in pathsInIni = ', 'm.props.profpath=', m.props.profpath, 'pathsInIni=', profToolkit.pathsInIni, 'ini=', ini)
-							stackUpdated = true;
-							console.log('deleted:', stackDOMJson[i]);
-							stackDOMJson.splice(i, 1); //this takes care of deletes
-							i--;	
-						} else {
-//							console.log('this stack value is in profToolkit', 'stack val = ', m.props.profpath, 'pathsInIni', profToolkit.pathsInIni);
-							profNamesCurrentlyInMenu.push(m.props.profpath);
-						}
-					}
-				}
-			}
-			
-//			console.info('after updating that profNamesCurrentlyInMenu is = ', profNamesCurrentlyInMenu);
-			
-			for (var p in ini) {
-				if (!('num' in ini[p])) { continue } //as its not a profile
-				var posOfProfInStack = -1; //actually cannot do this because have create profile button::::var posOfProfInStack = profNamesCurrentlyInMenu.indexOf(ini[p].props.Path); //identifies prop by path and gives location of it in stackDOMJson, this works because i do a for loop through stackDOMJson and create profNamesCurrentlyInMenu in that order
-//				console.log('looking for position in stack of profpath ', 'profpath = ', ini[p].props.Path);
-				for (var i=0; i<stackDOMJson.length; i++) {
-					if ('props' in stackDOMJson[i]) {
-						if (stackDOMJson[i].props.profpath == ini[p].props.Path) {
-							posOfProfInStack = i;
-							break;
-						} else {
-//							//console.log('stackDOMJson[i].props.profpath != ini[p].props.Path', stackDOMJson[i].props.profpath, ini[p].props.Path);
-							continue; //dont really need continue as there is no code below in this for but ya
-						}
-					} else {
-						continue; //dont really need continue as there is no code below in this for but ya
-					}
-				}
-//				console.log('index of ini[p].props.Path in stack object is', ini[p].props.Path, posOfProfInStack);
-				
-				if (posOfProfInStack > -1) {
-					//check if any properties changed else continue
-					//var justRenamed = false; //i had this as propsChanged but realized the only prop that can change is name and this happens on a rename so changed this to justRenamed. :todo: maybe im not sure but consider justDeleted
-					if (stackDOMJson[posOfProfInStack].label != ini[p].props.Name) {
-//						console.log('currently in menu the item "' + stackDOMJson[posOfProfInStack].label + '" was renamed to "' + ini[p].props.Name + '"');
-						stackDOMJson[posOfProfInStack].justRenamed = true;
-						stackDOMJson[posOfProfInStack].label = ini[p].props.Name;
-						//justRenamed = true;
-						if (!stackUpdated) {
-							stackUpdated = true; //now stack is not really updated (stack is stackDOMJson but we set this to true becuase if stackUpdated==true then it physically updates all PanelUi
-//							console.log('forcing stackUpdated as something was justRenamed');
-						} else {
-//							console.log('was just renamed but no need to force stackUpdated as its already stackUpdated == true');
-						}
-					}
-					continue; //contin as it even if it was renamed its not new so nothing to splice, and this profpath for ini[p] was found in stackDOMJson
-				} else {
-//					console.log('splicing p = ', ini[p], 'stackDOMjson=', stackDOMJson);
-					stackUpdated = true;
-					(function(pClosure) {
-						var objToSplice = {identifier:'[path="' + ini[pClosure].props.Path + '"]', label:p, class:'profilist-tbb-box',  status:'inactive', addEventListener:['click', launchProfile, false], addEventListener2:['mousedown', makeRename, false], style:tbb_style, props:{profpath:ini[pClosure].props.Path}};
-						
-						if (pClosure == profToolkit.selectedProfile.name) {
-							//should never happend because stackDOMJson length was not 0 if in this else of the parent if IT WIL CONTNIUE on this: if (profIdsCurrentlyInMenu.indexOf(p.id) > -1) { continue }
-							//actually this CAN happen because i will now be running refresh from time to time and user may rename current profile
-							objToSplice.status = 'active';
-							delete objToSplice.addEventListener;
-							objToSplice.addEventListener2[0] = 'command';
-							stackDOMJson.push(objToSplice);
-						} else {
-							stackDOMJson.splice(0, 0, objToSplice);
-						}
-					})(p);
-				}
-			}
-
-//			console.info('stackDOMJson before checking if stackUpdated==true',stackDOMJson);
-			if (iDOMWindow) {
-//				console.log('will just run updateMenuDOM on iDOMWindow');
-				updateMenuDOM(iDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
-			} else {
-//				console.log('will now run updateMenuDOM on all windows');
-				let DOMWindows = Services.wm.getEnumerator(null);
-				while (DOMWindows.hasMoreElements()) {
-					let aDOMWindow = DOMWindows.getNext();
-					if (aDOMWindow.document.getElementById('profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
-//						console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
-						updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
-					}
-				}
-			}
-			for (var i=0; i<stackDOMJson.length; i++) {
-				if (stackDOMJson[i].justRenamed) {
-					delete stackDOMJson[i].justRenamed;
-				}
-			}
-			/* if (stackUpdated) { //also should check to see if dom matches stack, if it doesnt then should update stack
-//				console.info('something was changed in stack so will update all menus now');
-				if (dontUpdateStack) {
-//					console.warn('dontUpdateStack is set to true so ABORTING update all menus');
-				} else {
-					if (iDOMWindow) {
-//						console.log('just updating iDOMWindow');
-						updateMenuDOM(iDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
-					} else {
-						let DOMWindows = Services.wm.getEnumerator(null);
-						while (DOMWindows.hasMoreElements()) {
-							let aDOMWindow = DOMWindows.getNext();
-							if (aDOMWindow.document.getElementById('profilist_box')) { //if this is true then the menu was already crated so lets update it, otherwise no need to update as we updated the stackDOMJson and the onPopupShowing will handle menu create
-//								console.info('updatngMenuDOM on this window == ', 'aDOMWindow = ', aDOMWindow);
-								updateMenuDOM(aDOMWindow, stackDOMJson, stackUpdated, dontUpdateStack);
-							}
-						}
-					}
-					//now delete the justRenamed property, we have to delete the property after all windows are updated, otherwise only first window gets its toolbarbutton renmaed
-					//consider putting a if (somethingRenamed) { on this block :todo:
-					for (var i=0; i<stackDOMJson.length; i++) {
-						if (stackDOMJson[i].justRenamed) {
-							delete stackDOMJson[i].justRenamed;
-						}
-					}
-					//end now delete teh justRenamed property
-				}
-			} */
-}
-
-function updateMenuDOM(aDOMWindow, json, jsonStackChanged, dontUpdateDom) {
-	//if jsonStackChanged is true then it will update for sure
-	
-	//identifier is the querySelector to run to match the element, if its matched it updates this el, if not matched then creates new el based on nodeToClone
-	var profilist_box = aDOMWindow.document.getElementById('profilist_box');
-	if (!profilist_box) {
-//		console.warn('no profilist_box to add to');
-		return new Error('no profilist_box to update to');
-	}
-	var stack = profilist_box.childNodes[0];
-	
-	var stackChilds = stack.childNodes;
-	var identObj = {};
-	/*
-	Array.prototype.forEach.call(stackChilds, function(elC) {
-		var identifierRead = elC.getAttribute('identifier');
-		identObj[identifierRead] = elC;
-		//console.log('in forEach:', identifierRead, elC);
-		//console.log('them anons', aDOMWindow.document.getAnonymousNodes(elC));
-	});
-	*/
- 	for (var i=0; i<stackChilds.length; i++) {
-		var identifierRead = stackChilds[i].getAttribute('identifier');
-		identObj[identifierRead] = stackChilds[i];
-	}
-	//start - test if dom matches json
-	if (!jsonStackChanged) {
-//		console.info('jsonStack was not just changed so will now test if dom matches json because jsonStack was not just changed');
-		var domMatchesJson = true; //start by assuming its true
-		var calcedTops = {}; //index matches order of json
-		var cumHeight = 0;
-		for (var i=0; i<json.length; i++) {
-			if (json[i].identifier in identObj) {
-				//start - check to see if all properties match
-				var el = identObj[json[i].identifier];
-				for (var p in json[i]) {
-					if (p == 'nodeToClone' || p == 'props' || p == 'style' || p.indexOf('addEventListener') == 0) { continue }
-					//continue if style because i do a style.height = which adds to the style tag
-						if (json[i][p] === null) {
-							if (el.hasAttribute(p)) {
-//								console.log('el hasAtribute when it shouldnt', 'attr=', p, 'el=', el);
-								domMatchesJson = false;
-								break;
-							}
-						} else {
-							if (el.getAttribute(p) != json[i][p]) {
-//								console.log('el attr is not right', 'attr=', p, 'attr shud be=', json[i][p], 'el=', el);
-								domMatchesJson = false;
-								break;
-							}
-						}
-				}
-				//end - check to see if all properties match
-			} else {
-				domMatchesJson = false;
-				break;
-			}
-		}
-		
-//		console.log('elHeight will use PUIsync_height', 'PUIsync_height=', PUIsync_height);
-		if (elHeight == 0) {
-//			console.error('elHeight == 0 this is an ERROR');
-		}
-					
-		if (domMatchesJson) { //else no need to test as its going to get updated anyways
-			//test if dom tops match calced tops
-			var domTopsMatchesCalcedTops = true; //start out assuming it does
-			for (var i=0; i<json.length; i++) {
-					var elHeight = PUIsync_height;
-					cumHeight += elHeight;
-					if (json[i].status == 'active') {
-						calcedTops[json[i].identifier] = 0;
-					} else {
-						calcedTops[json[i].identifier] = cumHeight;
-					}
-			}
-			for (var p in identObj) {
-				if (identObj[p].getAttribute('top') != calcedTops[p]) {
-					domTopsMatchesCalcedTops = false;
-					break;
-				}
-			}
-			//end - test if dom matches json
-		}
-
-		if (domMatchesJson) {
-			if (!domTopsMatchesCalcedTops) {
-//				console.info('just needs top fixing');
-			} else {
-//				console.info('domMatchesJson && domTopsMatchesCalcedTops SO DO NOTHING');
-				return false; //return false indiciating nothing was done but not returning error so indicating no error happend
-			}
-		} else if (!domMatchesJson) {
-//			console.info('needs full dom update');
-		}
-	} else {
-//		console.info('jsonStack was just changed so have to do full dom update');
-	}
-	
-	if (dontUpdateDom) {
-//		console.info('need to update dom but dontUpdateDom was set to true so will not update it');
-		return false; //note: i think i need to return promise here
-	}
-	
-	var cumHeight = 0;
-	
-	//cant set stack height here because popup state is now open. well can change it, but have to resize panel with the panelFit function i cant find here. because if i make it any taller than it is, then the scrollbar will show as the panel wont be sized to fit properly
-	
-	for (var i=0; i<json.length; i++) {
-//		console.log('in json arr = ', i);
-		var el = null;
-		var appendChild = false;
-		if (json[i].identifier) {
-			//console.log('identifier  string =', json[i].identifier);
-			el = identObj[json[i].identifier]; //stack.querySelector(json[i].identifier);
-			//console.log('post ident el = ', el);
-		}
-		if (!el) {
-			/* if (json[i].nodeToClone == 'PUIsync') {
-				json[i].nodeToClone = PUIsync;
-			}
-			el = json[i].nodeToClone.cloneNode(true); */
-			var toolbarbuttonJSON = ['xul:box', {style:tbb_box_style, class:'profilist-tbb-box newly-created', label:'newly created'}];
-			el = jsonToDOM(toolbarbuttonJSON, aDOMWindow.document, {});
-			appendChild = true;
-//			console.log('el created');
-		} else {
-//			console.log('el idented');
-		}
-		if (!el.hasAttribute('top')) {
-			el.setAttribute('top', '0'); //this is important, it prevents toolbaritems from taking 100% height of the stacks its in
-		}
-		
-		//console.log('ini entry of this prof:', ini[json[i].label]);
-		if (ini[json[i].label] && ini[json[i].label].props.Default == '1') {
-			profilist_box.setAttribute('default_profile_name', json[i].label);
-		}
-		
-		if (appendChild) {
-			console.log('added tbb_box_click');
-			el.addEventListener('click', tbb_box_click, false);
-			for (var p in json[i]) {
-				if (p == 'nodeToClone' || p == 'props' || p.indexOf('addEventListener') == 0) { continue }
-				//dont add anything here that needs to be added onto the tbb, like addEventListener, because its now in xbl, the tbb gets created only after box inserted into dom
-				if (json[i][p] === null) {
-					el.removeAttribute(p);
-				} else {
-					el.setAttribute(p, json[i][p]);
-				}
-			}
-		} else {
-			//if appendChild false then obviously idented
-			if ('justRenamed' in json[i]) {
-//				console.log('it was justRenamed');
-				//delete json[i].justRenamed; //cant delete this here, as if we are updating multiple windows, only the first window gets renamed properly
-				el.setAttribute('label', json[i].label);
-//				console.log('label set');
-				//dont need this anymore as i am now using path for idnetifier //json[i].identifier = '[path="' + json[i].label + '"]'; //have to do this here as needed the identifier to ident this el
-			}
-		}
-		
-		//el.style.height = '';
-		var elHeight = PUIsync_height; //el.boxObject.height;
-		//var elHeight = el.ownerDocument.defaultView.getComputedStyle(el,null).getPropertyValue('height'); //have to use getComputedStyle instead of boxObject.height because boxObject.height is rounded, i need cumHeight added with non-rounded values but top is set with rounded value
-		//elHeight = parseFloat(elHeight);
-		if (elHeight == 0) {
-			myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'DEBUG', 'elHeight = 0', false, null, null, 'Profilist');
-			if (appendChild) {
-				elHeight = PUIsync_height; //json[i].nodeToClone.boxObject.height;
-				//elHeight = json[i].nodeToClone.ownerDocument.defaultView.getComputedStyle(json[i].nodeToClone,null).getPropertyValue('height');
-				//elHeight = parseFloat(elHeight);
-//				console.log('elHeight was 0 but just appendedChild so assuming cloned node height which is', elHeight);
-			} else {
-//				console.log('elHeight was 0 and it was NOT just appended so cannot assume cloned node height');
-			}
-		}
-		//el.style.height = elHeight + 'px';
-//		console.log('PUIsync_height = ', PUIsync_height);
-//		console.log('el.boxObject.height = ', el.boxObject.height);
-		cumHeight += elHeight;
-//		console.log('cumHeight after adding = ' + cumHeight);
-		if (i < json.length - 1) {
-			el.setAttribute('top', cumHeight); //cant do this here because stack element expands to fit contents so this will mess up the cumHeight and make it think the element is longe that it is  //actually can do this now, now that i :learned: that if you set the top to some value it the element will not expand to take up 100% height of stack :learned:
-			//el.setAttribute('bottom', cumHeight + elHeight);
-//			console.log('set el top to ', cumHeight);
-		} else {
-			el.setAttribute('top', '0');
-//			console.log('set el top to 0');
-		}
-		
-		if (appendChild) {
-			if (json[i].status != 'active') { //this if makes sure the selected profile one gets added last note: again this is important because the last most element is top most on stack when collapsed, but in my case its more important because it gets the perm-hover class
-				stack.insertBefore(el, stack.firstChild);
-			} else {
-				stack.appendChild(el);
-			}
-			var boxAnons = el.ownerDocument.getAnonymousNodes(el);
-			//console.log('boxAnons:', boxAnons);
-			//var tbb = boxAnons[0];
-			var sm = boxAnons[1];
-			//console.log('tbb:', tbb);
-			//console.log('sm:', sm);
-			//var badge = tbb.ownerDocument.getAnonymousElementByAttribute(tbb, 'class', 'profilist-badge');
-			var setdefault = boxAnons[1].querySelector('.profilist-default');
-			//console.log('badge', badge);
-			console.error('setdefault', setdefault);
-
-			//badge.addEventListener('mouseenter', subenter, false);
-			setdefault.addEventListener('mouseenter', subenter, false);
-			//badge.addEventListener('mouseleave', subleave, false);
-			setdefault.addEventListener('mouseleave', subleave, false);
-
-			//el.addEventListener('mouseenter', subenter, false);
-			el.addEventListener('mousedown', properactive, false);
-			//el.addEventListener('mouseleave', subleave, false);
-			
-			for (var p in json[i]) {
-				if (p.indexOf('addEventListener') == 0) {
-					//console.log('found it needs addEventListener on tbb so doing that now');
-					(function(elClosure, jsonIClosure, pClosure) {
-						//this doesnt work anymore as xbl doesnt put in the toolbarbutton till after element is appended4444
-						//console.log('elClosure',elClosure.getAttribute('label'),'jsonIClosure',jsonIClosure);
-						//console.log('elClosure label',elClosure.getAttribute('label'));
-						//console.info('elClosure:', elClosure);
-						//elClosure.querySelector('.profilist-tbb').addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-						//elCosure.ownerDocument.
-				////var cTbb = elClosure.ownerDocument.getAnonymousElementByAttribute(elClosure, 'class', 'profilist-tbb');
-						//console.info(jsonIClosure.identifier.replace(/["\\]/g, '\\$&'));
-						//var cTbb = profilist_box.querySelector('[identifier="' + jsonIClosure.identifier.replace(/["\\]/g, '\\$&') + '"]');
-						//console.log('cTbb', cTbb);
-				////console.error(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-						//cTbb.addEventListener(jsonIClosure[pClosure][0], jsonIClosure[pClosure][1], jsonIClosure[pClosure][2]);
-					})(el, json[i], p);
-				}
-			}
-//			console.log('appended', el);
-		}
-
-	}
-	if (expandedheight != cumHeight) {
-//		console.log('glboal var of expandedheight does not equal new calced cumheight so update it now', 'expandedheight pre update = ', expandedheight, 'cumHeight=', cumHeight);
-		var oldExpandedheight = expandedheight;
-		expandedheight = cumHeight;
-//		console.log('oldExpandedheight = ' + oldExpandedheight);
-	}
-//	//console.log('stack.boxObject.height = ' + stack.boxObject.height);
-//	//console.log('stack.style.height = ' + stack.style.height);
-//	//console.log('aDOMWindow.getComputedStyle(stack).getPropertyValue(\'height\') = ' + aDOMWindow.getComputedStyle(stack).getPropertyValue('height'));
-	
-	var cStackHeight = parseInt(stack.style.height);
-	if (isNaN(cStackHeight)) {
-//		console.log('the panel containing this stack, in this window has never been opened so set it to collapsed');
-		stack.style.height = collapsedheight + 'px';
-		cStackHeight = collapsedheight;
-	}
-	if (cStackHeight != collapsedheight && cStackHeight != expandedheight) {
-//		console.warn('stack style height is not collapsed so assuming that its in expanded mode AND it is not at the correct expandedheight so update its height now', 'cStackHeight = ', cStackHeight, 'expandedheight=', expandedheight);
-		stack.style.height = expandedheight + 'px';
-//		//console.warn('stack.boxObject.height EQUALS oldExpandedheight', 'oldExpandedheight', oldExpandedheight, 'stack.boxObject.height', stack.boxObject.height)
-	}
-//	console.log('collapsedheight', collapsedheight);
-//	console.log('expandedheight', expandedheight);
-
-	var stackChilds = stack.childNodes;
-	for (var i=0; i<stackChilds.length; i++) {
-		//console.log('checking if label of ' + stackChilds[i].getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (stackChilds[i].hasAttribute('status')) {
-			if (!(stackChilds[i].getAttribute('label') in ini)) { //:assume: only profiles have status attribute
-				console.log('this profile is not in ini so remove it', 'ini=', ini);
-				stack.removeChild(stackChilds[i]);
-				i--;
-			}
-		} else {
-			//its not a profile toolbarbutton, should we keep it?
-			if (!stackChilds[i].classList.contains('profilist-do_not_auto_remove')) {
-				console.log('this is not a profile button and it doesnot have the DO NOT REMOVE class so remove it');
-				stack.removeChild(stackChilds[i]);
-				i--;
-			}
-		}
-	}
-
-	//i was putting a check here for if in dev mode, to check if current build icon matches, but realized i should do that on pref change instead
-	//actually i think it should go here
-	
-	//start - make sure the dev mode and dev-build icon is right
-	if (ini.General.props['Profilist.dev'] == 'true') {//does not work: `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {`
-		//so learned as a note: that i should use (for programmatic stuff) ini to check props rather than pref system, pref system is only there for communication between user interface
-		//make sure its enabled in menu dom
-		/*
-		if (!profilist_box.classList.contains('profilist-dev-enabled')) {
-			console.warn('dev is ENABLED, but menu dom is not, so ENABLING it');
-		}
-		*/
-		profilist_box.classList.add('profilist-dev-enabled');
-		checkIfIconIsRight(ini.General.props['Profilist.dev-builds'], profilist_box, true);
-	} else {
-		//make sure its disabled in menu dom
-		/*
-		if (profilist_box.classList.contains('profilist-dev-enabled')) {
-			console.warn('dev is DISABLED, but menu dom is not, so DISABLING it');
-		}
-		*/
-		profilist_box.classList.remove('profilist-dev-enabled');
-	}
-	//end - make sure the dev mode and dev-build icon is right
-	
-	/* [].forEach.call(stackChilds, function(sc) {
-//		console.log('checking if label of ' + sc.getAttribute('label') + ' is in ini', 'ini=', ini);
-		if (sc.hasAttribute('status') && !(sc.getAttribute('label') in ini)) { //:assume: only profiles have status attribute
-//			console.log('this profile is not in ini so remove it', 'ini=', ini);
-			stack.removeChild(sc);
-		}
-	}); */
-	
-//	console.info('json=',json);
-}
-
 function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box, update_dom_element_even_if_icon_unchanged) {
 //im moving this computation to on read so i think i can discontinue this function 11/13/14
 
@@ -2885,135 +2157,6 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 				}
 			}
 		}
-}
-
-var renameTimeouts = [];
-
-function makeRename(e) {
-//	console.error('e', e);
-	return;
-	if (e.type == 'mousedown' && e.button != 0) {
-		//ensure it must be primary click
-//		console.warn('not primary click so returning e=', e);
-		return;
-	}
-	//only allow certain chracters
-	//cannot rename profile to a name that already exists
-	
-	//makes the menu button editable field and keeps popup open till blur from field
-	var el = this;
-		
-	var doc = el.ownerDocument;
-	var win = doc.defaultView;
-	delete win.ProfilistInRenameMode;
-	
-	//make the el button an editable field
-	//add event listener on blur it should cancel and restore menu look (as in not editable)
-	//add event listener on enter submitRename
-	
-	if (el.getAttribute('status') == 'active') {
-		//make editable right away
-		actuallyMakeRename(el);
-	} else {
-		//make editable in 300ms if user doesnt mouseup
-		var util = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-		var winID = util.currentInnerWindowID;
-		renameTimeouts[winID] = {DOMWindow: win, timeout: 0};
-		
-		renameTimeouts[winID].timeout = win.setTimeout(function(){ actuallyMakeRename(el) }, 500);
-		el.addEventListener('mouseleave', function() {
-			el.removeEventListener('mouseleave', arguments.callee, false);
-			if (win.ProfilistInRenameMode) {
-				//already in edit mode so just remove event listener and nothing else
-//				console.log('timeout fired BUT already in edit mode so just remove event listener and nothing else');
-				return;
-			}
-			win.clearTimeout(renameTimeouts[winID].timeout);
-			delete renameTimeouts[winID];
-//			console.log('canceled actuallyMakeRename timeout');
-		}, false);
-		
-	}
-}
-
-function actuallyMakeRename(el) {
-//	console.info('el on actuallyMakeRename = ', el);
-	var doc = el.ownerDocument;
-	var win = doc.defaultView;
-	
-	win.ProfilistInRenameMode = true;
-	
-	var oldProfName = el.getAttribute('label');
-	var promptInput = {value:oldProfName}
-	var promptCheck = {value:false}
-	var promptResult = Services.prompt.prompt(null, core.name + ' - ' + 'Rename Profile', 'Enter what you would like to rename the profile "' + oldProfName + '" to. To delete the profile, leave blank and press OK', promptInput, null, promptCheck);
-	if (promptResult) {
-		if (promptInput.value == '') {
-			var confirmCheck = {value:false};
-			var confirmResult = Services.prompt.confirmCheck(null, core.name + ' - ' + 'Delete Profile', 'Are you sure you want to delete the profile named "' + oldProfName + '"? All of its files will be deleted.', 'Confirm Deletion', confirmCheck);
-			if (confirmResult) {				
-				if (confirmCheck.value) {
-					var promise = deleteProfile(1, oldProfName);
-					promise.then(
-						function() {
-							//Services.prompt.alert(null, core.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully deleted.');
-							myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Profile Deleted', 'The profile "' + oldProfName +'" was succesfully deleted.', false, null, null, 'Profilist');
-						},
-						function(aRejectReason) {
-//							console.warn('Delete failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
-							Services.prompt.alert(null, core.name + ' - ' + 'Delete Failed', aRejectReason.message);
-						}
-					);
-				} else {
-					Services.prompt.alert(null, core.name + ' - ' + 'Delete Aborted', 'Profile deletion aborted because "Confirm" box was not checked.');
-				}
-			}
-		} else {
-			var newProfName = promptInput.value;
-			if (newProfName != oldProfName) {
-				var promise = renameProfile(1, oldProfName, newProfName);
-				promise.then(
-					function() {
-						//Services.prompt.alert(null, core.name + ' - ' + 'Success', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName +'"');
-//						console.warn('Rename promise completed succesfully');
-						myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Profile Renamed', 'The profile "' + oldProfName +'" was succesfully renamed to "' + newProfName + '"', false, null, null, 'Profilist');
-						updateProfToolkit(1, 1).then(
-							function() {
-								//return Promise.resolve('updateProfToolkit success');
-							},
-							function() {
-								throw new Error('updateProfToolkit failed');
-							}
-						);
-					},
-					function(aRejectReason) {
-//						console.warn('Rename failed. An exception occured when trying to rename the profile, see Browser Console for details. Ex = ', aRejectReason);
-						Services.prompt.alert(null, core.name + ' - ' + 'Rename Failed', aRejectReason.message);
-					}
-				);
-			}
-		}
-	}
-	delete win.ProfilistInRenameMode;
-	//Services.prompt.alert(null, core.name + ' - ' + 'debug', 'deleted ProfilistInRenameMode');
-	return;
-	el.style.fontWeight = 'bold';
-	
-	var PanelUI = doc.getElementById('PanelUI-popup');
-	PanelUI.addEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
-}
-
-function submitRename() {
-	//when user presses enter in field
-	var el = this;
-	var doc = this.ownerDocument;
-	var win = doc.defaultView;
-	
-	var PanelUI = doc.getElementById('PanelUI-popup');
-	PanelUI.removeEventListener('popuphiding', prevHide, false) // //add on blur it should remove prevHide //actually no need for this because right now on blur it is set up to hide popup
-	
-	delete win.ProfilistInRenameMode;
-	//renameProfile(1, oldProfName, newProfName);
 }
 
 function properactive(e) {
@@ -4162,8 +3305,8 @@ function tbb_box_click(e) {
 			console.log('should prevent closing of menu - change badge');
 			//e.stopPropagation();  //just need preventDefault to stop panel from closing on click
 			e.preventDefault();
-			
-			checkAndExecPanelHidUnloaders(e.view, 'profilist-sub-clicked'); // close whatever is open
+
+			tbb_msg_close(null, cWin); // close whatever is open
 			
 			var targetedProfileName = targetedTBB.getAttribute('label');
 			console.info('targetedProfileName:', targetedProfileName);
@@ -4934,89 +4077,6 @@ function xhr(url, cb) {
     xhr.send(null);
 }
 
-function OLDlaunchProfile(e, profName, suppressAlert, url) {
-	console.info('in launchProfile');
-	if (!profName) {
-		var el = this;
-		profName = el.getAttribute('label');
-	}
-	var win = Services.wm.getMostRecentWindow('navigator:browser');
-	if (win.ProfilistInRenameMode) {
-		//in rename mode;
-//		console.log('window is in rename mode so dont launch profile');
-		return;
-	}
-	//Services.prompt.alert(null, core.name + ' - ' + 'INFO', 'Will attempt to launch profile named "' + profName + '".');
-	if (!suppressAlert) {
-		myServices.as.showAlertNotification(core.addon.path.images + 'icon48.png', core.name + ' - ' + 'Launching Profile', 'Profile Name: "' + profName + '"', false, null, null, 'Profilist');
-	}
-
-	var found = false;
-	for (var p in ini) {
-		if (!('num' in ini[p])) { continue } //as its not a profile
-		if (profName == p) {
-			found = true;
-			break;
-		}
-	}
-			
-	if (!found) {
-		Services.prompt.alert(null, core.name + ' - ' + 'Launch Failed', 'An error occured while trying to launch profile named "' + profName + '". Profile name not found in Profiles.ini in memory.');
-//		console.info('dump of profiles = ', ini);
-		return false;
-	}
-
-	//var exe = FileUtils.getFile('XREExeF', []); //this gives path to executable
-	var process = Cc['@mozilla.org/process/util;1'].createInstance(Ci.nsIProcess);
-	process.init(profToolkit.exePath);
-	
-	var args = ['-P', profName, '-no-remote']; //-new-instance
-	if (url) {
-		args.push('about:home');
-		args.push(url);
-	}
-	process.run(false, args, args.length);
-}
-
-function createUnnamedProfile() {
-	//creating profile with name that already exists does nothing
-	var promise = readIni();
-	return promise.then(
-		function() {
-//			console.log('now that readIni success it will do stuff');
-			for (var p in ini) {
-				if (!('num' in ini[p])) { continue } //as its not a profile
-			}
-			
-			var digit = 1;
-			var profName = 'Unnamed Profile 1'; //creates with default name
-			while (profName in ini) {
-				digit++;
-				profName = 'Unnamed Profile ' + digit
-			}
-
-//			console.log('will now createProfile with name = ', profName);
-			var promise1 = createProfile(0, profName);
-			return promise1.then(
-				function() {
-//					console.log('createProfile promise succesfully completed');
-					return Promise.resolve('createUnnamedProfile success');
-				},
-				function(aRejectReason) {
-//					console.warn('Create profile failed. An exception occured when trying to delete the profile, see Browser Console for details. Ex = ', aRejectReason);
-					Services.prompt.alert(null, core.name + ' - ' + 'Create Failed', aRejectReason.message);
-					return Promise.reject('Create Failed. ' + aRejectReason.message);
-				}
-			);
-		},
-		function(aRejectReason) {
-//			console.error('createProfile readIni promise rejected');
-			Services.prompt.alert(null, core.name + ' - ' + 'Read Failed', aRejectReason.message);
-			return Promise.reject('Read Failed. ' + aRejectReason.message);
-		}
-	);
-}
-
 function prevHide(e) {
 	e.preventDefault();
 	e.stopPropagation();
@@ -5282,12 +4342,6 @@ var windowListener = {
 			OS.Constants.Path.libsqlite3 = Services.dirsvc.get('GreBinD', Ci.nsIFile).path;
 			OS.Constants.Path.libxul = 	Services.dirsvc.get('XpcomLib', Ci.nsIFile).path;
 			*/
-		} else if (core.os.version_name != '7+') {
-			// win7+
-			if (OSStuff.setSystemAppUserModelID_perWin) {
-				myServices.wt7.setGroupIdForWindow(aDOMWindow, OSStuff.setSystemAppUserModelID_perWin);
-				//todo: set other stuff, like window RelaunchCommand RelaunchName RelaunchIcon
-			}
 		}
 		// end - do os specific stuff
 		
@@ -10781,30 +9835,6 @@ function updateProfStatObj(markObj) {
 	return deferredMain_updateProfStatObj.promise;
 }
 
-function setSystemAppUserModelID_onAllOpenWin() {
-	// WINNT function only
-	switch (cOS) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-			if (parseFloat(Services.sysinfo.getProperty('version')) >= 6.1) {
-				// win7+
-				if (OSStuff.setSystemAppUserModelID_perWin) {
-					var DOMWindows = Services.wm.getEnumerator(null);
-					while (DOMWindows.hasMoreElements()) {
-						var aDOMWindow = DOMWindows.getNext();
-						myServices.wt7.setGroupIdForWindow(aDOMWindow, OSStuff.setSystemAppUserModelID_perWin);
-					}
-				} else {
-					console.error('OSStuff.setSystemAppUserModelID_perWin is false');
-				}
-			}
-			break;
-		default:
-			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-	}
-}
-
 function install() {}
 
 function uninstall(aData, aReason) {
@@ -10835,6 +9865,7 @@ function uninstall(aData, aReason) {
 
 function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunchCmdPin*/) {
 	// winnt only
+	// :todo:perf: move this to ProfilistWorker
 	// searches the folders where shortcuts go if it is pinned
 		// does this by searching if shortcut path includes the profile path
 		// if profile is default it finds shortcuts with the default paths found from registry AND shortcuts with any lower cased launch paths matching any of the paths in ini.General.props['Profilist.dev-builds']);
@@ -10984,161 +10015,6 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 	// resolves to undefined on stupid error (like testing temp profile for pin)
 	
 	// warning, i should monitor this with every windows update, this is implementation detail, it can change at any time without notice: http://stackoverflow.com/questions/28228042/shgetpropertystoreforwindow-how-to-set-properties-on-existing-system-appusermo#comment44829015_28228042
-	
-	var deferredMain_getPathToPinnedCut = new Deferred();
-	
-	if (core.os.version_name != '7+') {
-		deferredMain_getPathToPinnedCut.reject(undefined);
-		return deferredMain_getPathToPinnedCut.promise;
-	}
-	
-	// globals for sub funcs
-	var searchCriterias = {
-		containsStr: [], // case insensitive find // used for finding default pins
-		matchesStr: [] // case insenstiive match
-	};
-	
-	var do_setupCriterias = function() {
-		// rejects main on fail, calls do_search on success
-		// all pushes should be lower cased //note: because i allow user to specify custom path to builds, and they might mess up the casing
-
-		if (aProfilePath === null) {
-			// temporary profiles cannot be pinned
-			deferredMain_getPathToPinnedCut.reject(undefined);
-			return deferredMain_getPathToPinnedCut.promise;
-		}
-
-		if (ini[aProfilePath].props.Default == '1') {
-			// to matchesStr push all builds from ini.General.Profilist['dev-builds'] // note: dev-builds should be an object with unique id to build path
-			// to matchesStr push all the builds found in registry
-			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
-			for (var buildId in devBuilds) {
-				searchCriterias.matchesStr.push(devBuilds[buildId].toLowerCase());
-			}
-			
-			var installedFxInfos = getAllFxBuilds();
-			
-			for (var i=0; i<installedFxInfos.length; i++) {
-				var cBuildPath = installedFxInfos.Name.toLowerCase();
-				if (searchCriterias.matchesStr.indexOf(cBuildPath) === -1) {
-					searchCriterias.matchesStr.push(cBuildPath);
-				}
-			}
-			
-			do_search();
-		} else {
-			// to containsStr push getPathToProfileDir(aProfilePath)
-			searchCriterias.matchesStr.push(getPathToProfileDir(aProfilePath).toLowerCase());
-		}
-	};
-	
-	var do_search = function() {
-		// rejects main on fail, resolves main on success
-		var path_dirIfNormalPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
-		var path_dirIfRelaunchCmdPin = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
-
-		// if in dirIfRelaunchCmdPin then the shortcut is held within a dir with random? weird string, so have to enumChildEntries 1 level deep
-		// if in dirIfNormalPin then just immediate children, so enumChildEntries with just 0 level deep
-		
-		/*logic*/
-		// enumChildEntries for both dirs, in delegate, if not dir then test its SystemAppUserModelID
-		// delegate checks
-			// not yet decided:
-				// SystemAppUserModelID - reason: if i want to find if default SystemAppUserModelID is pinned and change its target path. its easier to figure out SystemAppUserModelID of default then having to getPathToProfileDir of default profile (NO THIS IS NOT TRUE, its equally easy to get path to dfault profiles profile dir, just iterate through ini to find guy with Default=1, there has to be at least something with Default=1) {but what if no default profile) [actually the default pin cut should have path to just the build!! duhhhh!]
-				// if target path contains getPathToProfileDir(aProfilePath) - reason: SystemAppUserModelID is HashString of profileDir anyways, so going deep to SystemAppUserModelID is redundant and extra overhead
-		
-		var searchFullfilled = false; // set to true when pinned match is found, so it aborts remaining iteration of delegate 
-		
-		// created functions so it handles hoisting
-		
-		
-		//note: testing is case insensitive because i allow user to specify custom path to builds, and they might mess up the casing
-		var testMatches = function(str1, str2) {
-			// tests if str1 and str2 are same
-			console.log('testMatches str1:', str1, 'vs str2:', str2);
-			if (str1 == str2) {
-				return true;
-			} else {
-				return false;
-			}
-		};
-		
-		var testContains = function(str1, str2) {
-			// tests if str1 contains str2
-			console.log('testContains str1:', str1, 'vs str2:', str2);
-			if (str1.indexOf('"' + str2 + '"') > -1) { // double quotes as contins are only for profileDir's and if user has two profile dirs like "..../Unamed Profile 1" and "..../Unamed Profile 11" then it can give false posive as "..../Unamed Profile 1" will be found in both cases // and when i set targets, i always set the profileDir in double quotes. and pinned files are shortcuts to my launcher, and a shortcut to a target shortcut takes the path of the target shortcut
-				return true;
-			} else {
-				return false;
-			}
-		}
-		
-		var searchResults = [];
-		
-		var delegate_checkPinFile = function(entry) {
-			if (searchCriterias.matchesStr.length == 0 && searchCriterias.containsSr.length == 0) {
-				return true; // to stop iteration of delegate
-			}
-			if (!entry.isDir) {
-				// do test
-				for (var i=0; i<searchCriterias.matchesStr.length; i++) {
-					if (testMatches(searchCriterias.matchesStr[i], entry.path)) {
-						searchResults.push(entry.path);
-						searchCriterias.matchesStr.splice(i, 1);
-						return; // to prevent deeper exec, and this is assuming that each searchCriteria can only have one pinned cut match, which is correct assumption
-					}
-				}
-				for (var i=0; i<searchCriterias.containsStr.length; i++) {
-					if (testContains(searchCriterias.containsStr[i], entry.path)) {
-						searchResults.push(entry.path);
-						searchCriterias.containsStr.splice(i, 1);
-						return; // to prevent deeper exec, and this is assuming that each searchCriteria can only have one pinned cut match, which is correct assumption
-					}
-				}
-			}
-		};
-		
-		var promiseAllArr_checkContainedPinFiles;
-		if (dontCheck_dirIfRelaunchCmdPin) {
-			promiseAllArr_checkContainedPinFiles = [
-				enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0)
-			];		
-		} else {
-			promiseAllArr_checkContainedPinFiles = [
-				enumChildEntries(path_dirIfNormalPin, delegate_checkPinFile, 0),
-				enumChildEntries(path_dirIfRelaunchCmdPin, delegate_checkPinFile, 1)
-			];
-		}
-		
-		var promiseAll_checkContainedPinFiles = Promise.all(promiseAllArr_checkContainedPinFiles);
-		promiseAll_checkContainedPinFiles.then(
-		  function(aVal) {
-			console.log('Fullfilled - promiseAll_checkContainedPinFiles - ', aVal);
-			// start - do stuff here - promiseAll_checkContainedPinFiles
-			if (searchCriterias.matchesStr.length == 0 && searchCriterias.containsSr.length == 0) {
-				deferredMain_getPathToPinnedCut.reject(searchResults);
-			} else {
-				deferredMain_getPathToPinnedCut.reject(null);
-			}
-			// end - do stuff here - promiseAll_checkContainedPinFiles
-		  },
-		  function(aReason) {
-			var rejObj = {name:'promiseAll_checkContainedPinFiles', aReason:aReason};
-			console.error('Rejected - promiseAll_checkContainedPinFiles - ', rejObj);
-			deferredMain_getPathToPinnedCut.reject(rejObj);
-		  }
-		).catch(
-		  function(aCaught) {
-			var rejObj = {name:'promiseAll_checkContainedPinFiles', aCaught:aCaught};
-			console.error('Caught - promiseAll_checkContainedPinFiles - ', rejObj);
-			deferredMain_getPathToPinnedCut.reject(rejObj);
-		  }
-		);
-	}
-	
-	do_setupCriterias();
-	
-	return deferredMain_getPathToPinnedCut.promise;
 };
 
 var _cache_getAllFxBuilds;
@@ -11147,8 +10023,19 @@ function getAllFxBuilds(notFromCache) {
 	// gets all the builds found in the registry
 	// returns to array of objects (containing SystemAppUserModelID and path) see image: file:///C:/Users/Vayeate/Pictures/getAllFxBuilds%20resolve.png
 	
+	/* how i used this in the old getPathToPinnedCut
+			var installedFxInfos = getAllFxBuilds();
+			
+			for (var i=0; i<installedFxInfos.length; i++) {
+				var cBuildPath = installedFxInfos.Name.toLowerCase();
+				if (searchCriterias.matchesStr.indexOf(cBuildPath) === -1) {
+					searchCriterias.matchesStr.push(cBuildPath);
+				}
+			}
+	*/
+	
 	if (core.os.version_name != '7+') {
-		throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+		throw new Error(['os-unsupported', OS.Constants.Sys.Name]); // im not sure why this is win7+ i should test on xp and vista
 	} else {
 		if (!_cache_getAllFxBuilds || notFromCache) {
 			_cache_getAllFxBuilds = [];
@@ -11537,14 +10424,15 @@ function isLittleEndian() {
 	return new Int16Array(buffer)[0] === 256;
 };
 
-function HashString() {
+/*
+var HashString = (function (){
 	/**
 	 * Javascript implementation of
 	 * https://hg.mozilla.org/mozilla-central/file/0cefb584fd1a/mfbt/HashFunctions.h
 	 * aka. the mfbt hash function.
-	 */ 
+	 * / 
   // Note: >>>0 is basically a cast-to-unsigned for our purposes.
-  const encoder = new TextEncoder("utf-8");
+  const encoder = getTxtEncodr();
   const kGoldenRatio = 0x9E3779B9;
 
   // Multiply two uint32_t like C++ would ;)
@@ -11583,7 +10471,8 @@ function HashString() {
     }
     return rv;
   };
-}
+})();
+*/
 
 function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot, depth) {
 	// IMPORTANT: as dev calling this functiopn `depth` arg must ALWAYS be undefined (dont even set it to 0 or null, must completly omit setting it, or set it to undefined). this arg is meant for internal use for iteration

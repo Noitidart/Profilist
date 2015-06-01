@@ -435,6 +435,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 					sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
 					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(pathsObj.OSPath_makeFileAt);
 					sei.lpFile = cStr;
+					//sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()('-safe-mode'); // works
 					//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 					sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
 					
