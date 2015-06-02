@@ -115,6 +115,9 @@ Profilist.currentThisBuildsIconPath
 var profStatObj;
 const repCharForSafePath = '-';
 var cloneProfIniKey;
+
+var launchedInTieId = null;
+
 // Lazy Imports
 const myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
@@ -177,6 +180,7 @@ function extendCore() {
 	
 	core.firefox = {};
 	core.firefox.version = Services.appinfo.version;
+	core.firefox.channel = Services.prefs.getCharPref('app.update.channel');
 	
 	console.log('done adding to core, it is now:', core);
 }
@@ -296,7 +300,7 @@ current builds icon if dev mode is enabled
 							}
 						});
 						//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-						if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+						if (core.firefox.channel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
 							currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
 						} else {
 							currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
@@ -1695,6 +1699,37 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			//console.log('str_ObjBoot', str_ObjBoot, 'str_ObjWin', str_ObjWin);
 			
 			if (str_ObjBoot != str_ObjWin) {
+				
+				if (!('General' in objWin) || objBoot.General.props['Profilist.dev'] != objWin.General.props['Profilist.dev']) {
+					// :todo: make this block detect change on cChanImgName like if its tied, and user changes tie icon, then Profilist.dev didnt change so it wont get in here
+					if (objBoot.General.props['Profilist.dev'] == 'false') {
+						aDOMWindow.Profilist.PBox.classList.remove('profilist-dev-enabled');
+					} else {
+						aDOMWindow.Profilist.PBox.classList.add('profilist-dev-enabled');
+						if (launchedInTieId !== null) {
+							// currently running a tied, so use tied icon
+							var devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']);
+							var cChanImgName
+							for (var i=0; i<devBuilds.length; i++) {
+								if (devBuilds[i][2] == launchedInTieId) {
+									cChanImgName = devBuilds[i][0];
+								}
+							}
+							if (/^(?:esr|release|beta|aurora|nightly)$/m.test(cChanImgName)) {
+								cChanImgName = cChanImgName == 'esr' ? 'release' : cChanImgName;
+								aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
+							} else {
+								aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, cChanImgName, cChanImgName + '_16.png')) + '")';
+							}
+						} else {
+							// use channel default icon
+							var cChanImgName = core.firefox.channel == 'aurora' ? 'dev' : core.firefox.channel;
+							cChanImgName = cChanImgName == 'esr' ? 'release' : cChanImgName;
+							aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
+						}
+					}
+				}
+				
 				//figure out main key that were REMOVED in global (thus was FOUND in aDOMWindow... and NOT found in global)
 				var removeTheseChildIndexes = [];
 				var pwAdded = []; //this p was found in objBoot but not in objWin
@@ -1917,7 +1952,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			} else { // close if objWin objBoot str compairson
 				console.log('no changes based on obj str comparison, so no need for dom update');
 			}
-			
+
 			deferred_updateOnPanelShowing.resolve('dom stuff done, will do update statuses but thats not something i need to wait for, that can happen in parallell'); //maybe do this, see link5143646250 // if do go for this, then remove the deferred_uopsReadIni.reject from the failing on things in prof lock checking
 			
 			//10. update running icons
@@ -2113,7 +2148,7 @@ function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box,
 					}
 				});
 				//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-				if (Services.prefs.getCharPref('app.update.channel').indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
+				if (core.firefox.channel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
 					currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
 				} else {
 					currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
@@ -4024,7 +4059,7 @@ function saveTie(e) {
 					}
 				});
 				//start - profToolkit.exePathLower wasnt found in dev-builds so add it
-				var iconP = Services.prefs.getCharPref('app.update.channel') + '_auto.png'; //icon path
+				var iconP = core.firefox.channel + '_auto.png'; //icon path
 				var downloadP = currentThisBuildsIconPath; //its obviously the current builds path if got here
 				xhr(downloadP, data => {
 					//Services.prompt.alert(null, 'XHR Success', data);
@@ -5190,7 +5225,7 @@ function getChannelNameOfExePath(aExePath) {
 		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]); // note:important: requires tie id to have proper cassing on tie paths
 	} else {
 		if (aExePath == profToolkit.path_exeCur) {
-			_cache_getChannelNameOfExePath[aExePath] = Services.prefs.getCharPref('app.update.channel');
+			_cache_getChannelNameOfExePath[aExePath] = core.firefox.channel;
 			deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]);
 		} else {
 			var path_channelName;
@@ -5243,7 +5278,7 @@ function getChannelNameOfProfile(for_ini_key) {
 	
 	var deferred_getChannelNameOfProfile = new Deferred();
 	
-	getChannelNameOfProfile_cache_perBuild[profToolkit.exePath] = Services.prefs.getCharPref('app.update.channel');
+	getChannelNameOfProfile_cache_perBuild[profToolkit.exePath] = core.firefox.channel;
 	
 	if (!for_ini_key || for_ini_key == profToolkit.selectedProfile.iniKey) {
 		// either temp profile, or current profile, so return whatever is the current profiles build
@@ -6412,7 +6447,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 				deferredMain_getProfileSpecs.resolve(specObj);
 			}
 			if (aProfilePath == profToolkit.selectedProfile.iniKey) {
-				do_postGCNOEP(Services.prefs.getCharPref('app.update.channel'));
+				do_postGCNOEP(core.firefox.channel);
 			} else {
 				var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
 				promise_channelForExe.then(
@@ -8808,8 +8843,11 @@ function cpClientListener(aSubject, aTopic, aData) {
 						}
 					}
 					var responseJson = {
+						clientId: clientId,
 						ini: ini,
-						clientId: clientId
+						transObj: { // transferObj
+							profToolkit: profToolkit
+						}
 					};
 					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
 					cpCommPostMsg(['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));
@@ -8927,6 +8965,73 @@ function cpClientListener(aSubject, aTopic, aData) {
 				}
 			);
 			*/
+			break;
+		case 'query-browser-base-iconset':
+		
+				var promise_basePick = pickerIconset(Services.wm.getMostRecentWindow(null));
+				promise_basePick.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_basePick - ', aVal);
+						// start - do stuff here - promise_basePick
+							// :todo: go through and check if anything is tied to incomingJson.tieId and if it is then updates it icon
+							cpCommPostMsg(['response-browser-base-iconset', JSON.stringify({
+								img: aVal['16'].FileURI,
+								tieid: incomingJson.tieid
+							})].join(subDataSplitter));
+						// end - do stuff here - promise_basePick
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_basePick', aReason:aReason};
+						console.warn('Rejected - promise_basePick - ', rejObj);
+
+						var deepestReason = aReasonMax(aReason);
+						console.info('deepestReason:', deepestReason);
+						if (Object.prototype.toString.call(deepestReason) === '[object Array]') {
+							try {
+								var errorTxt = myServices.sb.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+							} catch(ex if ex.result == Cr.NS_ERROR_FAILURE) {
+								console.error('GetStringFromName/formatStringFromName - the `name` on id of `' + 'iconset-picker-error-txt-' + deepestReason[0] + '` doesnt exist');
+							}
+							if (errorTxt) {
+								Services.prompt.alert(
+									cWin,
+									myServices.sb.GetStringFromName('iconset-picker-error-title'),
+									myServices.sb.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
+								);
+								makePanelClosableOnBlur_doCompleteAnimation();
+								return; //prevent deeper execution
+							}
+							cpCommPostMsg(['response-browser-base-iconset', JSON.stringify({
+								errorTxt: errorTxt
+							})].join(subDataSplitter));
+							return;
+						}
+						
+						switch (deepestReason) {
+							case 'canceled picker':
+								
+									// no user notification, as its obvious, user knows when they cancelled the picker
+									console.log('user cancled picker, dont alert');
+								
+								break;
+							default:
+								Services.prompt.alert(
+									cWin,
+									myServices.sb.GetStringFromName('profilist-error-title'),
+									myServices.sb.formatStringFromName('profilist-error-txt-something', [JSON.stringify(deepestReason)], 1)
+								);
+						}
+						
+						//deferred_createProfile.reject(rejObj);
+					}
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_basePick', aCaught:aCaught};
+						console.error('Caught - promise_basePick - ', rejObj);
+						//deferred_createProfile.reject(rejObj);
+					}
+				);
+				
 			break;
 		default:
 			throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');

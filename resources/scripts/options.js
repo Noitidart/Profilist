@@ -18,11 +18,29 @@ var shortcutSelect;
 var loader;
 var load_img;
 var buildsCont;
+var nextTieId = 0;
+var transObj = {};
 /*end - global el holders*/
 
 document.addEventListener('DOMContentLoaded', setup, false);
 window.addEventListener('unload', uninit, false);
 
+window.onbeforeunload = function(e) {
+	if (ini.General.props['Profilist.dev'] == 'true') {
+		var err1 = document.querySelector('.browse'); //if any custom browse buttons are visible
+		if (err1) {
+			console.error('cannot save as errors exist');
+			e.returnValue = 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
+			return 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
+		}
+		var err2 = document.querySelector('.error'); //any errors on the rows?
+		if (err2) {
+			console.error('cannot save as errors exist');
+			e.returnValue = 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
+			return 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
+		}
+	}
+};
 // start - common helper functions
 function Deferred() {
 	if (Promise.defer) {
@@ -359,6 +377,7 @@ var observers = {
 					var responseJson = JSON.parse(subData);
 					if (responseJson.clientId == clientId) {
 						ini = responseJson.ini;
+						transObj = responseJson.transObj;
 						//ini = JSON.parse(JSON.stringify(responseJson.ini));
 						console.error('just read ini as =', ini);
 						readIniToDom();
@@ -400,6 +419,18 @@ var observers = {
 						//this client is not the responder to this query-make-desktop-shortcut
 					}
 				
+					break;
+				case 'response-browser-base-iconset':
+					
+								var responseJson = JSON.parse(subData);
+								var target = _changeIcon_targets.target;
+								target = target.parentNode;
+								target.classList.remove('browse');
+								//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
+								//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
+								//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
+								target.style.backgroundImage = 'url(' + responseJson.img + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
+					
 					break;
 				default:
 					throw new Error('"profilist-cp-server": subTopic of "' + subTopic + '" is unrecognized');
@@ -548,11 +579,19 @@ var observers = {
 		*/
 	}
 	
+	var _changeIcon_targets = {};
 	function changeIcon(e) {
 		var target = e.target;
 		var oTarg = e.originalTarget;
 		if (oTarg.classList.contains('browse-icon')) {
 			//clicked browse icon
+			_changeIcon_targets = {
+				oTarg: oTarg,
+				target: target
+			};
+			cpCommPostJson('query-browser-base-iconset', {tieid: e.target.getAttribute('tieid')});
+			return;
+			////////////// OLD WAY BELOW
 			var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
 			fp.init(window, 'Profilist - Select Custom Build Icon', Ci.nsIFilePicker.modeOpen);
 			fp.appendFilters(Ci.nsIFilePicker.filterImages);
@@ -728,6 +767,8 @@ var observers = {
 			*/
 			var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
 			rowDomJson[1].style = 'order:0;';
+			rowDomJson[1].tieid = nextTieId;
+			nextTieId++;
 			buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 		} else {
 			var json = JSON.parse(propVal);
@@ -735,13 +776,17 @@ var observers = {
 				var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
 				rowDomJson[1].style += 'order:' + i + ';';
 				//rowDomJson[1].class = ''; //remove `attn` class
-				var builtinIcon = json[i][0].match(/^(?:release|beta|dev|aurora|nightly)$/im);
+				rowDomJson[1].tieid = json[i][2];
+				if (json[i][2] > nextTieId) {
+					nextTieId = parseInt(json[i][2]) + 1;
+				}
+				var builtinIcon = json[i][0].match(/^(?:esr|release|beta|dev|aurora|nightly)$/im);
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
-					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(pathProfileIniFolder, json[i][0]))  + '#' + Math.random() + '")';
+					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(transObj.profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")';
 				}
 				rowDomJson[3][2][1].value = json[i][1]; //textbox value
 				if (json[i][1].toLowerCase() == pathExe.toLowerCase()) {
@@ -757,6 +802,8 @@ var observers = {
 			//add blank row
 			var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
 			rowDomJson[1].class = '';
+			rowDomJson[1].tieid = nextTieId;
+			nextTieId++;
 			rowDomJson[1].style += 'order:' + json.length + ';';
 			buildsCont.appendChild(jsonToDOM(rowDomJson, document, {}));
 		}
@@ -766,6 +813,7 @@ var observers = {
 		//start - setup drag drop
 		var cont = document.getElementById('buildsCont');
 		devBuildRows = cont.querySelectorAll('.devBuildSortable');
+		devBuildRowYs = [];
 		for (var i=0; i<devBuildRows.length; i++) {
 			devBuildRowYs.push(devBuildRows[i].offsetTop);
 		}
@@ -1129,6 +1177,8 @@ var observers = {
 		
 		var rowDomJson = JSON.parse(JSON.stringify(rowTempalateDomJson));
 		rowDomJson[1].class = '';
+		rowDomJson[1].tieid = nextTieId;
+		nextTieId++;
 		rowDomJson[1].style += 'order:' + devBuildRows.length + ';';// margin-bottom:' + devBuildRowH + 'px;';
 		var newRow = jsonToDOM(rowDomJson, document, {});
 		buildsCont.appendChild(newRow);
@@ -1167,7 +1217,7 @@ var observers = {
 			var iconSpan = t.querySelector('span');
 			var icon = iconSpan.style.backgroundImage;
 			if (icon == '') {
-				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i);
+				icon = iconSpan.getAttribute('class').match(/(?:esr|release|beta|dev|aurora|nightly)/i);
 				if (!icon) {
 					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
 					return;
@@ -1175,16 +1225,17 @@ var observers = {
 					icon = icon[0];
 				}
 			} else {
-				var iconUrl = icon.match(/url\(["']?(.*?)#/);
+				var iconUrl = icon.match(/.*\/(.*?)_16\.png#/);
 				if (!iconUrl) {
 					console.error('failed to run regex on background image', icon, i, t.innerHTML);
 				} else {
-					icon = OS.Path.basename(OS.Path.fromFileURI(iconUrl[1]));
+					icon = unescape(iconUrl[1]); //.substr(transObj.profToolkit.path_profilistData_iconsets.length);
 				}
 			}
 			var path = t.querySelector('input').value;
 			var order = t.style.order;
-			str.push([icon, path, order]);
+			var tieid = t.getAttribute('tieid');
+			str.push([icon, path, order, tieid]);
 		});
 		
 		str.sort(function(a, b) {
@@ -1230,7 +1281,7 @@ var observers = {
 			}
 			var iconPath = iconSpan.style.backgroundImage;
 			if (iconPath == '') {
-				var iconPath = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/);
+				var iconPath = iconSpan.getAttribute('class').match(/(?:esr|release|beta|dev|aurora|nightly)/);
 				console.log('iconPath:', iconPath[0]);
 			} else {
 				var iconPath = iconSpan.style.backgroundImage.substr(5, iconPath.length-2);
