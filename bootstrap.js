@@ -3344,8 +3344,18 @@ function tbb_box_click(e) {
 				console.log('morph for remove');
 				// morph to say Enter = Remove Esc = Cancel
 				// with thrid option "Del = Remove & Delete" , IF no other profile uses that badge, ask if want to "remove AND delete badge from hard drive"
+				targetedTBB.removeAttribute('badge');
+				delete ini[targetedProfileIniKey].props['Profilist.badge'];
+				writeIniAndBkp();
 				
-				
+				var cCB = function(cProfSpecs) {
+					var name_iconToUse = cProfSpecs.iconNameObj.str;
+					updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
+					updateIconToPinnedCut(targetedProfileIniKey, cProfSpecs);
+					updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
+					updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
+				};
+				do_getProfSpecsCheckUse_WithCB(null, targetedProfileIniKey, null, true, cCB);
 			} else {
 				// does not have badge applied
 				makePanelStay();
