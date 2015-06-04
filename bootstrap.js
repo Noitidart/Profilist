@@ -105,7 +105,7 @@ var encoder = 0;
 var iniStr_thatAffectDOM = '';
 var iniObj_thatAffectDOM = {};
 //learned: that if StartWithLastProfile=1 then profile manager/startup obeys the Default=1 but note that Default=1 is never removed
-var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name', 'Profilist.tie', 'Profilist.badge']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name'/*, 'Profilist.tie'*/, 'Profilist.badge']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~ // Profilist.tie is pushed in or removed, depending on pref of myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value
 /*
 //keys that i add to thatAffectDOM object:
 num - outside of props // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
@@ -187,6 +187,14 @@ function extendCore() {
 	core.firefox = {};
 	core.firefox.version = Services.appinfo.version;
 	core.firefox.channel = Services.prefs.getCharPref('app.update.channel');
+	if (core.firefox.channel == 'aurora') {
+		if (Services.vc.compare(Services.appinfo.version, 35) >= 0) {
+			// aurora became dev icon in version 35
+			core.firefox.channel = 'dev'; // for image purposing
+		}
+	} else if (core.firefox.channel == 'default') { // this is what it is on custom build
+		core.firefox.channel = 'nightly'; // for image purposing
+	}
 	
 	console.log('done adding to core, it is now:', core);
 }
@@ -212,6 +220,14 @@ current builds icon if dev mode is enabled
 			iniStr = aVal; //or can do JSON.stringify(ini);
 			//iniStr_thatAffectDOM
 			iniObj_thatAffectDOM = {};
+			if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
+				iniKeys_thatAffectDOM.push('Profilist.tie');
+			} else {
+				var ProfilistTieKeyIndex = iniKeys_thatAffectDOM.indexOf('Profilist.tie');
+				if (ProfilistTieKeyIndex > -1) {
+					iniKeys_thatAffectDOM.splice(ProfilistTieKeyIndex, 1);
+				}
+			}
 			for (var k=0; k<iniKeys_thatAffectDOM.length; k++) {
 				for (var p in ini) {
 					if (iniKeys_thatAffectDOM[k] in ini[p].props) {
@@ -273,6 +289,23 @@ current builds icon if dev mode is enabled
 			
 				gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value);
 				
+				var tieIdsActive = []; // meaning with info in gDevBuilds
+				for (var i=0; i<gDevBuilds.length; i++) {
+					tieIdsActive.push(gDevBuilds[i][devBuildsArrStruct.id]);
+				}
+				
+				console.error('scanning active tie ids:', tieIdsActive);
+				
+				for (var p in ini) {
+					if (!('num' in ini[p])) { continue }
+					if ('Profilist.tie' in ini[p].props) {
+						if (tieIdsActive.indexOf(ini[p].props['Profilist.tie']) == -1) {
+							console.warn('tieid of ', ini[p].props['Profilist.tie'], 'was found in use in ini, however it is not in left over tieids, so removing from ini.', 'left over tie ids:', tieIdsActive);
+							delete ini[p].props['Profilist.tie'];
+						}
+					}
+				}
+				
 				//start the generic-ish check stuff
 				// copy block link 011012154 slight modif
 				currentThisBuildsIconPath = '';
@@ -325,15 +358,18 @@ current builds icon if dev mode is enabled
 				//its possible to be relative
 				profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.relativeDescriptor_rootDirPath].props.Name;
 			} else {
-				//its absolute
-				profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+				if (profToolkit.selectedProfile.rootDirPath in ini) {
+					//its absolute
+					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+				} // else { its a temporary profile! }
 			}
 			
-			if (!profToolkit.selectedProfile.name) { //probably null
-				console.warn('this profile at path does not exist, so its a temporary profile');
-				profToolkit.selectedProfile.name = 'Temporary Profile'; //as it has no name
+			if (!profToolkit.selectedProfile.iniKey) { //probably null
+				console.error('XYZ this profile at path does not exist, so its a temporary profile');
+				profToolkit.selectedProfile.name = myServices.sb.GetStringFromName('temporary-profile'); //as it has no name
 				profToolkit.selectedProfile.iniKey = null;
 			} else {
+				console.error('XYZ SET IT HERE');
 				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
 			}
 			
@@ -1325,11 +1361,13 @@ function initProfToolkit() {
 	
 	if (profToolkit.selectedProfile.rootDirPath.indexOf(profToolkit.rootPathDefault) > -1) {
 		//then its PROBABLY relative as its in the folder it should be
+		console.error('setting XYZ here:', profToolkit.selectedProfile.rootDirPath, profToolkit.rootPathDefault);
 		var IniPathStr = new FileUtils.File(profToolkit.selectedProfile.rootDirPath); //OS.Path.join(profToolkit.rootPathDefault, profToolkit.selectedProfile.rootDirName);
 		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(profToolkit.nsIFile_iniDir); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = PathToWriteToIni;
 	} else {
 		//its not relative
+		console.error('setting XYZ null');
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = null;
 	}
 	profToolkit.selectedProfile.iniKey = undefined; //note: i set it to undefined meaning it hasnt been verified yet, i set it to null for temp profile meaning name not found, i set it to string once it was verified
@@ -1620,6 +1658,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile'], status:'active', style:['margin-top:0'], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
 				if (sIniKey) {
+					console.error('sIniKey is == ', sIniKey);
 					if (forCustomizationTabInsertItDisabled) {
 						elJson[1].disabled = 'true';
 						PStack.style.pointerEvents = 'none';
@@ -1628,7 +1667,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					if ('Default' in ini[sIniKey].props && ini[sIniKey].props.Default == '1') {
 						elJson[1].isdefault = true;
 					}
-					if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == 'true' && */'Profilist.tie' in ini[sIniKey].props) {
+					if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true && 'Profilist.tie' in ini[sIniKey].props) {
 						elJson[1].class.push('profilist-tied');
 						elJson[1].style.push('background-image: url("' + iniObj_thatAffectDOM.General.props['Profilist.currentThisBuildsIconPath'] + '")');
 					}
@@ -1640,6 +1679,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				} else {
 					//is temp profile
 					elJson[1].label = myServices.sb.GetStringFromName('temporary-profile');
+					elJson[1].class.push('profilist-temp-prof');
+					elJson[1].class = elJson[1].class.join(' ');
 				}
 				var elFromJson = jsonToDOM(	// make jsonToDOM of ini[pb].props
 					elJson
@@ -1677,16 +1718,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				
 				console.info('pref val dev:', myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value);
 				if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
-					if (!initialPanelDomSetup) {
-						console.info('objWin currentThisBuildsIconPath',  objWin.General.props['Profilist.currentThisBuildsIconPath']);
-					}
-					console.info('objBoot currentThisBuildsIconPath',  objBoot.General.props['Profilist.currentThisBuildsIconPath']);
-					
 					if (initialPanelDomSetup || objWin.General.props['Profilist.currentThisBuildsIconPath'] != objBoot.General.props['Profilist.currentThisBuildsIconPath']) {
 						// :todo: consider if currentThisBuildsIconPath is same name, but user deleted old img with that name and saved new img with that, so i probably need a force update of backgroundImage or something to compare string paths with Math.random
 						aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + objBoot.General.props['Profilist.currentThisBuildsIconPath'] + '#' + Math.random() + '")';
 					}
 				}
+
 				/* no need for this, as this is handled on a profile tbb level
 				if (initialPanelDomSetup || objWin.General.props['Profilist.defaultProfileIniKey'] != objBoot.General.props['Profilist.defaultProfileIniKey']) {
 					// 
@@ -1809,7 +1846,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
-								if (ppAdded[i].pp == 'Profilist.tie') {
+								if (ppAdded[i].pp == 'Profilist.tie' && myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
 									PStack.childNodes[childNodeI].classList.add('profilist-tied');
 									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + getPathTo16Img(getDevBuildPropForTieId(ppAdded[i].now, 'base_icon')) + '")';
 								} else {
@@ -1858,7 +1895,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								if ('Default' in objBoot[pb].props && objBoot[pb].props.Default == '1') {
 									elJson[1].isdefault = true;
 								}
-								if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true &&*/ 'Profilist.tie' in objBoot[pb].props) {
+								if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true && 'Profilist.tie' in objBoot[pb].props) {
 									elJson[1].class.push('profilist-tied');
 									console.info('exploring tie id:', objBoot[pb].props['Profilist.tie']);
 									elJson[1].style.push('background-image: url("' + getPathTo16Img(getDevBuildPropForTieId(objBoot[pb].props['Profilist.tie'], 'base_icon')) + '")');
@@ -3160,7 +3197,10 @@ function tbb_box_click(e) {
 				arr_addInToDevBuild[devBuildsArrStruct.exe_path] = profToolkit.exePath;
 				arr_addInToDevBuild[devBuildsArrStruct.base_icon] = core.firefox.channel;
 				gDevBuilds.push(arr_addInToDevBuild);
+				ini.General.props['Profilist.dev-builds'] = JSON.stringify(gDevBuilds);
+				runningExeTieId = daNextTieId;
 			}
+			console.info('runningExeTieId:', runningExeTieId);
 			
 			var untieIt = function() {
 				delete ini[cProfIniKey].props['Profilist.tie'];
@@ -3178,7 +3218,7 @@ function tbb_box_click(e) {
 			} else {
 				// is currently tied
 				if (ini[cProfIniKey].props['Profilist.tie'] == runningExeTieId) {
-					console.log('tied to runningExeTieId');
+					console.log('tied to runningExeTieId', 'runningExeTieId:', 'ini[cProfIniKey].props[Profilist.tie]:', ini[cProfIniKey].props['Profilist.tie']);
 					// start at first tie id that in gDevBuilds that is not runningExeTieId
 					if (gDevBuilds.length == 1) {
 						untieIt();
@@ -3578,10 +3618,10 @@ function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
 }
 function getPathTo16Img(iconset_name, uncached) {
 	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
-	if (/^(?:esr|release|beta|aurora|nightly)$/m.test(iconset_name)) {
-		if (iconset_name == 'aurora') {
+	if (/^(?:esr|release|beta|aurora|dev|nightly)$/m.test(iconset_name)) {
+		/*if (iconset_name == 'aurora') {
 			iconset_name = 'dev';
-		} else if (iconset_name == 'esr') {
+		} else */if (iconset_name == 'esr') {
 			iconset_name = 'release';
 		}
 		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
@@ -3844,7 +3884,12 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 	var deferredMain_updateIconToPinnedCut = new Deferred();
 	
 	// if aProfilePath is default profile update the default launchers too
-	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
+		console.warn('IS A TEMP PROF');
+		var isDefault = false;
+	} else {
+		var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	}
 	var OSPath = getPathToProfileDir(aProfileIniKey);
 	
 	if (!useProfSpecs) {
@@ -5011,6 +5056,10 @@ function activated(e) {
 		case 'winmo':
 		case 'wince':
 			// check if 
+			if (profToolkit.selectedProfile.iniKey === null) {
+				// its a temp prof, dont do this
+				break;
+			}
 			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(profToolkit.selectedProfile.iniKey) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
 			var promise_checkWmSeticoned = read_encoded(fullFilePathToWM_SETICON, {encoding:'utf8'});
 			promise_checkWmSeticoned.then(
@@ -6293,12 +6342,30 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		isRunning: null // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
 	};
 	
-	if (!(aProfilePath in ini)) {
+	if (aProfilePath === null && profToolkit.selectedProfile.iniKey === null) {
+		// its temporary profile
+		console.error('A PROFILE PATH IS NULL ITS GOTTA BE A TEMPORARY PROFILE esp cuz its in use');
+		console.error('YES HAS TO BE!! cuz profToolkit.selectedProfile.iniKey === null');
+		
+		/*
+		return {
+			channel_exeForProfile: core.firefox.channel,
+			iconNameObj: {
+				components: {
+					'CHANNEL-REF': core.firefox.channel
+				}
+				str: 'CHANNEL-REF_' + core.firefox.channel
+			},
+			iconsetId_base
+		}
+		*/
+		var props = {};
+	} else if (!(aProfilePath in ini)) {
 		deferredMain_getProfileSpecs.reject('key not found in ini');
 		return deferredMain_getProfileSpecs.promise;
+	} else {
+		var props = ini[aProfilePath].props;
 	}
-	
-	var props = ini[aProfilePath].props;
 	var iconNameComponents = {};	
 	
 	if ('Profilist.badge' in props) {
@@ -6630,7 +6697,17 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	// returns root dir
 	// if set objOfRootAndLocal to true, it returns an object, and the object holds two keys. root for rootdir of prof. and local IF it is a IsRelative=1 prof.
 	
-	if (!(for_ini_key in ini)) {
+	if (for_ini_key === null && profToolkit.selectedProfile.iniKey === null) {
+		console.warn('IS A TEMP PROF');
+		if (!objOfRootAndLocal) {
+			return profToolkit.selectedProfile.rootDirPath;
+		} else {
+			// just a root dir
+			return {
+				OSPath_root: profToolkit.selectedProfile.rootDirPath
+			}
+		}
+	} else if (!(for_ini_key in ini)) {
 		throw new Error('getPathToProfileDir for_ini_key "' + for_ini_key + '" not found in ini');
 	}
 	
@@ -7415,7 +7492,12 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	return deferred_makeDeskCut.promise;
 }
 function getLauncherName(for_ini_key, theChName) {
-	var theProfName_safedForPath = getSafedForOSPath(ini[for_ini_key].props.Name);
+	if (for_ini_key === null && profToolkit.selectedProfile.iniKey === null) {
+		console.warn('this is a temporary profile');
+		var theProfName_safedForPath = getSafedForOSPath(profToolkit.selectedProfile.name);
+	} else {
+		var theProfName_safedForPath = getSafedForOSPath(ini[for_ini_key].props.Name);
+	}
 	return getAppNameFromChan(theChName) + ' - ' + theProfName_safedForPath;
 }
 // end - shortcut creation
@@ -8839,7 +8921,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 					throw new Error('not a boolean');
 				  }
 				}
-			}
+			}			
 			prefObj.setval(user_set_val);
 			/* removed this write to ini and to ini file on 082914 104p because doing setval will trigger this it its onChange. the onChange also handles broadacasting to all cp clients to update dom to that value, and thats important (ie: if multiple clients open)
 			ini.General.props['Profilist.' + pref_name] = user_set_val;
@@ -9441,13 +9523,13 @@ function startup(aData, aReason) {
 						function(aReason) {
 							var rejObj = {name:'promise_getIconName', aReason:aReason};
 							console.error('Rejected - promise_getIconName - ', rejObj);
-							deferredMain_updateIconToAllWindows.reject(rejObj);
+							//deferredMain_updateIconToAllWindows.reject(rejObj);
 						}
 					).catch(
 						function(aCaught) {
 							var rejObj = {name:'promise_getIconName', aCaught:aCaught};
 							console.error('Caught - promise_getIconName - ', rejObj);
-							deferredMain_updateIconToAllWindows.reject(rejObj);
+							//deferredMain_updateIconToAllWindows.reject(rejObj);
 						}
 					);
 					
@@ -9876,7 +9958,13 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 	// resolves with obj of keys os paths to pinned cuts that launch aProfileIniKey, and value is obj with key OSPath_icon which is jsStr
 	var deferredMain_getPathToPinnedCut = new Deferred();
 	
-	var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
+		console.warn('IS A TEMP PROF');
+		var isDefault = false;
+	} else {
+		var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
+	}
+	
 	var OSPath = getPathToProfileDir(aProfileIniKey);
 	var path_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
 	var path_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
@@ -9887,7 +9975,12 @@ function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunc
 		//buildPathAndNoProfile: []
 	};
 	
-	criteriaForMatchingCut.profileName.push('-P "' + ini[aProfileIniKey].props.Name.toLowerCase() + '"');
+	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
+		console.warn('IS A TEMP PROF');
+		criteriaForMatchingCut.profileName.push('-P "' + profToolkit.selectedProfile.name.toLowerCase() + '"');
+	} else {
+		criteriaForMatchingCut.profileName.push('-P "' + ini[aProfileIniKey].props.Name.toLowerCase() + '"');
+	}
 	criteriaForMatchingCut.profilePath.push('-profile "' + OSPath.toLowerCase() + '"');
 	
 	var cutPaths = []; // os paths to cuts found

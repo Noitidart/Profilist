@@ -225,6 +225,7 @@ this is kind of nice think about it
 	flex-shrink: 1;
 	text-align: left;
 	padding-top: 1px;
+	/*text-shadow: 0 0 2px red;*/
 }
 
 /*start - badge*/
