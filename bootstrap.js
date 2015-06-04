@@ -81,6 +81,7 @@ const iconsetSizes_Profilist = {
 
 var ini = {UnInitialized:true};
 var devBuilds;
+var gDevBuilds = [];
 var iniStr = ''; //str of ini on last read // for detection for if should write if diff
 var iniReadStr = ''; //same like iniStr but no JSON'ing for detection if should continue parsing obj on read
 var iniStr_thatAffectsDOM = ''; //str of ini on last read (but just the props that affect dom) (so like properties like Profilist.launch_on_create doesnt affect dom as the function creatProfile checks this Profilist.launch_on_create property when deciding to launch or not
@@ -117,6 +118,11 @@ const repCharForSafePath = '-';
 var cloneProfIniKey;
 
 var launchedInTieId = null;
+var devBuildsArrStruct = { // holds index of key
+	id: 2,
+	exe_path: 1,
+	base_icon: 0 // folder name in iconset
+};
 
 // Lazy Imports
 const myServices = {};
@@ -196,418 +202,383 @@ iniStr_thatAffectDOM
 watchBranches[myPrefBranch]
 current builds icon if dev mode is enabled
 */
-		var deferred_riapoMAIN = new Deferred();
-		var deferred_readIniAndMaybeBkp = new Deferred();		
-		deferred_readIniAndMaybeBkp.promise.then(
-			function(aVal) {
-				console.log('Fullfilled - deferred_readIniAndMaybeBkp.promise - ', {d:{d:aVal}});
-				// start - do stuff here - deferred_readIniAndMaybeBkp.promise
-				//parse objs
-				iniStr = aVal; //or can do JSON.stringify(ini);
-				//iniStr_thatAffectDOM
-				iniObj_thatAffectDOM = {};
-				for (var k=0; k<iniKeys_thatAffectDOM.length; k++) {
-					for (var p in ini) {
-						if (iniKeys_thatAffectDOM[k] in ini[p].props) {
-							if (iniKeys_thatAffectDOM[k] == 'Default') {
-								var defaultProfilePath = ini[p].props['Path'];
-								var defaultProfileIsRelative = ini[p].props['IsRelative'];
-							}
-							if (!(p in iniObj_thatAffectDOM)) {
-								iniObj_thatAffectDOM[p] = {props:{}};
-							}/*  else if (!('props' in iniObj_thatAffectDOM)) {
-								iniObj_thatAffectDOM[p].props = {};
-							} */
-							iniObj_thatAffectDOM[p].props[iniKeys_thatAffectDOM[k]] = ini[p].props[iniKeys_thatAffectDOM[k]];
+	var deferred_riapoMAIN = new Deferred();
+	var deferred_readIniAndMaybeBkp = new Deferred();		
+	deferred_readIniAndMaybeBkp.promise.then(
+		function(aVal) {
+			console.log('Fullfilled - deferred_readIniAndMaybeBkp.promise - ', {d:{d:aVal}});
+			// start - do stuff here - deferred_readIniAndMaybeBkp.promise
+			//parse objs
+			iniStr = aVal; //or can do JSON.stringify(ini);
+			//iniStr_thatAffectDOM
+			iniObj_thatAffectDOM = {};
+			for (var k=0; k<iniKeys_thatAffectDOM.length; k++) {
+				for (var p in ini) {
+					if (iniKeys_thatAffectDOM[k] in ini[p].props) {
+						if (iniKeys_thatAffectDOM[k] == 'Default') {
+							var defaultProfilePath = ini[p].props['Path'];
+							var defaultProfileIsRelative = ini[p].props['IsRelative'];
 						}
-						if ('num' in ini[p]) { // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ 
-							if (!(p in iniObj_thatAffectDOM)) {
-								iniObj_thatAffectDOM[p] = {props:{}};
-							}
-							iniObj_thatAffectDOM[p].num = ini[p].num;
+						if (!(p in iniObj_thatAffectDOM)) {
+							iniObj_thatAffectDOM[p] = {props:{}};
+						}/*  else if (!('props' in iniObj_thatAffectDOM)) {
+							iniObj_thatAffectDOM[p].props = {};
+						} */
+						iniObj_thatAffectDOM[p].props[iniKeys_thatAffectDOM[k]] = ini[p].props[iniKeys_thatAffectDOM[k]];
+					}
+					if ('num' in ini[p]) { // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ 
+						if (!(p in iniObj_thatAffectDOM)) {
+							iniObj_thatAffectDOM[p] = {props:{}};
 						}
+						iniObj_thatAffectDOM[p].num = ini[p].num;
 					}
 				}
-				//iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM); //dont do this here as i need to first update currentThisBuildsIconPath
-				
-				//update watchBranches[myPrefBranch] AND make boolean type prefs, boolean type in ini object
-				for (var pref_name_in_obj in myPrefListener.watchBranches[myPrefBranch].prefNames) {
-					var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
-					if (pref_name_in_ini in ini.General.props) {
-						var prefValInPrefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
-						var prefValInIni = ini.General.props[pref_name_in_ini];
-						if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].type == Ci.nsIPrefBranch.PREF_BOOL) {
-							if (prefValInIni == 'false' || prefValInIni == '0') {
-								prefValInIni = false;
-								myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = false;
-							} else if (prefValInIni == 'true' || prefValInIni == '1') {
-								prefValInIni = true;
-								myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = true;
-							}
-						} else if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].type == Ci.nsIPrefBranch.PREF_INT) { // i dont use PREF_INT type but just for sake of accuracy im adding htis in
-							myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = parseInt(myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value);
+			}
+			//iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM); //dont do this here as i need to first update currentThisBuildsIconPath
+			
+			//update watchBranches[myPrefBranch] AND make boolean type prefs, boolean type in ini object
+			for (var pref_name_in_obj in myPrefListener.watchBranches[myPrefBranch].prefNames) {
+				var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
+				if (pref_name_in_ini in ini.General.props) {
+					var prefValInPrefObj = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
+					var prefValInIni = ini.General.props[pref_name_in_ini];
+					if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].type == Ci.nsIPrefBranch.PREF_BOOL) {
+						if (prefValInIni == 'false' || prefValInIni == '0') {
+							prefValInIni = false;
+							myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = false;
+						} else if (prefValInIni == 'true' || prefValInIni == '1') {
+							prefValInIni = true;
+							myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = true;
 						}
-						if (prefValInIni != prefValInPrefObj) {
-							myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].setval(prefValInIni, true); //i dont have to pass seoncd arg of true, as the onChange listener will see that the ini value is == newVal so it wont writeIni
-						}
-					} else {
-						//take value from pref and write it to ini, as pref is not found in ini
-						ini.General.props[pref_name_in_ini] = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
-						//console.log('ini of name', pref_name_in_ini, 'not found in ini, now will check if the current value of the pref is the default', 'cur:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value, 'default:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default);
-						if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value != myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default) {
-							var doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni = true;
-							console.error('doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni');
-						}
-						//note:todo:11/14/14 112a: i edited in something to ini, so i should do a writeIni or mark it so that a writeIni is done sometime
+					} else if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].type == Ci.nsIPrefBranch.PREF_INT) { // i dont use PREF_INT type but just for sake of accuracy im adding htis in
+						myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value = parseInt(myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value);
 					}
-				}
-				
-				//update icon `currentThisBuildsIconPath`
-				if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == true) { //if (ini.General.props['Profilist.dev'] == 'true') { //OR I can test `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == true) {` but if i use this pref test method then i need to update watch branches block before this currentBuildIcons
-				
-				
-					//start the generic-ish check stuff
-					devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']); //can instead use `JSON.parse(ini.General.props['Profilist.dev-builds'])` here
-					//var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
-					//start - figure out from dev_builds_str what icon path should be
-					try {
-						devBuilds.forEach(function(b) {
-							if (b[1].toLowerCase() == profToolkit.exePathLower) {
-								if (/^(?:esr|release|beta|aurora|nightly)$/m.test(b[0])) {
-									console.log('making bullet');
-									//currentThisBuildsIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
-									switch (b[0]) {
-										case 'esr':
-										case 'release':
-											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/release/release16.png';
-											break;
-										case 'beta':
-											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/beta/beta16.png';
-											break;
-										case 'aurora':
-											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/dev/dev16.png';
-											break;
-										case 'nightly':
-											currentThisBuildsIconPath = core.addon.path.images + 'channel-iconsets/nightly/nightly16.png';
-											break;
-										default:
-											console.error('cannot find currentThisBuildsIconPath');
-									}
-								} else {
-									currentThisBuildsIconPath = getPathsInIconset(b[0])['16'].FileURI + '#' + Math.random(); // OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, b[0], b[0])) + '#' + Math.random();
-								}
-								throw BreakException;
-							}
-						});
-						//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-						if (core.firefox.channel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
-							currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
-						} else {
-							currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
-						}
-					} catch (ignore if ex === BreakException) {}
-					//end - figure out from dev_builds_str what icon path should be
-					/*
-					if (currentThisBuildsIconPath != OLDcurrentThisBuildsIconPath) {
-						//icon of currentThisBuildsIconPath CHANGED
-						//console.log('icon of currentThisBuildsIconPath CHANGED');
-						//icon_changed = true;
-						//devBuildsStrOnLastUpdateToGlobalVar = dev_builds_str;
-					} else {
-						//icon of currentThisBuildsIconPath is unchanged
-						//console.log('icon of currentThisBuildsIconPath is unchanged')
-					}
-					*/
-					//end the generic-ish check stuff
-				
-					//have to add this in as another prop because its possible that currentThisBuildsIconPath can change even though Profilist.dev did not (ie: it reamined true)
-					//actually ignore this crap comment on right::: i think i sould set selectedProfile here //i dont figure out the default=1 profile and add is prop as that can be done on run time, that inf
-					iniObj_thatAffectDOM.General.props['Profilist.currentThisBuildsIconPath'] = currentThisBuildsIconPath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
-				}
-				
-				//update which profile is the Default profile
-				if (ini.General.props.StartWithLastProfile == '1') {
-					if (defaultProfilePath) {
-						if (!('General' in iniObj_thatAffectDOM)) { // this block is needed because if its a totally untouched by profilist ini then no props are found so General doesnt exist in iniObj_thatAffectDOM
-							iniObj_thatAffectDOM.General = {props:{}};
-						}
-						iniObj_thatAffectDOM.General.props['Profilist.defaultProfilePath'] = defaultProfilePath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
-						iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIsRelative'] = defaultProfileIsRelative; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
-					} else {
-						console.warn('start with last profile is 1 however no default profile marked in ini');
+					if (prefValInIni != prefValInPrefObj) {
+						myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].setval(prefValInIni, true); //i dont have to pass seoncd arg of true, as the onChange listener will see that the ini value is == newVal so it wont writeIni
 					}
 				} else {
-					//its 0
-					if (defaultProfilePath) {
-						delete iniObj_thatAffectDOM[defaultProfilePath].props.Default;
-					} else {
-						// proper for profilist logic, there is no profile marked default and StartWithLastProfile is 0
+					//take value from pref and write it to ini, as pref is not found in ini
+					ini.General.props[pref_name_in_ini] = myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value;
+					//console.log('ini of name', pref_name_in_ini, 'not found in ini, now will check if the current value of the pref is the default', 'cur:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value, 'default:', myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default);
+					if (myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].value != myPrefListener.watchBranches[myPrefBranch].prefNames[pref_name_in_obj].default) {
+						var doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni = true;
+						console.error('doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni');
+					}
+					//note:todo:11/14/14 112a: i edited in something to ini, so i should do a writeIni or mark it so that a writeIni is done sometime
+				}
+			}
+			
+			//update icon `currentThisBuildsIconPath`
+			//if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) { //if (ini.General.props['Profilist.dev'] == 'true') { //OR I can test `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {` but if i use this pref test method then i need to update watch branches block before this currentBuildIcons
+			
+				gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value);
+				
+				//start the generic-ish check stuff
+				// copy block link 011012154 slight modif
+				currentThisBuildsIconPath = '';
+				// does currently running path have a tied icon
+				var runningExeTieId = getDevBuildTieIdOfExePath(profToolkit.exePath);
+				if (runningExeTieId !== null) {
+					// currently running a tied, so use tied icon
+					currentThisBuildsIconPath = getPathTo16Img(getDevBuildPropForTieId(runningExeTieId, 'base_icon'), false); // no random, so i can compare for diffs
+				} else {
+					// use channel default icon
+					currentThisBuildsIconPath = getPathTo16Img(core.firefox.channel);
+				}
+				// end copy block link 011012154
+				//end the generic-ish check stuff
+			
+				//have to add this in as another prop because its possible that currentThisBuildsIconPath can change even though Profilist.dev did not (ie: it reamined true)
+				//actually ignore this crap comment on right::: i think i sould set selectedProfile here //i dont figure out the default=1 profile and add is prop as that can be done on run time, that inf
+				iniObj_thatAffectDOM.General.props['Profilist.currentThisBuildsIconPath'] = currentThisBuildsIconPath; //important: note: so remember, iniObj_thatAffectDOM the _thatAffectDOM stuff is just read only, never read from it to save to ini
+			//}
+			
+			// start - identify if Default profile
+			var found_defaultProfile = false;
+			for (var q in ini) {
+				if ('num' in ini[q]) {
+					if ('Default' in ini[q].props) {
+						found_defaultProfile = true;
+						iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIniKey'] = q;
+						break;
 					}
 				}
-				
-				iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM);
-				
-				
-				//figure selectedProfile.name					
-				//get from selectedProfile.rootDirPath to iniPath format to get its name
-				if (profToolkit.selectedProfile.relativeDescriptor_rootDirPath !== null) {
-					//its possible to be relative
-					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.relativeDescriptor_rootDirPath].props.Name;
-				} else {
-					//its absolute
-					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+			}
+			if (!found_defaultProfile) {
+				delete iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIniKey'];
+				if (ini.General.props.StartWithLastProfile != '1') {
+					ini.General.props.StartWithLastProfile = '1'; // :todo: should probably say to write to ini this is mainly the logic i want followed, if no default profile then I want StartWithLastProfile to be 0
 				}
-				
-				if (!profToolkit.selectedProfile.name) { //probably null
-					console.warn('this profile at path does not exist, so its a temporary profile');
-					profToolkit.selectedProfile.name = 'Temporary Profile'; //as it has no name
-					profToolkit.selectedProfile.iniKey = null;
-				} else {
-					profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
+			} else {
+				if (ini.General.props.StartWithLastProfile != '0') {
+					ini.General.props.StartWithLastProfile = '0'; // :todo: should probably say to write to ini this is mainly the logic i want followed, if no default profile then I want StartWithLastProfile to be 0
+				}				
+			}
+			// end - identify if Default profile
+			
+			iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM);
+			
+			
+			//figure selectedProfile.name					
+			//get from selectedProfile.rootDirPath to iniPath format to get its name
+			if (profToolkit.selectedProfile.relativeDescriptor_rootDirPath !== null) {
+				//its possible to be relative
+				profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.relativeDescriptor_rootDirPath].props.Name;
+			} else {
+				//its absolute
+				profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+			}
+			
+			if (!profToolkit.selectedProfile.name) { //probably null
+				console.warn('this profile at path does not exist, so its a temporary profile');
+				profToolkit.selectedProfile.name = 'Temporary Profile'; //as it has no name
+				profToolkit.selectedProfile.iniKey = null;
+			} else {
+				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
+			}
+			
+			if (writeIfDiff || doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni) {
+				if (doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni) {
+					console.log('will now do write because not all prefs were at default AND because none of the prefs were in the ini, if none were there but all were defalut i wouldnt bother doing this write');
 				}
-				
-				if (writeIfDiff || doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni) {
-					if (doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni) {
-						console.log('will now do write because not all prefs were at default AND because none of the prefs were in the ini, if none were there but all were defalut i wouldnt bother doing this write');
+				// start - im not sure if i need to writeIniAndBkpIfDiff here // edit: is needed if prefs are not all at default
+				var promise_writeIniAndBkpIfDiff = writeIniAndBkpIfDiff();
+				promise_writeIniAndBkpIfDiff.then(
+					function(aVal) {
+						console.log('Fullfilled - promise_writeIniAndBkpIfDiff - ', aVal);
+						// start - do stuff here - promise_writeIniAndBkpIfDiff
+						deferred_riapoMAIN.resolve('objs parsed and wroteIfDiff');
+						// end - do stuff here - promise_writeIniAndBkpIfDiff
+					},
+					function(aReason) {
+						var rejObj = {name:'promise_writeIniAndBkpIfDiff', aReason:aReason};
+						console.error('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
+						deferred_riapoMAIN.reject(rejObj);
 					}
-					// start - im not sure if i need to writeIniAndBkpIfDiff here // edit: is needed if prefs are not all at default
-					var promise_writeIniAndBkpIfDiff = writeIniAndBkpIfDiff();
-					promise_writeIniAndBkpIfDiff.then(
+				).catch(
+					function(aCaught) {
+						var rejObj = {name:'promise_writeIniAndBkpIfDiff', aCaught:aCaught};
+						console.error('Caught - promise_writeIniAndBkpIfDiff - ', rejObj);
+						deferred_riapoMAIN.reject(rejObj);
+					}
+				);
+				// end - im not sure if i need to writeIniAndBkpIfDiff here
+			} else {
+				deferred_riapoMAIN.resolve('objs parsed');
+			}
+			// end - do stuff here - deferred_readIniAndMaybeBkp.promise
+		},
+		function(aReason) {
+			var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aReason:aReason};
+			console.error('Rejected - deferred_readIniAndMaybeBkp.promise - ', rejObj);
+			deferred_riapoMAIN.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aCaught:aCaught};
+			console.error('Caught - deferred_readIniAndMaybeBkp.promise - ', rejObj);
+			deferred_riapoMAIN.reject(rejObj);
+		}
+	);
+	
+	
+	///////////
+	//start - read the ini file and if needed read the bkp to create the ini object
+//	console.log('in read');
+//	console.log('decoder got');
+//	console.log('starting read');
+	var promise_readIni = read_encoded(profToolkit.path_iniFile, {encoding:'utf-8'});
+	
+	promise_readIni.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_readIni - ', {b:{b:aVal}});
+			// start - do stuff here - promise_readIni
+			var readStr = aVal;
+			if (iniReadStr == readStr) {
+				deferred_readIniAndMaybeBkp.resolve('no need to parse regex even, the readStr is same');
+				console.log('no need to parse regex even, the readStr is same');
+			} else {
+				iniReadStr = readStr;
+				//console.log('radStr:', readStr);
+				ini = {};
+				var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //currently supports 15 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
+				var blocks = [];
+
+				var match;
+				while (match = patt.exec(readStr)) {
+	//				//console.log('MAAAAAAAAAAATCH', match);
+
+					var group = match[1];
+					ini[group] = {};
+
+					if (group == 'Profile') {
+						ini[group]['num'] = parseInt(match[2]);
+					}
+
+					ini[group].props = {};
+
+					for (var i = 3; i < match.length; i = i + 2) {
+						var prop = match[i];
+						if (prop === undefined) {
+							break;
+						}
+						var propVal = match[i + 1]
+						ini[group].props[prop] = propVal;
+					}
+
+					if (group == 'Profile') {
+						//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
+						ini[ini[group].props.Path] = ini[group];
+						delete ini[group];
+					}
+				}
+				if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
+					console.log('ini object finalized via non-bkp');
+					iniStr = JSON.stringify(ini);
+					deferred_readIniAndMaybeBkp.resolve(iniStr);
+					//return Promise.resolve('Success promise_readIni',);
+				} else {
+					console.log('ini was not touched');
+					//ini was not touched
+					//so read from bkp and update ini with properties that are missing
+					var promise_readIniBkp = read_encoded(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
+					promise_readIniBkp.then(
 						function(aVal) {
-							console.log('Fullfilled - promise_writeIniAndBkpIfDiff - ', aVal);
-							// start - do stuff here - promise_writeIniAndBkpIfDiff
-							deferred_riapoMAIN.resolve('objs parsed and wroteIfDiff');
-							// end - do stuff here - promise_writeIniAndBkpIfDiff
+							console.log('Fullfilled - promise_readIniBkp - ', {c:{c:aVal}});
+							// start - do stuff here - promise_readIniBkp
+							var readStr = aVal;
+							//i dont do the iniReadStr == readStr check here, BECAUSE what if user made new profiles with the profile manager, then this backup method needs to be called. im thinking that even if backup restored stuff to ini object, and the iniReadStr is prior to backup, then on next read, if it finds iniStr is same then it wont blah blah blah im thinking no need
+							//should readStr
+							//ini is currently the untouched ini
+							//go through readStr and update ini with the properties that are missing (if a profile is in ini but not in iniBkp then it means that profile no longer exists)
+								//meaning add all Profilist. properties to the ini that dont exist there
+							//console.log('readStrBkp:', readStr);
+							//start read ini to str
+							var iniBkp = {};
+							//no need to redefine patt //var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
+							var blocks = [];
+
+							var match;
+							while (match = patt.exec(readStr)) {
+				//				//console.log('MAAAAAAAAAAATCH', match);
+
+								var group = match[1];
+								iniBkp[group] = {};
+
+								if (group == 'Profile') {
+									iniBkp[group]['num'] = parseInt(match[2]);
+								}
+
+								iniBkp[group].props = {};
+
+								for (var i = 3; i < match.length; i = i + 2) {
+									var prop = match[i];
+									if (prop === undefined) {
+										break;
+									}
+									var propVal = match[i + 1]
+									iniBkp[group].props[prop] = propVal;
+								}
+
+								if (group == 'Profile') {
+									//Object.defineProperty(iniBkp, iniBkp[group].props.Name, Object.getOwnPropertyDescriptor(iniBkp[group], group));
+									iniBkp[iniBkp[group].props.Path] = iniBkp[group];
+									delete iniBkp[group];
+								}
+							}
+							//end read str to obj
+							var somethingRestoredFromBkpToIni = false;
+							for (var p in ini) {
+								if (p in iniBkp) {
+									for (var sub_p in iniBkp[p]) {
+										if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+											somethingRestoredFromBkpToIni = true;
+											ini[p][sub_p] = iniBkp[p][sub_p];
+										}
+									}
+									if ('num' in ini[p]) {
+										//its a profile entry
+										for (var sub_p in iniBkp[p].props) {
+											if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+												somethingRestoredFromBkpToIni = true;
+												ini[p].props[sub_p] = iniBkp[p].props[sub_p];
+											}
+										}
+									}
+								}
+							}
+							if (somethingRestoredFromBkpToIni) {
+								iniStr = JSON.stringify(ini);
+							}
+							//return deferred_readIniAndMaybeBkp.resolve('ini object finalized via bkp'); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
+							deferred_readIniAndMaybeBkp.resolve(iniStr);
+							// end - do stuff here - promise_readIniBkp
 						},
 						function(aReason) {
-							var rejObj = {name:'promise_writeIniAndBkpIfDiff', aReason:aReason};
-							console.error('Rejected - promise_writeIniAndBkpIfDiff - ', rejObj);
-							deferred_riapoMAIN.reject(rejObj);
+							var rejObj = {name:'promise_readIniBkp', aReason:aReason, extra:'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.'}; //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
+							console.error('Rejected - promise_readIniBkp - ', rejObj);
+							
+							var deepestReason = aReasonMax(aReason);
+							if (deepestReason.becauseNoSuchFile) {
+								// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
+								//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+								console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
+								deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
+							} else {
+								console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
+								deferred_riapoMAIN.reject(rejObj);
+							}
+							
 						}
 					).catch(
 						function(aCaught) {
-							var rejObj = {name:'promise_writeIniAndBkpIfDiff', aCaught:aCaught};
-							console.error('Caught - promise_writeIniAndBkpIfDiff - ', rejObj);
+							var rejObj = {name:'promise_readIniBkp', aCaught:aCaught};
+							console.error('Caught - promise_readIniBkp - ', rejObj);
 							deferred_riapoMAIN.reject(rejObj);
 						}
 					);
-					// end - im not sure if i need to writeIniAndBkpIfDiff here
-				} else {
-					deferred_riapoMAIN.resolve('objs parsed');
+					promise_readIniBkp.then(
+						function() {
+							console.log('Success', 'promise_readIniBkp');
+
+						},
+						function(aReason) {
+							//console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
+							if (aReason.becauseNoSuchFile) {
+								// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
+								//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
+								console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
+								deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
+							} else {
+								console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
+								deferred_readIniAndMaybeBkp.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message); //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
+							}
+						}
+					).catch(
+						function(aCaught) {
+							console.error('Caught - promise_readIniBkp - ', aCaught);
+							// throw aCaught;
+						}
+					);
 				}
-				// end - do stuff here - deferred_readIniAndMaybeBkp.promise
-			},
-			function(aReason) {
-				var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aReason:aReason};
-				console.error('Rejected - deferred_readIniAndMaybeBkp.promise - ', rejObj);
-				deferred_riapoMAIN.reject(rejObj);
 			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'deferred_readIniAndMaybeBkp.promise', aCaught:aCaught};
-				console.error('Caught - deferred_readIniAndMaybeBkp.promise - ', rejObj);
-				deferred_riapoMAIN.reject(rejObj);
-			}
-		);
-		
-		
-		///////////
-		//start - read the ini file and if needed read the bkp to create the ini object
-	//	console.log('in read');
-	//	console.log('decoder got');
-	//	console.log('starting read');
-		var promise_readIni = read_encoded(profToolkit.path_iniFile, {encoding:'utf-8'});
-		
-		promise_readIni.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_readIni - ', {b:{b:aVal}});
-				// start - do stuff here - promise_readIni
-				var readStr = aVal;
-				if (iniReadStr == readStr) {
-					deferred_readIniAndMaybeBkp.resolve('no need to parse regex even, the readStr is same');
-					console.log('no need to parse regex even, the readStr is same');
-				} else {
-					iniReadStr = readStr;
-					//console.log('radStr:', readStr);
-					ini = {};
-					var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //currently supports 15 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
-					var blocks = [];
+			// end - do stuff here - promise_readIni
+		},
+		function(aReason) {
+			var rejObj = {name:'promise_readIni', aReason:aReason};
+			console.error('Rejected - promise_readIni - ', rejObj);
+			deferred_riapoMAIN.reject(rejObj);
+		}
+	).catch(
+		function(aCaught) {
+			var rejObj = {name:'promise_readIni', aCaught:aCaught};
+			console.error('Caught - promise_readIni - ', rejObj);
+			deferred_riapoMAIN.reject(rejObj);
+		}
+	);
 
-					var match;
-					while (match = patt.exec(readStr)) {
-		//				//console.log('MAAAAAAAAAAATCH', match);
-
-						var group = match[1];
-						ini[group] = {};
-
-						if (group == 'Profile') {
-							ini[group]['num'] = parseInt(match[2]);
-						}
-
-						ini[group].props = {};
-
-						for (var i = 3; i < match.length; i = i + 2) {
-							var prop = match[i];
-							if (prop === undefined) {
-								break;
-							}
-							var propVal = match[i + 1]
-							ini[group].props[prop] = propVal;
-						}
-
-						if (group == 'Profile') {
-							//Object.defineProperty(ini, ini[group].props.Name, Object.getOwnPropertyDescriptor(ini[group], group));
-							ini[ini[group].props.Path] = ini[group];
-							delete ini[group];
-						}
-					}
-					if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
-						console.log('ini object finalized via non-bkp');
-						iniStr = JSON.stringify(ini);
-						deferred_readIniAndMaybeBkp.resolve(iniStr);
-						//return Promise.resolve('Success promise_readIni',);
-					} else {
-						console.log('ini was not touched');
-						//ini was not touched
-						//so read from bkp and update ini with properties that are missing
-						var promise_readIniBkp = read_encoded(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
-						promise_readIniBkp.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_readIniBkp - ', {c:{c:aVal}});
-								// start - do stuff here - promise_readIniBkp
-								var readStr = aVal;
-								//i dont do the iniReadStr == readStr check here, BECAUSE what if user made new profiles with the profile manager, then this backup method needs to be called. im thinking that even if backup restored stuff to ini object, and the iniReadStr is prior to backup, then on next read, if it finds iniStr is same then it wont blah blah blah im thinking no need
-								//should readStr
-								//ini is currently the untouched ini
-								//go through readStr and update ini with the properties that are missing (if a profile is in ini but not in iniBkp then it means that profile no longer exists)
-									//meaning add all Profilist. properties to the ini that dont exist there
-								//console.log('readStrBkp:', readStr);
-								//start read ini to str
-								var iniBkp = {};
-								//no need to redefine patt //var patt = /\[(.*?)(\d*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //supports 10 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
-								var blocks = [];
-
-								var match;
-								while (match = patt.exec(readStr)) {
-					//				//console.log('MAAAAAAAAAAATCH', match);
-
-									var group = match[1];
-									iniBkp[group] = {};
-
-									if (group == 'Profile') {
-										iniBkp[group]['num'] = parseInt(match[2]);
-									}
-
-									iniBkp[group].props = {};
-
-									for (var i = 3; i < match.length; i = i + 2) {
-										var prop = match[i];
-										if (prop === undefined) {
-											break;
-										}
-										var propVal = match[i + 1]
-										iniBkp[group].props[prop] = propVal;
-									}
-
-									if (group == 'Profile') {
-										//Object.defineProperty(iniBkp, iniBkp[group].props.Name, Object.getOwnPropertyDescriptor(iniBkp[group], group));
-										iniBkp[iniBkp[group].props.Path] = iniBkp[group];
-										delete iniBkp[group];
-									}
-								}
-								//end read str to obj
-								var somethingRestoredFromBkpToIni = false;
-								for (var p in ini) {
-									if (p in iniBkp) {
-										for (var sub_p in iniBkp[p]) {
-											if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
-												somethingRestoredFromBkpToIni = true;
-												ini[p][sub_p] = iniBkp[p][sub_p];
-											}
-										}
-										if ('num' in ini[p]) {
-											//its a profile entry
-											for (var sub_p in iniBkp[p].props) {
-												if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
-													somethingRestoredFromBkpToIni = true;
-													ini[p].props[sub_p] = iniBkp[p].props[sub_p];
-												}
-											}
-										}
-									}
-								}
-								if (somethingRestoredFromBkpToIni) {
-									iniStr = JSON.stringify(ini);
-								}
-								//return deferred_readIniAndMaybeBkp.resolve('ini object finalized via bkp'); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
-								deferred_readIniAndMaybeBkp.resolve(iniStr);
-								// end - do stuff here - promise_readIniBkp
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_readIniBkp', aReason:aReason, extra:'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.'}; //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
-								console.error('Rejected - promise_readIniBkp - ', rejObj);
-								
-								var deepestReason = aReasonMax(aReason);
-								if (deepestReason.becauseNoSuchFile) {
-									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
-									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
-									console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
-									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
-								} else {
-									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
-									deferred_riapoMAIN.reject(rejObj);
-								}
-								
-							}
-						).catch(
-							function(aCaught) {
-								var rejObj = {name:'promise_readIniBkp', aCaught:aCaught};
-								console.error('Caught - promise_readIniBkp - ', rejObj);
-								deferred_riapoMAIN.reject(rejObj);
-							}
-						);
-						promise_readIniBkp.then(
-							function() {
-								console.log('Success', 'promise_readIniBkp');
-
-							},
-							function(aReason) {
-								//console.error('Rejected', 'promise_readIniBkp', 'aReason:', aReason);
-								if (aReason.becauseNoSuchFile) {
-									// rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made
-									//return deferred_readIniAndMaybeBkp.resolve('rejected as bkp doesnt exist, so in this case then just resolve with what was read from initially and a profilist touch has to be made');
-									console.error('Rejected because .profilist.bkp doesnt exist, but still resolving as bkp will be made on next write when there is one, but because of htis line im not queueing a write');
-									deferred_readIniAndMaybeBkp.resolve(iniStr); //deferred_readIniAndMaybeBkp.then.promise onFulliflled expects aVal to be iniStr
-								} else {
-									console.error('Rejected - promise_readIniBkp - aReason:', aReason, 'Profiles.ini was not touched by Profilist and .profilist.bkp could not be read.');
-									deferred_readIniAndMaybeBkp.reject('Profiles.ini was not touched by Profilist and .profilist.bkp could not be read. ' + aReason.message); //note: todo: should revisit, because if profilist.bkp cannot be read then this rejection cause it to not function at all, i should consider making it just continue as if ini was untouched
-								}
-							}
-						).catch(
-							function(aCaught) {
-								console.error('Caught - promise_readIniBkp - ', aCaught);
-								// throw aCaught;
-							}
-						);
-					}
-				}
-				// end - do stuff here - promise_readIni
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_readIni', aReason:aReason};
-				console.error('Rejected - promise_readIni - ', rejObj);
-				deferred_riapoMAIN.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_readIni', aCaught:aCaught};
-				console.error('Caught - promise_readIni - ', rejObj);
-				deferred_riapoMAIN.reject(rejObj);
-			}
-		);
-
-		//end - read the ini file and if needed read the bkp to create the ini object
-		return deferred_riapoMAIN.promise;
+	//end - read the ini file and if needed read the bkp to create the ini object
+	return deferred_riapoMAIN.promise;
 }
 
 function writeIniAndBkpIfDiff() {
@@ -1599,8 +1570,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			//note, in the dom, the tbb_boxes should be in order as they are seen in iniFile
 			
 			//and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~
+			var initialPanelDomSetup = false;
 			if (!('iniObj_thatAffectDOM' in aDOMWindow.Profilist)) {
 				aDOMWindow.Profilist.iniObj_thatAffectDOM = {};
+				initialPanelDomSetup = true;
 				
 				PStack.removeChild(PStack.childNodes[0]); //remove loading
 				
@@ -1655,15 +1628,9 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					if ('Default' in ini[sIniKey].props && ini[sIniKey].props.Default == '1') {
 						elJson[1].isdefault = true;
 					}
-					if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' && */'Profilist.tie' in ini[sIniKey].props) {
-						var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(ini[sIniKey].props['Profilist.tie']);
-						if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
-							elJson[1].class.push('profilist-tied');
-							elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")');
-						} else {
-							console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', ini[sIniKey].props['Profilist.tie'], 'sIniKey:', sIniKey);
-							throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + ini[sIniKey].props['Profilist.tie'] + ' ' + 'sIniKey:' + ' ' + sIniKey;
-						}
+					if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == 'true' && */'Profilist.tie' in ini[sIniKey].props) {
+						elJson[1].class.push('profilist-tied');
+						elJson[1].style.push('background-image: url("' + iniObj_thatAffectDOM.General.props['Profilist.currentThisBuildsIconPath'] + '")');
 					}
 					if ('Profilist.badge' in ini[sIniKey].props) {
 						elJson[1].badge = getPathToBadge(ini[sIniKey].props['Profilist.badge'], 16);
@@ -1699,36 +1666,32 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			//console.log('str_ObjBoot', str_ObjBoot, 'str_ObjWin', str_ObjWin);
 			
 			if (str_ObjBoot != str_ObjWin) {
-				
-				if (!('General' in objWin) || objBoot.General.props['Profilist.dev'] != objWin.General.props['Profilist.dev']) {
-					// :todo: make this block detect change on cChanImgName like if its tied, and user changes tie icon, then Profilist.dev didnt change so it wont get in here
-					if (objBoot.General.props['Profilist.dev'] == 'false') {
+
+				if (initialPanelDomSetup || objWin.General.props['Profilist.dev'] != myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value + '') { // :todo: need to remove Profilist.dev from objBoot.General.props['Profilist.dev']
+					if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == false) { //if (objBoot.General.props['Profilist.dev'] == 'false') {
 						aDOMWindow.Profilist.PBox.classList.remove('profilist-dev-enabled');
 					} else {
 						aDOMWindow.Profilist.PBox.classList.add('profilist-dev-enabled');
-						if (launchedInTieId !== null) {
-							// currently running a tied, so use tied icon
-							var devBuilds = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']);
-							var cChanImgName
-							for (var i=0; i<devBuilds.length; i++) {
-								if (devBuilds[i][2] == launchedInTieId) {
-									cChanImgName = devBuilds[i][0];
-								}
-							}
-							if (/^(?:esr|release|beta|aurora|nightly)$/m.test(cChanImgName)) {
-								cChanImgName = cChanImgName == 'esr' ? 'release' : cChanImgName;
-								aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
-							} else {
-								aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, cChanImgName, cChanImgName + '_16.png')) + '")';
-							}
-						} else {
-							// use channel default icon
-							var cChanImgName = core.firefox.channel == 'aurora' ? 'dev' : core.firefox.channel;
-							cChanImgName = cChanImgName == 'esr' ? 'release' : cChanImgName;
-							aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
-						}
 					}
 				}
+				
+				console.info('pref val dev:', myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value);
+				if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
+					if (!initialPanelDomSetup) {
+						console.info('objWin currentThisBuildsIconPath',  objWin.General.props['Profilist.currentThisBuildsIconPath']);
+					}
+					console.info('objBoot currentThisBuildsIconPath',  objBoot.General.props['Profilist.currentThisBuildsIconPath']);
+					
+					if (initialPanelDomSetup || objWin.General.props['Profilist.currentThisBuildsIconPath'] != objBoot.General.props['Profilist.currentThisBuildsIconPath']) {
+						// :todo: consider if currentThisBuildsIconPath is same name, but user deleted old img with that name and saved new img with that, so i probably need a force update of backgroundImage or something to compare string paths with Math.random
+						aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + objBoot.General.props['Profilist.currentThisBuildsIconPath'] + '#' + Math.random() + '")';
+					}
+				}
+				/* no need for this, as this is handled on a profile tbb level
+				if (initialPanelDomSetup || objWin.General.props['Profilist.defaultProfileIniKey'] != objBoot.General.props['Profilist.defaultProfileIniKey']) {
+					// 
+				}
+				*/
 				
 				//figure out main key that were REMOVED in global (thus was FOUND in aDOMWindow... and NOT found in global)
 				var removeTheseChildIndexes = [];
@@ -1806,7 +1769,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
 								if (ppChanged[i].pp == 'Profilist.tie') {
-									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppChanged[i].now) + '")';
+									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + getPathTo16Img(getDevBuildPropForTieId(ppChanged[i].now, 'base_icon')) + '")';
 								} else {
 									PStack.childNodes[childNodeI].setAttribute(pp_to_attr(ppChanged[i].pp), process_attr_of(ppChanged[i].pp, ppChanged[i].now));
 								}
@@ -1848,7 +1811,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
 								if (ppAdded[i].pp == 'Profilist.tie') {
 									PStack.childNodes[childNodeI].classList.add('profilist-tied');
-									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + cssBackgroundUrl_for_devBuildExePath(ppAdded[i].now) + '")';
+									PStack.childNodes[childNodeI].style.backgroundImage = 'url("' + getPathTo16Img(getDevBuildPropForTieId(ppAdded[i].now, 'base_icon')) + '")';
 								} else {
 									if (ppAdded[i].pp == 'Profilist.badge') {
 										console.error('YESS ITS HERE:', uneval(ppAdded[i]));
@@ -1895,15 +1858,10 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 								if ('Default' in objBoot[pb].props && objBoot[pb].props.Default == '1') {
 									elJson[1].isdefault = true;
 								}
-								if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'] == 'true' &&*/ 'Profilist.tie' in objBoot[pb].props) {
-									var bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse = cssBackgroundUrl_for_devBuildExePath(objBoot[pb].props['Profilist.tie']);
-									if (bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse) {
-										elJson[1].class.push('profilist-tied');
-										elJson[1].style.push('backgroundImage: url("' + bgImgUrl_elseIfTiePathNotFoundInDevBuildsIAmFalse + '")');
-									} else {
-										console.warn('profile is tied, but tied path was not found in dev-builds array', 'dev-builds:', devBuildsPathsAndIconsArr, 'tie:', objBoot[pb].props['Profilist.tie'], 'pb:', pb);
-										throw 'profile is tied' + ' '  + 'but tied path was not found in dev-builds array' + ' ' + 'dev-builds:' + ' ' + devBuildsPathsAndIconsArr + ' ' + 'tie:' + ' ' + objBoot[pb].props['Profilist.tie'] + ' ' + 'pb:' + ' ' + pb;
-									}
+								if (/*myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true &&*/ 'Profilist.tie' in objBoot[pb].props) {
+									elJson[1].class.push('profilist-tied');
+									console.info('exploring tie id:', objBoot[pb].props['Profilist.tie']);
+									elJson[1].style.push('background-image: url("' + getPathTo16Img(getDevBuildPropForTieId(objBoot[pb].props['Profilist.tie'], 'base_icon')) + '")');
 								}
 								if ('Profilist.badge' in objBoot[pb].props) {
 									elJson[1].badge = getPathToBadge(objBoot[pb].props['Profilist.badge'], '16');
@@ -2092,106 +2050,6 @@ function updateStatusImgs(aDOMWindow) {
 			//deferred_updateOnPanelShowing.reject(rejObj); // rem here link5143646250
 		}
 	);
-}
-
-function cssBackgroundUrl_for_devBuildExePath(exePath) {
-	var devBuildsPathsAndIconsArr = JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds']);
-	//var tieFoundInArr = false;
-	for (var i=0; i<devBuildsPathsAndIconsArr.length; i++) {
-		if (devBuildsPathsAndIconsArr[i][1] == exePath) {
-			//tieFoundInArr = true;
-			console.info('tieFound/path so path to icon of this tiePath is:', devBuildsPathsAndIconsArr[i][0]);
-			if (/^(?:release|beta|aurora|nightly)$/m.test(exePath)) {
-				return core.addon.path.images + 'bullet_' + b[0] + '.png';
-			} else {
-				return OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, exePath) + '#' + Math.random());
-			}
-			break;
-		}
-	}
-	return false; //will only get here if it doesnt find return th tie
-	
-	/* if (!tieFoundInArr) {
-		return false;
-	} else {
-		throw 'should never get here as if tie was found it should have returend it';
-	} */
-}
-
-function checkIfIconIsRight(dev_builds_str, dom_element_to_update_profilist_box, update_dom_element_even_if_icon_unchanged) {
-//im moving this computation to on read so i think i can discontinue this function 11/13/14
-
-	//if `dom_element_to_update_profilist_box` == string of `ALL WINDOWS` then update all windows
-	//if `dom_element_to_update_profilist_box` === null THEN no dom is updated
-	
-	//if icon changed then it is definitely going to update
-	
-		var icon_changed = false;
-		//make sure the icon is up to date
-		if (currentThisBuildsIconPath != '' && devBuildsStrOnLastUpdateToGlobalVar == dev_builds_str) {
-			console.log('dev_builds_str is unchanged, so no need to bother with looping to check for update');
-		} else {
-			//start the generic-ish check stuff
-			var devBuilds = JSON.parse(dev_builds_str);
-			var OLDcurrentThisBuildsIconPath = currentThisBuildsIconPath;
-			//start - figure out from dev_builds_str what icon path should be
-			try {
-				devBuilds.forEach(function(b) {
-					if (b[1].toLowerCase() == profToolkit.exePathLower) {
-						if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
-							console.log('making bullet');
-							currentThisBuildsIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
-						} else {
-							currentThisBuildsIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
-						}
-						throw BreakException;
-					}
-				});
-				//if got here, then it didnt throw BreakException so that means it didnt find an icon so use default branding
-				if (core.firefox.channel.indexOf('beta') > -1) { //have to do this because beta branding icon is same as release, so i apply my custom beta bullet png
-					currentThisBuildsIconPath = core.addon.path.images + 'bullet_beta.png';
-				} else {
-					currentThisBuildsIconPath = 'chrome://branding/content/icon16.png';
-				}
-			} catch (ex) {
-				if (ex !== BreakException) {
-					throw ex;
-				}
-			}
-			//end - figure out from dev_builds_str what icon path should be
-			if (currentThisBuildsIconPath != OLDcurrentThisBuildsIconPath) {
-				//icon of currentThisBuildsIconPath CHANGED
-				console.log('icon of currentThisBuildsIconPath CHANGED');
-				icon_changed = true;
-				devBuildsStrOnLastUpdateToGlobalVar = dev_builds_str;
-			} else {
-				//icon of currentThisBuildsIconPath is unchanged
-				console.log('icon of currentThisBuildsIconPath is unchanged')
-			}
-			//end the generic-ish check stuff
-		}
-		
-		if (dom_element_to_update_profilist_box !== null) {
-			if (update_dom_element_even_if_icon_unchanged == true || icon_changed == true) {
-				console.log('updating dom for checkIfIconIsRight');
-				if (dom_element_to_update_profilist_box == 'ALL WINDOWS') {
-					var DOMWindows = Services.wm.getEnumerator(null);
-					while (DOMWindows.hasMoreElements()) {
-						var aDOMWindow = DOMWindows.getNext();
-						var profilistBox = aDOMWindow.document.getElementById('profilist_box');
-						if (profilistBox) {
-							//console.log('profilistBox found updating its profilistBox.style.backgroundImage:', profilistBox.style.backgroundImage);
-							profilistBox.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")';
-							//console.log('after update profilistBox.style.backgroundImage:', profilistBox.style.backgroundImage);
-						}
-					}
-				} else {
-					//it must be a dom element
-					console.log('updating this dom element bg img to:', 'url("' + currentThisBuildsIconPath + '")');
-					dom_element_to_update_profilist_box.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")';
-				}
-			}
-		}
 }
 
 function properactive(e) {
@@ -2840,7 +2698,7 @@ function tbb_box_click(e) {
 	var origTarg = e.originalTarget;
 	var box = e.target;
 	var targetedTBB = e.target;
-	console.log('clicked target == box it should:', box);
+	console.log('clicked target == box it should:', box, 'origTarg:', origTarg);
 	var className;
 	var classList = origTarg.classList;
 
@@ -3269,61 +3127,106 @@ function tbb_box_click(e) {
 			tbb_msg('ren-profile-' + cProfIniKey, 'INPUT', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, false);
 		},
 		'profilist-dev-build': function() {
-			console.log('change build');
-			console.log('box:', box, 'origTarg:', origTarg);
-			//box == box
-			//origTarg == .profilist-dev-build
-			var nameOfProfileSubmenuClickedOn = origTarg.parentNode.parentNode.getAttribute('label');
-			console.log('prof dev build click, nameOfProfileSubmenuClickedOn:', nameOfProfileSubmenuClickedOn);
-			if (tieOnEnter == '') {
-				tieOnEnter = ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
+			var cProfName = box.getAttribute('label');
+			var cProfIniKey = getIniKeyFromProfName(cProfName);
+			
+			console.log('prof dev build click, cProfName:', cProfName);
+			//gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // uncomment if you want to refresh gDevBuilds
+			
+			if (unsavedTie === null) {
+				unsavedTie = {
+					iniKey: cProfIniKey,
+					tiePreInitialToggle: 'Profilist.tie' in ini[cProfIniKey].props ? ini[cProfIniKey].props['Profilist.tie'] : null
+				};
+				// changing it from original so add mouseleave
+				console.log('initial click so attach mouseleave');
+				origTarg.addEventListener('mouseleave', saveTie, false); //learned: same e that got passed to tbb_box_click which is the containing parent func. gets passed to this addEventListener. very good. this is what i was hoping for.
 			}
 			
-			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+			var runningExeTieId = getDevBuildTieIdOfExePath(profToolkit.exePath);
+			if (runningExeTieId === null) { // ensure that this exe path is in gDevBuilds
+				// add it in
+				// get next tie id
+				var daNextTieId = 0;
+				for (var i=0; i<gDevBuilds.length; i++) {
+					var tieIdC = parseInt(gDevBuilds[i][devBuildsArrStruct.id]);
+					if (tieIdC >= daNextTieId) {
+						daNextTieId = tieIdC + 1;
+					}
+				}
+				// push it in
+				var arr_addInToDevBuild = [];
+				arr_addInToDevBuild[devBuildsArrStruct.id] = daNextTieId;
+				arr_addInToDevBuild[devBuildsArrStruct.exe_path] = profToolkit.exePath;
+				arr_addInToDevBuild[devBuildsArrStruct.base_icon] = core.firefox.channel;
+				gDevBuilds.push(arr_addInToDevBuild);
+			}
+			
+			var untieIt = function() {
+				delete ini[cProfIniKey].props['Profilist.tie'];
+				box.style.backgroundImage = '';
+				box.classList.remove('profilist-tied');
+			}
 			
 			if (!box.classList.contains('profilist-tied')) {
+				// is currently untied
 				box.classList.add('profilist-tied');
-				ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = profToolkit.exePath; //do this to get proper casing, rather than profToolkit.exePathLower
-				//check if profToolkit.exePathLower is in dev-builds, if it is then use its icon right way, else on mouse out download icon and add to dev-builds
-				/*
-				//check to make sure that exe path is in dev-builds
-				try {
-					devBuilds.forEach(function(b) {
-						if (b[1].toLowerCase() == profToolkit.exePathLower) {
-							box.style.backgroundImage = 'url("' + currentThisBuildsIconPath + '")'; //can use current as it will have been file formatted already
-							ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = b[1];
-							throw BreakException;
+				
+				// tie it in ini
+				ini[cProfIniKey].props['Profilist.tie'] = runningExeTieId;
+				box.classList.add('profilist-tied');
+			} else {
+				// is currently tied
+				if (ini[cProfIniKey].props['Profilist.tie'] == runningExeTieId) {
+					console.log('tied to runningExeTieId');
+					// start at first tie id that in gDevBuilds that is not runningExeTieId
+					if (gDevBuilds.length == 1) {
+						untieIt();
+					} else {
+						for (var i=0; i<gDevBuilds.length; i++) {
+							console.info('iterA', 'i:', i, 'i - 1:', i - 1, 'gDevBuilds.length:', gDevBuilds.length, 'gDevBuilds.length - 1', gDevBuilds.length - 1, 'runningExeTieId:', runningExeTieId, 'gDevBuilds[i][devBuildsArrStruct.id]:', gDevBuilds[i][devBuildsArrStruct.id]);
+							if (gDevBuilds[i][devBuildsArrStruct.id] != runningExeTieId) {
+								// tie to this one
+								console.error('setting to path for:', gDevBuilds[i][devBuildsArrStruct.base_icon]);
+								ini[cProfIniKey].props['Profilist.tie'] = gDevBuilds[i][devBuildsArrStruct.id];
+								box.style.backgroundImage = 'url("' + getPathTo16Img(gDevBuilds[i][devBuildsArrStruct.base_icon], true) + '")';
+								break;
+							}
 						}
 					}
-					//got here so it wasn't found so add this to dev-builds
-					box.addEventListener('mouseleave', saveTieAndDownload, false);
-				} catch (ex) {
-					if (ex != BreakException) throw ex
-				}
-				*/
-			} else {
-				//has profilist-tied				
-				try {
-					devBuilds.forEach(function(b) {
-						if (b[1].toLowerCase() != profToolkit.exePathLower && b[1] != ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie']) {
-							if (/^(?:release|beta|aurora|nightly)$/m.test(b[0])) {
-								var useIconPath = core.addon.path.images + 'bullet_' + b[0] + '.png';
-							} else {
-								var useIconPath = OS.Path.toFileURI(OS.Path.join(OS.Constants.Path.userApplicationDataDir, b[0])) + '#' + Math.random();
-							}
-							box.style.backgroundImage = 'url("' + useIconPath + '")';
-							ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'] = b[1];
-							throw BreakException;
+				} else {
+					// tie to next in line in gDevBuilds
+					console.log('tie to non- runningExeTieId');
+					// find the current index of current tie in gDevBuilds
+					var cTieIdIndex = 0;
+					for (var i=0; i<gDevBuilds.length; i++) {
+						if (gDevBuilds[i][devBuildsArrStruct.id] == ini[cProfIniKey].props['Profilist.tie']) {
+							cTieIdIndex = i;
 						}
-					});
-					//either had nothing in there, or had just profToolkit.exePathLower in there. I THINK nothing in there is not supposed to happen. but its time to untie
-					box.style.backgroundImage = '';
-					delete ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
-					box.classList.remove('profilist-tied');
-				} catch (ex) { if (ex != BreakException) throw ex }
+					}
+					console.info('found cTieIdIndex:', cTieIdIndex, 'gDevBuilds.length:', gDevBuilds.length);
+					if (cTieIdIndex == gDevBuilds.length - 1) {
+						untieIt();
+					} else {
+						// tie to next tieId that is not of runningExeTieId
+						cTieIdIndex++;
+						for (var i=cTieIdIndex; i<gDevBuilds.length; i++) {
+							console.info('iter B:', 'i:', i);
+							if (gDevBuilds[i][devBuildsArrStruct.id] != runningExeTieId) {
+								// tie it
+								console.log('tying it to:', gDevBuilds[i][devBuildsArrStruct.id]);
+								ini[cProfIniKey].props['Profilist.tie'] = gDevBuilds[i][devBuildsArrStruct.id];
+								box.style.backgroundImage = 'url("' + getPathTo16Img(gDevBuilds[i][devBuildsArrStruct.base_icon], true) + '")';
+								break;
+							}
+							if (i == gDevBuilds.length - 1) {
+								console.log('ok untie it');
+								untieIt();
+							}
+						}
+					}
+				}
 			}
-			
-			origTarg.addEventListener('mouseleave', saveTie, false); //learned: same e that got passed to tbb_box_click which is the containing parent func. gets passed to this addEventListener. very good. this is what i was hoping for.
 		},
 		'profilist-dev-safe': function() {
 			console.log('launch this profile in safe mode');
@@ -3636,6 +3539,64 @@ function tbb_box_click(e) {
 	classAction[className]();
 }
 
+function getDevBuildTieIdOfExePath(aExePath, refreshDevBuildsJson) {
+	// aExePath is a OS path
+	// returns null if aExePath not found in gDevBuilds
+	
+	if (refreshDevBuildsJson) {
+		gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+	}
+	var pathLowered = aExePath.toLowerCase();
+	for (var i=0; i<gDevBuilds.length; i++) {
+		if (gDevBuilds[i][devBuildsArrStruct.exe_path].toLowerCase() == pathLowered) {
+			return gDevBuilds[i][devBuildsArrStruct.id];
+		}
+	}
+	return null;
+}
+function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
+	// if refreshDevBuildsJson then it return data might be stale
+	if (refreshDevBuildsJson) {
+		gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+	}
+	for (var i=0; i<gDevBuilds.length; i++) {
+		if (gDevBuilds[i][devBuildsArrStruct.id] == cTieId) {
+			console.info('returning', gDevBuilds[i][devBuildsArrStruct[getPropName]]);
+			return gDevBuilds[i][devBuildsArrStruct[getPropName]];
+		}
+		if (i == gDevBuilds.length - 1) {
+			if (!refreshDevBuildsJson) {
+				console.warn('went through all of gDevBuilds and couldnt find cTieid, but devuser asked for no refresh, but because not found, will refresh then try again');
+				return getDevBuildPropForTieId(cTieId, getPropName, true)
+			} else {
+				console.error('could not find cTieId of', cTieId, 'in gDevBuilds even after refreshing', 'gDevBuilds:', gDevBuilds);
+				throw new Error('could not find cTieId in gDevBuilds even after refreshing');
+			}
+		}
+	}
+	throw new Error('reached outsdie of lopo in getDevBuildPropForTieId this should never happen');
+}
+function getPathTo16Img(iconset_name, uncached) {
+	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
+	if (/^(?:esr|release|beta|aurora|nightly)$/m.test(iconset_name)) {
+		if (iconset_name == 'aurora') {
+			iconset_name = 'dev';
+		} else if (iconset_name == 'esr') {
+			iconset_name = 'release';
+		}
+		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
+		return core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png'; // chrome path so no need for file uri
+		//aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
+	} else {
+		if (uncached) {
+			console.info('returning', OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png#' + Math.random());
+			return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png#' + Math.random();
+		} else {
+			console.info('returning', OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png');
+			return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png';
+		}
+	}
+}
 // start - functions to update icons at various locations
 function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 	// if aProfilePath is of cur profile it uses XPCOM to get all windows
@@ -4036,90 +3997,18 @@ function keepPuiShowing(e) {
 	e.preventDefault();
 }
 
-var tieOnEnter = '';
+var unsavedTie = null; // when nothing to save, set this back to null
 function saveTie(e) {
+	// if this happens, unsavedTie can never be null
 	e.target.removeEventListener('mouseleave', saveTie, false);
-	console.log('saving tie on e.target:', e.target); //e.target == .profilist-dev-build
-	
-	var nameOfProfileSubmenuClickedOn = e.target.parentNode.parentNode.getAttribute('label');
-	console.log('saveTie nameOfProfileSubmenuClickedOn:', nameOfProfileSubmenuClickedOn);
-	
-	var theTieOnEnter = tieOnEnter;
-	tieOnEnter = '';
-	var tieOnLeave = ini[nameOfProfileSubmenuClickedOn].props['Profilist.tie'];
-	if (theTieOnEnter != tieOnLeave) {
-		console.log('SAVING ini as tie is different, it was:', theTieOnEnter, 'is now:', tieOnLeave);
-		//start - if tie is not undefined, then check if its dev-builds if not then add it, this only happens if user clicks to enable first time, as that uses the current build, and if that current builds path was not already in dev-builds
-		if (tieOnLeave && tieOnLeave.toLowerCase() == profToolkit.exePathLower) {
-			var devBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
-			try {
-				devBuilds.forEach(function(b) {
-					if (b[1].toLowerCase() == profToolkit.exePathLower) {
-						throw BreakException;
-					}
-				});
-				//start - profToolkit.exePathLower wasnt found in dev-builds so add it
-				var iconP = core.firefox.channel + '_auto.png'; //icon path
-				var downloadP = currentThisBuildsIconPath; //its obviously the current builds path if got here
-				xhr(downloadP, data => {
-					//Services.prompt.alert(null, 'XHR Success', data);
-					var file = OS.Path.join(OS.Constants.Path.userApplicationDataDir, iconP);
-					var promise_downloadP_save = OS.File.writeAtomic(file, new Uint8Array(data));
-					promise_downloadP_save.then(
-						function() {
-							console.log('succesfully saved image to desktop');
-						},
-						function(ex) {
-							 console.error('FAILED in saving image to desktop');
-						}
-					);
-				});
-				devBuilds.push([iconP, tieOnLeave]);
-				ini.General.props['Profilist.dev-builds'] = JSON.stringify(devBuilds);
-				//end - it wasnt found in dev-builds so add it
-			} catch (ex) { if (ex != BreakException) throw ex }
-		}
-		//end - if tie is not undefined, then check if its dev-builds if not then add it, this only happens if user clicks to enable first time, as that uses the current build, and if that current builds path was not already in dev-builds
-		var promise_saveTie = writeIni();
-		promise_saveTie.then(
-			function() {
-				//return Promise.resolve('writeIni success');
-			},
-			function(aReason) {
-				//return Promise.reject('updating ini with newly created profile failed');
-				console.error('failed to save ini for promise_saveTie, aReason:', aReason);
-			}
-		);
+	var tieOnMouseLeave = 'Profilist.tie' in ini[unsavedTie.iniKey].props ? ini[unsavedTie.iniKey].props['Profilist.tie'] : null
+	if (tieOnMouseLeave !== unsavedTie.tiePreInitialToggle) {
+		console.log('need to write ini as tie on leave is diff from before initial toggle');
+		writeIniAndBkp(); // no need for writeIniAndBkpIfDiff becuause if saveTie happens it is only because the tie changed, this is handlded by attaching saveTie on mouseleave by the toggler in submenu click
 	} else {
-		console.log('tie state UNCHANGED so do no saving');
+		console.log('no need to write ini as after initial toggle, user toggled back to same state');
 	}
-}
-
-function xhr(url, cb) {
-    let xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
-
-    let handler = ev => {
-        evf(m => xhr.removeEventListener(m, handler, !1));
-        switch (ev.type) {
-            case 'load':
-                if (xhr.status == 200) {
-                    cb(xhr.response);
-                    break;
-                }
-            default:
-                Services.prompt.alert(null, 'XHR Error', 'Error Fetching Package: ' + xhr.statusText + ' [' + ev.type + ':' + xhr.status + ']');
-                break;
-        }
-    };
-
-    let evf = f => ['load', 'error', 'abort'].forEach(f);
-    evf(m => xhr.addEventListener(m, handler, false));
-
-    xhr.mozBackgroundRequest = true;
-    xhr.open('GET', url, true);
-    xhr.channel.loadFlags |= Ci.nsIRequest.LOAD_ANONYMOUS | Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_PERSISTENT_CACHING;
-    xhr.responseType = "arraybuffer"; //dont set it, so it returns string, you dont want arraybuffer. you only want this if your url is to a zip file or some file you want to download and make a nsIArrayBufferInputStream out of it or something
-    xhr.send(null);
+	unsavedTie = null;
 }
 
 function prevHide(e) {
