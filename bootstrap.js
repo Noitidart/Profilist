@@ -95,7 +95,7 @@ var profToolkit = {
 		localDirName: 0,
 		rootDirPath: 0,
 		localDirPath: 0,
-		name: 0
+		name: null
 	} //reference to the profiles object but to the current profile in the profiles object
 };
 
@@ -364,12 +364,12 @@ current builds icon if dev mode is enabled
 				} // else { its a temporary profile! }
 			}
 			
-			if (!profToolkit.selectedProfile.iniKey) { //probably null
+			if (profToolkit.selectedProfile.name === null || profToolkit.selectedProfile.name === myServices.sb.GetStringFromName('temporary-profile')) { //probably null
 				console.error('XYZ this profile at path does not exist, so its a temporary profile');
 				profToolkit.selectedProfile.name = myServices.sb.GetStringFromName('temporary-profile'); //as it has no name
 				profToolkit.selectedProfile.iniKey = null;
 			} else {
-				console.error('XYZ SET IT HERE');
+				console.error('XYZ SET IT HERE, it has name and it is:', profToolkit.selectedProfile.name);
 				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
 			}
 			
@@ -1333,7 +1333,7 @@ function initProfToolkit() {
 			localDirName: 0,
 			rootDirPath: 0,
 			localDirPath: 0,
-			name: 0
+			name: null
 		} //reference to the profiles object but to the current profile in the profiles object
 	};
 	
@@ -3617,6 +3617,7 @@ function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
 	throw new Error('reached outsdie of lopo in getDevBuildPropForTieId this should never happen');
 }
 function getPathTo16Img(iconset_name, uncached) {
+	// copied to options.js
 	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
 	if (/^(?:esr|release|beta|aurora|dev|nightly)$/m.test(iconset_name)) {
 		/*if (iconset_name == 'aurora') {
@@ -3880,7 +3881,7 @@ function updateIconToDesktcut(aProfilePath) {
 }
 
 function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
-	
+	console.error('incoming to updateIconToPinnedCut and aProfileIniKey:', aProfileIniKey);
 	var deferredMain_updateIconToPinnedCut = new Deferred();
 	
 	// if aProfilePath is default profile update the default launchers too
@@ -3949,6 +3950,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 						}
 						
 						if (OSPathArr_cutNeedingUpdate.length > 0) {
+							console.error('XYZ aProfileIniKey:', aProfileIniKey);
 							var setOptionsObj = {
 								iconPath: OSPath_neededIcon,
 								launcherName: useProfSpecs.launcherName,
@@ -8817,7 +8819,8 @@ function cpClientListener(aSubject, aTopic, aData) {
 						clientId: clientId,
 						ini: ini,
 						transObj: { // transferObj
-							profToolkit: profToolkit
+							profToolkit: profToolkit,
+							core: core
 						}
 					};
 					//Services.obs.notifyObservers(null, 'profilist-cp-server', ['response-client-born', JSON.stringify(responseJson)].join(subDataSplitter));

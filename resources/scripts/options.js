@@ -20,6 +20,9 @@ var load_img;
 var buildsCont;
 var nextTieId = 0;
 var transObj = {};
+
+var core = {};
+var profToolkit = {};
 /*end - global el holders*/
 
 document.addEventListener('DOMContentLoaded', setup, false);
@@ -378,6 +381,8 @@ var observers = {
 					if (responseJson.clientId == clientId) {
 						ini = responseJson.ini;
 						transObj = responseJson.transObj;
+						core = transObj.core;
+						profToolkit = profToolkit;
 						//ini = JSON.parse(JSON.stringify(responseJson.ini));
 						console.error('just read ini as =', ini);
 						readIniToDom();
@@ -508,75 +513,8 @@ var observers = {
 			return;
 		}
 		
-		/*
-		if (prof_props.IsRelative == '1') {
-			var dirName = OS.Path.basename(OS.Path.normalize(prof_props.Path));
-			var fullPathToProfile = OS.Path.join(FileUtils.getFile('DefProfRt', []).path, dirName);
-		} else {
-			var fullPathToProfile = prof_props.Path;
-		}
-		*/
-		
 		loader.style.display = 'flex-block';
 		cpCommPostJson('query-make-desktop-shortcut', {key_in_ini: identifier});
-		/*
-		if (OS.Constants.Sys.Name == 'WINNT') {
-			var exe = FileUtils.getFile('XREExeF', []);
-			var myShortcut = FileUtils.getFile('Desk', ['Firefox - ' + prof_props.Name + '.lnk']);
-			var myShortcutWin = myShortcut.QueryInterface(Ci.nsILocalFileWin);
-
-			//var myScIcon = new FileUtils.File('moz-icon:' + Services.io.newFileURI(exe).spec);
-			//can use identifier as path because identifier is path. i thought but it didnt work out right so moving tgo full path to profile
-			myShortcutWin.setShortcut(exe, null, '-profile "' + fullPathToProfile + '" -no-remote', 'Launches Mozilla Firefox with "' + prof_props.Name + '" Profile', exe);
-			successAnim();
-		} else if (OS.Constants.Sys.Name == 'Linux') {
-			var exe = FileUtils.getFile('XREExeF', []);
-			var args = '-profile "' + fullPathToProfile + '" -no-remote';
-
-			var name = 'Firefox - ' + prof_props.Name;
-			var target = exe;
-			var icon_path = 'firefox'; //OS.Path.join(OS.Constants.Path.desktopDir, 'beta.png');
-			var cmd = [];
-			cmd.push('[Desktop Entry]');
-			cmd.push('Name=' + name);
-			cmd.push('Type=Application');
-			cmd.push('Comment=Launches Mozilla Firefox with "' + prof_props.Name + '" Profile');
-			cmd.push('Exec=' + target.path + ' ' + args);
-			cmd.push('Icon=' + icon_path);
-			cmdStr = cmd.join('\n');
-
-			var path = OS.Path.join(OS.Constants.Path.desktopDir, name + '.desktop');
-			var tmpPath = OS.Path.join(OS.Constants.Path.desktopDir, name + '.desktop.tmp');
-
-			var promise_writeShortcut = OS.File.writeAtomic(path, cmdStr, {tmpPath: tmpPath, encoding:'utf-8'});
-			promise_writeShortcut.then(
-			  function(aVal) {
-				var promise_makeTrusted = OS.File.setPermissions(path, {unixMode: 0o4777});
-				promise_makeTrusted.then(
-				 function(aVal) {
-				   //console.log('promise_makeTrusted success', 'aVal:', aVal);
-				   successAnim();
-				 },
-				  function(aReason) {
-					console.warn('promise_makeTrusted rejected', 'aReason:', aReason);
-					alert('Desktop File Trust Failed - Desktop file was created but could not be marked as trusted - After closing this message see "Browser Console" for more information');
-					loader.style.opacity = 0;
-					throw new Error('Desktop File Trust Failed - Desktop file was created but could not be marked as trusted - Reason: ' + aReason);
-				  }
-				);
-			  },
-			  function(aReason) {
-				alert('Shortcut Creation Failed - After closing this message see "Browser Console" for more information');
-				loader.style.opacity = 0;
-				throw new Error('Shortcut Creation Failed - Desktop File Write Failed - Reason: ' + aReason);
-				//Services.ww.activeWindow.alert('rejected for reason: ' + uneval(aReason))
-			  }
-			);
-		} else {
-			alert('Unrecognized Operating System - Desktop shortcut creation failed');
-			loader.style.opacity = 0;
-		}
-		*/
 	}
 	
 	var _changeIcon_targets = {};
@@ -786,7 +724,7 @@ var observers = {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
-					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(transObj.profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")';
+					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")';
 				}
 				rowDomJson[3][2][1].value = json[i][1]; //textbox value
 				if (json[i][1].toLowerCase() == pathExe.toLowerCase()) {
@@ -1098,6 +1036,8 @@ var observers = {
 		}
 		var div = this.parentNode.parentNode;
 		var text = div.querySelector('input');
+		var iconSpan = div.querySelector('span');
+		iconSpan.setAttribute('class', core.firefox.channel);
 		text.value = pathExe;
 		div.classList.add('current-build-on-this');
 		cont.classList.add('current-build-used');
@@ -1229,7 +1169,7 @@ var observers = {
 				if (!iconUrl) {
 					console.error('failed to run regex on background image', icon, i, t.innerHTML);
 				} else {
-					icon = unescape(iconUrl[1]); //.substr(transObj.profToolkit.path_profilistData_iconsets.length);
+					icon = unescape(iconUrl[1]); //.substr(profToolkit.path_profilistData_iconsets.length);
 				}
 			}
 			var path = t.querySelector('input').value;
@@ -1511,3 +1451,25 @@ var observers = {
 	}
 	/*end - dom insertion library function from MDN*/
 /* end - non communication stuff, just internal js like creating shortcuts and handling select changes*/
+function getPathTo16Img(iconset_name, uncached) {
+	// copied from bootstrap.js
+	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
+	if (/^(?:esr|release|beta|aurora|dev|nightly)$/m.test(iconset_name)) {
+		/*if (iconset_name == 'aurora') {
+			iconset_name = 'dev';
+		} else */if (iconset_name == 'esr') {
+			iconset_name = 'release';
+		}
+		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
+		return core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png'; // chrome path so no need for file uri
+		//aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
+	} else {
+		if (uncached) {
+			console.info('returning', OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png#' + Math.random());
+			return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png#' + Math.random();
+		} else {
+			console.info('returning', OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png');
+			return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png';
+		}
+	}
+}
