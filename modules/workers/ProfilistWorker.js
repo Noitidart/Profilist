@@ -323,7 +323,7 @@ function makeLauncher(pathsObj) {
 		case 'wince':
 			
 				
-				
+				/*
 				var cutDirPath = OS.Path.dirname(pathsObj.OSPath_makeFileAt);
 				var cutFileName = pathsObj.OSPath_makeFileAt.substring(cutDirPath.length+1, pathsObj.OSPath_makeFileAt.length-4);
 				var targetArgs = pathsObj.jsStr_args;
@@ -349,7 +349,11 @@ function makeLauncher(pathsObj) {
 				makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
 				console.log('finished make dir');
 				return OLDcreateShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
-			
+				*/
+				
+				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [pathsObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
+				return createShortcuts([pathsObj]);
+				
 			break;
 		default:
 			throw new Error('os-unsupported');
@@ -416,12 +420,15 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 				//try {
 					// can just do makeLauncher and catch on error, as that does exist check, and i set appUserModelId so if it exists it wont continue
 					
-					var exists = OS.File.exists(pathsObj.OSPath_makeFileAt);
-					
-					if (!exists) {
-						makeLauncher(pathsObj);
+					if (core.os.version_name == '7+') {
+						if (pathsObj.IDHash) {
+							pathsObj.appUserModelId = HashStringHelper(pathsObj.IDHash) + ''; // make it a jsStr
+							delete pathsObj.IDHash;
+						}
 					}
-					console.info('ok shortcut made?');
+					
+					makeLauncher(pathsObj); // shortcut compares args and targetFile, if not matched, then updates shortcut
+					console.info('ok shortcut updated?');
 					
 					// shellExecEx
 					// http://blogs.msdn.com/b/oldnewthing/archive/2010/11/18/10092914.aspx
@@ -433,7 +440,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 					var sei = ostypes.TYPE.SHELLEXECUTEINFO();
 					//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 					sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(pathsObj.OSPath_makeFileAt);
+					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(pathsObj.dirNameLnk);
 					sei.lpFile = cStr;
 					//sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()('-safe-mode'); // works
 					//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
@@ -468,6 +475,61 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 		default:
 			throw new Error('os-unsupported');
 	}
+}
+
+function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aProfIsDefault, aProfName) {
+	// returns array of paths to launchers found that launch aProfRootDirOsPath, if profile is default, then it also returns all launchers that launch into default profile
+	/* objOsPathsAndDepthToSearch is like this:
+	{
+		path1: depth jsInt OR null for no max depth
+		path2: depth jsInt
+	}
+	*/
+	// aProfRootDirOsPath is required
+	// optional: aProfIsDefault, aProfName
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				var arrLauncherPaths = [];
+				var arrCollectedPaths = []; // paths of all of the files found in the selected paths
+				var dlgtCollect = function(aEntry) {
+					if (!aEntry.isDir) {
+						arrCollectedPaths.push(aEntry.path);
+					}
+				};
+				
+				// get cut details
+				for (var p in objOsPathsAndDepthToSearch) {
+					enumChildEntries(p, dlgtCollect, objOsPathsAndDepthToSearch[p], false);
+				}
+				
+				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths);
+				
+				console.info('cutInfos:', cutInfos);
+				
+				// filter out based on cuts that launch this profile
+				var criteriaForMatchingCut = [];
+				criteriaForMatchingCut.push('-profile "' + aProfRootDirOsPath.toLowerCase() + '"');
+				
+				if (aProfName) {
+					// not yet implemented, may never need to
+				}
+				for (var p in cutInfos) {
+					//if (aProfRootDirOsPath) {
+						if (cutInfos[p].TargetArgs.indexOf(criteriaForMatchingCut[0]) > -1) {
+							arrLauncherPaths.push(p);
+						}
+					//}
+				}
+				
+				return arrLauncherPaths;
+			break;
+		default:
+			throw new Error('os-unsupported')
+	}		
 }
 
 function createShortcuts(aArrOfObjs) {
@@ -881,7 +943,7 @@ function OLDcreateShortcut(path_createInDir, str_createWithName, path_linkTo, op
 					
 					//will overwrite existing
 					if (aExists !== true && aExists !== false) {
-						var aExists = OS.File.exists(path_create);
+						aExists = OS.File.exists(path_create);
 					}
 					if (aExists) {
 						//exists
@@ -2084,14 +2146,14 @@ var HashString = (function (){
 var _cache_HashStringHelper = {};
 function HashStringHelper(aText) {
 	if (!(aText in _cache_HashStringHelper)) {
-		_cache_HashStringHelper = HashString(aText);
+		_cache_HashStringHelper[aText] = HashString(aText);
 	}
 	return _cache_HashStringHelper[aText];
 }
 
 function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
 	// sync version of https://gist.github.com/Noitidart/0104294ce25386e4788f
-	// C:\Users\Vayeate\Pictures\enumChildEntires sync version varviewer.png
+	// C:\Users\Vayeate\Pictures\enumChildEntries sync version varviewer.png
 	// if delegate returns true, then enumChildEntries returns the entry it ended on
 	/* dig techqniue if max_depth 3:
 	root > SubDir1

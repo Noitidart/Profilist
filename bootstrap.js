@@ -124,6 +124,8 @@ var devBuildsArrStruct = { // holds index of key
 	base_icon: 0 // folder name in iconset
 };
 
+var tbb_msg_restore_handlers = {};
+
 // Lazy Imports
 const myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
@@ -187,6 +189,7 @@ function extendCore() {
 	core.firefox = {};
 	core.firefox.version = Services.appinfo.version;
 	core.firefox.channel = Services.prefs.getCharPref('app.update.channel');
+	// link5060513255 - see that i alias esr to release and default to nightly, and aurora to dev if version is < 35
 	if (core.firefox.channel == 'aurora') {
 		if (Services.vc.compare(Services.appinfo.version, 35) >= 0) {
 			// aurora became dev icon in version 35
@@ -251,7 +254,7 @@ current builds icon if dev mode is enabled
 				}
 			}
 			//iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM); //dont do this here as i need to first update currentThisBuildsIconPath
-			
+			console.info('iniObj_thatAffectDOM:', iniObj_thatAffectDOM);
 			//update watchBranches[myPrefBranch] AND make boolean type prefs, boolean type in ini object
 			for (var pref_name_in_obj in myPrefListener.watchBranches[myPrefBranch].prefNames) {
 				var pref_name_in_ini = 'Profilist.' + pref_name_in_obj;
@@ -337,6 +340,7 @@ current builds icon if dev mode is enabled
 					}
 				}
 			}
+			
 			if (!found_defaultProfile) {
 				delete iniObj_thatAffectDOM.General.props['Profilist.defaultProfileIniKey'];
 				if (ini.General.props.StartWithLastProfile != '1') {
@@ -468,7 +472,7 @@ current builds icon if dev mode is enabled
 						delete ini[group];
 					}
 				}
-				if (readStr.indexOf('Profilist.touched=') > -1) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
+				if (/^Profilist\./m.test(readStr)) { //note: Profilist.touched is json.stringify of an array holding paths it profilist was installed from, on uninstall it should remove self path from Profilist.touched and if its empty then it should prompt to delete all profilist settings & files
 					console.log('ini object finalized via non-bkp');
 					iniStr = JSON.stringify(ini);
 					deferred_readIniAndMaybeBkp.resolve(iniStr);
@@ -476,7 +480,7 @@ current builds icon if dev mode is enabled
 				} else {
 					console.log('ini was not touched');
 					//ini was not touched
-					//so read from bkp and update ini with properties that are missing
+					//so read from bkp and update ini with properties (so just .props are restored, any missing groups are not restored as they were probably inteiontally removed) that are missing
 					var promise_readIniBkp = read_encoded(profToolkit.path_iniBkpFile, {encoding:'utf-8'});
 					promise_readIniBkp.then(
 						function(aVal) {
@@ -523,24 +527,28 @@ current builds icon if dev mode is enabled
 								}
 							}
 							//end read str to obj
+							console.info('iniBkp:', iniBkp);
 							var somethingRestoredFromBkpToIni = false;
 							for (var p in ini) {
 								if (p in iniBkp) {
-									for (var sub_p in iniBkp[p]) {
+									for (var sub_p in iniBkp[p].props) {
 										if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+											console.log('restoring', sub_p, 'from bkp to ini');
 											somethingRestoredFromBkpToIni = true;
-											ini[p][sub_p] = iniBkp[p][sub_p];
+											ini[p].props[sub_p] = iniBkp[p].props[sub_p];
 										}
 									}
+									/*
 									if ('num' in ini[p]) {
 										//its a profile entry
 										for (var sub_p in iniBkp[p].props) {
-											if (sub_p.substr(0, 10/*'Profilist.'.length*/) == 'Profilist.') {
+											if (sub_p.substr(0, 10) == 'Profilist.') {
 												somethingRestoredFromBkpToIni = true;
 												ini[p].props[sub_p] = iniBkp[p].props[sub_p];
 											}
 										}
 									}
+									*/
 								}
 							}
 							if (somethingRestoredFromBkpToIni) {
@@ -1459,7 +1467,6 @@ const collapseDelay = 500;
 const expandDelay = 300;
 function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTabInsertItDisabled) { //returns promise
 	//does not fire when entering customize mode
-	console.error('entered');
 	var deferred_updateOnPanelShowing = new Deferred();
 	
 	//get aDOMWindow
@@ -1485,6 +1492,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 	//get panel
 	// http://mxr.mozilla.org/mozilla-beta/source/browser/components/customizableui/content/panelUI.js#26
 	// tells you like .panel is PanelUI-popup etc
+	
+	console.error('aDOMWindow.PanelUI._initialized:', aDOMWindow.PanelUI._initialized);
 	
 	var PUI = aDOMWindow.PanelUI.panel; //PanelUI-popup
 	var PUIf = aDOMWindow.PanelUI.mainView.childNodes[1]; //PanelUI-footer //aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
@@ -1523,7 +1532,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				console.error('getComputed:', aDOMWindow.getComputedStyle(PLoading, '').height);
 				PUIsync_height = PLoading.boxObject.height;
 				console.error('PLoading.boxObject.height:', PLoading.boxObject.height);
-				
+
 				collapsedheight = PUIsync_height;
 				//var computedHeight = win.getComputedStyle(el, '').height;
 				//console.log('computed PUIsync_height:', computedHeight);
@@ -1587,7 +1596,6 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 	
 	//make sure its PStack is collapsed
 	//PStack.style.height = collapsedheight + 'px'; //maybe not needed //was doing this in past: `if (collapsedheight != PUIsync_height || stack.style.height == '') {`
-	
 	
 	//start read ini
 	if (dontRefreshIni) {
@@ -2268,8 +2276,6 @@ function tbb_msg_close(aHandlerName, aDOMWindow, allButThisHandler/*, aRestoreSt
 		}
 	}
 }
-
-tbb_msg_restore_handlers = {};
 
 function tbb_msg(aHandlerName, aNewLblVal, aRestoreStyle, aDOMWindow, aTBBBox, aSMItem, aCB, aOverwrite) {
 	// aSMItem is the submenu item clicked
@@ -3596,6 +3602,7 @@ function getDevBuildTieIdOfExePath(aExePath, refreshDevBuildsJson) {
 }
 function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
 	// if refreshDevBuildsJson then it return data might be stale
+	console.log('in getDevBuildPropForTieId');
 	if (refreshDevBuildsJson) {
 		gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
 	}
@@ -5158,6 +5165,7 @@ function channelNameTo_refName(ch_name) {
 
 var _cache_getChannelNameOfExePath = {}; //{exePath: channelName, exePath2: channelName}
 function getChannelNameOfExePath(aExePath) {
+	console.info('aExePath:', aExePath);
 	// assuming case sensitivity is right
 	var deferredMain_getChannelNameOfExePath = new Deferred();
 	
@@ -5228,7 +5236,7 @@ function getChannelNameOfProfile(for_ini_key) {
 		var buildPath; //build of the profile for_ini_key
 		//var path_channelName = OS.Path.join(profToolkit.PrfDef, 'channel-prefs.js');
 		if ('Profilist.tie' in ini[for_ini_key]) {
-			buildPath = getPathToBuildByTie(ini[for_ini_key]['Profilist.tie']);
+			buildPath = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path');
 		} else {
 			buildPath = profToolkit.exePath; // todo: this is incorrect!!! 032015 1207p
 			asfsadfd(); // put here as it brings attention to me so i fix this
@@ -5704,7 +5712,7 @@ function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launch
 		// start - sub globals
 		var path_toFxApp; // path we will launch
 		if ('Profilist.tie' in ini[for_ini_key].props) {
-			path_toFxApp = getPathToBuildByTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
+			path_toFxApp = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path'); // used tied path if the profile is tied
 		} else {
 			path_toFxApp = profToolkit.exePath; //not tied so use current builds path
 		}
@@ -6407,6 +6415,7 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 			if (aProfilePath == profToolkit.selectedProfile.iniKey) {
 				do_postGCNOEP(core.firefox.channel);
 			} else {
+				console.log('pre here, specObj:', specObj, 'aProfilePath:', aProfilePath);
 				var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
 				promise_channelForExe.then(
 					function(aVal) {
@@ -6510,10 +6519,12 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		if ('Profilist.tie' in props) {
 			specObj.tieId = props['Profilist.tie']; //so if tied, but getting running info, the tieId will still get delievered to specObj
 			if (ifRunningThenTakeThat && specObj.isRunning) {
-				useLastUsedExePath(false); // false cuz its running, the file has to exist, it will never need to fall back onto cur exe path //if getPathToBuildByTie(tieId) != specObj.path_exeForProfile then user tied it, but has not yet quit/started
+				console.log('ifRunningThenTakeThat is marked true, but i never get running status for a tied, and isRunning is:', specObj.isRunning);
+				useLastUsedExePath(false); // false cuz its running, the file has to exist, it will never need to fall back onto cur exe path //if getDevBuildPropForTieId(tieId, 'exe_path') != specObj.path_exeForProfile then user tied it, but has not yet quit/started
 			} else {
-				specObj.path_exeForProfile = getPathToBuildByTie(specObj.tieId);
-				specObj.iconsetId_base = getIconsetIdByTie(specObj.tieId);
+				console.log('ok here getting path_exeForProfile tieId is:', specObj.tieId);
+				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
+				specObj.iconsetId_base = getDevBuildPropForTieId(specObj.tieId, 'base_icon');
 				iconNameComponents['TIE-ID'] = specObj.iconsetId_base;
 				getChannelToExePath(); // maybe no need for getting channel, as we need channel to determine iconsetId_base, but here we already have it
 			}
@@ -6599,8 +6610,10 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		//var deferred_skipRunningCheck = new Deferred();
 		//promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
 		//deferred_skipRunningCheck.resolve(null);
+		console.log('in this block');
 		postRunCheck();
 	} else {
+		console.log('checking if locked');
 		promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [props.IsRelative, props.Path, profToolkit.rootPathDefault]);
 		promise_testAProfilePathRunning.then(
 			function(aVal) {
@@ -6673,28 +6686,6 @@ function getIconName(for_ini_key, ch_name) {
 	return name_launcherIcns;	
 }
 
-
-//note: so i have to make Profilist.dev-builds hold json stringify of {tieId1:[iconsetId,buildPath], tieId2:[iconsetId,buildPath]}
-var devBuildsArrIndex = {
-	iconsetId: 1,
-	buildPath: 0
-};
-function getIconsetIdByTie(tie_id) {
-	if (!(tie_id in devBuilds)) {
-		return null;
-	} else {
-		return devBuilds[tie_id][devBuildsArrIndex.iconsetId];
-	}
-}
-
-function getPathToBuildByTie(tie_id) {
-	if (!(tie_id in devBuilds)) {
-		return null;
-	} else {
-		return devBuilds[tie_id][devBuildsArrIndex.buildPath];
-	}
-}
-
 function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	// returns root dir
 	// if set objOfRootAndLocal to true, it returns an object, and the object holds two keys. root for rootdir of prof. and local IF it is a IsRelative=1 prof.
@@ -6740,6 +6731,7 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 
 function getAppNameFromChan(theChName) {
 	//based on channel name returns what the app name should be
+	// link5060513255 - see that i alias esr to release and default to nightly, and aurora to dev if version is < 35
 	switch (theChName) {
 		case 'esr':
 			return 'Firefox ESR';
@@ -6751,8 +6743,13 @@ function getAppNameFromChan(theChName) {
 			return 'Firefox Beta';
 			break;
 		case 'aurora':
+			if (Services.vc.compare(Services.appinfo.version, 35) >= 0) {
+				// aurora became dev icon in version 35
+				return 'Firefox Aurora';
+			}
 			return 'Firefox Developer';
 			break;
+		case 'default': // this is what it is on custom build
 		case 'nightly':
 			return 'Firefox Nightly';
 			break;
@@ -6917,6 +6914,25 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 					} else {
 						// prep launch
 						var do_sendMsgToLaunch = function() {
+							
+							// shortcut is checked to make sure it has right targetFile, icon, and args
+							var cutInfoObj = {
+								// keys for worker__createShortcut
+								dir: profToolkit.path_profilistData_launcherExes,
+								name: cProfSpec.launcherName,
+								dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
+								args: '-profile "' + getPathToProfileDir(aProfileIniKey) + '" -no-remote',
+								desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile',
+								icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+								targetFile: cProfSpec.path_exeForProfile,
+								
+								updateIfDiff: true,
+								refreshIcon: 1,
+								
+								// keys for worker__launchProfile
+								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfileIniKey) : null
+							};
+							/*//////// old way
 							var pathsObj = {
 								OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
 								OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
@@ -6924,10 +6940,10 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 								jsStr_args: getPathToProfileDir(aProfileIniKey),
 								jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
 							};
+							*/
+							console.info('ready to send msg to launch, pathsObj:', cutInfoObj);
 							
-							console.info('ready to send msg to launch, pathsObj:', pathsObj);
-							
-							var promise_doLaunch = ProfilistWorker.post('launchProfile', [pathsObj]);
+							var promise_doLaunch = ProfilistWorker.post('launchProfile', [cutInfoObj]);
 							promise_doLaunch.then(
 								function(aVal) {
 									console.log('Fullfilled - promise_doLaunch - ', aVal);
@@ -7405,7 +7421,7 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 							
 							var path_toFxApp; // path we will launch
 							if ('Profilist.tie' in ini[for_ini_key].props) {
-								path_toFxApp = getPathToBuildByTie(ini[for_ini_key].props['Profilist.tie']); // used tied path if the profile is tied
+								path_toFxApp = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path'); // used tied path if the profile is tied
 							} else {
 								path_toFxApp = profToolkit.exePath; //not tied so use current builds path
 							}
