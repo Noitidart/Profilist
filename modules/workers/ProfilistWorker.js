@@ -427,6 +427,21 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 						}
 					}
 					
+					// find if it already exists in dir
+					var launchPath = pathsObj.dirNameLnk; // as if rename is needed the obj changes, so i save it here
+					
+					var searchDirs = {};
+					searchDirs[pathsObj.dir] = 1;
+					var rezFindsArr = findLaunchers(searchDirs, pathsObj.profRootDir); // should return 1 or 0 entries
+					console.info('rezFindsArr:', rezFindsArr);
+					if (rezFindsArr.length == 1) {
+						pathsObj.renameToName = pathsObj.name;
+						pathsObj.dirNameLnk = rezFindsArr[0];
+					} else if (rezFindsArr.length > 1) {
+						console.error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr:', rezFindsArr);
+						throw new Error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr');
+					}
+					
 					makeLauncher(pathsObj); // shortcut compares args and targetFile, if not matched, then updates shortcut
 					console.info('ok shortcut updated?');
 					
@@ -440,7 +455,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 					var sei = ostypes.TYPE.SHELLEXECUTEINFO();
 					//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 					sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(pathsObj.dirNameLnk);
+					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(launchPath);
 					sei.lpFile = cStr;
 					//sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()('-safe-mode'); // works
 					//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
@@ -477,7 +492,7 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 	}
 }
 
-function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aProfIsDefault, aProfName) {
+function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aOptions={}) {
 	// returns array of paths to launchers found that launch aProfRootDirOsPath, if profile is default, then it also returns all launchers that launch into default profile
 	/* objOsPathsAndDepthToSearch is like this:
 	{
@@ -486,7 +501,14 @@ function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aProfIsDe
 	}
 	*/
 	// aProfRootDirOsPath is required
-	// optional: aProfIsDefault, aProfName
+	// optional: aOptions
+	/* aOptions
+	{
+		isDefaultProf: jsBool, // cuases exes to be found too on windows
+		profName: jsStr, // another check type `-P "name_here"` not yet impelemnted
+		returnObj: false is default and an array of paths is returned, if false, on WINNT it returs obj
+	}
+	*/
 	
 	switch (core.os.name) {
 		case 'winnt':
@@ -514,18 +536,29 @@ function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aProfIsDe
 				var criteriaForMatchingCut = [];
 				criteriaForMatchingCut.push('-profile "' + aProfRootDirOsPath.toLowerCase() + '"');
 				
-				if (aProfName) {
+				if (aOptions.profName) {
 					// not yet implemented, may never need to
 				}
+				console.log('testing for', criteriaForMatchingCut[0]);
 				for (var p in cutInfos) {
 					//if (aProfRootDirOsPath) {
+						console.log('testing', cutInfos[p].TargetArgs, 'test:', cutInfos[p].TargetArgs.indexOf(criteriaForMatchingCut[0]));
 						if (cutInfos[p].TargetArgs.indexOf(criteriaForMatchingCut[0]) > -1) {
 							arrLauncherPaths.push(p);
 						}
 					//}
 				}
-				
-				return arrLauncherPaths;
+				console.error('ok these are filtered:', arrLauncherPaths);
+				if (aOptions.returnObj) {
+					for (var p in cutInfos) {
+						if (arrLauncherPaths.indexOf(p) == -1) {
+							delete cutInfos[p];
+						}
+					}
+					return cutInfos;
+				} else {
+					return arrLauncherPaths;
+				}
 			break;
 		default:
 			throw new Error('os-unsupported')
@@ -539,7 +572,7 @@ function createShortcuts(aArrOfObjs) {
 		{
 			dir:					// jsStr. OSPath. short for OSPath_dirToMakeShortcutFileIn // example: C:\blah
 			name:					// jsStr. short for jsStr_nameOfShortcutFileNoLnk which is name of shortcut file, without the .lnk. if name is not safe for a winnt path, then set doPathSafeWith to a character to replace it with to safe it. // example: cut
-			dirNameLnk:			// jsStr. OSPath. full path with .lnk at end // example: C:\blah\cut.lnk
+			dirNameLnk:			// jsStr. OSPath. full path with .lnk at end // example: C:\blah\cut.lnk // if this is provided along with dir and name. dirNameLnk is used and dir and name are calced from dirNameLnk
 			
 			targetFile:			// jsStr. OSPath. optional if the shortcut already exists
 			icon:				// jsStr. OSPath. path to icon to use // ex: C:\blah\rawr.ico
@@ -584,6 +617,7 @@ function createShortcuts(aArrOfObjs) {
 		for (var i=0; i<aArrOfObjs.length; i++) {
 			
 			var cObj = aArrOfObjs[i];
+			console.info('cObj is:', cObj);
 			
 			if (core.os.version_name != '7+') {
 				if ('appUserModelId' in cObj) {
@@ -627,6 +661,7 @@ function createShortcuts(aArrOfObjs) {
 			
 			if (!('exists' in cObj)) {
 				cObj.exists = OS.File.exists(fullPath);
+				console.info('existance check for fullPath of', fullPath, 'is:', cObj.exists);
 			}
 			
 			if (!cObj.exists && !('targetFile' in cObj)) {
@@ -636,7 +671,7 @@ function createShortcuts(aArrOfObjs) {
 
 			if ('renameToName' in cObj) {
 				if ('doPathSafeWith' in cObj) {
-					var renameToName = cObj.renameToName.replace(/([\\*:?<>|\/\"])/g, cObj.doPathSafeWith);
+					var renameToName = getSafedForOSPath(cObj.renameToName, cObj.doPathSafeWith);
 				} else {
 					var renameToName = cObj.renameToName;
 				}
@@ -648,7 +683,7 @@ function createShortcuts(aArrOfObjs) {
 					if (renameToName != name) {
 						// ok rename it
 						console.log('needing to rename it as old name was "' + name + '" and new name based on devuser set should be "' + renameToName + '"');
-						var fullPathRENAMED = OS.Path.join(dir, renameToName);
+						var fullPathRENAMED = OS.Path.join(dir, renameToName + '.lnk');
 						var rez_rename = OS.File.move(fullPath, fullPathRENAMED);
 						
 						// update fullPath
@@ -2279,6 +2314,23 @@ function copyDirAs(aSrcDir, aTargetDir, pasteAsDirName) {
 	enumChildEntries(aSrcDir, delegateCopy, null, false); // null to max_depth so it gets all, dont run on root
 	
 	return true;
+}
+var _getSafedForOSPath_pattWIN = /([\\*:?<>|\/\"])/g;
+var _getSafedForOSPath_pattNIXMAC = /\//g;
+const repCharForSafePath = '-';
+function getSafedForOSPath(aStr, useNonDefaultRepChar) {
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				return aStr.replace(_getSafedForOSPath_pattWIN, useNonDefaultRepChar ? useNonDefaultRepChar : repCharForSafePath);
+				
+			break;
+		default:
+		
+				return aStr.replace(_getSafedForOSPath_pattNIXMAC, useNonDefaultRepChar ? useNonDefaultRepChar : repCharForSafePath);
+	}
 }
 // END - Common
 

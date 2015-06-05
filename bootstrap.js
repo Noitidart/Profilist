@@ -365,10 +365,13 @@ current builds icon if dev mode is enabled
 				if (profToolkit.selectedProfile.rootDirPath in ini) {
 					//its absolute
 					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
-				} // else { its a temporary profile! }
+				} else {
+					//its a temporary profile!
+					profToolkit.selectedProfile.isTemp = true;
+				}
 			}
 			
-			if (profToolkit.selectedProfile.name === null || profToolkit.selectedProfile.name === myServices.sb.GetStringFromName('temporary-profile')) { //probably null
+			if (profToolkit.selectedProfile.name === null || profToolkit.selectedProfile.isTemp) { //probably null
 				console.error('XYZ this profile at path does not exist, so its a temporary profile');
 				profToolkit.selectedProfile.name = myServices.sb.GetStringFromName('temporary-profile'); //as it has no name
 				profToolkit.selectedProfile.iniKey = null;
@@ -769,18 +772,18 @@ function saltName(aName) {
 /*end - salt generator*/
 var _getSafedForOSPath_pattWIN = /([\\*:?<>|\/\"])/g;
 var _getSafedForOSPath_pattNIXMAC = /\//g;
-function getSafedForOSPath(aStr) {
+function getSafedForOSPath(aStr, useNonDefaultRepChar) {
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 		
-				return aStr.replace(_getSafedForOSPath_pattWIN, repCharForSafePath);
+				return aStr.replace(_getSafedForOSPath_pattWIN, useNonDefaultRepChar ? useNonDefaultRepChar : repCharForSafePath);
 				
 			break;
 		default:
 		
-				return aStr.replace(_getSafedForOSPath_pattNIXMAC, repCharForSafePath);
+				return aStr.replace(_getSafedForOSPath_pattNIXMAC, useNonDefaultRepChar ? useNonDefaultRepChar : repCharForSafePath);
 	}
 }
 function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refreshIni, aIniKeyToClone) {
@@ -3892,7 +3895,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 	var deferredMain_updateIconToPinnedCut = new Deferred();
 	
 	// if aProfilePath is default profile update the default launchers too
-	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
+	if (aProfileIniKey === null && profToolkit.selectedProfile.isTemp) {
 		console.warn('IS A TEMP PROF');
 		var isDefault = false;
 	} else {
@@ -3917,14 +3920,22 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 				var OSPath_neededIcon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useProfSpecs.iconNameObj.str + '.ico');
 				
 				var promiseAllArr_updateOsLauncherIcons = [];
-				
+				console.time('update pin cuts');
 				if (core.os.version_name == '7+') {
 					// update pinned shortcuts
 					var deferred_cutsUpdated = new Deferred();
 					promiseAllArr_updateOsLauncherIcons.push(deferred_cutsUpdated.promise);
 					
 					var do_getPinCutPaths = function() {
-						var promise_getPinCutPaths = getPathToPinnedCut(aProfileIniKey);
+						var objOsPathsOfDirs = {};
+						var path_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'); // :note: implementation specific, test on win10 and all windows version
+						var path_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts'); // :note: implementation specific, test on win10 and all windows version
+						objOsPathsOfDirs[path_dirForNormalPins] = 1;
+						objOsPathsOfDirs[path_dirForRelaunchCmdPins] = 2;
+						
+						var path_profRootDir = getPathToProfileDir(aProfileIniKey);
+						
+						var promise_getPinCutPaths = ProfilistWorker.post('findLaunchers', [objOsPathsOfDirs, path_profRootDir, {returnObj:true}]); //getPathToPinnedCut(aProfileIniKey);
 						promise_getPinCutPaths.then(
 							function(aVal) {
 								console.log('Fullfilled - promise_getPinCutPaths - ', aVal);
@@ -3955,6 +3966,8 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 								OSPathArr_cutNeedingUpdate.push(cutPath);
 							//}
 						}
+						
+						console.info('OSPathArr_cutNeedingUpdate:', OSPathArr_cutNeedingUpdate);
 						
 						if (OSPathArr_cutNeedingUpdate.length > 0) {
 							console.error('XYZ aProfileIniKey:', aProfileIniKey);
@@ -4006,6 +4019,7 @@ function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
 					function(aVal) {
 						console.log('Fullfilled - promiseAll_updateOsLauncherIcons - ', aVal);
 						// start - do stuff here - promiseAll_updateOsLauncherIcons
+						console.timeEnd('update pin cuts');
 						deferredMain_updateIconToPinnedCut.resolve(true);
 						// end - do stuff here - promiseAll_updateOsLauncherIcons
 					},
@@ -6689,8 +6703,7 @@ function getIconName(for_ini_key, ch_name) {
 function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	// returns root dir
 	// if set objOfRootAndLocal to true, it returns an object, and the object holds two keys. root for rootdir of prof. and local IF it is a IsRelative=1 prof.
-	
-	if (for_ini_key === null && profToolkit.selectedProfile.iniKey === null) {
+	if (for_ini_key === null && profToolkit.selectedProfile.isTemp) {
 		console.warn('IS A TEMP PROF');
 		if (!objOfRootAndLocal) {
 			return profToolkit.selectedProfile.rootDirPath;
@@ -6705,7 +6718,7 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	}
 	
 	if (!objOfRootAndLocal) {
-		if (for_ini_key == profToolkit.selectedProfile.iniKey) {
+		if (for_ini_key == profToolkit.selectedProfile.iniKey) { // works even if its temp prof
 			return profToolkit.selectedProfile.rootDirPath;
 		}
 		
@@ -6930,7 +6943,8 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 								refreshIcon: 1,
 								
 								// keys for worker__launchProfile
-								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfileIniKey) : null
+								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfileIniKey) : null,
+								profRootDir: getPathToProfileDir(aProfileIniKey)
 							};
 							/*//////// old way
 							var pathsObj = {
