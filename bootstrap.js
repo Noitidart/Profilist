@@ -3279,6 +3279,115 @@ function tbb_box_click(e) {
 		},
 		'profilist-dev-safe': function() {
 			console.log('launch this profile in safe mode');
+			
+			var cProfName = box.getAttribute('label');
+			var cProfIniKey = getIniKeyFromProfName(cProfName);
+			
+			if (cProfIniKey == profToolkit.selectedProfile.iniKey) {
+				// https://dxr.mozilla.org/mozilla-central/source/browser/components/nsBrowserGlue.js#778
+				var cancelQuit = Cc['@mozilla.org/supports-PRBool;1'].createInstance(Ci.nsISupportsPRBool);
+				Services.obs.notifyObservers(cancelQuit, 'quit-application-requested', 'restart');
+				if (!cancelQuit.data) {
+					Services.startup.restartInSafeMode(Ci.nsIAppStartup.eAttemptQuit);
+				}
+				return;
+			}
+			
+			
+			console.log('rename, cProfIniKey:', cProfName);
+			tbb_msg_close(null, cWin);
+			
+			var postRunCheck = function(isRunning) {
+				if (isRunning) {
+					var cCB = {
+						onconfirm: function(aHndlr, aEvent, aInput) {
+							console.log('ok terminate pid then launch');
+							cWin.PanelUI.toggle();// hide panel
+							var promise_forceQuit = ProfilistWorker.post('forceQuit', [isRunning, ini[cProfIniKey].props.IsRelative, ini[cProfIniKey].props.Path, profToolkit.rootPathDefault]); // for WINNT isRunning will be 1, else its the PID, for WINNT the realative and onwards args are used to get the pid
+							promise_forceQuit.then(
+							  function(aVal) {
+								console.log('Fullfilled - promise_forceQuit - ', aVal);
+								// start - do stuff here - promise_forceQuit
+								if (aVal) {
+									launchProfile(cProfIniKey, ['-safe-mode']);
+								} else {
+									throw new Error('TerminateProcess was false, this is weird should never happen as its a force quit');
+								}
+								// end - do stuff here - promise_forceQuit
+							  },
+							  function(aReason) {
+								var rejObj = {name:'promise_forceQuit', aReason:aReason};
+								console.warn('Rejected - promise_forceQuit - ', rejObj);
+								//deferred_createProfile.reject(rejObj);
+							  }
+							).catch(
+							  function(aCaught) {
+								var rejObj = {name:'promise_forceQuit', aCaught:aCaught};
+								console.error('Caught - promise_forceQuit - ', rejObj);
+								//deferred_createProfile.reject(rejObj);
+							  }
+							);
+						},
+						oncancel: function() {
+							// focus the most recent window then
+							var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [isRunning, ini[cProfIniKey].props.IsRelative, ini[cProfIniKey].props.Path, profToolkit.rootPathDefault]);
+							// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
+							promise_doFocus.then(
+								function(aVal) {
+									console.log('Fullfilled - promise_doFocus - ', aVal);
+									// start - do stuff here - promise_doFocus
+									//deferredMain_launchProfile.resolve(true);
+									// end - do stuff here - promise_doFocus
+								},
+								function(aReason) {
+									var rejObj = {name:'promise_doFocus', aReason:aReason};
+									console.error('Rejected - promise_doFocus - ', rejObj);
+									//deferredMain_launchProfile.reject(rejObj);
+								}
+							).catch(
+								function(aCaught) {
+									var rejObj = {name:'promise_doFocus', aCaught:aCaught};
+									console.error('Caught - promise_doFocus - ', rejObj);
+									//deferredMain_launchProfile.reject(rejObj);
+								}
+							);
+						}
+					};
+					tbb_msg('prompt-force-restart' + cProfIniKey, 'Profile is running, force restart?', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, false);
+				} else {
+					cWin.PanelUI.toggle();// hide panel
+					launchProfile(cProfIniKey, ['-safe-mode']);
+				}
+			};
+			
+			var promise_testProfRunning = ProfilistWorker.post('queryProfileLocked', [ini[cProfIniKey].props.IsRelative, ini[cProfIniKey].props.Path, profToolkit.rootPathDefault]);
+			promise_testProfRunning.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_testProfRunning - ', aVal);
+					// start - do stuff here - promise_testProfRunning
+					// aVal is - if not running across all platforms. on all platforms if 1, it means its running, on non-winnt if >1 then its the pid as its running
+					postRunCheck(aVal);
+					// end - do stuff here - promise_testProfRunning
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_testProfRunning', aReason:aReason};
+					console.error('Rejected - promise_testProfRunning - ', rejObj);
+					//deferredMain_getProfileSpecs.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_testProfRunning', aCaught:aCaught};
+					console.error('Caught - promise_testProfRunning - ', rejObj);
+					//deferredMain_getProfileSpecs.reject(rejObj);
+				}
+			);
+			
+			// check if profile is running
+				// if it is then tbb msg if ok to force quit
+					// if yes, then launchProfile with -safe-mode
+				// else not running
+					// launchProfile with -safe-mode
+			
 		},
 		'toolbarbutton-icon': function() {
 			if (!box.hasAttribute('status')) {
@@ -6957,7 +7066,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 							*/
 							console.info('ready to send msg to launch, pathsObj:', cutInfoObj);
 							
-							var promise_doLaunch = ProfilistWorker.post('launchProfile', [cutInfoObj]);
+							var promise_doLaunch = ProfilistWorker.post('launchProfile', [cutInfoObj, arrOfArgs]);
 							promise_doLaunch.then(
 								function(aVal) {
 									console.log('Fullfilled - promise_doLaunch - ', aVal);
@@ -9981,171 +10090,6 @@ function uninstall(aData, aReason) {
 // start - custom to profilist helper functions
 
 // end - custom to profilist helper functions
-
-function getPathToPinnedCut(aProfileIniKey/*aProfilePath, dontCheck_dirIfRelaunchCmdPin*/) {
-	// winnt only
-	// :todo:perf: move this to ProfilistWorker
-	// searches the folders where shortcuts go if it is pinned
-		// does this by searching if shortcut path includes the profile path
-		// if profile is default it finds shortcuts with the default paths found from registry AND shortcuts with any lower cased launch paths matching any of the paths in ini.General.props['Profilist.dev-builds']);
-	// resolves with obj of keys os paths to pinned cuts that launch aProfileIniKey, and value is obj with key OSPath_icon which is jsStr
-	var deferredMain_getPathToPinnedCut = new Deferred();
-	
-	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
-		console.warn('IS A TEMP PROF');
-		var isDefault = false;
-	} else {
-		var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
-	}
-	
-	var OSPath = getPathToProfileDir(aProfileIniKey);
-	var path_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
-	var path_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts');
-	
-	var criteriaForMatchingCut = { // i lower case all pushes into here, in case user made his own shortcuts, so i cant trust his casing. and in case the user put wrong casing in devBuilds
-		profileName: [],
-		profilePath: [],
-		//buildPathAndNoProfile: []
-	};
-	
-	if (aProfileIniKey === null && profToolkit.selectedProfile.iniKey === null) {
-		console.warn('IS A TEMP PROF');
-		criteriaForMatchingCut.profileName.push('-P "' + profToolkit.selectedProfile.name.toLowerCase() + '"');
-	} else {
-		criteriaForMatchingCut.profileName.push('-P "' + ini[aProfileIniKey].props.Name.toLowerCase() + '"');
-	}
-	criteriaForMatchingCut.profilePath.push('-profile "' + OSPath.toLowerCase() + '"');
-	
-	var cutPaths = []; // os paths to cuts found
-	
-	/* // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
-	if (isDefault) {
-		// collect paths to all builds
-		
-		// from registry
-		var fxBuildsFromRegistry = getAllFxBuilds();
-		for (var i=0; i<fxBuildsFromRegistry.length; i++) {
-			var cBuildPath = fxBuildsFromRegistry[i].Name.toLowerCase() + '\\firefox.exe';
-			criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
-			//cutPaths.push(cBuildPath);
-		}
-		
-		// from Profilist.dev-builds pref
-		var devBuilds = ini.General.props['Profilist.dev-builds'] != '' ? JSON.parse(ini.General.props['Profilist.dev-builds']) : {};
-		for (var buildId in devBuilds) {
-			var cBuildPath = devBuilds[buildId].toLowerCase();
-			if (criteriaForMatchingCut.buildPathAndNoProfile.indexOf(cBuildPath) == -1) {
-				criteriaForMatchingCut.buildPathAndNoProfile.push(cBuildPath);
-				//cutPaths.push(cBuildPath);
-			}
-		}
-	}
-	*/
-	
-	var delegate_collectCutInfos = function(entry) {
-		if (!entry.isDir) {
-			cutPaths.push(entry.path);
-		}
-	};
-	
-	var do_testPaths = function() {
-		var promise_getInfoOnShortcuts = ProfilistWorker.post('winnt_getInfoOnShortcuts', [cutPaths]);
-		promise_getInfoOnShortcuts.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getInfoOnShortcuts - ', aVal);
-				// start - do stuff here - promise_getInfoOnShortcuts
-				var OSPathArr_matchingCuts = [];
-				var matched;
-				for (var cInfo in aVal) {
-					matched = false;
-					for (var i=0; i<criteriaForMatchingCut.profileName.length; i++) {
-						if (aVal[cInfo].TargetArgs.indexOf(criteriaForMatchingCut.profileName[i]) > -1) {
-							OSPathArr_matchingCuts.push(cInfo);
-							matched = true;
-							break;
-						}
-					}
-					if (matched) { continue }
-					
-					for (var i=0; i<criteriaForMatchingCut.profilePath.length; i++) {
-						if (aVal[cInfo].TargetArgs.indexOf(criteriaForMatchingCut.profilePath[i]) > -1) {
-							OSPathArr_matchingCuts[cInfo] = {
-								OSPath_icon: aVal[cInfo].OSPath_icon
-							};
-							matched = true;
-							break;
-						}
-					}
-					if (matched) { continue }
-					/*
-					for (var i=0; i<criteriaForMatchingCut.buildPathAndNoProfile.length; i++) {
-						if (criteriaForMatchingCut.buildPathAndNoProfile[i] == aVal[cInfo].TargetPath && aVal[cInfo].TargetArgs.indexOf('-P') == -1 && aVal[cInfo].TargetArgs.indexOf('-profile') == -1) {
-							// this is a default launcher, and the only reason i would be looping here is is aProfileIniKey is of isDefault profile
-							OSPathArr_matchingCuts.push(cInfo);
-							matched = true;
-							break;
-						}
-					}
-					if (matched) { continue }
-					*/
-				}
-				deferredMain_getPathToPinnedCut.resolve(OSPathArr_matchingCuts);
-				// end - do stuff here - promise_getInfoOnShortcuts
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getInfoOnShortcuts', aReason:aReason};
-				console.error('Rejected - promise_getInfoOnShortcuts - ', rejObj);
-				deferredMain_getPathToPinnedCut.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getInfoOnShortcuts', aCaught:aCaught};
-				console.error('Caught - promise_getInfoOnShortcuts - ', rejObj);
-				deferredMain_getPathToPinnedCut.reject(rejObj);
-			}
-		);
-		
-	};
-	
-	var promiseAllArr_collectCutInfos = [
-		enumChildEntries(profToolkit.path_profilistData_launcherExes, delegate_collectCutInfos, 0), // finds launcher, it may not be named properly
-		enumChildEntries(path_dirForNormalPins, delegate_collectCutInfos, 0),
-		enumChildEntries(path_dirForRelaunchCmdPins, delegate_collectCutInfos, 1)
-	];
-	
-	var promiseAll_collectCutInfos = Promise.all(promiseAllArr_collectCutInfos);
-	promiseAll_collectCutInfos.then(
-		function(aVal) {
-			console.log('Fullfilled - promiseAll_collectCutInfos - ', aVal);
-			// start - do stuff here - promiseAll_collectCutInfos
-			do_testPaths();
-			// end - do stuff here - promiseAll_collectCutInfos
-		},
-		function(aReason) {
-			var rejObj = {name:'promiseAll_collectCutInfos', aReason:aReason};
-			console.error('Rejected - promiseAll_collectCutInfos - ', rejObj);
-			deferredMain_getPathToPinnedCut.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promiseAll_collectCutInfos', aCaught:aCaught};
-			console.error('Caught - promiseAll_collectCutInfos - ', rejObj);
-			deferredMain_getPathToPinnedCut.reject(rejObj);
-		}
-	);
-	
-	return deferredMain_getPathToPinnedCut.promise;
-	///// OLD WAY ////////////////////////////////////////
-	//winnt only
-	// searches the folders where shortcuts go if it is pinned
-		// so reminder: if get null, then know that its not pinned
-	// returns promise
-	// dontCheck_dirIfRelaunchCmdPin is set to true, when looking for if default is pinned, as default pin is never found in dirIfRelaunchCmdPin
-	// rsolves to arr of paths, arr cuz, if default profile, then they can have multiple builds pinned
-	// resolves to undefined on stupid error (like testing temp profile for pin)
-	
-	// warning, i should monitor this with every windows update, this is implementation detail, it can change at any time without notice: http://stackoverflow.com/questions/28228042/shgetpropertystoreforwindow-how-to-set-properties-on-existing-system-appusermo#comment44829015_28228042
-};
 
 var _cache_getAllFxBuilds;
 function getAllFxBuilds(notFromCache) {

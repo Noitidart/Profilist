@@ -408,8 +408,132 @@ function makeDeskcut(cutInfoObj) {
 	}
 }
 
+function forceQuit(aPID, IsRelative, Path, path_DefProfRt) {
+	// IsRelative, Path, path_DefProfRt is for WINNT so it can get PID, you should check if its running before calling this, but its not so bad if you call this while its not running it wont find a PID and it will return failure
+	// force kills the process
+	// aPID is ofcourse a process id that is running
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+				var cProfPID = aPID > 1 ? aPID : getPidForRunningProfile(IsRelative, Path, path_DefProfRt); // throws if pid not found // assuming that PID can never be 1
+				
+				var hProcess = ostypes.API('OpenProcess')(ostypes.CONST.PROCESS_TERMINATE, false, cProfPID);
+				console.info('hProcess:', hProcess.toString(), uneval(hProcess), cutils.jscGetDeepest(hProcess));
+				if (ctypes.winLastError != 0) {
+				  console.error('Failed hProcess, winLastError:', ctypes.winLastError);
+				  throw new Error({
+					name: 'os-api-error',
+					message: 'Failed hProcess, winLastError: "' + ctypes.winLastError + '" and hProcess: "' + hProcess.toString(),
+					winLastError: ctypes.winLastError
+				  });
+				}
+				try {
+					var rez_term = ostypes.API('TerminateProcess')(hProcess, 0);
+					console.info('rez_term:', rez_term.toString(), uneval(rez_term), cutils.jscGetDeepest(rez_term));
+					if (ctypes.winLastError != 0) {
+					  console.error('Failed rez_term, winLastError:', ctypes.winLastError);
+					  throw new Error({
+						name: 'os-api-error',
+						message: 'Failed rez_term, winLastError: "' + ctypes.winLastError + '" and rez_term: "' + rez_term.toString(),
+						winLastError: ctypes.winLastError
+					  });
+					}
+				} finally {
+					var rez_CloseHandle = ostypes.API('CloseHandle')(hProcess);
+					console.info('rez_CloseHandle:', rez_CloseHandle.toString(), uneval(rez_CloseHandle), cutils.jscGetDeepest(rez_CloseHandle));
+					if (ctypes.winLastError != 0) {
+					  console.error('Failed rez_CloseHandle, winLastError:', ctypes.winLastError);
+					  throw new Error({
+						name: 'os-api-error',
+						message: 'Failed rez_CloseHandle, winLastError: "' + ctypes.winLastError + '" and rez_CloseHandle: "' + rez_CloseHandle.toString(),
+						winLastError: ctypes.winLastError
+					  });
+					}
+				}
+				
+				return rez_term;
+				
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
 
-function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to check if launcher exists first? not used yet
+function gracefulQuit(aPID, IsRelative, Path, path_DefProfRt) {
+	// IsRelative, Path, path_DefProfRt is for WINNT so it can get PID, you should check if its running before calling this, but its not so bad if you call this while its not running it wont find a PID and it will return failure
+	// aPID is ofcourse a process id that is running
+	// sends message to close, so user gets prompted by the default prompt things (ie: needs to save document)
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			
+				// get all windows, and SendMessage WM_CLOSE or WM_QUIT to each
+				var cProfPID = aPID > 1 ? aPID : getPidForRunningProfile(IsRelative, Path, path_DefProfRt); // throws if pid not found // assuming that PID can never be 1
+				
+				
+				/*
+				// method1 - tested works save dialogs shown
+				// issue is though, that if a save dialog is shown, its window is not focused, it just flashes in taskbar, i should figure out someway to focus it
+				var arr_strPtrWin = getPtrStrToWinOfProf(cProfPID, true, true);
+				for (var i=0; i<arr_strPtrWin.length; i++) {
+					
+					var hWnd = ostypes.TYPE.HWND(ctypes.UInt64(arr_strPtrWin[i]));
+					
+					var rez_SendMessage = ostypes.API('SendMessage')(hWnd, ostypes.CONST.WM_CLOSE, 0, 0);
+					console.info('rez_SendMessage:', rez_SendMessage.toString(), uneval(rez_SendMessage), cutils.jscGetDeepest(rez_SendMessage));
+					if (ctypes.winLastError != 0) {
+					  console.error('Failed rez_SendMessage, winLastError:', ctypes.winLastError);
+					  throw new Error({
+						name: 'os-api-error',
+						message: 'Failed rez_SendMessage, winLastError: "' + ctypes.winLastError + '" and rez_SendMessage: "' + rez_SendMessage.toString(),
+						winLastError: ctypes.winLastError
+					  });
+					}
+					
+					//break; // testing to see what happens if i send WM_QUIT to just any window of the pid, im hoping it does graceful quit on the whole process
+					
+				}
+				*/
+				
+				
+				// method2 - tested works, sending to any one of the windows, vis or invis, quits whole app without forcing it, however the save promps didnt show
+				// issue is though, none of the save dialog boxes are shown on windows that need it
+				var strPtrWin = getPtrStrToWinOfProf(cProfPID, false, false); // i dont think i need a visible win for this method
+				var hWnd = ostypes.TYPE.HWND(ctypes.UInt64(strPtrWin));
+				
+				var idThread = ostypes.API('GetWindowThreadProcessId')(hWnd, null);
+				console.info('idThread:', idThread.toString(), uneval(idThread), cutils.jscGetDeepest(idThread));
+				if (ctypes.winLastError != 0) {
+				  console.error('Failed idThread, winLastError:', ctypes.winLastError);
+				  throw new Error({
+					name: 'os-api-error',
+					message: 'Failed idThread, winLastError: "' + ctypes.winLastError + '" and idThread: "' + idThread.toString(),
+					winLastError: ctypes.winLastError
+				  });
+				}
+				
+				var rez_PostThreadMessage = ostypes.API('PostThreadMessage')(idThread, ostypes.CONST.WM_QUIT, 0, 0);
+				console.info('rez_PostThreadMessage:', rez_PostThreadMessage.toString(), uneval(rez_PostThreadMessage), cutils.jscGetDeepest(rez_PostThreadMessage));
+				if (ctypes.winLastError != 0) {
+				  console.error('Failed rez_PostThreadMessage, winLastError:', ctypes.winLastError);
+				  throw new Error({
+					name: 'os-api-error',
+					message: 'Failed rez_PostThreadMessage, winLastError: "' + ctypes.winLastError + '" and rez_PostThreadMessage: "' + rez_PostThreadMessage.toString(),
+					winLastError: ctypes.winLastError
+				  });
+				}
+				
+				
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function launchProfile(pathsObj, arrOfArgs) { // checkExistanceFirst to check if launcher exists first? not used yet
 	
 	// pathsObj should be same as that needed to be passed to makeLauncher
 	switch (core.os.name) {
@@ -455,9 +579,10 @@ function launchProfile(pathsObj, argsForQueryLocked) { // checkExistanceFirst to
 					var sei = ostypes.TYPE.SHELLEXECUTEINFO();
 					//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 					sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
-					var cStr = ostypes.TYPE.LPCTSTR.targetType.array()(launchPath);
-					sei.lpFile = cStr;
-					//sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()('-safe-mode'); // works
+					sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(launchPath);
+					if (arrOfArgs && arrOfArgs.length > 0) {
+						sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()(arrOfArgs.join(' '));
+					}
 					//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 					sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
 					
@@ -1568,13 +1693,13 @@ function getPtrStrToWinOfProf(aProfilePID, allWin, visWinOnly) {
 							
 							// debug block
 							if ((hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
-								arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+								arrWinPtrStrs.push(cutils.strOfPtr(hwnd));
 							} else {
 								// win not visible
 							}
 						} else {
 							// i dont care if its vis or not
-							arrWinPtrStrs.push(hwnd.toString().match(/.*"(.*?)"/)[1]);
+							arrWinPtrStrs.push(cutils.strOfPtr(hwnd));
 						}
 						if (!allWin) {
 							return false;

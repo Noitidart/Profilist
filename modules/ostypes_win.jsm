@@ -6022,8 +6022,10 @@ var winInit = function() {
 		// SendMessage
 		ICON_SMALL: 0,
 		ICON_BIG: 1,
+		WM_CLOSE: 0x0010,
 		WM_COPYDATA: 0x004A,
 		WM_GETICON: 0x007F,
+		WM_QUIT: 0x0012,
 		WM_SETICON: 0x0080,
 		
 		// SetClassLong
@@ -6039,6 +6041,7 @@ var winInit = function() {
 		
 		PROCESS_DUP_HANDLE: 0x0040,
 		PROCESS_QUERY_INFORMATION: 0x0400,
+		PROCESS_TERMINATE: 1,
 		MAXIMUM_ALLOWED: 0x02000000,
 		
 		DUPLICATE_SAME_ACCESS: 0x00000002,
@@ -6330,6 +6333,38 @@ var winInit = function() {
 				self.TYPE.UINT			// fuLoad
 			);
 		},
+		OpenProcess: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684320%28v=vs.85%29.aspx
+			 * HANDLE WINAPI OpenProcess(
+			 *   __in_ DWORD dwDesiredAccess,
+			 *   __in_ BOOL  bInheritHandle,
+			 *   __in_ DWORD dwProcessId
+			 * );
+			 */
+			return lib('kernel32').declare('OpenProcess', self.TYPE.WINABI,
+				self.TYPE.HANDLE,	// return
+				self.TYPE.DWORD,	// dwDesiredAccess
+				self.TYPE.BOOL,		// bInheritHandle
+				self.TYPE.DWORD		// dwProcessId
+			);
+		},
+		PostThreadMessage: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644946%28v=vs.85%29.aspx
+			 * BOOL WINAPI PostThreadMessage(
+			 *   __in_ DWORD  idThread,
+			 *   __in_ UINT   Msg,
+			 *   __in_ WPARAM wParam,
+			 *   __in_ LPARAM lParam
+			 * );
+			 */
+			return lib('user32').declare(ifdef_UNICODE ? 'PostThreadMessageW' : 'PostThreadMessageA', self.TYPE.WINABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.DWORD,	// idThread
+				self.TYPE.UINT,		// Msg
+				self.TYPE.WPARAM,	// wParam
+				self.TYPE.LPARAM	// lParam
+			);
+		},
 		PropVariantClear: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/aa380073%28v=vs.85%29.aspx
 			 * WINOLEAPI PropVariantClear(
@@ -6545,6 +6580,19 @@ var winInit = function() {
 				self.TYPE.LPCTSTR,		// pszSource
 				self.TYPE.LPTSTR.ptr	// *ppwsz
 			); 
+		},
+		TerminateProcess: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms686714%28v=vs.85%29.aspx
+			 * BOOL WINAPI TerminateProcess(
+			 *   __in_ HANDLE hProcess,
+			 *   __in_ UINT   uExitCode
+			 * );
+			 */
+			return lib('kernel32').declare('TerminateProcess', self.TYPE.WINABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE,	// hProcess
+				self.TYPE.UINT		// uExitCode
+			);
 		},
 		ConnectNamedPipe: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365146%28v=vs.85%29.aspx
