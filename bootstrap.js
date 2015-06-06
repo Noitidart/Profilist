@@ -3693,7 +3693,7 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 													  .QueryInterface(Ci.nsIInterfaceRequestor)
 													  .getInterface(Ci.nsIBaseWindow);
 								cWinHandlePtrStr.push(aBaseWin.nativeHandle);
-								setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWin);
+								setWinPPSProps(profToolkit.selectedProfile.iniKey, cProfSpec, aDOMWin);
 							}
 							
 							step2();
@@ -3813,9 +3813,11 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	}
 	
 	var cbPostProgSpecsGot = function(aProfSpec) {
+		console.error('ok going to call get ensure icon now');
 		ensureIconExists_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
 	};
 	
+	console.error('going to call get prof spec now');
 	getProfileSpecs_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
 	
 	return deferredMain_updateIconToAllWindows.promise;
@@ -3851,7 +3853,7 @@ function updateIconToLauncher(aProfIniKey, useSpecObj, aOptions={}) {
 							searchDirs[profToolkit.path_system_dirForNormalPins] = 1; // win7+ pinned taskbar
 							searchDirs[profToolkit.path_system_dirForRelaunchCmdPins] = 2; // win7+ pinned taskbar
 							if (core.os.version == 6.2 || core.os.version == 6.3) {
-								//searchDirs[profToolkit.path_system_dirStartScreen] = 1; // win8+ start screen, when programs are pinned to start screen on install, they are found here I THINK i asked q on stackoverflow here: http://stackoverflow.com/questions/30682241/location-of-shortcuts-pinned-to-win8-8-1-start-screen?noredirect=1#comment49426104_30682241 // it seems its this path for non start screen pin too on win8/win81 i havent tested other os yet
+								//searchDirs[profToolkit.path_system_dirStartScreen] = 1; // win8+ start screen, when programs are pinned to start screen on install, they are found here I THINK i asked q on stackoverflow here: http://stackoverflow.com/questions/30682241/location-of-shortcuts-pinned-to-win8-8-1-start-screen?noredirect=1#comment49426104_30682241 // it seems its this path for non start screen pin too on win8/win81 i havent tested other os yet // many progs were inside a subfolder, so depth may need to be 2 here, however firefox was not in a subfolder
 							}
 						}
 						if (core.os.version < 6.2) {
@@ -4169,10 +4171,10 @@ function customizationending(e) {
 var lastMaxStackHeight = 0;
 
 var _cache_useOsSetObj = {};
-const _cache_expiryTime_useOsSetObj = 1000;
-function setWinPPSProps(aProfIniKey, useOsSetObj, aNativeHandlePtrStr_OR_aDOMWindow) {
+const _cache_expiryTime_useOsSetObj = 1000; // 1sec
+function setWinPPSProps(aProfIniKey, useSpecObj, aNativeHandlePtrStr_OR_aDOMWindow) {
 	// aDOMWindow only used by if setWinPPSProps on self. meaning if triggering on self profile
-	
+	console.error('doing setWinPPSProps');
 	var deferredMain_setWinPPSProps = new Deferred();
 	
 	var cDOMWindow;
@@ -4243,19 +4245,22 @@ function setWinPPSProps(aProfIniKey, useOsSetObj, aNativeHandlePtrStr_OR_aDOMWin
 		do_setItOnWin(_cache_useOsSetObj[aProfIniKey]);
 	};
 	
-	if (!useOsSetObj) {
+	if (!useSpecObj) {
 		if (aProfIniKey in _cache_useOsSetObj) {
 			if (new Date().getTime() - _cache_useOsSetObj[aProfIniKey].cacheTime < _cache_expiryTime_useOsSetObj) {
 				// cached val is within _cache_expiryTime_useOsSetObj (i initally set this to 1sec) old
+				console.error('USING CACHED');
 				do_setItOnWin(_cache_useOsSetObj[aProfIniKey]);
 			} else {
+				console.error('refreshing cache');
 				getProfileSpecs_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
 			}
 		} else {
+			console.error('initing cache');
 			getProfileSpecs_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
 		}
 	} else {
-		do_setItOnWin(useOsSetObj);
+		do_createTransferObj(useSpecObj);
 	}
 	
 	return deferredMain_setWinPPSProps.promise;
@@ -4281,7 +4286,7 @@ var windowListener = {
 		let DOMWindows = Services.wm.getEnumerator(null);
 		while (DOMWindows.hasMoreElements()) {
 			let aDOMWindow = DOMWindows.getNext();
-			windowListener.loadIntoWindowBeforeLoad(aDOMWindow);
+			windowListener.loadIntoWindowBeforeLoad(aDOMWindow, true);
 			if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
 				windowListener.loadIntoWindow(aDOMWindow);
 			} else {
@@ -4381,7 +4386,7 @@ var windowListener = {
 			delete aDOMWindow.Profilist;
 		}
 	},
-	loadIntoWindowBeforeLoad: function(aDOMWindow) {
+	loadIntoWindowBeforeLoad: function(aDOMWindow, isRegister) {
 		if (!aDOMWindow) {
 			console.error('no aDOMWindow!!! this is weird shouldnt happen');
 		}
@@ -4391,7 +4396,11 @@ var windowListener = {
 			case 'winmo':
 			case 'wince':
 					
-					setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWindow); // returns promise
+					if (!isRegister) {
+						setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWindow); // returns promise // passing null to 2nd arg makes setWinPPSProps get first spec obj and then cached for the rest
+					} else {
+						console.error('will not setWinPPSProps as this is loadIntoWindowBeforeLoad from register loop');
+					}
 					
 				break;
 			default:
@@ -7066,6 +7075,7 @@ function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB) {
 	};
 	
 	if (!useSpecObj) {
+		console.error('calling get prof sepc from ensure icon');
 		getProfileSpecs_WithCB(aDeferred, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
 	} else {
 		cbPostProgSpecsGot(useSpecObj);
@@ -8140,6 +8150,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 		if (iconNameObj) {
 			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
 		} else {
+			console.error('calling getProfileSpecs from makeIcon');
 			var promise_profSpecsToGetIconNameObj = getProfileSpecs(for_ini_key);
 			promise_profSpecsToGetIconNameObj.then(
 				function(aVal) {
