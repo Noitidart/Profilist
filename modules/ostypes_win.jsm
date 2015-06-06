@@ -6066,7 +6066,10 @@ var winInit = function() {
 		SLGP_RAWPATH: 0x4,
 		ERROR_FILE_NOT_FOUND: 2,
 		ERROR_SHARING_VIOLATION: 32,
-		ERROR_PATH_NOT_FOUND: 3
+		ERROR_PATH_NOT_FOUND: 3,
+		
+		INFINITE: 0xFFFFFFFF,
+		SYNCHRONIZE: 0x100000
 	};
 	
 	var _lib = {}; // cache for lib
@@ -6592,6 +6595,19 @@ var winInit = function() {
 				self.TYPE.BOOL,		// return
 				self.TYPE.HANDLE,	// hProcess
 				self.TYPE.UINT		// uExitCode
+			);
+		},
+		WaitForSingleObject: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms687032%28v=vs.85%29.aspx
+			 * DWORD WINAPI WaitForSingleObject(
+			 *   __in_ HANDLE hHandle,
+			 *   __in_ DWORD  dwMilliseconds
+			 * );
+			 */
+			return lib('kernel32').declare('WaitForSingleObject', self.TYPE.WINABI,
+				self.TYPE.DWORD,	// return
+				self.TYPE.HANDLE,	// hHandle
+				self.TYPE.DWORD		// dwMilliseconds
 			);
 		},
 		ConnectNamedPipe: function() {

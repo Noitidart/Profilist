@@ -419,7 +419,7 @@ function forceQuit(aPID, IsRelative, Path, path_DefProfRt) {
 			
 				var cProfPID = aPID > 1 ? aPID : getPidForRunningProfile(IsRelative, Path, path_DefProfRt); // throws if pid not found // assuming that PID can never be 1
 				
-				var hProcess = ostypes.API('OpenProcess')(ostypes.CONST.PROCESS_TERMINATE, false, cProfPID);
+				var hProcess = ostypes.API('OpenProcess')(ostypes.CONST.PROCESS_TERMINATE | ostypes.CONST.SYNCHRONIZE, false, cProfPID);
 				console.info('hProcess:', hProcess.toString(), uneval(hProcess), cutils.jscGetDeepest(hProcess));
 				if (ctypes.winLastError != 0) {
 				  console.error('Failed hProcess, winLastError:', ctypes.winLastError);
@@ -440,6 +440,18 @@ function forceQuit(aPID, IsRelative, Path, path_DefProfRt) {
 						winLastError: ctypes.winLastError
 					  });
 					}
+
+					var rez_wait = ostypes.API('WaitForSingleObject')(hProcess, ostypes.CONST.INFINITE);
+					console.info('rez_wait:', rez_wait.toString(), uneval(rez_wait), cutils.jscGetDeepest(rez_wait));
+					if (ctypes.winLastError != 0) {
+					  console.error('Failed rez_wait, winLastError:', ctypes.winLastError);
+					  throw new Error({
+						name: 'os-api-error',
+						message: 'Failed rez_wait, winLastError: "' + ctypes.winLastError + '" and rez_wait: "' + rez_wait.toString(),
+						winLastError: ctypes.winLastError
+					  });
+					}
+					
 				} finally {
 					var rez_CloseHandle = ostypes.API('CloseHandle')(hProcess);
 					console.info('rez_CloseHandle:', rez_CloseHandle.toString(), uneval(rez_CloseHandle), cutils.jscGetDeepest(rez_CloseHandle));
