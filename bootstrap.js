@@ -372,11 +372,11 @@ current builds icon if dev mode is enabled
 			}
 			
 			if (profToolkit.selectedProfile.name === null || profToolkit.selectedProfile.isTemp) { //probably null
-				console.error('XYZ this profile at path does not exist, so its a temporary profile');
+				//console.log('XYZ this profile at path does not exist, so its a temporary profile');
 				profToolkit.selectedProfile.name = myServices.sb.GetStringFromName('temporary-profile'); //as it has no name
 				profToolkit.selectedProfile.iniKey = null;
 			} else {
-				console.error('XYZ SET IT HERE, it has name and it is:', profToolkit.selectedProfile.name);
+				//console.log('XYZ SET IT HERE, it has name and it is:', profToolkit.selectedProfile.name);
 				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
 			}
 			
@@ -1372,13 +1372,13 @@ function initProfToolkit() {
 	
 	if (profToolkit.selectedProfile.rootDirPath.indexOf(profToolkit.rootPathDefault) > -1) {
 		//then its PROBABLY relative as its in the folder it should be
-		console.error('setting XYZ here:', profToolkit.selectedProfile.rootDirPath, profToolkit.rootPathDefault);
+		//console.log('setting XYZ here:', profToolkit.selectedProfile.rootDirPath, profToolkit.rootPathDefault);
 		var IniPathStr = new FileUtils.File(profToolkit.selectedProfile.rootDirPath); //OS.Path.join(profToolkit.rootPathDefault, profToolkit.selectedProfile.rootDirName);
 		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(profToolkit.nsIFile_iniDir); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = PathToWriteToIni;
 	} else {
 		//its not relative
-		console.error('setting XYZ null');
+		//console.log('setting XYZ null');
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = null;
 	}
 	profToolkit.selectedProfile.iniKey = undefined; //note: i set it to undefined meaning it hasnt been verified yet, i set it to null for temp profile meaning name not found, i set it to string once it was verified
@@ -1398,7 +1398,15 @@ function initProfToolkit() {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-			profToolkit.path_profilistData_winntWatchDir = OS.Path.join(profToolkit.path_profilistData_root, 'winnt_watch_dir');
+		
+				profToolkit.path_profilistData_winntWatchDir = OS.Path.join(profToolkit.path_profilistData_root, 'winnt_watch_dir');
+				if (core.os.version_name == '7+') {
+					profToolkit.path_system_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'); // :note: implementation specific, test on win10 and all windows version
+					profToolkit.path_system_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts'); // :note: implementation specific, test on win10 and all windows version
+					profToolkit.path_system_dirStartScreen = Services.dirsvc.get('CmPrgs', Ci.nsIFile).path; // im guessing on this one, based on right click and open file location from start screen, it gave me C:\ProgramData\Microsoft\Windows\Start Menu\Programs on right click, and this dirsvc special matches that
+				}
+				profToolkit.path_system_dirQuickLaunch = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch'); //C:\Users\Vayeate\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch // https://gist.github.com/Noitidart/f43784329caaa5f75382#file-_ff-addon-snippet-os-shortcutservice-js-L51
+				profToolkit.path_system_dirPrograms = OS.Constants.Path.winStartMenuProgsDir; // same as Services.dirsvc.get('Progs', Ci.nsIFile).path; // drivsvc paths are cached
 			break;
 			
 		default:
@@ -2050,16 +2058,16 @@ function updateStatusImgs(aDOMWindow) {
 					//aVal is TRUE if LOCKED
 					//aVal is FALSE if NOT locked
 					if (aVal) {
-						console.info('profile', objWin[hoisted_p].props.Name, 'is IN USE');
+						//console.info('profile', objWin[hoisted_p].props.Name, 'is IN USE');
 						//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'active');
 						aDOMWindow.Profilist.PStack.childNodes[getChildNodeI(hoisted_p, objWin, aDOMWindow.Profilist.PStack)].setAttribute('status', 'active');
 					} else {
-						console.info('profile', objWin[hoisted_p].props.Name, 'is NOT in use');
+						//console.info('profile', objWin[hoisted_p].props.Name, 'is NOT in use');
 						//tbb_boxes[tbb_boxes_name_to_i[p]].setAttribute('status', 'inactive');
 						aDOMWindow.Profilist.PStack.childNodes[getChildNodeI(hoisted_p, objWin, aDOMWindow.Profilist.PStack)].setAttribute('status', 'inactive');
 					}
 					
-					console.log('Success promise_profLokChk num: ' + objWin[hoisted_p].num + ' and name: ' + objWin[hoisted_p].props.Name);
+					//console.log('Success promise_profLokChk num: ' + objWin[hoisted_p].num + ' and name: ' + objWin[hoisted_p].props.Name);
 					// end - do stuff here - promise_profLokChk
 				},
 				function(aReason) {
@@ -3445,138 +3453,43 @@ function tbb_box_click(e) {
 				writeIniAndBkp();
 				
 				var cCB = function(cProfSpecs) {
-					var name_iconToUse = cProfSpecs.iconNameObj.str;
-					updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
-					updateIconToPinnedCut(targetedProfileIniKey, cProfSpecs);
-					updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
-					updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
+					updateIconToAllWindows(targetedProfileIniKey, cProfSpecs);
+					updateIconToSystemLaunchers(targetedProfileIniKey, cProfSpecs); // for winnt this will update exe's, but its not set up yet, so on winnt to update system launchers i use updateIconToLauncher with winUpdateIconToSystemShortcutLaunchers true
+					updateIconToDesktcut(targetedProfileIniKey, cProfSpecs);
+					updateIconToLauncher(targetedProfileIniKey, cProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true});
 				};
-				do_getProfSpecsCheckUse_WithCB(null, targetedProfileIniKey, null, true, cCB);
+				getProfileSpecs_WithCB(null, targetedProfileIniKey, null, true, cCB);
 			} else {
 				// does not have badge applied
 				makePanelStay();
-				var promise_pickerProcess = pickerIconset(cWin);
-				promise_pickerProcess.then(
-					function(aVal) {
+				
+				/* in proces of converting to use WithCB functions just for niceness, the below is old way and it works
+				var cCB = function(aProfSpec) {
+					ensureIconExists_WithCB(null, targetedProfileIniKey, aProfSpec, cCB2);
+				};
+				
+				var cCB2 = function(cProfSpec) {
+					
+				};
+				getProfileSpecs_WithCB(null, targetedProfileIniKey, null, true, cCB);
+				*/
+				
+				var step1 = function() {
+					var promise_pickerProcess = pickerIconset(cWin);
+					promise_pickerProcess.then(
+					  function(aVal) {
 						console.log('Fullfilled - promise_pickerProcess - ', aVal);
 						// start - do stuff here - promise_pickerProcess
-						console.log('badge applied');
-						
-						targetedTBB.setAttribute('badge', aVal['16'].FileURI);
-						var iconsetId = OS.Path.split(aVal['16'].OSPath).components;
-						iconsetId = iconsetId[iconsetId.length-2];
-						
-						console.info('iconsetId from post promise:', iconsetId);
-						
-						cWin.setTimeout(makePanelClosableOnBlur_doCompleteAnimation, 500);
-						
-						ini[targetedProfileIniKey].props['Profilist.badge'] = iconsetId;
-						writeIniAndBkp();
-						var targetedProfSpecs;
-						var pickerProcess_getProfSpecs = function() {
-							var promise_pickerProcess_getProfSpecs = getProfileSpecs(targetedProfileIniKey);
-							promise_pickerProcess_getProfSpecs.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_pickerProcess_getProfSpecs - ', aVal);
-									// start - do stuff here - promise_pickerProcess_getProfSpecs
-									targetedProfSpecs = aVal;
-									pickerProcess_makeIcon();
-									// end - do stuff here - promise_pickerProcess_getProfSpecs
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_pickerProcess_getProfSpecs', aReason:aReason};
-									console.error('Rejected - promise_pickerProcess_getProfSpecs - ', rejObj);
-									//deferred_createProfile.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_pickerProcess_getProfSpecs', aCaught:aCaught};
-									console.error('Caught - promise_pickerProcess_getProfSpecs - ', rejObj);
-									//deferred_createProfile.reject(rejObj);
-								}
-							);
-						};
-						
-						var pickerProcess_makeIcon = function() {
-							var promise_pickerProcess_makeIcon = makeIcon(targetedProfileIniKey, targetedProfSpecs.iconNameObj);
-							promise_pickerProcess_makeIcon.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_pickerProcess_makeIcon - ', aVal);
-									// start - do stuff here - promise_pickerProcess_makeIcon
-									pickerProcess_updateWindowsLauncherDeskcut();
-									// end - do stuff here - promise_pickerProcess_makeIcon
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_pickerProcess_makeIcon', aReason:aReason};
-									console.error('Rejected - promise_pickerProcess_makeIcon - ', rejObj);
-									//deferred_createProfile.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_pickerProcess_makeIcon', aCaught:aCaught};
-									console.error('Caught - promise_pickerProcess_makeIcon - ', rejObj);
-									//deferred_createProfile.reject(rejObj);
-								}
-							);
-						};
-						
-						var pickerProcess_updateWindowsLauncherDeskcut = function() {
-							var name_iconToUse = targetedProfSpecs.iconNameObj.str;
-							updateIconToAllWindows(targetedProfileIniKey, name_iconToUse);
-							updateIconToPinnedCut(targetedProfileIniKey, targetedProfSpecs);
-							updateIconToLauncher(targetedProfileIniKey, name_iconToUse);
-							updateIconToDesktcut(targetedProfileIniKey, name_iconToUse);
-						};
-						/*
-						// makeIcon(targetedProfileIniKey); // resolves with icon name it should be
-						// makeIcon.then(
-							function(aVal) {
-								// aVal is object: {iconNameShouldBe: string, alreadySetOnLauncher: bool} the icon name it should be updated to
-								
-								
-								//// do not update launcher and deskcut icon if user changed build of profile while that profile was running (in another build), instead setup icon update to happen on shutdown of browser
-									// check if profile is running, if it is, figure out its current build/channel its actually running in
-										// if it is running then now figure out if it is TIED to another build/channel, if it is then
-										if (aProfilePath_currentlyRunningChannel != aProfilePath_tiedChannel) {
-											updateLauncherAndCutIconsOnBrowserShutdown = function() {
-												// must use nsIFile so as to keep browser shutdown going until the applying completes, it should be as simple and quick as possible in shutdown, so like keep file data ready to be copied
-												// maybe consider: no need to updateIconToWindows as browser is shutting down? //updateIconToWindows();
-												updateIconToLauncher();
-												updateIconToDesktcut();
-											};
-										} else {
-											updateIconToWindows();
-											updateIconToLauncher();
-											updateIconToDesktcut();									
-										}
-								// updateIconToWindows(null; // update all windows
-								// updateIconToLauncher();
-								// updateIconToDesktCut();
-							},
-							function(aReason) {
-								
-							}
-						); // end makeIcon.then
-						*/
-						
-						pickerProcess_getProfSpecs();
+						step2(aVal);
 						// end - do stuff here - promise_pickerProcess
-					},
-					function(aReason) {
+					  },
+					  function(aReason) {
 						var rejObj = {name:'promise_pickerProcess', aReason:aReason};
-						console.error('Rejected - promise_pickerProcess - ', rejObj);
+						console.warn('Rejected - promise_pickerProcess - ', rejObj);
+						
 						var deepestReason = aReasonMax(aReason);
 						console.info('deepestReason:', deepestReason);
 						if (Object.prototype.toString.call(deepestReason) === '[object Array]') {
-							/*
-							switch (deepestReason[0]) {
-								case 'non-square':
-									break;
-								default:
-									console.error('should never get here, only if aCaught, which is programmer problem');
-									return; //to prevent deeper exec
-							}
-							*/
 							try {
 								var errorTxt = myServices.sb.formatStringFromName('iconset-picker-error-txt-' + deepestReason[0], deepestReason.slice(1), deepestReason.slice(1).length) // link3632035
 							} catch(ex if ex.result == Cr.NS_ERROR_FAILURE) {
@@ -3606,67 +3519,53 @@ function tbb_box_click(e) {
 								);
 						}
 						
-						makePanelClosableOnBlur_doCompleteAnimation();
-					}
-				).catch(
-					function(aCaught) {
-						console.error('caught pickerIconset');
-						Services.prompt.alert(null, 'profilist', 'in catching');
+						makePanelClosableOnBlur_doCompleteAnimation();						
+						//deferred_createProfile.reject(rejObj);
+					  }
+					).catch(
+					  function(aCaught) {
 						var rejObj = {name:'promise_pickerProcess', aCaught:aCaught};
 						console.error('Caught - promise_pickerProcess - ', rejObj);
-						console.error(rejObj);
-					}
-				);
+						Services.prompt.alert(null, 'profilist', 'in catching');
+						//deferred_createProfile.reject(rejObj);
+					  }
+					);
+				};
+				
+				var step2 = function(pickerPicked) {
+					var step2_1 = function() {
+						console.log('badge picked');
+						
+						targetedTBB.setAttribute('badge', pickerPicked['16'].FileURI);
+						var iconsetId = OS.Path.split(pickerPicked['16'].OSPath).components;
+						iconsetId = iconsetId[iconsetId.length-2];
+						
+						console.info('iconsetId from post pickerProcess:', iconsetId);
+						
+						cWin.setTimeout(makePanelClosableOnBlur_doCompleteAnimation, 500);
+						
+						ini[targetedProfileIniKey].props['Profilist.badge'] = iconsetId;
+						writeIniAndBkp();
+						
+						getProfileSpecs_WithCB(null, targetedProfileIniKey, null, true, step2_2);
+					};
+					
+					var step2_2 = function(aProfSpec) {
+						ensureIconExists_WithCB(null, targetedProfileIniKey, aProfSpec, step3);
+					};
+					
+					step2_1();
+				};
+				
+				var step3 = function(targetedProfSpecs) {
+					updateIconToAllWindows(targetedProfileIniKey, targetedProfSpecs);
+					updateIconToSystemLaunchers(targetedProfileIniKey, targetedProfSpecs);
+					updateIconToLauncher(targetedProfileIniKey, targetedProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true});
+					updateIconToDesktcut(targetedProfileIniKey, targetedProfSpecs);
+				};
+				
+				step1();
 			}
-			
-			/*
-			targetedTBB.classList.add('profilist-in-badge-change');
-			console.log('targetedProfileName:', targetedProfileName);
-			
-			var PUI = origTarg.ownerDocument.defaultView.PanelUI.panel;
-			PUI.addEventListener('popuphiding', keepPuiShowing, false);
-			
-			origTarg.ownerDocument.defaultView.Profilist.PBox.classList.add('profilist-keep-open');
-			
-			Services.prompt.alert(origTarg.ownerDocument.defaultView, 'Profilist - Badging Process', 'You are on Mac OS X, ideally you should multi-select from the upcoming file dialog, 7 images. They should each be a square image of sizes 10px, 16px, 32px, 64px, 128px, 256px, and 512px. Only the 16px will be shown in the Firefox Profilist menu, but the other sizes will be used for generating badged icons for shortcuts. If a match for the size needed is not found, then the nearest sized one is scaled, this will lead to reduced quality on the scaled images. So supply high quality images of each image if you can.');
-			var promise_doBadgeProc = showPick4Badging(origTarg.ownerDocument.defaultView);
-			
-			var postPromise = function() {
-				origTarg.ownerDocument.defaultView.Profilist.PBox.classList.remove('profilist-keep-open');
-				PUI.removeEventListener('popuphiding', keepPuiShowing, false);
-				//targetedTBB.classList.add('profilist-POST-badge-change'); //experimental
-				targetedTBB.classList.remove('profilist-in-badge-change');
-			};
-			
-			promise_doBadgeProc.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_doBadgeProc - ', aVal);
-					// start - do stuff here - promise_doBadgeProc
-					//Services.prompt.alert(null, '', aVal + '_16.png');
-					for (var k in ini) {
-						if ('num' in ini[k] && ini[k].props.Name == targetedProfileName) {
-							ini[k].props['Profilist.badge'] = aVal;
-							break;
-						}
-					}
-					targetedTBB.setAttribute('badge', getPathToBadge(ini[k].props['Profilist.badge'], '16'));
-					writeIniAndBkp();
-					postPromise();
-					// end - do stuff here - promise_doBadgeProc
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_doBadgeProc', aReason:aReason};
-					console.error('Rejected - promise_doBadgeProc - ', rejObj);
-					postPromise();
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_doBadgeProc', aCaught:aCaught};
-					console.error('Caught - promise_doBadgeProc - ', rejObj);
-					postPromise();
-				}
-			);
-			*/
 		}
 	};
 	
@@ -3758,7 +3657,7 @@ function getPathTo16Img(iconset_name, uncached) {
 	}
 }
 // start - functions to update icons at various locations
-function updateIconToAllWindows(aProfilePath, useIconNameStr) {
+function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	// if aProfilePath is of cur profile it uses XPCOM to get all windows
 	
 	// useIconNameStr should be string of path
@@ -3767,224 +3666,322 @@ function updateIconToAllWindows(aProfilePath, useIconNameStr) {
 		// true if done	
 		// false if not needed
 		
-	
-	console.log('in updateIconToAllWindows');
-	
 	var deferredMain_updateIconToAllWindows = new Deferred();
 	
-	if (['winnt','linux'].indexOf(cOS) == -1) {
-		deferredMain_getProfileSpecs.reject('os-unsupported');
-	}
-	
-	var do_getIconName = function() {
-		/*
-		var promise_getIconName = getProfileSpecs(aProfilePath);
-		promise_getIconName.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getIconName - ', aVal);
-				// start - do stuff here - promise_getIconName
-				useIconNameStr = aVal.iconNameObj.str;
-				do_applyIcon();
-				// end - do stuff here - promise_getIconName
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getIconName', aReason:aReason};
-				console.error('Rejected - promise_getIconName - ', rejObj);
-				deferredMain_updateIconToAllWindows.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
-				console.error('Caught - promise_getIconName - ', rejObj);
-				deferredMain_updateIconToAllWindows.reject(rejObj);
-			}
-		);
-		*/
-		// have to do makeIcon because icon may not exist
-		var promise_getIconName = makeIcon(aProfilePath);
-		promise_getIconName.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getIconName - ', aVal);
-				// start - do stuff here - promise_getIconName
-				useIconNameStr = aVal.profSpecs.iconNameObj.str;
-				do_applyIcon();
-				// end - do stuff here - promise_getIconName
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getIconName', aReason:aReason};
-				console.error('Rejected - promise_getIconName - ', rejObj);
-				deferredMain_updateIconToAllWindows.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
-				console.error('Caught - promise_getIconName - ', rejObj);
-				deferredMain_updateIconToAllWindows.reject(rejObj);
-			}
-		);
-	}
-
-	var do_applyIcon = function() {
-		switch (cOS) {
-			case 'winnt':
-				var cWinHandlePtrStr;
-				var winntPathToWatchedFile = null;
-				var do_theApply = function() {					
-					console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
-					useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useIconNameStr + '.ico');
-					console.info('will apply this icon:', useIconNameStr);
-					var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
-						useIconNameStr,		// iconPath
-						cWinHandlePtrStr,	// arrWinHandlePtrStrs
-						winntPathToWatchedFile	// samePid
-					]);
-					promise_changeIconForWindows.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_changeIconForWindows - ', aVal);
-							// start - do stuff here - promise_changeIconForWindows
-							deferredMain_updateIconToAllWindows.resolve(true);
-							// end - do stuff here - promise_changeIconForWindows
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
-							console.error('Rejected - promise_changeIconForWindows - ', rejObj);
-							deferredMain_updateIconToAllWindows.reject(rejObj);
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					// step globals
+					var cWinHandlePtrStr;
+					var winntPathToWatchedFile = null;
+					
+					var step1 = function() {
+						// collect hwndPtrStr's
+						if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
+							// is current profile so no need for ctypes to get handles for all visible windows
+							cWinHandlePtrStr = [];
+							var DOMWindows = Services.wm.getEnumerator(null);
+							while (DOMWindows.hasMoreElements()) {
+								var aDOMWin = DOMWindows.getNext();
+								var aBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
+													  .getInterface(Ci.nsIWebNavigation)
+													  .QueryInterface(Ci.nsIDocShellTreeItem)
+													  .treeOwner
+													  .QueryInterface(Ci.nsIInterfaceRequestor)
+													  .getInterface(Ci.nsIBaseWindow);
+								cWinHandlePtrStr.push(aBaseWin.nativeHandle);
+								setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWin);
+							}
+							
+							step2();
+						} else {
+							// test if profile at aProfIniKey is running
+								// if it isnt then resolve
+								// if it is then continue to badge apply after getting handle for one of its windows
+							
+							var step1_1 = function() {
+								// get pid for aProfIniKey
+								// even for xp just go ahead and run this, it will return 0 if not found. if not found it will go through absolutely all handles which can take up to 1s but its not going to apply so its not a delay
+								var promise_pidOfProfile = ProfilistWorker.post('getPidForRunningProfile', [ini[aProfIniKey].props.IsRelative, aProfIniKey, profToolkit.rootPathDefault]);
+								promise_pidOfProfile.then(
+									function(aVal) {
+										console.log('Fullfilled - promise_pidOfProfile - ', aVal);
+										// start - do stuff here - promise_pidOfProfile
+										if (aVal > 0) {
+											step1_2(aVal);
+										} else {
+											console.warn('not running so no windows to update'); // this is an acceptable resolve to this function as before running this, devuser is not expected to check if running
+											deferredMain_updateIconToAllWindows.resolve(false);
+										}
+										// end - do stuff here - promise_pidOfProfile
+									},
+									function(aReason) {
+										var rejObj = {name:'promise_pidOfProfile', aReason:aReason};
+										console.error('Rejected - promise_pidOfProfile - ', rejObj);
+										deferredMain_updateIconToAllWindows.reject(rejObj);
+									}
+								).catch(
+									function(aCaught) {
+										var rejObj = {name:'promise_pidOfProfile', aCaught:aCaught};
+										console.error('Caught - promise_pidOfProfile - ', rejObj);
+										deferredMain_updateIconToAllWindows.reject(rejObj);
+									}
+								);
+							};
+							
+							var step1_2 = function(aProfPID) {
+								// collect all visible window handles
+								var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true, true]); // returns array of hwnd ptr str's
+								promise_getWinHandleForPid.then(
+									function(aVal) {
+										console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
+										// start - do stuff here - promise_getWinHandleForPid
+										// aVal is a string to pointer on success, else it is 0
+											// i set allWin to true so it will be a an array of strings
+										if (!aVal) {
+											console.error('no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`');
+											deferredMain_updateIconToAllWindows.resolve(false);
+										} else {
+											winntPathToWatchedFile = {
+												fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
+												fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
+											};
+											cWinHandlePtrStr = aVal;
+											step2();
+										}
+										// end - do stuff here - promise_getWinHandleForPid
+									},
+									function(aReason) {
+										var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
+										console.error('Rejected - promise_getWinHandleForPid - ', rejObj);
+										deferredMain_updateIconToAllWindows.reject(rejObj);
+									}
+								).catch(
+									function(aCaught) {
+										var rejObj = {name:'promise_getWinHandleForPid', aCaught:aCaught};
+										console.error('Caught - promise_getWinHandleForPid - ', rejObj);
+										deferredMain_updateIconToAllWindows.reject(rejObj);
+									}
+								);
+							}
+							
+							step1_1();
 						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_changeIconForWindows', aCaught:aCaught};
-							console.error('Caught - promise_changeIconForWindows - ', rejObj);
-							deferredMain_updateIconToAllWindows.reject(rejObj);
-						}
-					);
+					};
+					
+					var step2 = function() {
+						console.info('cWinHandlePtrStr:', cWinHandlePtrStr);
+						var useIconNameStr = OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico');
+						console.info('will apply this icon:', useIconNameStr);
+						var promise_changeIconForWindows = ProfilistWorker.post('changeIconForAllWindows', [
+							useIconNameStr,			// iconPath
+							cWinHandlePtrStr,		// arrWinHandlePtrStrs
+							winntPathToWatchedFile	// is undefined for samePid
+						]);
+						promise_changeIconForWindows.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_changeIconForWindows - ', aVal);
+								// start - do stuff here - promise_changeIconForWindows
+								deferredMain_updateIconToAllWindows.resolve(true);
+								// end - do stuff here - promise_changeIconForWindows
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_changeIconForWindows', aReason:aReason};
+								console.error('Rejected - promise_changeIconForWindows - ', rejObj);
+								deferredMain_updateIconToAllWindows.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_changeIconForWindows', aCaught:aCaught};
+								console.error('Caught - promise_changeIconForWindows - ', rejObj);
+								deferredMain_updateIconToAllWindows.reject(rejObj);
+							}
+						);
+					};
+					
+					step1();
 				};
-				
-				if (!aDOMWin) {
-					if (aProfilePath == profToolkit.selectedProfile.iniKey) {
-						// is current profile so no need for ctyes to get handles for all windows
-						cWinHandlePtrStr = [];
-						var DOMWindows = Services.wm.getEnumerator(null);
-						while (DOMWindows.hasMoreElements()) {
-							var aDOMWin = DOMWindows.getNext();
-							var aBaseWin = aDOMWin.QueryInterface(Ci.nsIInterfaceRequestor)
-												  .getInterface(Ci.nsIWebNavigation)
-												  .QueryInterface(Ci.nsIDocShellTreeItem)
-												  .treeOwner
-												  .QueryInterface(Ci.nsIInterfaceRequestor)
-												  .getInterface(Ci.nsIBaseWindow);
-							cWinHandlePtrStr.push(aBaseWin.nativeHandle);
-							setWinPPSProps(profToolkit.selectedProfile.iniKey, null, aDOMWin);
-						}
-						
-						do_theApply();
-					} else {
-						// test if profile at aProfilePath is running
-							// if it isnt then resolve
-							// if it is then continue to badge apply after getting handle for one of its windows
-						
-						var do_getProfPid = function() {
-							// even for xp just go ahead and run this, it will return 0 if not found. if not found it will go through absolutely all handles which can take up to 1s but its not going to apply so its not a delay
-							var promise_pidOfProfile = ProfilistWorker.post('getPidForRunningProfile', [ini[aProfilePath].props.IsRelative, aProfilePath, profToolkit.rootPathDefault]);
-							promise_pidOfProfile.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_pidOfProfile - ', aVal);
-									// start - do stuff here - promise_pidOfProfile
-									if (aVal > 0) {
-										do_getWinHandleForPid(aVal);
-									} else {
-										// not running
-										deferredMain_updateIconToAllWindows.resolve(false);
-									}
-									// end - do stuff here - promise_pidOfProfile
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_pidOfProfile', aReason:aReason};
-									console.error('Rejected - promise_pidOfProfile - ', rejObj);
-									deferredMain_updateIconToAllWindows.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_pidOfProfile', aCaught:aCaught};
-									console.error('Caught - promise_pidOfProfile - ', rejObj);
-									deferredMain_updateIconToAllWindows.reject(rejObj);
-								}
-							);
-						};
-						
-						var do_getWinHandleForPid = function(aProfPID) {
-							var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true, true]);
-							promise_getWinHandleForPid.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
-									// start - do stuff here - promise_getWinHandleForPid
-									// aVal is a string to pointer on success, else it is 0
-										// i set allWin to true so it will be a an array of strings
-									if (!aVal) {
-										// no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`
-										deferredMain_updateIconToAllWindows.resolve(false);
-									} else {
-										winntPathToWatchedFile = {
-											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfilePath) + '.json'),
-											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
-										};
-										cWinHandlePtrStr = aVal;
-										do_theApply();
-									}
-									// end - do stuff here - promise_getWinHandleForPid
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
-									console.error('Rejected - promise_getWinHandleForPid - ', rejObj);
-									deferredMain_updateIconToAllWindows.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_getWinHandleForPid', aCaught:aCaught};
-									console.error('Caught - promise_getWinHandleForPid - ', rejObj);
-									deferredMain_updateIconToAllWindows.reject(rejObj);
-								}
-							);
-						}
-						
-						do_getProfPid();
-					}
-				}
-				break;
-			
-			case 'linux':
-				//todo:
-				break;
-			
-			default:
-				// should never get here due to the os check initially
-				deferredMain_updateIconToAllWindows.reject('os-unsupported');
-		}
+		
+			break;
+		default:
+			console.error('os-unsupported');
+			deferredMain_updateIconToAllWindows.reject('os-unsupported');
+			return deferredMain_updateIconToAllWindows.promise;
 	}
 	
-	// start - main
-	if (!useIconNameStr) {
-		// figure out icon name
-		do_getIconName();
-	} else {
-		do_applyIcon();
-	}
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
 	
 	return deferredMain_updateIconToAllWindows.promise;
 }
 
-function updateIconToLauncher(aProfilePath) {
-	// if launcher exists
-		// first reads what build it was last used at by getting Profilist.tie, if it doesnt have Profilist.tie then it gets last used build by reading icon CHANNEL-REF
-				// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
-				// then using that TIE-ID or CHANNEL-REF it uses that as base (has to has one of the two)
-				// if it has correct stuff then it doesnt update
+function updateIconToLauncher(aProfIniKey, useSpecObj, aOptions={}) {
+	console.error('entered updateIconToLauncher');
+	// if launcher exists, update it, else do nothing
+		// update means: ensure launcher has not just right icon but right everything, as if icon is wrong, very likely everything else is wrong
+	// for winnt, aOptions can contain, winUpdateIconToSystemShortcutLaunchers, so i dont have to run updateIconToSystemLaunchers, as they are same style both are shortcuts, so in one com initialize i can knock them all out
 	
 	console.log('updateIconToLauncher run - not yet implemented');
 	
 	// todo: for windows, make sure to check for pinned shortcuts and update those as well
+	
+	// update the launcher so it has accurate info, possibly update the deskcut here too if needed (winnt doesnt need desktcut update as its hardlink, but osx probably does)
+
+	var deferredMain_updateIconToLauncher = new Deferred();
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					// start link060609853
+					// determine dirs
+					var searchDirs = {};
+					searchDirs[profToolkit.path_profilistData_launcherExes] = 1; // profilist launcher dir
+					if (aOptions.winUpdateIconToSystemShortcutLaunchers) {
+						// for updateIconToSystemLaunchers
+						if (core.os.version_name == '7+') {
+							searchDirs[profToolkit.path_system_dirForNormalPins] = 1; // win7+ pinned taskbar
+							searchDirs[profToolkit.path_system_dirForRelaunchCmdPins] = 2; // win7+ pinned taskbar
+							if (core.os.version == 6.2 || core.os.version == 6.3) {
+								//searchDirs[profToolkit.path_system_dirStartScreen] = 1; // win8+ start screen, when programs are pinned to start screen on install, they are found here I THINK i asked q on stackoverflow here: http://stackoverflow.com/questions/30682241/location-of-shortcuts-pinned-to-win8-8-1-start-screen?noredirect=1#comment49426104_30682241 // it seems its this path for non start screen pin too on win8/win81 i havent tested other os yet
+							}
+						}
+						if (core.os.version < 6.2) {
+							// if less then win8 i think the start menu program shortctus are here:
+							//searchDirs[profToolkit.path_system_dirPrograms] = 1;
+						}
+						
+						// untested, as it didnt play a role in win81, which is what i devd on, path_system_dirQuickLaunch, path_system_dirPrograms
+						//searchDirs[profToolkit.path_system_dirQuickLaunch] = 1;
+					}
+					// end determine dirs
+					
+					var commonCutInfoObj = {
+						// keys for worker__createShortcuts
+						//dir: OS.Path.dirname(rezFindsArr[i]),
+						//name: OS.Path.basename(rezFindsArr[i]), // remove the .lnk
+						name: cProfSpec.launcherName,
+						//dirNameLnk: rezFindsArr[i], // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
+						args: '-profile "' + getPathToProfileDir(aProfIniKey) + '" -no-remote',
+						desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile',
+						icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+						targetFile: cProfSpec.path_exeForProfile,
+						
+						//updateIfDiff: true, // will be set by winnt_updateFoundShortcutLaunchers_withObj to true anyways, so lets data to post
+						//refreshIcon: 1 // will be set by anyways...
+					};
+					
+					var promise_winnt_updateFoundShortcutLaunchers_withObj = ProfilistWorker.post('winnt_updateFoundShortcutLaunchers_withObj', [searchDirs, getPathToProfileDir(aProfIniKey), commonCutInfoObj]);
+					promise_winnt_updateFoundShortcutLaunchers_withObj.then(
+					  function(aVal) {
+						console.log('Fullfilled - promise_winnt_updateFoundShortcutLaunchers_withObj - ', aVal);
+						// start - do stuff here - promise_winnt_updateFoundShortcutLaunchers_withObj
+						console.error('completed updateIconToLauncher');
+						// end - do stuff here - promise_winnt_updateFoundShortcutLaunchers_withObj
+					  },
+					  function(aReason) {
+						var rejObj = {name:'promise_winnt_updateFoundShortcutLaunchers_withObj', aReason:aReason};
+						console.warn('Rejected - promise_winnt_updateFoundShortcutLaunchers_withObj - ', rejObj);
+						//deferred_createProfile.reject(rejObj);
+					  }
+					).catch(
+					  function(aCaught) {
+						var rejObj = {name:'promise_winnt_updateFoundShortcutLaunchers_withObj', aCaught:aCaught};
+						console.error('Caught - promise_winnt_updateFoundShortcutLaunchers_withObj - ', rejObj);
+						//deferred_createProfile.reject(rejObj);
+					  }
+					);
+					// end link060609853
+				};
+		
+			break;
+		default:
+			console.error('os-unsupported');
+			deferredMain_updateIconToLauncher.reject('os-unsupported');
+			return deferredMain_updateIconToLauncher.promise;
+	}
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_updateIconToLauncher, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_updateIconToLauncher, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	
+	return deferredMain_updateIconToLauncher.promise;
 }
 
-function updateIconToDesktcut(aProfilePath) {
+function updateIconToSKELETON(aProfIniKey, useSpecObj, aOptions={}) {
+	// updates things like exe files on winnt and also all systemShortcutLaunchers, however if aOptions.winDONTUpdateSystemShortcutLaunchers, then it just does the exe files
+	// on osx it updates the main .app
+	
+	var deferredMain_updateIconToSKELETON = new Deferred();
+	
+	switch (core.os.name) {
+		case 'BLAH':
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					// do stuff
+				};
+		
+			break;
+		default:
+			console.error('os-unsupported');
+			deferredMain_updateIconToSKELETON.reject('os-unsupported');
+			return deferredMain_updateIconToSKELETON.promise;
+	}
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_updateIconToSKELETON, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_updateIconToSKELETON, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	
+	return deferredMain_updateIconToSKELETON.promise;
+}
+
+function updateIconToSystemLaunchers(aProfIniKey, useSpecObj, aOptions={}) {
+	// updates things like exe files on winnt and also all systemShortcutLaunchers, however if aOptions.winDONTUpdateSystemShortcutLaunchers, then it just does the exe files
+	// on osx it updates the main .app
+	
+	var deferredMain_updateIconToSystemLaunchers = new Deferred();
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					console.log('not yet implemeented, but needed');
+					// find exe's
+					// if aOptions.winDONTUpdateSystemShortcutLaunchers == true then dont do shortcuts, else if its false then do same from link060609853 minus the path_profilistData_launcherExes
+				};
+		
+			break;
+		default:
+			console.error('os-unsupported');
+			deferredMain_updateIconToSystemLaunchers.reject('os-unsupported');
+			return deferredMain_updateIconToSystemLaunchers.promise;
+	}
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_updateIconToSystemLaunchers, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_updateIconToSystemLaunchers, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	
+	return deferredMain_updateIconToSystemLaunchers.promise;
+}
+
+function updateIconToDesktcut(aProfIniKey, useSpecObj, aOptions={}) {
+	
 	// get all files on desktop
 	// check if the path of shortcut (windows) or symlink (nix/mac) point to launcher file path
 		// check if launcher exists
@@ -3993,164 +3990,35 @@ function updateIconToDesktcut(aProfilePath) {
 				// first reads what build it was last used at by getting Profilist.tie, if it doesnt have Profilist.tie then it gets last used build by reading icon CHANNEL-REF
 				// checks if the icon of launcher is correct, by reading icon file of that profile -- icon file is in form of `____BADGE-ID_#####__TIE-ID_#### or __BADGE-ID_#####__CHANNEL-REF_#### (does not have to have a BADGE_ID but has to have TIE-ID or CHANNEL_REF)
 				// if it has correct stuff then it doesnt update
-				
-	console.log('updateIconToDesktcut run - not yet implemented');
-	
-	// for winnt no need, because i create hardlinks, and when i update the icon of the file a hardlink links to, the hardlink icon updates aH!
-}
 
-function updateIconToPinnedCut(aProfileIniKey, useProfSpecs) {
-	console.error('incoming to updateIconToPinnedCut and aProfileIniKey:', aProfileIniKey);
-	var deferredMain_updateIconToPinnedCut = new Deferred();
-	
-	// if aProfilePath is default profile update the default launchers too
-	if (aProfileIniKey === null && profToolkit.selectedProfile.isTemp) {
-		console.warn('IS A TEMP PROF');
-		var isDefault = false;
-	} else {
-		var isDefault = ('Default' in ini[aProfileIniKey].props && ini[aProfileIniKey].props.Default == '1') ? true : false;
-	}
-	var OSPath = getPathToProfileDir(aProfileIniKey);
-	
-	if (!useProfSpecs) {
-		throw new Error('useProfSpecs is required!');
-	}
+	var deferredMain_updateIconToDesktcut = new Deferred();
 	
 	switch (core.os.name) {
+		case 'darwin':
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					console.log('not yet implemented but i think i need it, but maybe not if i can figure out how to get alias to refresh to match icon, right now it works if i rename the alias ahh so maybe find all things aliased to it then rename or something i dont know think about it');
+				};
+		
+			break;
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-				
-				// all
-					// if isDefault, update all default launchers
-				// 7+
-					// update pinned shortcuts
-
-				var OSPath_neededIcon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, useProfSpecs.iconNameObj.str + '.ico');
-				
-				var promiseAllArr_updateOsLauncherIcons = [];
-				console.time('update pin cuts');
-				if (core.os.version_name == '7+') {
-					// update pinned shortcuts
-					var deferred_cutsUpdated = new Deferred();
-					promiseAllArr_updateOsLauncherIcons.push(deferred_cutsUpdated.promise);
-					
-					var do_getPinCutPaths = function() {
-						var objOsPathsOfDirs = {};
-						var path_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'); // :note: implementation specific, test on win10 and all windows version
-						var path_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts'); // :note: implementation specific, test on win10 and all windows version
-						objOsPathsOfDirs[path_dirForNormalPins] = 1;
-						objOsPathsOfDirs[path_dirForRelaunchCmdPins] = 2;
-						
-						var path_profRootDir = getPathToProfileDir(aProfileIniKey);
-						
-						var promise_getPinCutPaths = ProfilistWorker.post('findLaunchers', [objOsPathsOfDirs, path_profRootDir, {returnObj:true}]); //getPathToPinnedCut(aProfileIniKey);
-						promise_getPinCutPaths.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_getPinCutPaths - ', aVal);
-								// start - do stuff here - promise_getPinCutPaths
-								do_updatePinCutPaths(aVal);
-								// end - do stuff here - promise_getPinCutPaths
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_getPinCutPaths', aReason:aReason};
-								console.error('Rejected - promise_getPinCutPaths - ', rejObj);
-								deferred_cutsUpdated.reject(rejObj);
-							}
-						).catch(
-							function(aCaught) {
-								var rejObj = {name:'promise_getPinCutPaths', aCaught:aCaught};
-								console.error('Caught - promise_getPinCutPaths - ', rejObj);
-								deferred_cutsUpdated.reject(rejObj);
-							}
-						);
-					};
-					
-					var do_updatePinCutPaths = function(cutPathsObjWithIconPaths) {
-						// sets icon on pin cut paths that dont have the right icon
-						var OSPathArr_cutNeedingUpdate = [];
-						
-						for (var cutPath in cutPathsObjWithIconPaths) {
-							//if (cutPathsObjWithIconPaths[cutPath].OSPath_icon != OSPath_neededIcon) { // todo: for perm i should test if args or iconpath or name differs from needed and what it is right now, im not doing it right now cuz i have to go back to winnt_getInfoOnShortcuts and update that, its perf thing so do it probably, so for right now everything will get updated regardless
-								OSPathArr_cutNeedingUpdate.push(cutPath);
-							//}
-						}
-						
-						console.info('OSPathArr_cutNeedingUpdate:', OSPathArr_cutNeedingUpdate);
-						
-						if (OSPathArr_cutNeedingUpdate.length > 0) {
-							console.error('XYZ aProfileIniKey:', aProfileIniKey);
-							var setOptionsObj = {
-								iconPath: OSPath_neededIcon,
-								launcherName: useProfSpecs.launcherName,
-								desc: 'Launches ' + getAppNameFromChan(useProfSpecs.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile',
-								args: '-profile "' + getPathToProfileDir(aProfileIniKey) + '" -no-remote',
-								OSPath_targetFile: useProfSpecs.path_exeForProfile
-							};
-							
-							var promise_setInfoOnShortcuts = ProfilistWorker.post('winnt_setInfoOnShortcuts', [OSPathArr_cutNeedingUpdate, setOptionsObj]);
-							promise_setInfoOnShortcuts.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_setInfoOnShortcuts - ', aVal);
-									// start - do stuff here - promise_setInfoOnShortcuts
-									deferred_cutsUpdated.resolve(OSPathArr_cutNeedingUpdate.length); // resolve with number if cuts updated
-									// end - do stuff here - promise_setInfoOnShortcuts
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_setInfoOnShortcuts', aReason:aReason};
-									console.error('Rejected - promise_setInfoOnShortcuts - ', rejObj);
-									deferred_cutsUpdated.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_setInfoOnShortcuts', aCaught:aCaught};
-									console.error('Caught - promise_setInfoOnShortcuts - ', rejObj);
-									deferred_cutsUpdated.reject(rejObj);
-								}
-							);
-						} else {
-							deferred_cutsUpdated.resolve(0); // resolve with number if cuts updated
-						}
-					}
-					
-					do_getPinCutPaths();
-					
-				}
-				
-				if (isDefault) {
-					// sets icon on pin default like firefox.exe
-					var deferred_exeUpdates = new Deferred();
-					promiseAllArr_updateOsLauncherIcons.push(deferred_exeUpdates.promise);
-				}
-				
-				var promiseAll_updateOsLauncherIcons = Promise.all(promiseAllArr_updateOsLauncherIcons);
-				promiseAll_updateOsLauncherIcons.then(
-					function(aVal) {
-						console.log('Fullfilled - promiseAll_updateOsLauncherIcons - ', aVal);
-						// start - do stuff here - promiseAll_updateOsLauncherIcons
-						console.timeEnd('update pin cuts');
-						deferredMain_updateIconToPinnedCut.resolve(true);
-						// end - do stuff here - promiseAll_updateOsLauncherIcons
-					},
-					function(aReason) {
-						var rejObj = {name:'promiseAll_updateOsLauncherIcons', aReason:aReason};
-						console.error('Rejected - promiseAll_updateOsLauncherIcons - ', rejObj);
-						deferredMain_updateIconToPinnedCut.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promiseAll_updateOsLauncherIcons', aCaught:aCaught};
-						console.error('Caught - promiseAll_updateOsLauncherIcons - ', rejObj);
-						deferredMain_updateIconToPinnedCut.reject(rejObj);
-					}
-				);
-				
-			break;
+			// for winnt no need, because i create hardlinks, and when i update the icon of the file a hardlink links to, the hardlink icon updates aH!
 		default:
-			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+			console.error('os-unsupported');
+			deferredMain_updateIconToDesktcut.reject('os-unsupported');
+			return deferredMain_updateIconToDesktcut.promise;
 	}
 	
-	return deferredMain_updateIconToPinnedCut.promise;
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_updateIconToDesktcut, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_updateIconToDesktcut, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	
+	return deferredMain_updateIconToDesktcut.promise;
+	
 }
 // end - functions to update icons at various locations
 
@@ -4381,10 +4249,10 @@ function setWinPPSProps(aProfIniKey, useOsSetObj, aNativeHandlePtrStr_OR_aDOMWin
 				// cached val is within _cache_expiryTime_useOsSetObj (i initally set this to 1sec) old
 				do_setItOnWin(_cache_useOsSetObj[aProfIniKey]);
 			} else {
-				do_getProfSpecsCheckUse_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
+				getProfileSpecs_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
 			}
 		} else {
-			do_getProfSpecsCheckUse_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
+			getProfileSpecs_WithCB(deferredMain_setWinPPSProps, aProfIniKey, null, true, do_createTransferObj);
 		}
 	} else {
 		do_setItOnWin(useOsSetObj);
@@ -6494,7 +6362,8 @@ function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipCha
 		*/
 		var props = {};
 	} else if (!(aProfilePath in ini)) {
-		deferredMain_getProfileSpecs.reject('key not found in ini');
+		console.error('key not found, key:', aProfilePath);
+		deferredMain_getProfileSpecs.reject('key not found in ini, key: "' + aProfilePath + '"');
 		return deferredMain_getProfileSpecs.promise;
 	} else {
 		var props = ini[aProfilePath].props;
@@ -6881,7 +6750,7 @@ function getAppNameFromChan(theChName) {
 	}
 }
 
-function launchProfile(aProfileIniKey, arrOfArgs) {
+function launchProfile(aProfIniKey, arrOfArgs) {
 	// arrOfArgs is array of other command line arguments you want it launched with
 	
 	/*** LOGIC ***/
@@ -6944,14 +6813,14 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 	
 	var deferredMain_launchProfile = new Deferred();
 	
-	if (aProfileIniKey == profToolkit.selectedProfile.iniKey) {
+	if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
 		Services.prompt.alert(null, 'whaa', 'cannot launch self!!!');
 		deferredMain_launchProfile.reject('cannot try to launch currently running profile, its already running!');
 		return deferredMain_launchProfile.promise;
 	}
 	
 	var do_getProfSpecs = function(aCB) {
-		var promise_cProfSpecs = getProfileSpecs(aProfileIniKey, true, true, false); // does not check if running
+		var promise_cProfSpecs = getProfileSpecs(aProfIniKey, true, true, false); // does not check if running
 		promise_cProfSpecs.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
@@ -6976,7 +6845,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 	};
 	
 	var do_ensureIconExists = function(useIconNameObj, aCB) {
-		var promise_getIconName = makeIcon(aProfileIniKey, useIconNameObj);
+		var promise_getIconName = makeIcon(aProfIniKey, useIconNameObj);
 		promise_getIconName.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_getIconName - ', aVal);
@@ -7012,7 +6881,7 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 					if (cProfSpec.isRunning) {
 						// focus most recent window
 						// if non-winnt then isRunning holds pid
-						var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [cProfSpec.isRunning, ini[aProfileIniKey].props.IsRelative, ini[aProfileIniKey].props.Path, profToolkit.rootPathDefault]);
+						var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [cProfSpec.isRunning, ini[aProfIniKey].props.IsRelative, ini[aProfIniKey].props.Path, profToolkit.rootPathDefault]);
 						// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
 						promise_doFocus.then(
 							function(aVal) {
@@ -7039,29 +6908,29 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 							
 							// shortcut is checked to make sure it has right targetFile, icon, and args
 							var cutInfoObj = {
-								// keys for worker__createShortcut
+								// keys for worker__createShortcuts
 								dir: profToolkit.path_profilistData_launcherExes,
 								name: cProfSpec.launcherName,
 								dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
-								args: '-profile "' + getPathToProfileDir(aProfileIniKey) + '" -no-remote',
-								desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile',
+								args: '-profile "' + getPathToProfileDir(aProfIniKey) + '" -no-remote',
+								desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile',
 								icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
 								targetFile: cProfSpec.path_exeForProfile,
 								
 								updateIfDiff: true,
 								refreshIcon: 1,
 								
-								// keys for worker__launchProfile
-								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfileIniKey) : null,
-								profRootDir: getPathToProfileDir(aProfileIniKey)
+								// keys for worker__makeLauncher
+								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfIniKey) : null,
+								profRootDir: getPathToProfileDir(aProfIniKey)
 							};
 							/*//////// old way
 							var pathsObj = {
 								OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
 								OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
 								OSPath_targetFile: cProfSpec.path_exeForProfile,
-								jsStr_args: getPathToProfileDir(aProfileIniKey),
-								jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfileIniKey].props.Name + '" Profile'
+								jsStr_args: getPathToProfileDir(aProfIniKey),
+								jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile'
 							};
 							*/
 							console.info('ready to send msg to launch, pathsObj:', cutInfoObj);
@@ -7095,7 +6964,9 @@ function launchProfile(aProfileIniKey, arrOfArgs) {
 			
 			break;
 		default:
-			throw new Error('os-unsupported');
+			console.error('os-unsupported');
+			deferredMain_launchProfile.reject('os-unsupported');
+			return deferredMain_launchProfile.promise;
 	}
 	
 	return deferredMain_launchProfile.promise;
@@ -7120,7 +6991,11 @@ function updateLauncherAndDeskcut(updateReason) {
 
 // start - CB helpers for promises, CB's are called on success
 // so far using with makeDeskcut
-var do_getProfSpecsCheckUse_WithCB = function(aDeferred, aProfIniKey, aSpecObj, aIfRunningThenTakeThat, aCB) {
+function getProfileSpecs_WithCB(aDeferred, aProfIniKey, aSpecObj, aIfRunningThenTakeThat, aCB) {
+	// optional: aDeferred, aSpecObj, aIfRunningThenTakeThat
+	// required: aProfIniKey, aCB
+	// aCB is called with profSpecs for aProfIniKey
+	
 	if (aSpecObj) {
 		aCB(aSpecObj);
 		return; // to prevent deeper exec
@@ -7138,40 +7013,64 @@ var do_getProfSpecsCheckUse_WithCB = function(aDeferred, aProfIniKey, aSpecObj, 
 		function(aReason) {
 			var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
 			console.error('Rejected - promise_cProfSpecs - ', rejObj);
-			aDeferred.reject(rejObj);
+			if (aDeferred) {
+				aDeferred.reject(rejObj);
+			}
 		}
 	).catch(
 		function(aCaught) {
 			var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
 			console.error('Caught - promise_cProfSpecs - ', rejObj);
-			aDeferred.reject(rejObj);
+			if (aDeferred) {
+				aDeferred.reject(rejObj);
+			}
 		}
 	);
 };
 
-var do_ensureIconExists_withCB = function(aDeferred, aProfIniKey, useIconNameObj, aCB) {
-	var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, useIconNameObj);
-	promise_ensureIconRdyAndMade.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
-			// start - do stuff here - promise_ensureIconRdyAndMade
-			
-				aCB();
+function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB) {
+	// optinal: aDeferred, useSpecObj
+	// required: aProfIniKey, aCB
+	// aCB is called with profSpecs for aProfIniKey
+	
+	//console.error('in ensureIconExists_WithCB with aProfIniKey:', aProfIniKey);
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		var useIconNameObj = aProfSpec.iconNameObj;
+		var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, useIconNameObj); // if useIconNameObj is not provided, then makeIcon will get prof specs, and it will return it
+		promise_ensureIconRdyAndMade.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
+				// start - do stuff here - promise_ensureIconRdyAndMade
 				
-			// end - do stuff here - promise_ensureIconRdyAndMade
-		},
-		function(aReason) {
-			var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
-			console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
-			aDeferred.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
-			console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
-			aDeferred.reject(rejObj);
-		}
-	);
+					aCB(aProfSpec);
+					
+				// end - do stuff here - promise_ensureIconRdyAndMade
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
+				console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
+				if (aDeferred) {
+					aDeferred.reject(rejObj);
+				}
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
+				console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
+				if (aDeferred) {
+					aDeferred.reject(rejObj);
+				}
+			}
+		);
+	};
+	
+	if (!useSpecObj) {
+		getProfileSpecs_WithCB(aDeferred, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	} else {
+		cbPostProgSpecsGot(useSpecObj);
+	}
+	
 };
 // end - CB helpers for promises
 
@@ -7183,17 +7082,14 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	
 	var deferredMain_makeDeskCut = new Deferred();
 	
-	// ensure icon is ready for this
-	var promise_ensureIcon = makeIcon()
-	
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 
-				do_getProfSpecsCheckUse_WithCB(deferredMain_makeDeskCut, for_ini_key, useSpecObj, true, function(cProfSpec) {
+				var cbPostGetProfSpecs = function(cProfSpec) {
 					console.info('cProfSpec:', cProfSpec);
-					var do_makeTheCut = function() {
+					var cbPostIconEnsured = function() {
 						var cutInfoObj = {
 							// keys for worker__createShortcut
 							dir: profToolkit.path_profilistData_launcherExes,
@@ -7207,9 +7103,12 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 							updateIfDiff: true,
 							refreshIcon: 1,
 							
-							// keys for worker__makeDeskcut
+							// keys for worker__makeLauncher
 							IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null,
-							DontCheckExistsJustWriteOverwrite: true
+							profRootDir: getPathToProfileDir(for_ini_key),
+							
+							// keys for worker__makeDeskcut
+							IfExists_ThenDontCreateShortcuts: false // i want it to updateIfDiff
 						};
 						
 						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [cutInfoObj]);
@@ -7234,8 +7133,11 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 						);
 
 					};
-					do_ensureIconExists_withCB(deferredMain_makeDeskCut, for_ini_key, cProfSpec.iconNameObj, do_makeTheCut);
-				});
+					
+					ensureIconExists_WithCB(deferredMain_makeDeskCut, for_ini_key, cProfSpec.iconNameObj, cbPostIconEnsured);
+				};
+				
+				getProfileSpecs_WithCB(deferredMain_makeDeskCut, for_ini_key, useSpecObj, true, cbPostGetProfSpecs);
 
 			break;
 		default:
@@ -7244,393 +7146,6 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	}
 	
 	return deferredMain_makeDeskCut.promise;
-	
-	/////////////// OLD WAY
-	// returns promise
-	
-	// creates desktop shortcut to the launcher
-	// if launcher doesnt exist it makes it first
-	var deferredMain_makeDeskCut = new Deferred();
-	
-	var resolveObj = {
-		cProfilePath: for_ini_key
-	};
-		
-	// start - os support check
-	var do_platCheck = function() {
-		// rejects derredMain_makeIcon
-		// on success goes to 
-		var platformSupported;
-		
-		if (cOS == 'darwin') { // this if block should similar 67864810
-			var userAgent = myServices.hph.userAgent;
-			//console.info('userAgent:', userAgent);
-			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
-			//console.info('version_osx matched:', version_osx);
-			
-			if (!version_osx) {
-				console.error('Could not identify Mac OS X version.');
-				platformSupported = false;
-			} else {		
-				version_osx = parseFloat(version_osx[1]);
-				console.info('version_osx parseFloated:', version_osx);
-				if (version_osx >= 0 && version_osx < 6) {
-					//will never happen, as my min support of profilist is for FF29 which is min of osx10.6
-					//deferred_makeIcnsOfPaths.reject('OS X < 10.6 is not supported, your version is: ' + version_osx);
-					platformSupported = true;
-				} else if (version_osx >= 6 && version_osx < 7) {
-					//deferred_makeIcnsOfPaths.reject('Mac OS X 10.6 support coming soon. I need to figure out how to use MacMemory functions then follow the outline here: https://github.com/philikon/osxtypes/issues/3');
-					platformSupported = true;
-				} else if (version_osx >= 7) {
-					// ok supported
-					platformSupported = true;
-				} else {
-					//deferred_makeIcnsOfPaths.reject('Some unknown value of version_osx was found:' + version_osx);
-					platformSupported = false; //its already false
-				}
-				resolveObj.launcherExtension = 'app';
-			}
-		} else if (cOS == 'winnt') {
-			platformSupported = true;
-			resolveObj.launcherExtension = 'lnk';
-		} else if (cOS == 'linux') {
-			platformSupported = true;
-			resolveObj.launcherExtension = 'desktop';
-		}
-		
-		if (!platformSupported) {
-			console.info('platformSupported:', platformSupported);
-			deferredMain_makeIcon.reject('OS not supported for makeIcon');
-			//return; //no deeper exec so no need for return
-		} else {
-			do_MLGetProfSpecs();
-		}
-	}
-	// end - os support check
-	
-	var do_MLGetProfSpecs = function() {
-		// basically do_getProfSpecs
-		if (iconNameObj) {
-			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
-		} else {
-			var promise_MLgetProfSpecs = getProfileSpecs(for_ini_key, ifRunningThenTakeThat, launching); //if running then take that, is inputted here
-			promise_MLgetProfSpecs.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_MLgetProfSpecs - ', aVal);
-					// start - do stuff here - promise_MLgetProfSpecs
-					resolveObj.profSpecs = aVal;
-					do_MLcheckIfPreExisting();
-					// end - do stuff here - promise_MLgetProfSpecs
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
-					console.error('Rejected - promise_MLgetProfSpecs - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_MLgetProfSpecs', aCaught:aCaught};
-					console.error('Caught - promise_MLgetProfSpecs - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			);
-		}
-	};
-	
-	var do_MLcheckIfPreExisting = function() {
-		if (forceOverwrite) {
-			do_preCreate();
-			return;
-		}
-		//resolveObj.launcherName = getLauncherName(for_ini_key, resolveObj.profSpecs.channel_exeForProfile);
-		resolveObj.path_launcher = OS.Path.join(profToolkit.path_profilistData_launcherExes, resolveObj.profSpecs.launcherName + '.' + resolveObj.launcherExtension);
-		
-		var promise_launcherExist = OS.File.exist(resolveObj.path_launcher);
-		promise_launcherExist.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_launcherExist - ', aVal);
-				// start - do stuff here - promise_launcherExist
-				if (aVal) {
-					resolveObj.alreadyExisted = true;
-					deferredMain_makeLauncher.resolve(resolveObj);
-				} else {
-					do_preCreate();
-				}
-				// end - do stuff here - promise_launcherExist
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_launcherExist', aReason:aReason};
-				console.error('Rejected - promise_launcherExist - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_launcherExist', aCaught:aCaught};
-				console.error('Caught - promise_launcherExist - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_preCreate = function() {
-		var promiseAllArr_preCreate = [];
-		
-		
-		switch (cOS) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
-				
-				break;
-			case 'linux':
-			case 'freebsd':
-			case 'openbsd':
-			case 'sunos':
-			case 'webos':
-			case 'android':
-				
-				//break;
-			case 'darwin':
-				
-				//break;
-			default:
-				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-		}
-		
-		promiseAllArr_preCreate.push(makeIcon(for_ini_key, resolveObj.profSpecs.iconName)); // if running then take that, that should be determined in the prof get specs
-		var promiseAll_preCreate = Promise.all(promiseAllArr_preCreate);
-		promiseAll_preCreate.then(
-			function(aVal) {
-				console.log('Fullfilled - promiseAll_preCreate - ', aVal);
-				// start - do stuff here - promiseAll_preCreate
-				// end - do stuff here - promiseAll_preCreate
-			},
-			function(aReason) {
-				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
-				console.error('Rejected - promiseAll_preCreate - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promiseAll_preCreate', aCaught:aCaught};
-				console.error('Caught - promiseAll_preCreate - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_makeCut = function() {
-		switch (cOS) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
-				
-				break;
-			case 'linux':
-			case 'freebsd':
-			case 'openbsd':
-			case 'sunos':
-			case 'webos':
-			case 'android':
-				
-				//break;
-			case 'darwin':
-				
-				//break;
-			default:
-				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-		}
-	}
-	// start - main
-	do_platCheck();
-	// end - main
-	
-	return deferredMain_makeDeskCut.promise;
-	
-	////////////////////////////
-	console.info('for_ini_key:', for_ini_key, 'ini[for_ini_key]:', ini[for_ini_key], ini);
-	var deferred_makeDeskCut = new Deferred();
-
-	/* algo ::::
-		check if cut exists, (for mac make sure by checking if has ini.launcher, if it does then read the shell of profilst-exec and see if that path points to correct one, if its not correct then mark as non exist
-		makeCut
-	*/
-	
-	// start - makeCut
-	var do_makeCut = function() {
-		// makes cut if it doesnt exist
-		
-		var deferred_makeCut = new Deferred();
-		
-		if (cOS == 'darwin') { //note:debug added in winnt
-			theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
-			/*
-			// check if name is available in launchers folder of var cutName = 'LOCALIZED_BUILD - ' + ini[for_ini_key].props.Name.replace(/\//g, repCharForSafePath)"
-				// if its avail, then `ini[for_ini_key].props['Profilist.launcher'] =  cutName` without need for .app //was going to make this `ini[for_ini_key].props['Profilist.launcher-basename']`
-		
-			//now whenever profile is renamed, then check if launcher
-			*/
-			// check for launcher
-			// makeSymLink with expected path, if it fails
-			
-			var makeLauncherThenAlias = function() {
-				var promise_doMakeLauncher = makeLauncher(for_ini_key);
-				promise_doMakeLauncher.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_doMakeLauncher - ', aVal);
-						// start - do stuff here - promise_doMakeLauncher
-						makeDeskAlias();
-						// end - do stuff here - promise_doMakeLauncher
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_doMakeLauncher', aReason:aReason};
-						console.error('Rejected - promise_doMakeLauncher - ', rejObj);
-						deferred_makeDeskCut.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_doMakeLauncher', aCaught:aCaught};
-						console.error('Caught - promise_doMakeLauncher - ', rejObj);
-						deferred_makeDeskCut.reject(rejObj);
-					}
-				);
-			}
-			
-			var makeDeskAlias = function() {
-				var pathToTargetDskAl = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app');
-				var pathToAlias = OS.Path.join(OS.Constants.Path.desktopDir, theLauncherAndAliasName);
-				var promise_makeDeskAlias = delAliasThenMake(pathToTargetDskAl, pathToAlias)
-				promise_makeDeskAlias.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_makeDeskAlias - ', aVal);
-						// start - do stuff here - promise_makeDeskAlias
-						deferred_makeDeskCut.resolve('successfully made desktop shortcut');
-						// end - do stuff here - promise_makeDeskAlias
-					},
-					function(aReason) {
-						//if (aReason.unixErrno == 17) {
-						//	deferred_makeDeskCut.resolve('desktop shortcut already exists'); //should never happen as i del first
-						//} else {
-							var rejObj = {name:'promise_makeDeskAlias', aReason:aReason};
-							console.error('Rejected - promise_makeDeskAlias - ', rejObj);
-							deferred_makeDeskCut.reject(rejObj);
-						//}
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_makeDeskAlias', aCaught:aCaught};
-						console.error('Caught - promise_makeDeskAlias - ', rejObj);
-						deferred_makeDeskCut.reject(rejObj);
-					}
-				);
-			}
-			
-			if ('Profilist.launcher' in ini[for_ini_key].props) {
-				//assume it exists
-				//but lets verify just in case
-				var pathToExecViaLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app', 'Contents', 'MacOS', 'profilist-' + ini[for_ini_key].props['Profilist.launcher']);
-				var promise_launcherExists = read_encoded(pathToExecViaLauncher, {encoding:'utf-8'});
-				promise_launcherExists.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_launcherExists - ', aVal);
-						// start - do stuff here - promise_launcherExists
-						var identingJson = aVal.match(/##(.*?)##/);
-						console.info('identingJson:', identingJson);
-						if (!identingJson) {
-							throw 'failed to get identingJson';
-						} else {
-							var needUpdateLauncher = false;
-							identingJson = JSON.parse(identingJson[1]);
-							
-							var path_toFxApp; // path we will launch
-							if ('Profilist.tie' in ini[for_ini_key].props) {
-								path_toFxApp = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path'); // used tied path if the profile is tied
-							} else {
-								path_toFxApp = profToolkit.exePath; //not tied so use current builds path
-							}
-							var path_toFxBin = path_toFxApp;
-							path_toFxApp = path_toFxApp.substr(0, path_toFxApp.toLowerCase().indexOf('.app') + 4);
-							
-							if (identingJson.iconName != getIconName(for_ini_key, theChName)) {
-								console.log('icon of curent cut doesnt match so need to update that', 'getIconName(for_ini_key, theChName):', getIconName(for_ini_key, theChName), 'identingJson.iconName:', identingJson.iconName);
-								needUpdateLauncher = true;
-							} else if (identingJson.build != path_toFxApp) {
-								console.log('the build inside this cut doesnt match path_toFxApp', 'path_toFxApp:', path_toFxApp, 'identingJson.build:', identingJson.build);
-								needUpdateLauncher = true;
-							}
-							if (needUpdateLauncher) {
-								makeLauncherThenAlias();
-							} else {
-								console.log('no update needed, so resolve as saying it already exists');
-								deferred_makeDeskCut.resolve('already exists with right params');
-							}
-						}
-						// end - do stuff here - promise_launcherExists
-					},
-					function(aReason) {
-						console.error('THIS SHOULD NEVER HAPPEN, as if Profilist.launcher is ini, then launcher should exist. launcher does not exist even though Profilist.launcher is in ini for this key, so makeLauncher then try makeAlias again');
-						var deepestReason = aReasonMax(aReason);
-						if (deepestReason.becauseNoSuchFile) {
-							makeLauncherThenAlias();
-						} else {
-							var rejObj = {name:'promise_launcherExists', aReason:aReason};
-							console.error('Caught - promise_launcherExists - ', rejObj);
-							deferred_makeDeskCut.reject(rejObj);
-						}
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_launcherExists', aCaught:aCaught};
-						console.error('Caught - promise_launcherExists - ', rejObj);
-						deferred_makeDeskCut.reject(rejObj);
-					}
-				);
-			} else {
-				//make launcher then makeDeskAlias
-				makeLauncherThenAlias();
-			}
-		} else if (cOS == 'asdflaksdfj') {
-			
-		} else {
-			deferred_makeDeskCut.reject('Profilist only supports desktop shortcut creation for the following operating systems: Darwin(MacOS X)');
-		}
-	};
-	// end - makeCut
-	
-	// start - setup getChName
-	var do_getChName = function() {
-		var promise_getChName = getChannelNameOfProfile(for_ini_key);
-		promise_getChName.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getChName - ', aVal);
-				// start - do stuff here - promise_getChName
-				theChName = aVal;
-				do_makeCut();
-				// end - do stuff here - promise_getChName
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getChName', aReason:aReason};
-				console.error('Rejected - promise_getChName - ', rejObj);
-				deferred_makeDeskCut.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getChName', aCaught:aCaught};
-				console.error('Caught - promise_getChName - ', rejObj);
-				deferred_makeDeskCut.reject(rejObj);
-			}
-		);
-	};
-	// end - setup getChName
-	
-	// start - globals for these sub funcs
-	var theChName;
-	var theLauncherAndAliasName;
-	// end - globals for these sub funcs
-	
-	do_getChName();
-	
-	return deferred_makeDeskCut.promise;
 }
 function getLauncherName(for_ini_key, theChName) {
 	if (for_ini_key === null && profToolkit.selectedProfile.iniKey === null) {
@@ -8277,6 +7792,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 				//not yet setup
 		
 		
+	console.error('eneterd makeIcon with iniKey of:', for_ini_key);
 	
 	var deferredMain_makeIcon = new Deferred();
 
@@ -8720,7 +8236,7 @@ function getIniKeyFromProfName(aProfName) {
 }
 
 /* start - control panel server/client communication */
-const subDataSplitter = ':~:~:~:'; //note: must match splitter const used in client //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
+const subDataSplitter = ':~:~:~:'; //note: must match splitter const used in client //used if observer from cp-server wants to send a subTopic and subData, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to 
 
 var addonListener = {
   onPropertyChanged: function(addon, properties) {
@@ -8857,7 +8373,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 		var subData = aDataSplit[1];
 		if (subData.indexOf('msgJson') > -1) {
 			var incomingJson = JSON.parse(subData);
-			console.info('incomingJson:', incomingJson);
+			console.info('incomingJson for subTopic:', subTopic, 'json:', incomingJson);
 		}
 	} else {
 		var subTopic = aDataSplit[0];
@@ -9658,8 +9174,9 @@ function startup(aData, aReason) {
 							console.log('Fullfilled - promise_getIconName - ', aVal);
 							// start - do stuff here - promise_getIconName
 							var useProfSpecs = aVal.profSpecs; //.iconNameObj.str;
-							updateIconToAllWindows(profToolkit.selectedProfile.iniKey, useProfSpecs.iconNameObj.str);
-							updateIconToPinnedCut(profToolkit.selectedProfile.iniKey, useProfSpecs);
+							updateIconToAllWindows(profToolkit.selectedProfile.iniKey, useProfSpecs);
+							updateIconToSystemLaunchers(profToolkit.selectedProfile.iniKey, useProfSpecs); // updates specs/icon to exe's but not yet implemented
+							updateIconToLauncher(profToolkit.selectedProfile.iniKey, useProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true}); // updates all system launchers too
 							// end - do stuff here - promise_getIconName
 						},
 						function(aReason) {

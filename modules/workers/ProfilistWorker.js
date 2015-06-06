@@ -316,42 +316,73 @@ function refreshIconAtPath(iconPath) {
 	}
 }
 
+function winnt_updateFoundShortcutLaunchers_withObj(objDirDepth, aProfRootDirOsPath, commonCutInfoObj) {
+	// if shortcut found in these dirs, it is updated
+		// if launcher is not found it is not made
+		
+	var rezFindsArr = findLaunchers(objDirDepth, aProfRootDirOsPath);
+	
+	var cArrOfObjs = [];
+	for (var i=0; i<rezFindsArr.length; i++) {
+		cArrOfObjs.push({
+			dirNameLnk: rezFindsArr[i],
+			args: commonCutInfoObj.args,
+			desc: commonCutInfoObj.desc,
+			icon: commonCutInfoObj.icon,
+			targetFile: commonCutInfoObj.targetFile,
+			
+			renameToName: commonCutInfoObj.name,
+			updateIfDiff: true,
+			refreshIcon: 1
+		});
+		if (core.os.version_name == '7+') {
+			cArrOfObjs[cArrOfObjs.length-1].appUserModelId = HashStringHelper(aProfRootDirOsPath);
+		}
+	}
+	
+	createShortcuts(cArrOfObjs);
+}
+
 function makeLauncher(pathsObj) {
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
-		case 'wince':
-			
+		case 'wince':				
 				
-				/*
-				var cutDirPath = OS.Path.dirname(pathsObj.OSPath_makeFileAt);
-				var cutFileName = pathsObj.OSPath_makeFileAt.substring(cutDirPath.length+1, pathsObj.OSPath_makeFileAt.length-4);
-				var targetArgs = pathsObj.jsStr_args;
-				var desc = pathsObj.jsStr_desc;
-				
-				var cutOpts = {
-					path_createWithIcon: pathsObj.OSPath_icon,
-					str_createWithDesc: pathsObj.jsStr_desc
-				};
-				
-				if (core.os.version_name == '7+') {
-					console.info('pathsObj.jsStr_args:', pathsObj.jsStr_args);
-					cutOpts.str_createWithAppUserModelId = HashString(pathsObj.jsStr_args) + ''; // to make it a string otherwise get `expected type pointer, got 3181739213` on chrome://profilist/content/modules/ostypes_win.jsm line 6697
-					console.info('cutOpts.str_createWithAppUserModelId:', cutOpts.str_createWithAppUserModelId);
+				// note to dev: requires pathsObj.dir be passed in arg
+				if (!('dir' in pathsObj)) {
+					throw new Error('makeLauncher for WINNT requires that pathsObj.dir be specified');
+				}
+				if (!('profRootDir' in pathsObj)) {
+					throw new Error('makeLauncher for WINNT requires that pathsObj.profRootDir be specified');
 				}
 				
-				cutOpts.str_createWithArgs = '-profile "' + pathsObj.jsStr_args + '" -no-remote';
-				
-				console.info('cutDirPath:', cutDirPath);
-				console.info('cutFileName:', cutFileName);
-				console.info('cutOpts:', JSON.stringify(cutOpts));
-				
-				makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
-				console.log('finished make dir');
-				return OLDcreateShortcut(cutDirPath, cutFileName, pathsObj.OSPath_targetFile, cutOpts);
-				*/
+				if (core.os.version_name == '7+') {
+					if (pathsObj.IDHash) {
+						pathsObj.appUserModelId = HashStringHelper(pathsObj.IDHash) + ''; // make it a jsStr
+						delete pathsObj.IDHash;
+					}
+				}
 				
 				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [pathsObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
+				// :todo: make tryOsFile_ifDirsNoExistMakeThenRetry return differently, letting me know if it made the dir, or it was already there, cuz if it wasnt there, then i can skip the findLaunchers proc as the folder didnt exist so its obvious the launcher didnt exist
+				
+				// check launch directory if it already exists and just needs rename
+				var searchDirs = {};
+				searchDirs[pathsObj.dir] = 1;
+				var rezFindsArr = findLaunchers(searchDirs, pathsObj.profRootDir); // should return 1 or 0 entries
+				console.info('rezFindsArr:', rezFindsArr);
+				if (rezFindsArr.length == 1) {
+					pathsObj.renameToName = pathsObj.name;
+					pathsObj.dirNameLnk = rezFindsArr[0];
+				} else if (rezFindsArr.length > 1) {
+					// :todo: maybe rather then error'ing i should warn and delete all but one
+					console.error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr:', rezFindsArr);
+					throw new Error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr');
+				}
+				
+				delete pathsObj.profRootDir;
+				
 				return createShortcuts([pathsObj]);
 				
 			break;
@@ -372,32 +403,25 @@ function makeDeskcut(cutInfoObj) {
 					throw new Error('makeDeskcut requires path safed dirNameLnk');
 				}
 				if (!('dir' in cutInfoObj)) {
-					throw new Error('makeDeskcut requires path safed dir'); // and createShortcut requires name if i provide dir, so make sure to provide name as well
+					throw new Error('makeDeskcut requires path safed dir'); // and createShortcuts requires name if i provide dir, so make sure to provide name as well
 				}
 				if ('renameToName' in cutInfoObj) {
 					throw new Error('makeDeskcut requires that renameToName not be set, because it relies on the fed dirNameLnk');
 				}
 				
-				if (!cutInfoObj.DontCheckExistsJustWriteOverwrite) {
+				if (cutInfoObj.IfExists_ThenDontCreateShortcuts) { // default of IfExists_ThenDontCreateShortcuts is false/null/undefined
+					console.error('will check if launcher exists, if it does then it wont makeLauncher');
 					if (!('exists' in cutInfoObj)) {
 						// `exists` wasnt in obj so check existance, this is required before a hard link can be made
-						cutInfoObj.exists = OS.File.exists(OS.Path.join(cutInfoObj.dir, cutInfoObj.name + '.lnk'));
+						cutInfoObj.exists = OS.File.exists(cutInfoObj.dirNameLnk);
 					}
 					
 					if (!cutInfoObj.exists) {
-						if (core.os.version_name == '7+') {
-							if (cutInfoObj.IDHash) {
-								cutInfoObj.appUserModelId = HashStringHelper(cutInfoObj.IDHash) + ''; // make it a jsStr
-							}
-						}
-						//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
-						tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutInfoObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
-						createShortcuts([cutInfoObj]);
+						makeLauncher(cutInfoObj);
 					}
 				} else {
-						//makeDir_Bug934283(cutDirPath, {from:OS.Constants.Path.userApplicationDataDir});
-						tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [cutInfoObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
-						createShortcuts([cutInfoObj]);					
+					console.error('ok going straight to makeLauncher');
+					makeLauncher(cutInfoObj);
 				}
 				
 				return makeAlias(OS.Path.join(OS.Constants.Path.desktopDir, cutInfoObj.name + '.lnk'), cutInfoObj.dirNameLnk); // when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
@@ -556,27 +580,8 @@ function launchProfile(pathsObj, arrOfArgs) { // checkExistanceFirst to check if
 				//try {
 					// can just do makeLauncher and catch on error, as that does exist check, and i set appUserModelId so if it exists it wont continue
 					
-					if (core.os.version_name == '7+') {
-						if (pathsObj.IDHash) {
-							pathsObj.appUserModelId = HashStringHelper(pathsObj.IDHash) + ''; // make it a jsStr
-							delete pathsObj.IDHash;
-						}
-					}
-					
 					// find if it already exists in dir
 					var launchPath = pathsObj.dirNameLnk; // as if rename is needed the obj changes, so i save it here
-					
-					var searchDirs = {};
-					searchDirs[pathsObj.dir] = 1;
-					var rezFindsArr = findLaunchers(searchDirs, pathsObj.profRootDir); // should return 1 or 0 entries
-					console.info('rezFindsArr:', rezFindsArr);
-					if (rezFindsArr.length == 1) {
-						pathsObj.renameToName = pathsObj.name;
-						pathsObj.dirNameLnk = rezFindsArr[0];
-					} else if (rezFindsArr.length > 1) {
-						console.error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr:', rezFindsArr);
-						throw new Error('found more then 1 launcher in profilist_data/launcher_exes/, rezFindsArr');
-					}
 					
 					makeLauncher(pathsObj); // shortcut compares args and targetFile, if not matched, then updates shortcut
 					console.info('ok shortcut updated?');
@@ -629,9 +634,9 @@ function launchProfile(pathsObj, arrOfArgs) { // checkExistanceFirst to check if
 	}
 }
 
-function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aOptions={}) {
+function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 	// returns array of paths to launchers found that launch aProfRootDirOsPath, if profile is default, then it also returns all launchers that launch into default profile
-	/* objOsPathsAndDepthToSearch is like this:
+	/* objDirDepth is like this:
 	{
 		path1: depth jsInt OR null for no max depth
 		path2: depth jsInt
@@ -652,17 +657,20 @@ function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aOptions=
 		case 'winmo':
 		case 'wince':
 		
+				// find shortcut launchers
 				var arrLauncherPaths = [];
 				var arrCollectedPaths = []; // paths of all of the files found in the selected paths
 				var dlgtCollect = function(aEntry) {
 					if (!aEntry.isDir) {
-						arrCollectedPaths.push(aEntry.path);
+						if (aEntry.path.substr(-3).toLowerCase() == 'lnk') {
+							arrCollectedPaths.push(aEntry.path);
+						}
 					}
 				};
 				
 				// get cut details
-				for (var p in objOsPathsAndDepthToSearch) {
-					enumChildEntries(p, dlgtCollect, objOsPathsAndDepthToSearch[p], false);
+				for (var p in objDirDepth) {
+					enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
 				}
 				
 				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths);
@@ -696,6 +704,10 @@ function findLaunchers(objOsPathsAndDepthToSearch, aProfRootDirOsPath, aOptions=
 				} else {
 					return arrLauncherPaths;
 				}
+				// end find shortcut launchers
+				
+				// :todo: find exe launchers
+				
 			break;
 		default:
 			throw new Error('os-unsupported')
@@ -829,7 +841,7 @@ function createShortcuts(aArrOfObjs) {
 						// update name
 						name = renameToName;
 						console.log('fullPath moded due to renameToRename, its is now:', fullPath);
-					}
+					} // else its already named renameToName so no need to rename
 				}
 				
 				// ok load it, it exists
@@ -853,11 +865,14 @@ function createShortcuts(aArrOfObjs) {
 					var cPreExisting = {}; // holds what is currently set on it, based on what was in cObj
 					
 					if ('icon' in cObj) {
+
 						var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
 						var piIcon = ostypes.TYPE.INT();
 						var hr_GetIconLocation = refs.shellLink.GetIconLocation(refs.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
 						ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
 						cPreExisting.icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+						console.info('updateIfDiff icon check yielded:', pszIconPath.readString());
+
 						/* // i dont check for diff in iconIndex yet
 						if ('iconIndex' in cObj) {
 							cPreExisting.iconIndex = piIcon.value;
@@ -1002,230 +1017,6 @@ function createShortcuts(aArrOfObjs) {
 	return winntShellFile_DoerAndFinalizer(doer, refs);
 }
 
-function OLDcreateShortcut(path_createInDir, str_createWithName, path_linkTo, options={}, aExists) {
-	// winnt only
-	// set aExists to true or false if you know if it exists or not. this skips the exists check. one less call
-	
-	/* logic - current */
-	// regardless of existance and if str_createWithAppUserModelId is set, it tries to overwrite whatever was provided
-	
-	// reason this is issue: is because if System.AppUserModel.ID is already set, you can't change it, it hangs or crashes or something todo: test what exactly happens, also test what if i set it to the same System.AppUserModel.ID, see if anything goes wrong
-	
-	/* logic - maintain times */
-	// if shortcut already exists
-		// if options.str_createWithAppUserModelId is set
-			// IPropertyStore_GetValue on System.AppUserModel.ID is done, if it matches options.str_createWithAppUserModelId OR is blank then
-				// properites are overwritten with whatever else is prvoided
-			// else
-				// GetPath to get ftCreationTime, lpLastAccessTime, and lpLastWriteTime
-				// file is deleted
-				// shortcut is created with whatever properties were provided
-				// SetFileTime is set on the created shortcut with the pointers obtained from GetPath
-		// else
-			// then its properties are overwritten with whatever was provided
-
-	// reason for this is so that System.AppUserModel.ID cannot be set if one is already there
-	// reason to maintain the times via GetPath and SetFileTime is because ???
-		// i think any hardlink to the shortcut gets deleted when the shortcut gets deleted, todo: verify this
-			// 19:31	noida	if i have a hardlink to a shortcut, does the hardlink get deleted if the shortcut is deleted?
-			// 19:31	noida	i need to delete the shortcut for a second as i recreate it with a new System.AppUserModel.ID
-		// ??? == i think its so that things point to this shortcut, (ex: the launcher shortcuts), like pinned icon in taskbar, can find it again? todo: test this to figure out
-		
-	/* alternative logic - doesnt maintain times*/
-	// if shortcut already exists
-		// if options.str_createWithAppUserModelId is set
-			// IPropertyStore_GetValue on System.AppUserModel.ID is done, if it matches options.str_createWithAppUserModelId OR is blank then
-				// properites are overwritten with whatever else is prvoided
-			// else
-				// file is deleted
-				// shortcut is created with whatever properties were provided
-		// else
-			// then its properties are overwritten with whatever was provided
-	
-	switch (core.os.name) {
-		case 'winnt':
-		case 'winmo':
-		case 'wince':
-		
-				/*
-				example args:
-				path_createInDir: OS.Constants.Path.desktopDir
-				str_createWithName: 'My Shortcut' // do not included '.lnk'
-				path_linkTo: Services.dirsvc.get('XREExeF', Ci.nsIFile).path // CAN be null IF the shortcut already exists and you want to use this for just updating icon or something
-				options: {
-					path_createWithIcon: OS.Path.join(OS.Constants.Path.desktopDir, 'smiley.ico'), // optional because the icon of the targetFile is used if one is not provided
-					int_createWithIconIndex: 0, // 0 is used if not provided
-					str_createWithAppUserModelId: 'blah', // max 128 characters, no spaces // no systemAppUserModelID is set if not provided
-					str_createWithArgs: '-P -no-remote', // no args are set if not provided
-					str_createWithDesc: 'this is description i want shown on my shortcut', // no descriptin is set if not provided
-					path_createWithWorkDir: null // i have no idea what a working dir is, but if not provided its not set
-				}
-				*/
-				// creates shortcut file (.lnk)
-				var shellLink;
-				var persistFile;
-				var propertyStore;
-				try {
-					var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
-					console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
-					if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx) || cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
-						//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
-					} else {
-						throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
-					}
-					
-					ostypes.HELPER.InitShellLinkAndPersistFileConsts();
-
-					var shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
-					var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_ShellLink.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_IShellLink.address(), shellLinkPtr.address());
-					console.info('hr_CoCreateInstance:', hr_CoCreateInstance.toString(), uneval(hr_CoCreateInstance));
-					ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'CoCreateInstance');
-					shellLink = shellLinkPtr.contents.lpVtbl.contents;
-
-					
-					var persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
-					var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPersistFile.address(), persistFilePtr.address());
-					console.info('hr_shellLinkQI:', hr_shellLinkQI.toString(), uneval(hr_shellLinkQI));
-					ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'QueryInterface (IShellLink->IPersistFile)');
-					persistFile = persistFilePtr.contents.lpVtbl.contents;
-
-					if ('str_createWithAppUserModelId' in options) {
-						ostypes.HELPER.InitPropStoreConsts();
-						var propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
-						var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPropertyStore.address(), propertyStorePtr.address());
-						console.info('hr_shellLinkQI2:', hr_shellLinkQI2.toString(), uneval(hr_shellLinkQI2));
-						ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'QueryInterface (IShellLink->IPropertyStore)');
-						propertyStore = propertyStorePtr.contents.lpVtbl.contents;
-					}
-					
-					/*
-					var shortcutFile = OS.Path.join(OS.Constants.Path.desktopDir, 'jsctypes.lnk'); // string path, must end in .lnk
-					var targetFile = FileUtils.getFile('XREExeF', []).path; // string path
-					var workingDir = null; // string path // from MSDN: The working directory is optional unless the target requires a working directory. For example, if an application creates a Shell link to a Microsoft Word document that uses a template residing in a different directory, the application would use this method to set the working directory.
-					var args = '-P -no-remote'; // command line arguments // string
-					var description = 'my sc via jsctypes'; // string
-					var iconFile = OS.Path.join(OS.Constants.Path.desktopDir, 'ppbeta.ico'); // string path
-					var iconIndex = null; // integer
-					var systemAppUserModelID = 'rawr45654'; // string
-					
-					cancelFinally = true;
-					*/
-					
-					var path_create = OS.Path.join(path_createInDir, str_createWithName + '.lnk');
-					
-					//will overwrite existing
-					if (aExists !== true && aExists !== false) {
-						aExists = OS.File.exists(path_create);
-					}
-					if (aExists) {
-						//exists
-						var hr_Load = persistFile.Load(persistFilePtr, path_create, 0);
-						console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
-						ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
-					} else {
-						if (!path_linkTo) {
-							throw new Error('The shortcut does not exist, therefore a target to link this shortcut to must be provided');
-						}
-					}
-
-					if (path_linkTo) { // required
-						var hr_SetPath = shellLink.SetPath(shellLinkPtr, path_linkTo);
-						console.info('hr_SetPath:', hr_SetPath.toString(), uneval(hr_SetPath));
-						ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
-					}
-
-					if ('path_createWithWorkDir' in options) {
-						var hr_SetWorkingDirectory = shellLink.SetWorkingDirectory(shellLinkPtr, options.path_createWithWorkDir);
-						console.info('hr_SetWorkingDirectory:', hr_SetWorkingDirectory.toString(), uneval(hr_SetWorkingDirectory));
-						ostypes.HELPER.checkHRESULT(hr, 'SetWorkingDirectory');
-					}
-
-					if ('str_createWithArgs' in options) {
-						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, options.str_createWithArgs);
-						console.info('hr_SetArguments:', hr_SetArguments.toString(), uneval(hr_SetArguments));
-						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'SetArguments');
-					}
-
-					if ('str_createWithDesc' in options) {
-						var hr_SetDescription = shellLink.SetDescription(shellLinkPtr, options.str_createWithDesc);
-						console.info('hr_SetDescription:', hr_SetDescription.toString(), uneval(hr_SetDescription));
-						ostypes.HELPER.checkHRESULT(hr_SetDescription, 'SetDescription');
-					}
-
-					if ('path_createWithIcon' in options) {
-						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, options.path_createWithIcon, options.int_createWithIconIndex ? options.int_createWithIconIndex : 0);
-						console.info('hr_SetIconLocation:', hr_SetIconLocation.toString(), uneval(hr_SetIconLocation));
-						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
-					}
-
-					if ('str_createWithAppUserModelId' in options) {
-						if (aExists) {
-							console.error('cannot update System.AppUserModel.ID, you specified it should though, so throwing warning as it will not update it'); // trying to update while it exists returns HRESULT of -2147287035 which is STG_E_ACCESSDENIED
-						} else {
-							var hr_systemAppUserModelID = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), options.str_createWithAppUserModelId);		
-							ostypes.HELPER.checkHRESULT(hr_systemAppUserModelID, 'hr_systemAppUserModelID');
-						}
-						
-						var jsstr_IPSGetValue = ostypes.HELPER.IPropertyStore_GetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
-						console.info('jsstr_IPSGetValue:', jsstr_IPSGetValue.toString(), uneval(jsstr_IPSGetValue));
-					}
-					
-					var hr_Save = persistFile.Save(persistFilePtr, path_create, false);
-					console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
-					ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
-					
-					console.log('Shortcut succesfully created');
-							
-				} finally {
-					var sumThrowMsg = [];
-					if (persistFile) {
-						try {
-							persistFile.Release(persistFilePtr);
-						} catch(e) {
-							console.error("Failure releasing persistFile: ", e.toString());
-							sumThrowMsg.push(e.message);
-						}
-					}
-					
-					if (propertyStore) {
-						try {
-							propertyStore.Release(propertyStorePtr);
-						} catch(e) {
-							console.error("Failure releasing propertyStore: ", e.message.toString());
-							sumThrowMsg.push(e.message);
-						}
-					}
-
-					if (shellLink) {
-						try {
-							shellLink.Release(shellLinkPtr);
-						} catch(e) {
-							console.error("Failure releasing shellLink: ", e.message.toString());
-							sumThrowMsg.push(e.message);
-						}
-					}
-					
-					//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
-						try {
-							ostypes.API('CoUninitialize')(); // return void
-						} catch(e) {
-							console.error("Failure calling CoUninitialize: ", e.message.toString());
-							sumThrowMsg.push(e.message);
-						}
-					//}
-					
-					if (sumThrowMsg.length > 0) {
-						throw new Error(sumThrowMsg.join(' |||| '));
-					}
-					console.log('finally proc complete');
-				}
-			
-			break;
-		default:
-			throw new Error('os-unsupported');
-	}
-}
-
 function queryProfileLocked(IsRelative, Path, path_DefProfRt) {
 	// IsRelative is the value from profiles.ini for the profile you want to target
 	// Path is the value from profiles.ini for the profile you want to target
@@ -1317,13 +1108,15 @@ function makeAlias(path_create, path_target) {
 					// when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
 				// path_create and path_target must include extenions
 				
+				// cannot make hard link of a directory, files only
+				
 				var rez_CreateHardLink = ostypes.API('CreateHardLink')(path_create, path_target, null);
 				console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
 				if (ctypes.winLastError != 0) {
 					if (ctypes.winLastError == ostypes.CONST.ERROR_ALREADY_EXISTS) {
 						// it already exists so it was already made so just return true
 						console.log('CreateHardLink got winLastError for already existing, its rez was:', rez_CreateHardLink, 'but lets return true as if hard link was already made then no need to make again, all hardlinks update right away to match all from what it is hard linekd to');
-						return true
+						return true;
 					}
 					console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
 					throw new Error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
@@ -1958,6 +1751,7 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 			
 			if (aOptions.appUserModelId) {
 				// :todo: maybe keep creation time constant, maybe, if recreating causes detachment
+				console.error('REMOVING HERE AS APPUSERMODELID IS SET');
 				OS.File.remove(arrOSPath[i]);
 				var hr_SetPath = references.shellLink.SetPath(references.shellLinkPtr, aOptions.path_linkTo);
 				ostypes.HELPER.checkHRESULT(hr_SetPath, 'SetPath');
@@ -1977,6 +1771,7 @@ function winnt_setInfoOnShortcuts(arrOSPath, aOptions) {
 			}
 
 			if ('iconPath' in aOptions) {
+				console.log('setting icon path to:', aOptions.iconPath);
 				var hr_SetIconLocation = references.shellLink.SetIconLocation(references.shellLinkPtr, aOptions.iconPath, aOptions.iconIndex ? aOptions.iconIndex : 0);
 				ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'SetIconLocation');
 			}
@@ -2029,17 +1824,20 @@ function winnt_getInfoOnShortcuts(arrOSPath) {
 			console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
 			ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
 			
-			var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
-			var piIcon = ostypes.TYPE.INT();
-			var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
-			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			rezObj[arrOSPath[i]].OSPath_icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			// :todo: perf enhancement. consider setting in the updateIfDiff option, or add option updateIfArgHasProf so then i dont have to do findLaunchers then iterate again with COM to update launchers/createShortcuts
 			
-			var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
-			var fFlags = ostypes.CONST.SLGP_RAWPATH;
-			var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
-			ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
+			// i dont use these from this yet
+			// var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+			// var piIcon = ostypes.TYPE.INT();
+			// var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
+			// ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+			// rezObj[arrOSPath[i]].OSPath_icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			
+			// var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+			// var fFlags = ostypes.CONST.SLGP_RAWPATH;
+			// var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
+			// ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+			// rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
 			
 			var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
 			var hr_GetArguments = references.shellLink.GetArguments(references.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
