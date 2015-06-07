@@ -427,15 +427,19 @@ var observers = {
 					break;
 				case 'response-browser-base-iconset':
 					
-								var responseJson = JSON.parse(subData);
-								var target = _changeIcon_targets.target;
-								target = target.parentNode;
-								target.classList.remove('browse');
-								//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
-								//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
-								//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
-								target.style.backgroundImage = 'url(' + responseJson.img + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
-					
+								
+						var responseJson = JSON.parse(subData);
+						if ('img' in responseJson) {
+							var target = _changeIcon_targets.target;
+							target = target.parentNode;
+							target.classList.remove('browse');
+							//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
+							//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
+							//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
+							target.style.backgroundImage = 'url(' + responseJson.img + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
+							saveDevBuilds();
+						}
+								
 					break;
 				default:
 					throw new Error('"profilist-cp-server": subTopic of "' + subTopic + '" is unrecognized');
@@ -1157,7 +1161,7 @@ var observers = {
 			var iconSpan = t.querySelector('span');
 			var icon = iconSpan.style.backgroundImage;
 			if (icon == '') {
-				icon = iconSpan.getAttribute('class').match(/(?:esr|release|beta|dev|aurora|nightly)/i);
+				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i); // removed esr from here as i dont have an esr class
 				if (!icon) {
 					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
 					return;
@@ -1165,7 +1169,7 @@ var observers = {
 					icon = icon[0];
 				}
 			} else {
-				var iconUrl = icon.match(/.*\/(.*?)_16\.png#/);
+				var iconUrl = icon.match(/.*\/(.*?)_16\.png#/); //its a file uri so its safe to hard code it path seperator
 				if (!iconUrl) {
 					console.error('failed to run regex on background image', icon, i, t.innerHTML);
 				} else {
