@@ -84,7 +84,6 @@ var devBuilds;
 var gDevBuilds = [];
 var iniStr = ''; //str of ini on last read // for detection for if should write if diff
 var iniReadStr = ''; //same like iniStr but no JSON'ing for detection if should continue parsing obj on read
-var iniStr_thatAffectsDOM = ''; //str of ini on last read (but just the props that affect dom) (so like properties like Profilist.launch_on_create doesnt affect dom as the function creatProfile checks this Profilist.launch_on_create property when deciding to launch or not
 var profToolkit = {
 	rootPathDefault: 0,
 	localPathDefault: 0,
@@ -102,7 +101,7 @@ var profToolkit = {
 var decoder = 0;
 var encoder = 0;
 
-var iniStr_thatAffectDOM = '';
+var iniStr_thatAffectDOM = ''; //str of ini on last read (but just the props that affect dom) (so like properties like Profilist.launch_on_create doesnt affect dom as the function creatProfile checks this Profilist.launch_on_create property when deciding to launch or not
 var iniObj_thatAffectDOM = {};
 //learned: that if StartWithLastProfile=1 then profile manager/startup obeys the Default=1 but note that Default=1 is never removed
 var iniKeys_thatAffectDOM = ['Profilist.dev', 'Profilist.dev-builds'/*, 'StartWithLastProfile'*/, 'Default', 'Name'/*, 'Profilist.tie'*/, 'Profilist.badge']; // i just add num here so its known to me that i use it as affected to dom, but its outside of props so it wont be caught so i manually add it into the obj ~LINK683932~ //and also i only check for changes in .props so num is outside of it so i just use that for childNode targeting ~LINK65484200~ // Profilist.tie is pushed in or removed, depending on pref of myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value
@@ -290,27 +289,33 @@ current builds icon if dev mode is enabled
 			//update icon `currentThisBuildsIconPath`
 			//if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) { //if (ini.General.props['Profilist.dev'] == 'true') { //OR I can test `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {` but if i use this pref test method then i need to update watch branches block before this currentBuildIcons
 			
-				gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value);
-				
-				var tieIdsActive = []; // meaning with info in gDevBuilds
-				for (var i=0; i<gDevBuilds.length; i++) {
-					tieIdsActive.push(gDevBuilds[i][devBuildsArrStruct.id]);
-				}
-				
-				console.error('scanning active tie ids:', tieIdsActive);
-				
-				for (var p in ini) {
-					if (!('num' in ini[p])) { continue }
-					if ('Profilist.tie' in ini[p].props) {
-						if (tieIdsActive.indexOf(ini[p].props['Profilist.tie']) == -1) {
-							console.warn('tieid of ', ini[p].props['Profilist.tie'], 'was found in use in ini, however it is not in left over tieids, so removing from ini.', 'left over tie ids:', tieIdsActive);
-							delete ini[p].props['Profilist.tie'];
+				if ('Profilist.dev-builds' in ini.General.props) {
+					gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value);
+					
+					// also update iniObj_thatAffectDOM with base icons used
+					
+					var tieIdsActive = []; // meaning with info in gDevBuilds
+					for (var i=0; i<gDevBuilds.length; i++) {
+						var cTieId = gDevBuilds[i][devBuildsArrStruct.id];
+						var cBaseIcon = gDevBuilds[i][devBuildsArrStruct.base_icon];
+						tieIdsActive.push(cTieId);
+						iniObj_thatAffectDOM.General.props['Profilist.dev-build-base_icon-' + cTieId] = cBaseIcon;
+					}
+					
+					console.error('scanning active tie ids:', tieIdsActive);
+					
+					for (var p in ini) {
+						if (!('num' in ini[p])) { continue }
+						if ('Profilist.tie' in ini[p].props) {
+							if (tieIdsActive.indexOf(ini[p].props['Profilist.tie']) == -1) {
+								console.warn('tieid of ', ini[p].props['Profilist.tie'], 'was found in use in ini, however it is not in left over tieids, so removing from ini.', 'left over tie ids:', tieIdsActive);
+								delete ini[p].props['Profilist.tie'];
+							}
 						}
 					}
 				}
-				
 				//start the generic-ish check stuff
-				// copy block link 011012154 slight modif
+				// copy block link011012154 slight modif
 				currentThisBuildsIconPath = '';
 				// does currently running path have a tied icon
 				var runningExeTieId = getDevBuildTieIdOfExePath(profToolkit.exePath);
@@ -321,7 +326,7 @@ current builds icon if dev mode is enabled
 					// use channel default icon
 					currentThisBuildsIconPath = getPathTo16Img(core.firefox.channel);
 				}
-				// end copy block link 011012154
+				// end copy block link011012154
 				//end the generic-ish check stuff
 			
 				//have to add this in as another prop because its possible that currentThisBuildsIconPath can change even though Profilist.dev did not (ie: it reamined true)
@@ -843,7 +848,7 @@ function createProfileNew(theProfileName, absolutProfile_pathToParentDir, refres
 				var PathToWriteToIni;
 				if (!absolutProfile_pathToParentDir) {
 					//get relative path
-					var mRootDir = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
+					var mRootDir = Services.dirsvc.get('UAppData', Ci.nsIFile); //new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
 					var IniPathStr = FileUtils.getFile('DefProfRt', [theDirName]);
 					var PathToWriteToIni = IniPathStr.getRelativeDescriptor(mRootDir); //returns "Profiles/folderName"
 					//end get relative path
@@ -1368,13 +1373,13 @@ function initProfToolkit() {
 	profToolkit.path_iniDir = OS.Constants.Path.userApplicationDataDir;
 	profToolkit.path_iniFile = OS.Path.join(profToolkit.path_iniDir, 'profiles.ini');
 	
-	profToolkit.nsIFile_iniDir = new FileUtils.File(profToolkit.path_iniDir); //for getRelativeDescriptor use
+	//profToolkit.nsIFile_iniDir = new FileUtils.File(profToolkit.path_iniDir); //for getRelativeDescriptor use
 	
 	if (profToolkit.selectedProfile.rootDirPath.indexOf(profToolkit.rootPathDefault) > -1) {
 		//then its PROBABLY relative as its in the folder it should be
 		//console.log('setting XYZ here:', profToolkit.selectedProfile.rootDirPath, profToolkit.rootPathDefault);
 		var IniPathStr = new FileUtils.File(profToolkit.selectedProfile.rootDirPath); //OS.Path.join(profToolkit.rootPathDefault, profToolkit.selectedProfile.rootDirName);
-		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(profToolkit.nsIFile_iniDir); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
+		var PathToWriteToIni = IniPathStr.getRelativeDescriptor(Services.dirsvc.get('UAppData', Ci.nsIFile)); //returns "Profiles/folderName" /***console.time('blah'); var sep = sep.getRelativeDescriptor(sep2); console.timeEnd('blah'); console.log(sep); ~~~ 0.04ms***/
 		profToolkit.selectedProfile.relativeDescriptor_rootDirPath = PathToWriteToIni;
 	} else {
 		//its not relative
@@ -1821,6 +1826,23 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 									PBox.style.backgroundImage = 'url("' + ppChanged[i].now + '")';
 								} else if (pp == 'Profilist.defaultProfilePath') {
 									PBox.setAttribute('defaultProfilePath', ppChanged[i].now);
+								} else if (ppChanged[i].pp.indexOf('Profilist.dev-build-base_icon-') == 0) {
+									// base_icon of tieid was updated
+									var cTieId = ppChanged[i].pp.substr('Profilist.dev-build-base_icon-'.length);
+									var cNewBgImgUrl = getPathTo16Img(ppChanged[i].now, true);
+									console.error('change on base_icon of cTieId:', cTieId, 'here is the change set obj:', ppChanged[i]);
+									for (var iniKey in objWin) { // use objWin as the added's and removed's not yet updated, and the goal here is to just update the old ones anyways, the new ones will get added in with proper icon. the only issue is that i might update removed's and this is useless as it will get removed anyways
+										if ('num' in objWin[iniKey]) {
+											if ('Profilist.tie' in objWin[iniKey].props) {
+												if (objWin[iniKey].props['Profilist.tie'] == cTieId) { // :todo: what if image contents change but name is same, should implement, using uncached feature og getPathTo16Img well it wont even trigger that it changed. so its interesting
+													var box = aDOMWindow.Profilist.PStack.childNodes[getChildNodeI(iniKey, objWin, aDOMWindow.Profilist.PStack)]; // using objWin here because the removed's and added's have not been updated yet
+													console.error('ok updated bg img!!!!');
+													box.style.backgroundImage = 'url("' + cNewBgImgUrl + '")';
+													console.error('ok updated bg img!!!! DONE');
+												}
+											}
+										}
+									}
 								}
 							} else if ('num' in objWin[pw]) { //can alternatively do `'num' in objBoot[pw]` notice the objBoot
 								var childNodeI = getChildNodeI(pw, objWin, PStack);
@@ -8481,6 +8503,7 @@ function cpClientListener(aSubject, aTopic, aData) {
 							writeToIni = true;
 						}
 					}
+					console.error('sending profToolkit of:', profToolkit);
 					var responseJson = {
 						clientId: clientId,
 						ini: ini,
@@ -8607,8 +8630,8 @@ function cpClientListener(aSubject, aTopic, aData) {
 			*/
 			break;
 		case 'query-browser-base-iconset':
-		
-				var promise_basePick = pickerIconset(Services.wm.getMostRecentWindow(null));
+				var cWin = Services.wm.getMostRecentWindow('navigator:browser')
+				var promise_basePick = pickerIconset(cWin);
 				promise_basePick.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_basePick - ', aVal);

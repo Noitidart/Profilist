@@ -381,10 +381,11 @@ var observers = {
 					if (responseJson.clientId == clientId) {
 						ini = responseJson.ini;
 						transObj = responseJson.transObj;
+						//console.info('incoming transObj:', transObj);
 						core = transObj.core;
-						profToolkit = profToolkit;
+						profToolkit = transObj.profToolkit;
 						//ini = JSON.parse(JSON.stringify(responseJson.ini));
-						console.error('just read ini as =', ini);
+						//console.info('just read ini as =', ini, 'and profToolkit as:', profToolkit);
 						readIniToDom();
 					} else {
 						//this isnt the client that was just born. in other words, this isnt the client that asked for birth data
@@ -728,7 +729,7 @@ var observers = {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
-					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")';
+					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")'; // the math.random here is for on mouseleave, we see if its same or diff
 				}
 				rowDomJson[3][2][1].value = json[i][1]; //textbox value
 				if (json[i][1].toLowerCase() == pathExe.toLowerCase()) {
