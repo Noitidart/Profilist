@@ -439,6 +439,8 @@ var observers = {
 							//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
 							target.style.backgroundImage = 'url(' + responseJson.img + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
 							saveDevBuilds();
+							var row = target.parentNode;
+							cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
 						}
 								
 					break;
@@ -532,99 +534,8 @@ var observers = {
 				oTarg: oTarg,
 				target: target
 			};
+			
 			cpCommPostJson('query-browser-base-iconset', {tieid: e.target.getAttribute('tieid')});
-			return;
-			////////////// OLD WAY BELOW
-			var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
-			fp.init(window, 'Profilist - Select Custom Build Icon', Ci.nsIFilePicker.modeOpen);
-			fp.appendFilters(Ci.nsIFilePicker.filterImages);
-			fp.displayDirectory = new FileUtils.File(OS.Constants.Path.userApplicationDataDir);
-			var rv = fp.show();
-			if (rv == Ci.nsIFilePicker.returnOK || rv == Ci.nsIFilePicker.returnReplace) {
-				var file = fp.file; // Get the path as string. Note that you usually won't need to work with the string paths.
-				var path = fp.file.path; // work with returned nsILocalFile...
-				
-				//start - size to 16x16 and save it to profile folder
-				//using canvas technique because in case i need to resize it i can do so right away. rather than xhr first then if not right size the go to canvas anyways
-				var img = new Image();
-				img.onload = function() {
-					var canvas = document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
-					canvas.width = 16;
-					canvas.height = 16;
-					var ctx = canvas.getContext('2d');
-					if (img.naturalHeight != 16 || img.naturalWidth != 16) {
-						ctx.drawImage(img, 0, 0, 16, 16);
-					} else {
-						ctx.drawImage(img, 0, 0);
-					}
-					/*
-					var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-					var XOR = data.length;
-					var AND = canvas.width * canvas.height / 8;
-					var size = XOR + AND;
-					var buffer = new ArrayBuffer(size);
-					var png = new Uint8Array(buffer);
-					*/
-					(canvas.toBlobHD || canvas.toBlob).call(canvas, function(b) {
-						var r = new FileReader();
-						r.onloadend = function () {
-							// r.result contains the ArrayBuffer.
-							var basename = OS.Path.basename(fp.file.path);
-							var dirname = OS.Path.dirname(fp.file.path).toLowerCase();
-							console.log('dirname = ', dirname, 'OS.Const:', OS.Constants.Path.userApplicationDataDir);
-							if (dirname == OS.Constants.Path.userApplicationDataDir.toLowerCase()) {
-								//alert('no need to write just use as its in userAppDataDir');
-								var dontWriteJustUse = true;
-							}
-							var basename_noext = basename.substr(0, basename.lastIndexOf('.'));
-							var postImgReady = function() {
-								target = target.parentNode;
-								target.classList.remove('browse');
-								//console.log('os.file newfileuir:', OS.Path.toFileURI(writePath + '#' + Math.random()));
-								//console.log('fileutils newfileuir:', Services.io.newFileURI(new FileUtils.File(writePath + '#' + Math.random())));
-								//both newFileURI methods encode the `#` to `%23` i think this makes sense, so lets just put the # outside of the tofileuri func
-								target.style.backgroundImage = 'url(' + OS.Path.toFileURI(writePath) + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
-							}
-							
-							var writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'build_iconsets', basename_noext + '.png');
-							if (dontWriteJustUse) {
-								console.log('user selected image from AppDataDir so no need to write just use it');
-								postImgReady();
-							} else {
-								var writeAttempt = 0;
-								var writeIt = function() {
-									if (writeAttempt > 0) {
-										writePath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'build_iconsets', basename_noext + '-' + writeAttempt + '.png');
-									}
-									var promise_saveResized = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [writePath, new Uint8Array(r.result), {tmpPath:writePath + '.tmp', noOverwrite:true}], OS.Constants.Path.userApplicationDataDir);
-									promise_saveResized.then(
-										function(aVal) {
-											console.log('succesfully saved image to disk');
-											postImgReady();
-										},
-										function(aReason) {
-											var deepestReason = aReason; while (deepestReason.aReason) { deepestReason = deepestReason.aReason }
-											if (deepestReason instanceof OS.File.Error && deepestReason.becauseExists) {
-												console.warn('failed simply cuz a file with that name already exists so will writeAttempt++');
-												writeAttempt++;
-												writeIt();
-											} else {
-												alert('Custom image for build failed to copy to Profilist directory on disk, see "Browser Console" after closing this message for more information');
-												throw new Error('Custom image for build failed to copy to Profilist directory on disk - ' + aReason);
-											}
-											//console.log('writeAtomic failed for reason:', aReason);
-										}
-									);
-								};
-								writeIt();
-							}
-						};
-						r.readAsArrayBuffer(b);
-					}, 'image/png');
-				};
-				img.src = OS.Path.toFileURI(fp.file.path);
-				//end - size to 16x16 and save it to profile folder
-			}
 			return;
 		}
 		if (oTarg.classList.contains('change-icon')) {
@@ -723,7 +634,10 @@ var observers = {
 				if (json[i][2] > nextTieId) {
 					nextTieId = parseInt(json[i][2]) + 1;
 				}
-				var builtinIcon = json[i][0].match(/^(?:esr|release|beta|dev|aurora|nightly)$/im);
+				
+				var builtinIcon = json[i][0].match(/^(?:esr|release|beta|aurora|dev|nightly|default)$/im);
+				builtinIcon = getIconsetForChannelName(builtinIcon);
+				
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
@@ -1162,7 +1076,7 @@ var observers = {
 			var iconSpan = t.querySelector('span');
 			var icon = iconSpan.style.backgroundImage;
 			if (icon == '') {
-				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i); // removed esr from here as i dont have an esr class
+				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i); // removed esr and default from here as i dont have an esr or default iconset
 				if (!icon) {
 					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
 					return;
@@ -1208,34 +1122,7 @@ var observers = {
 			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
 		}
 	}
-	/*
-	function generateDevBuildsStr() {
-		//ini.General.props.devbuilds
-		var devbuildsJson = [];
-		var rows = document.querySelectorAll('.builds-cont > div');
-		for (var i=1; i<rows.length; i++) {
-			var iconSpan = rows[i].childNodes[0];
-			var textbox = rows[i].querySelector('input[type=text]');
-			
-			var buildPath = textbox.value.trim();
-			if (iconSpan.classList.contains('browse')) {
-				continue;
-			}
-			if (buildPath == '') {
-				continue;
-			}
-			var iconPath = iconSpan.style.backgroundImage;
-			if (iconPath == '') {
-				var iconPath = iconSpan.getAttribute('class').match(/(?:esr|release|beta|dev|aurora|nightly)/);
-				console.log('iconPath:', iconPath[0]);
-			} else {
-				var iconPath = iconSpan.style.backgroundImage.substr(5, iconPath.length-2);
-			}
-			console.log('iconPath:', iconPath);
-			devbuildsJson.push([buildPath, iconPath]);
-		}
-	}
-	*/
+	
 	var enteredIconClass;
 	var enteredIconBG;
 	
@@ -1249,16 +1136,21 @@ var observers = {
 		setTimeout(function() {
 			var leaveIconBG = e.target.style.backgroundImage;
 			var leaveIconClass = e.target.getAttribute('class');
-			
 			if (enteredIconBG != leaveIconBG) {
 				console.log('running save cuz icongBg differs');
 				saveDevBuilds();
+				var row = e.target.parentNode;
+				console.error('info2:', row);
+				cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
 				return;
 			}
 			
 			if (enteredIconClass != leaveIconClass) {
 				console.log('running save cuz iconClass differs');
 				saveDevBuilds();
+				var row = e.target.parentNode;
+				console.error('info3:', row);
+				cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
 				return;
 			}
 		}, 100); //do the wait because if leaving after file picker, it needs some time to take
@@ -1459,12 +1351,8 @@ var observers = {
 function getPathTo16Img(iconset_name, uncached) {
 	// copied from bootstrap.js
 	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
-	if (/^(?:esr|release|beta|aurora|dev|nightly)$/m.test(iconset_name)) {
-		/*if (iconset_name == 'aurora') {
-			iconset_name = 'dev';
-		} else */if (iconset_name == 'esr') {
-			iconset_name = 'release';
-		}
+	if (/^(?:esr|release|beta|aurora|dev|nightly|default)$/m.test(iconset_name)) {
+		iconset_name = getIconsetForChannelName(iconset_name);
 		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
 		return core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png'; // chrome path so no need for file uri
 		//aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
@@ -1476,5 +1364,45 @@ function getPathTo16Img(iconset_name, uncached) {
 			console.info('returning', OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png');
 			return OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconset_name, iconset_name)) + '_16.png';
 		}
+	}
+}
+
+function getIconsetForChannelName(channel_name, firefox_version) {
+	// copied from bootstrap.js
+	// firefox_version is double, used for determining if aurora is dev or aurora
+	// for a channel name it gives the name of the folder name in in core.addon.path.images + 'channel-iconsets/' + FOLDER_NAME_HERE + '/' + FOLDER_NAME_HERE + '_##.png'
+	switch (channel_name) {
+		case 'esr':
+		case 'release':
+		
+			return 'release';
+			
+		case 'aurora':
+		
+			if (firefox_version) {
+				if (Services.vc.compare(Services.appinfo.version, firefox_version) >= 0) {
+					// aurora became dev icon in version 35
+					return 'dev';
+				} else {
+					return 'aurora';
+				}
+			} else {
+				// default to dev
+				return 'dev';
+			}
+			
+		case 'dev':
+		
+			return 'dev';
+			
+		case 'default':
+		case 'nightly':
+		
+			return 'nightly';
+			
+		default:
+		
+			throw new Error('unrecognized channel_name! no preset iconset for this channel name!!! channel_name: "' + channel_name + '"');
+			
 	}
 }

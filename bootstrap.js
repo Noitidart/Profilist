@@ -187,15 +187,13 @@ function extendCore() {
 	
 	core.firefox = {};
 	core.firefox.version = Services.appinfo.version;
-	core.firefox.channel = Services.prefs.getCharPref('app.update.channel');
+	core.firefox.channel = Services.prefs.getCharPref('app.update.channel'); // esr|release|beta|aurora|dev|nightly|default
 	// link5060513255 - see that i alias esr to release and default to nightly, and aurora to dev if version is < 35
 	if (core.firefox.channel == 'aurora') {
 		if (Services.vc.compare(Services.appinfo.version, 35) >= 0) {
 			// aurora became dev icon in version 35
-			core.firefox.channel = 'dev'; // for image purposing
+			core.firefox.channel = 'dev'; // NOT for image purposes
 		}
-	} else if (core.firefox.channel == 'default') { // this is what it is on custom build
-		core.firefox.channel = 'nightly'; // for image purposing
 	}
 	
 	console.log('done adding to core, it is now:', core);
@@ -361,28 +359,23 @@ current builds icon if dev mode is enabled
 			iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM);
 			
 			
-			//figure selectedProfile.name					
+			//figure selectedProfile.name and selectedProfile.iniKey			
 			//get from selectedProfile.rootDirPath to iniPath format to get its name
 			if (profToolkit.selectedProfile.relativeDescriptor_rootDirPath !== null) {
 				//its possible to be relative
 				profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.relativeDescriptor_rootDirPath].props.Name;
+				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath;
 			} else {
 				if (profToolkit.selectedProfile.rootDirPath in ini) {
 					//its absolute
 					profToolkit.selectedProfile.name = ini[profToolkit.selectedProfile.rootDirPath].props.Name;
+					profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.rootDirPath;
 				} else {
 					//its a temporary profile!
 					profToolkit.selectedProfile.isTemp = true;
+					profToolkit.selectedProfile.iniKey = null;
+					profToolkit.selectedProfile.name = OS.Path.basename(getPathToProfileDir(null, false));
 				}
-			}
-			
-			if (profToolkit.selectedProfile.name === null || profToolkit.selectedProfile.isTemp) { //probably null
-				//console.log('XYZ this profile at path does not exist, so its a temporary profile');
-				profToolkit.selectedProfile.name = myServices.sb.GetStringFromName('temporary-profile'); //as it has no name
-				profToolkit.selectedProfile.iniKey = null;
-			} else {
-				//console.log('XYZ SET IT HERE, it has name and it is:', profToolkit.selectedProfile.name);
-				profToolkit.selectedProfile.iniKey = profToolkit.selectedProfile.relativeDescriptor_rootDirPath ? profToolkit.selectedProfile.relativeDescriptor_rootDirPath : profToolkit.selectedProfile.rootDirPath;
 			}
 			
 			if (writeIfDiff || doWriteCuzPrefsAreNotAllDefaultAndPrefValsNotFoundInIni) {
@@ -1355,6 +1348,9 @@ function initProfToolkit() {
 	
 	profToolkit.exePath = Services.dirsvc.get('XREExeF', Ci.nsIFile).path;
 	profToolkit.exePathLower = profToolkit.exePath.toLowerCase();
+	
+	_cache_getChannelNameOfExePath[profToolkit.exePathLower] = core.firefox.channel; // link354869099
+	
 	profToolkit.path_exeCur = profToolkit.exePath; //currently running channels exe
 	profToolkit.rootPathDefault =  Services.dirsvc.get('DefProfRt', Ci.nsIFile).path; //FileUtils.getFile('DefProfRt', []).path; //following method does not work on custom profile: OS.Path.dirname(OS.Constants.Path.localProfileDir); //will work as long as at least one profile is in the default profile folder //i havent tested when only custom profile
 //	console.log('initProfToolkit 1');
@@ -1667,7 +1663,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				*/
 				////// copy/modification/strips of block 8752123154 //except for the he forCustomizationTabInsertItDisabled
 				/*
-				if (profToolkit.selectedProfile.iniKey === null) {
+				if (profToolkit.selectedProfile.isTemp) {
 					// its a temp prof
 					var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile profilist-temp-profile'], status:'active', style:['margin-top:0'], top:0}];
 					elJson[1].label = myServices.sb.GetStringFromName('temporary-profile');
@@ -1681,7 +1677,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				*/
 				var elJson = ['xul:box', {class:['profilist-tbb-box', 'profilist-tbb-box-inactivatable profilist-cur-profile'], status:'active', style:['margin-top:0'], top:0}];
 				var sIniKey = profToolkit.selectedProfile.iniKey;
-				if (sIniKey) {
+				if (sIniKey) { // so profToolkit.selectedProfile.isTemp is true
 					console.error('sIniKey is == ', sIniKey);
 					if (forCustomizationTabInsertItDisabled) {
 						elJson[1].disabled = 'true';
@@ -1702,7 +1698,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					elJson[1].style = elJson[1].style.join('; ');
 				} else {
 					//is temp profile
-					elJson[1].label = myServices.sb.GetStringFromName('temporary-profile');
+					elJson[1].label = myServices.sb.formatStringFromName('temp-prof-with-dir-name', [profToolkit.selectedProfile.name], 1); //myServices.sb.GetStringFromName('temporary-profile');
 					elJson[1].class.push('profilist-temp-prof');
 					elJson[1].class = elJson[1].class.join(' ');
 				}
@@ -3633,38 +3629,88 @@ function getDevBuildTieIdOfExePath(aExePath, refreshDevBuildsJson) {
 	}
 	return null;
 }
+
+function getDevBuildPropForExePath(aExePath, getPropName, refreshDevBuildsJson) {
+	// if refreshDevBuildsJson then it return data might be stale
+	console.log('in getDevBuildPropForTieId');
+	if (refreshDevBuildsJson) {
+		gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+	}
+	
+	var aExePathLowered = aExePath.toLowerCase();
+	for (var i=0; i<gDevBuilds.length; i++) {
+		if (gDevBuilds[i][devBuildsArrStruct.exe_path].toLowerCase() == aExePathLowered) {
+			return gDevBuilds[i][devBuildsArrStruct[getPropName]];
+		}
+	}
+	// if got here obviously nothing was found
+	console.warn('exe path of', aExePath, 'not found in gDevBuilds');
+	
+	return null;
+}
+
 function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
 	// if refreshDevBuildsJson then it return data might be stale
 	console.log('in getDevBuildPropForTieId');
 	if (refreshDevBuildsJson) {
 		gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
 	}
+	
 	for (var i=0; i<gDevBuilds.length; i++) {
 		if (gDevBuilds[i][devBuildsArrStruct.id] == cTieId) {
-			console.info('returning', gDevBuilds[i][devBuildsArrStruct[getPropName]]);
 			return gDevBuilds[i][devBuildsArrStruct[getPropName]];
 		}
-		if (i == gDevBuilds.length - 1) {
-			if (!refreshDevBuildsJson) {
-				console.warn('went through all of gDevBuilds and couldnt find cTieid, but devuser asked for no refresh, but because not found, will refresh then try again');
-				return getDevBuildPropForTieId(cTieId, getPropName, true)
-			} else {
-				console.error('could not find cTieId of', cTieId, 'in gDevBuilds even after refreshing', 'gDevBuilds:', gDevBuilds);
-				throw new Error('could not find cTieId in gDevBuilds even after refreshing');
-			}
-		}
 	}
-	throw new Error('reached outsdie of lopo in getDevBuildPropForTieId this should never happen');
+	// if got here obviously nothing was found
+	console.warn('exe path of', aExePath, 'not found in gDevBuilds');
+	
+	return null;
 }
+
+function getIconsetForChannelName(channel_name, firefox_version) {
+	// firefox_version is double, used for determining if aurora is dev or aurora
+	// for a channel name it gives the name of the folder name in in core.addon.path.images + 'channel-iconsets/' + FOLDER_NAME_HERE + '/' + FOLDER_NAME_HERE + '_##.png'
+	switch (channel_name) {
+		case 'esr':
+		case 'release':
+		
+			return 'release';
+			
+		case 'aurora':
+		
+			if (firefox_version) {
+				if (Services.vc.compare(Services.appinfo.version, firefox_version) >= 0) {
+					// aurora became dev icon in version 35
+					return 'dev';
+				} else {
+					return 'aurora';
+				}
+			} else {
+				// default to dev
+				return 'dev';
+			}
+			
+		case 'dev':
+		
+			return 'dev';
+			
+		case 'default':
+		case 'nightly':
+		
+			return 'nightly';
+			
+		default:
+		
+			throw new Error('unrecognized channel_name! no preset iconset for this channel name!!! channel_name: "' + channel_name + '"');
+			
+	}
+}
+
 function getPathTo16Img(iconset_name, uncached) {
 	// copied to options.js
 	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
-	if (/^(?:esr|release|beta|aurora|dev|nightly)$/m.test(iconset_name)) {
-		/*if (iconset_name == 'aurora') {
-			iconset_name = 'dev';
-		} else */if (iconset_name == 'esr') {
-			iconset_name = 'release';
-		}
+	if (/^(?:esr|release|beta|aurora|dev|nightly|default)$/m.test(iconset_name)) {
+		iconset_name = getIconsetForChannelName(iconset_name);
 		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
 		return core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png'; // chrome path so no need for file uri
 		//aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
@@ -5087,7 +5133,7 @@ function activated(e) {
 		case 'winmo':
 		case 'wince':
 			// check if 
-			if (profToolkit.selectedProfile.iniKey === null) {
+			if (profToolkit.selectedProfile.isTemp) {
 				// its a temp prof, dont do this
 				break;
 			}
@@ -5187,24 +5233,208 @@ function channelNameTo_refName(ch_name) {
 
 var _cache_getChannelNameOfExePath = {}; //{exePath: channelName, exePath2: channelName}
 function getChannelNameOfExePath(aExePath) {
-	console.info('aExePath:', aExePath);
-	// assuming case sensitivity is right
 	var deferredMain_getChannelNameOfExePath = new Deferred();
 	
-	if (_cache_getChannelNameOfExePath[aExePath]) {
-		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]); // note:important: requires tie id to have proper cassing on tie paths
+	var aExePathLowered = aExePath.toLowerCase();
+	if (_cache_getChannelNameOfExePath[aExePathLowered]) { // link803206654
+		deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePathLowered]);
 	} else {
-		if (aExePath == profToolkit.path_exeCur) {
-			_cache_getChannelNameOfExePath[aExePath] = core.firefox.channel;
-			deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[aExePath]);
+		// if (aExePathLowered == profToolkit.exePathLower) { // no more need for this block check due to i added to cache on initProfToolkit link354869099 so it will already exist and link803206654 would have returned it
+		// 	deferredMain_getChannelNameOfExePath.resolve(_cache_getChannelNameOfExePath[profToolkit.exePathLower]);
+		// }
+		var path_channelName;
+		if (core.os.name != 'darwin') {
+			path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
 		} else {
-			var path_channelName;
-			if (cOS != 'darwin') {
-				path_channelName = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
-			} else {
-				path_channelName = OS.Path.join(aExePath.substr(0, aExePath.search(/\.app/i)/*.toLowerCase().indexOf('.app')*/ + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
-			}
+			path_channelName = OS.Path.join(aExePath.substr(0, aExePathLowered.indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
+		}
 
+		var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
+		promise_readChanPref.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readChanPref - ', aVal);
+				// start - do stuff here - promise_readChanPref
+				var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
+				if (!chanVal) {
+					var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
+					console.error('Rejected - promise_readChanPref - ', rejObj);
+					deferredMain_getChannelNameOfExePath.reject(rejObj);
+				} else {
+					if (chanVal[1] == 'aurora') {
+						// i should test the version in the path_channelName or somewhere (i just checked version is not available in path_channelName file) file to see if its < 35 or not
+						// but for now im setting it to dev
+						chanVal[1] = 'dev';
+					}
+					_cache_getChannelNameOfExePath[aExePathLowered] = chanVal[1];
+					deferredMain_getChannelNameOfExePath.resolve(chanVal[1]);
+				}
+				// end - do stuff here - promise_readChanPref
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_readChanPref', aReason:aReason};
+				console.error('Rejected - promise_readChanPref - ', rejObj);
+				deferredMain_getChannelNameOfExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
+				console.error('Caught - promise_readChanPref - ', rejObj);
+				deferredMain_getChannelNameOfExePath.reject(rejObj);
+			}
+		);
+	}
+	
+	return deferredMain_getChannelNameOfExePath.promise;
+}
+
+function getExePathProfileLastLaunchedIn(aProfIniKey) {
+	// get last build a profile was launched with, also the last firefox version
+	// resolve values:
+		// null - meaning never launched before
+		// {exePath:, fxVersion:} // fxVersion is a string it can be like `41.0a1` so have to use Services.vc to compare on it, its not a js number
+	
+	var deferredMain_getExePathProfileLastLaunchedIn = new Deferred();
+	var step0 = function() {
+		// test if its selectedProfile/tempProfile
+		if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
+			// is temp or not
+			// is sleected profile though
+			deferredMain_getExePathProfileLastLaunchedIn.resolve({
+				exePath: profToolkit.exePath,
+				fxVersion: core.firefox.version
+			});
+		} else {
+			step1();
+		}
+	};
+	
+	var step1 = function() {
+		// read compat ini
+		var path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfIniKey, false), 'compatibility.ini');
+		var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
+		promise_readCompatIni.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_readCompatIni - ', aVal);
+				// start - do stuff here - promise_readCompatIni
+					step2(aVal);
+				// end - do stuff here - promise_readCompatIni
+			},
+			function(aReason) {
+				var deepestReason = aReasonMax(aReason);
+				if (deepestReason.becauseNoSuchFile) {
+					// this happens for brand new profiles that havent been launched yet
+						// so return null, the one receiving can then decide whether to use path of current build, or tied build if its tieable (ie: not temp prof) and tied
+					deferredMain_getExePathProfileLastLaunchedIn.resolve(null);
+				}
+				var rejObj = {name:'promise_readCompatIni', aReason:aReason};
+				console.error('Rejected - promise_readCompatIni - ', rejObj);
+				deferredMain_getExePathProfileLastLaunchedIn.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_readCompatIni', aCaught:aCaught};
+				console.error('Caught - promise_readCompatIni - ', rejObj);
+				deferredMain_getExePathProfileLastLaunchedIn.reject(rejObj);
+			}
+		);
+	};
+	
+	var step2 = function(compatIniContents) {
+		// parse compatIniContents
+		
+		var LastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(aVal);
+		var LastVersion = /LastVersion=(.*?)_/.exec(aVal);
+		
+		if (!LastPlatformDir) {
+			consolee.error('regex failed on LastPlatformDir, compatIniContents was:', compatIniContents);
+			throw 'regex failed on LastPlatformDir';
+		}
+		
+		if (!LastVersion) {
+			consolee.error('regex failed on LastVersion, compatIniContents was:', compatIniContents);
+			throw 'regex failed on LastVersion';
+		}
+		
+		var path_aProfileLastPlatformDir = LastPlatformDir[1];
+		
+		if (core.os.name == 'darwin') {
+			// :todo: test that this block work after i added in the dont readCompatIni if aProfilePath == profToolkit.selectedProfile.iniKey 052415
+			if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
+				// i have to do this to get the non-aliased path
+				var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
+				path_aProfileLastPlatformDir = nsifile_aProfileLastPlatformDir.target;
+			}	
+			var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
+			var endingArr_exeCur = split_exeCur.slice(split_exeCur.indexOf('MacOS'));
+			var endingStr_exeCur = OS.Path.join.apply(OS.File, endingArr_exeCur);
+			
+			var split_aProfileLastPlatformDir = OS.Path.split(path_aProfileLastPlatformDir).components;
+			var startArr_aProfileLastPlatformDir = split_aProfileLastPlatformDir.slice(0, split_aProfileLastPlatformDir.indexOf('Contents') + 1);
+			var startStr_aProfileLastPlatformDir = OS.Path.join.apply(OS.File, startArr_aProfileLastPlatformDir);
+			var exePath = OS.Path.join(startStr_aProfileLastPlatformDir, endingStr_exeCur);
+		} else {
+			var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
+			var endingStr_exeCur = split_exeCur[split_exeCur.length-1];
+			var exePath = OS.Path.join(path_aProfileLastPlatformDir, endingStr_exeCur);
+		}
+		
+		deferredMain_getExePathProfileLastLaunchedIn.resolve({
+			exePath: exePath,
+			fxVersion: LastVersion[1];
+		});
+	};
+	
+	step0();
+	
+	return deferredMain_getExePathProfileLastLaunchedIn.promise;
+}
+
+
+
+function getChannelNameProfileLastLaunchedIn(aProfIniKey, aExePath) {
+	// NOTE: not yet used anywhere, function not completed, 061015
+	// resolves to channel string: esr, release, beta, aurora, nightly, default
+	// if aExePath is not provided, it is obtained via getExePathProfileLastLaunchedIn
+	var deferredMain_getChannelNameProfileLastLaunchedIn = new Deferred();
+	
+	if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
+		// either temp profile or current profile
+		deferredMain_getChannelNameProfileLastLaunchedIn.resolve(core.firefox.channel);
+	} else {
+		// new way: call getExePathProfileLastLaunchedIn then call getChannelNameOfExePath
+		
+		var step1 = function() {
+			//getExePathProfileLastLaunchedIn
+		};
+		
+		var step2 = function() {
+			//getChannelNameOfExePath
+		};
+		
+		if (!aExePath) {
+			step1();
+		} else {
+			step2();
+		}
+		
+		/* old crap which is horrible
+		var path_channelName;
+		var buildPath; //build of the profile for_ini_key
+		//var path_channelName = OS.Path.join(profToolkit.PrfDef, 'channel-prefs.js');
+		if ('Profilist.tie' in ini[for_ini_key]) {
+			buildPath = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path');
+		} else {
+			buildPath = profToolkit.exePath; // todo: this is incorrect!!! 032015 1207p
+			asfsadfd(); // put here as it brings attention to me so i fix this
+		}
+		if (cOS != 'darwin') {
+			path_channelName = OS.Path.join(OS.Path.dirname(buildPath), 'defaults', 'pref', 'channel-prefs.js');
+		} else {
+			path_channelName = OS.Path.join(buildPath.substr(0, buildPath.toLowerCase().indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js');
+		}
+		if (path_channelName in getChannelNameOfProfile_cache_perBuild) { // note:important: requires tie id to have proper cassing on tie paths
+			deferred_getChannelNameOfProfile.resolve(getChannelNameOfProfile_cache_perBuild[path_channelName]);
+		} else {
 			var promise_readChanPref = read_encoded(path_channelName, {encoding:'utf-8'});
 			promise_readChanPref.then(
 				function(aVal) {
@@ -5213,38 +5443,40 @@ function getChannelNameOfExePath(aExePath) {
 					var chanVal = aVal.match(/pref\("app\.update\.channel", "(.*?)"/);
 					if (!chanVal) {
 						var rejObj = {name:'promise_readChanPref', aReason:'Regex match failed', fileContents:aVal, regexMatchVal:chanVal};
-						deferredMain_getChannelNameOfExePath.reject('regex match failed');
+						deferred_getChannelNameOfProfile.reject('Regex match failed');
 					} else {
 						chanVal = chanVal[1];
-						_cache_getChannelNameOfExePath[aExePath] = chanVal;
-						deferredMain_getChannelNameOfExePath.resolve(chanVal);
+						getChannelNameOfProfile_cache_perBuild[path_channelName] = chanVal;
+						deferred_getChannelNameOfProfile.resolve(chanVal);
 					}
 					// end - do stuff here - promise_readChanPref
 				},
 				function(aReason) {
 					var rejObj = {name:'promise_readChanPref', aReason:aReason};
 					console.error('Rejected - promise_readChanPref - ', rejObj);
-					deferredMain_getChannelNameOfExePath.reject(rejObj);
+					deferred_getChannelNameOfProfile.reject(rejObj);
 				}
 			).catch(
 				function(aCaught) {
 					var rejObj = {name:'promise_readChanPref', aCaught:aCaught};
 					console.error('Caught - promise_readChanPref - ', rejObj);
-					deferredMain_getChannelNameOfExePath.reject(rejObj);
+					deferred_getChannelNameOfProfile.reject(rejObj);
 				}
 			);
 		}
-	
+		*/
 	}
 	
-	return deferredMain_getChannelNameOfExePath.promise;
-}
+	
+	return deferredMain_getChannelNameProfileLastLaunchedIn.promise;
+};
 
 var getChannelNameOfProfile_cache_perBuild = {}; // [buildPath] = chan
 function getChannelNameOfProfile(for_ini_key) {
+	// :todo: 061015 DEPRECATE THIS, it is horrible it mixes tie id and crap. im replacing it with getChannelNameProfileLastLaunchedIn, and why the hell cache it? thats horrible as this can change all the time as users launch close launch and so on. so the replacement of `getChannelNameProfileLastLaunchedIn` depends on `getExePathProfileLastLaunchedIn`
 	// can pass `null` for `for_ini_key` and if this is temp profile it will give that else will give regular error of not found
 	// returns promise
-	// resolves to channel string: release, beta, aurora, nightly
+	// resolves to channel string: esr, release, beta, aurora, nightly, default
 	
 	var deferred_getChannelNameOfProfile = new Deferred();
 	
@@ -5472,7 +5704,7 @@ function getProfId(aProfilePath, preProfToolkitInit) {
 	
 	var deferredMain_getProfId = new Deferred();
 	
-	if (!preProfToolkitInit && profToolkit.selectedProfile.iniKey === null) {
+	if (!preProfToolkitInit && profToolkit.selectedProfile.isTemp) {
 		// temporary profile
 		deferredMain_getProfId.resolve(null);
 	} else if (!preProfToolkitInit && aProfilePath == profToolkit.selectedProfile.iniKey && 'selectedProfile' in _getProfId) {
@@ -5517,1148 +5749,399 @@ function getProfId(aProfilePath, preProfToolkitInit) {
 	return deferredMain_getProfId.promise;
 }
 
-function makeLauncher(for_ini_key, forceOverwrite, ifRunningThenTakeThat, launching) {
-	// returns promise
-	// resolves with:
-		// {cProfilePath:for_ini_key, profSpecs:getProfileSpecs(), OSPath:of_icon_created, alreadyExisted:false} // profSpecs is not there if iconNameObj was passed into makeIcon as second arg
-		
-	// makes launcher if it doesnt exist,  or if overwrite arg (force update) is true (DOES NOT: updates parameters if they are wrong)
-	// makes icon first if it doesnt exist
+const iconName_keyVal_joiner = '_';
+const iconName_set_joiner = '__';
+
+function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
+	// if set ignoreRunning then the key isRunning will be DNE
+	// presetIsRunning should be set to 0 if its not running, or anything greater then 0 if it srunning. as general practice if > 1 then its the running pid
 	
-	var deferredMain_makeLauncher = new Deferred();
-	var resolveObj = {
-		cProfilePath: for_ini_key
-	};
-		
-	// start - os support check
-	var do_platCheck = function() {
-		// rejects derredMain_makeIcon
-		// on success goes to 
-		var platformSupported;
-		
-		if (cOS == 'darwin') { // this if block should similar 67864810
-			var userAgent = myServices.hph.userAgent;
-			//console.info('userAgent:', userAgent);
-			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
-			//console.info('version_osx matched:', version_osx);
-			
-			if (!version_osx) {
-				console.error('Could not identify Mac OS X version.');
-				platformSupported = false;
-			} else {		
-				version_osx = parseFloat(version_osx[1]);
-				console.info('version_osx parseFloated:', version_osx);
-				if (version_osx >= 0 && version_osx < 6) {
-					//will never happen, as my min support of profilist is for FF29 which is min of osx10.6
-					//deferred_makeIcnsOfPaths.reject('OS X < 10.6 is not supported, your version is: ' + version_osx);
-					platformSupported = true;
-				} else if (version_osx >= 6 && version_osx < 7) {
-					//deferred_makeIcnsOfPaths.reject('Mac OS X 10.6 support coming soon. I need to figure out how to use MacMemory functions then follow the outline here: https://github.com/philikon/osxtypes/issues/3');
-					platformSupported = true;
-				} else if (version_osx >= 7) {
-					// ok supported
-					platformSupported = true;
-				} else {
-					//deferred_makeIcnsOfPaths.reject('Some unknown value of version_osx was found:' + version_osx);
-					platformSupported = false; //its already false
-				}
-				resolveObj.launcherExtension = 'app';
-			}
-		} else if (cOS == 'winnt') {
-			platformSupported = true;
-			resolveObj.launcherExtension = 'lnk';
-		} else if (cOS == 'linux') {
-			platformSupported = true;
-			resolveObj.launcherExtension = 'desktop';
-		}
-		
-		if (!platformSupported) {
-			console.info('platformSupported:', platformSupported);
-			deferredMain_makeIcon.reject('OS not supported for makeIcon');
-			//return; //no deeper exec so no need for return
-		} else {
-			do_MLGetProfSpecs();
-		}
+	// by default this function repsects what it is if its running
+	// isRunning is 0 if not running or > 0 if it is, this just avoids a double run check in this function if you already got the running status before
+	// ignoreRunning will give you the profile specs irrespective of what it is currently running in (if it is running)
+	
+	/* returns object like this:
+	{
+		channel_exeForProfile: esr|release|beta|aurora|dev|nightly, // will give aurora if < fx35 and dev if >= 35 // for firefox builds, the channel is "default" this gets replaced with "nightly" // requires channel check
+		iconNameObj: {
+			components: {
+				'BASE': iconset name folder of base depending on channel exe path, and if it that exe path has a custom icon,
+				'BADGE': iconset name folder of badge, if no badge then DNE
+			},
+			str: join of the commoponents with _ seperatoer between key and val, and __ between each entry
+		},
+		iconsetId_badge: iconset name in profilist_data folder, // dne if no badge
+		iconsetId_base: iconset name in profilist_data folder, if this is a regular channel its name is here // requires channel check
+		isRunning: ya, // 0 for not, 1 if yes > 1 if yes and its a pid // DNE if ignoreRunning is true
+		launhcerName: 'Firefox Nightly - ' + getSafedForOSPath(profile name), // requires channel check
+		path_exeForProfile: path to build exe,
+		tieId: if its tied else DNE,
+		fxVersion: ya
 	}
-	// end - os support check
-	
-	var do_MLGetProfSpecs = function() {
-		// basically do_getProfSpecs
-		if (iconNameObj) {
-			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
-		} else {
-			var promise_MLgetProfSpecs = getProfileSpecs(for_ini_key, ifRunningThenTakeThat, launching); //if running then take that, is inputted here
-			promise_MLgetProfSpecs.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_MLgetProfSpecs - ', aVal);
-					// start - do stuff here - promise_MLgetProfSpecs
-					resolveObj.profSpecs = aVal;
-					do_MLcheckIfPreExisting();
-					// end - do stuff here - promise_MLgetProfSpecs
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_MLgetProfSpecs', aReason:aReason};
-					console.error('Rejected - promise_MLgetProfSpecs - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_MLgetProfSpecs', aCaught:aCaught};
-					console.error('Caught - promise_MLgetProfSpecs - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			);
-		}
-	};
-	
-	var do_MLcheckIfPreExisting = function() {
-		if (forceOverwrite) {
-			do_preCreate();
-			return;
-		}
-		//resolveObj.launcherName = getLauncherName(for_ini_key, resolveObj.profSpecs.channel_exeForProfile);
-		resolveObj.path_launcher = OS.Path.join(profToolkit.path_profilistData_launcherExes, resolveObj.profSpecs.launcherName + '.' + resolveObj.launcherExtension);
-		
-		var promise_launcherExist = OS.File.exist(resolveObj.path_launcher);
-		promise_launcherExist.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_launcherExist - ', aVal);
-				// start - do stuff here - promise_launcherExist
-				if (aVal) {
-					resolveObj.alreadyExisted = true;
-					deferredMain_makeLauncher.resolve(resolveObj);
-				} else {
-					do_preCreate();
-				}
-				// end - do stuff here - promise_launcherExist
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_launcherExist', aReason:aReason};
-				console.error('Rejected - promise_launcherExist - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_launcherExist', aCaught:aCaught};
-				console.error('Caught - promise_launcherExist - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_preCreate = function() {
-		var promiseAllArr_preCreate = [];
-		
-		
-		switch (cOS) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
-				
-				break;
-			case 'linux':
-			case 'freebsd':
-			case 'openbsd':
-			case 'sunos':
-			case 'webos':
-			case 'android':
-				
-				//break;
-			case 'darwin':
-				
-				//break;
-			default:
-				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-		}
-		
-		promiseAllArr_preCreate.push(makeIcon(for_ini_key, resolveObj.profSpecs.iconName)); // if running then take that, that should be determined in the prof get specs
-		var promiseAll_preCreate = Promise.all(promiseAllArr_preCreate);
-		promiseAll_preCreate.then(
-			function(aVal) {
-				console.log('Fullfilled - promiseAll_preCreate - ', aVal);
-				// start - do stuff here - promiseAll_preCreate
-				// end - do stuff here - promiseAll_preCreate
-			},
-			function(aReason) {
-				var rejObj = {name:'promiseAll_preCreate', aReason:aReason};
-				console.error('Rejected - promiseAll_preCreate - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promiseAll_preCreate', aCaught:aCaught};
-				console.error('Caught - promiseAll_preCreate - ', rejObj);
-				deferred_createProfile.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_creation = function() {
-		switch (cOS) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
-				
-				break;
-			case 'linux':
-			case 'freebsd':
-			case 'openbsd':
-			case 'sunos':
-			case 'webos':
-			case 'android':
-				
-				//break;
-			case 'darwin':
-				
-				//break;
-			default:
-				throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
-		}
-	}
-	// start - main
-	do_platCheck();
-	// end - main
-	
-	return deferredMain_makeLauncher.promise;
-	
-	
-	
-	////////////////////////////////////////////////////////////////////
-	// makes the launcher for nix/mac
-	// overwrites without making any checks (on mac it checks for existing [by checking plist.info and taking its bundle-identifier &&&& also checking dock.plist for this .app])
-	var deferred_makeLauncher = new Deferred();
-	
-	// start - setup getChName
-	
-	var makeMac = function() {
-		// start - sub globals
-		var path_toFxApp; // path we will launch
-		if ('Profilist.tie' in ini[for_ini_key].props) {
-			path_toFxApp = getDevBuildPropForTieId(ini[for_ini_key].props['Profilist.tie'], 'exe_path'); // used tied path if the profile is tied
-		} else {
-			path_toFxApp = profToolkit.exePath; //not tied so use current builds path
-		}
-		var path_toFxBin = path_toFxApp;
-		path_toFxApp = path_toFxApp.substr(0, path_toFxApp.toLowerCase().indexOf('.app') + 4);
-		console.info('path_toFxApp:', path_toFxApp);
-		var path_toFxAppContents = OS.Path.join(path_toFxApp, 'Contents');
-		theLauncherAndAliasName = getLauncherName(for_ini_key, theChName);
-		var path_toLauncher = OS.Path.join(profToolkit.path_iniDir, 'profilist_data', 'profile_launchers', theLauncherAndAliasName + '.app'); // we create at this path
-		var path_toLauncherContents = OS.Path.join(path_toLauncher, 'Contents');
-		var bundleIdentifer;
-		if ('Profilist.launcher' in ini[for_ini_key].props) {
-			bundleIdentifer = ini[for_ini_key].props['Profilist.launcher'];
-		} else {
-			bundleIdentifer = (Math.random() + '').substr(2);
-		}
-		// end - sub globals
-		
-		var do_updateIni_then_writeDummy = function() {
-			// start - reflect mods
-			var reflectMods = function() {
-				// start - removeDummy
-				var do_removeDummy = function() {
-					var promise_removeDummy = OS.File.removeDir(path_toDummy);
-					promise_removeDummy.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_removeDummy - ', aVal);
-							// start - do stuff here - promise_removeDummy
-							//deferred_reflectMods.resolve('change should be reflecting now on dir, need to reflect on dock now');
-							// end - do stuff here - promise_removeDummy
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_removeDummy', aReason:aReason};
-							console.error('Rejected - promise_removeDummy - ', rejObj);
-							//deferred_reflectMods.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_removeDummy', aCaught:aCaught};
-							console.error('Caught - promise_removeDummy - ', rejObj);
-							//deferred_reflectMods.reject(rejObj);
-						}
-					);
-				}
-				// end - removeDummy
-
-				var path_toDummy = OS.Path.join(path_toLauncher, 'profilist-reflect-mods-dummy-dir');
-				var promise_makeDummy = OS.File.makeDir(path_toDummy);
-				promise_makeDummy.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_makeDummy - ', aVal);
-						// start - do stuff here - promise_makeDummy
-						do_removeDummy();
-						// end - do stuff here - promise_makeDummy
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_makeDummy', aReason:aReason};
-						console.error('Rejected - promise_makeDummy - ', rejObj);
-						//deferred_reflectMods.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_makeDummy', aCaught:aCaught};
-						console.error('Caught - promise_makeDummy - ', rejObj);
-						//deferred_reflectMods.reject(rejObj);
-					}
-				);
-			};
-			// start timer for reflect mods
-			var reflectTimerEvent = {
-				notify: function() {
-					console.log('triggering reflectMods()');
-					reflectMods();
-				}
-			};
-			// end timer for reflect mods
-			// end - reflect mods
-			ini[for_ini_key].props['Profilist.launcher'] = bundleIdentifer;
-			var promise_updateIni = writeIniAndBkp();
-			promise_updateIni.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_updateIni - ', aVal);
-					// start - do stuff here - promise_updateIni
-					var reflectTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer); // refelct mods block was here
-					reflectTimer.initWithCallback(reflectTimerEvent, 1000, Ci.nsITimer.TYPE_ONE_SHOT);
-					deferred_makeLauncher.resolve('madeMac success');
-					// end - do stuff here - promise_updateIni
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_updateIni', aReason:aReason};
-					console.error('Rejected - promise_updateIni - ', rejObj);
-					deferred_makeLauncher.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_updateIni', aCaught:aCaught};
-					console.error('Caught - promise_updateIni - ', rejObj);
-					deferred_makeLauncher.reject(rejObj);
-				}
-			);
-		}
-		
-		// start - meat		
-		var promiseAllArr_makeMac = [];
-		
-		var deferred_makeLauncherDirAndFiles = new Deferred(); // make top level dirs, then IN PARALELL (copy contents and write modded plist) then resolve deferred_makeLauncherDirFiles
-		var deferred_writeExecAndPermIt = new Deferred(); //write the executble in the OS.Path.join(path_toFxApp, 'Contents', 'MacOS');
-		var deferred_writeIcon = new Deferred(); //create badged tied icon in OS.Path.join(path_toFxApp, 'Contents', 'Resources');
-		var deferred_ensure_pathsPrefContentsJson = new Deferred();
-		
-		promiseAllArr_makeMac.push(deferred_makeLauncherDirAndFiles.promise);
-		promiseAllArr_makeMac.push(deferred_writeExecAndPermIt.promise);
-		promiseAllArr_makeMac.push(deferred_writeIcon.promise);
-		promiseAllArr_makeMac.push(deferred_ensure_pathsPrefContentsJson.promise);
-		
-		var promiseAll_makeMac = Promise.all(promiseAllArr_makeMac);
-		promiseAll_makeMac.then(
-			function(aVal) {
-				console.log('Fullfilled - promiseAll_makeMac - ', aVal);
-				// start - do stuff here - promiseAll_makeMac
-				do_updateIni_then_writeDummy();
-				// end - do stuff here - promiseAll_makeMac
-			},
-			function(aReason) {
-				var rejObj = {name:'promiseAll_makeMac', aReason:aReason};
-				console.error('Rejected - promiseAll_makeMac - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promiseAll_makeMac', aCaught:aCaught};
-				console.error('Caught - promiseAll_makeMac - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
-			}
-		);
-		// end - meat
-		
-		// start do_pathsPrefContentsJson
-		var do_pathsPrefContentsJson = function() {
-			var path_toPrefContentsJson = OS.Path.join(OS.Path.dirname(path_toFxBin), 'profilist-main-paths.json');
-			
-			// start - write main app paths file
-			// if custom then we cant set main_profLD_LDS_basename to ProfLD as ProfLD of custom from alias and reg is path to the custom profile dir
-			// so to get right main_profLD_LDS_basename from castom we have to 
-			
-			// btw in reg non-custom-path profile (relative profile) ProfLD != ProfD AND in reg custom-profile ProfLD == ProfD
-			// in alias of realtive profile, ProfLD needs fixing, whle ProfD does not
-			//
-			var json_prefContents = {
-				mainAppPath: path_toFxApp, //Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent.path,
-				main_profLD_LDS_basename: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path
-			};
-			var pathsFileContents = JSON.stringify(json_prefContents);
-			var path_toPrefContentsJson = OS.Path.join(path_toFxApp, 'Contents', 'MacOS', 'profilist-main-paths.json');
-			var promise_writePathsFile = OS.File.writeAtomic(path_toPrefContentsJson, pathsFileContents, {encoding:'utf-8', tmpPath:path_toPrefContentsJson+'.bkp'});
-			promise_writePathsFile.then(
-				function(aVal) {
-					console.log('Fulfilled - promise_writePathsFile - ', aVal);
-					deferred_ensure_pathsPrefContentsJson.resolve('paths json written');
-				},
-				function(aReason) {
-					var rejObj = {
-						promiseName: 'promise_writePathsFile',
-						aReason: aReason
-					};
-					console.error('Rejected - ' + rejObj.promiseName + ' - ', rejObj);
-					deferred_ensure_pathsPrefContentsJson.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {
-						promiseName: 'promise_writePathsFile',
-						aCaught: aCaught
-					};
-					console.error('Caught - promise_writePathsFile - ', rejObj);
-					deferred_ensure_pathsPrefContentsJson.reject(rejObj);
-				}
-			);
-			// end - write main app paths file
-		}
-		// end do_pathsPrefContentsJson
-		
-		// start - do_makeLauncherDirAndFiles
-		var do_makeLauncherDirAndFiles = function() {
-			var promiseAllArr_makeLauncherDirAndFiles = [];
-			
-			var deferred_copyContents = new Deferred();
-			var deferred_writeModdedPlist = new Deferred();
-			var deferred_xattr = new Deferred();
-			promiseAllArr_makeLauncherDirAndFiles.push(deferred_copyContents.promise);
-			promiseAllArr_makeLauncherDirAndFiles.push(deferred_writeModdedPlist.promise);
-			promiseAllArr_makeLauncherDirAndFiles.push(deferred_xattr.promise);
-
-			var promiseAll_makeLauncherDirAndFiles = Promise.all(promiseAllArr_makeLauncherDirAndFiles);
-			promiseAll_makeLauncherDirAndFiles.then(
-				function(aVal) {
-					console.log('Fullfilled - promiseAll_makeLauncherDirAndFiles - ', aVal);
-					// start - do stuff here - promiseAll_makeLauncherDirAndFiles
-					deferred_makeLauncherDirAndFiles.resolve('finished writing mod plist and aliases');
-					// end - do stuff here - promiseAll_makeLauncherDirAndFiles
-				},
-				function(aReason) {
-					var rejObj = {name:'promiseAll_makeLauncherDirAndFiles', aReason:aReason};
-					console.error('Rejected - promiseAll_makeLauncherDirAndFiles - ', rejObj);
-					deferred_makeLauncherDirAndFiles.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promiseAll_makeLauncherDirAndFiles', aCaught:aCaught};
-					console.error('Caught - promiseAll_makeLauncherDirAndFiles - ', rejObj);
-					deferred_makeLauncherDirAndFiles.reject(rejObj);
-				}
-			);
-			
-			// start - do_copyContents
-			var do_copyContents = function() {
-				// start - do_copyAsAliases
-				var do_copyAsAliases = function(sourcePaths) {
-					var promiseAllArr_copyAsAliases = [];
-					for (var i=0; i<sourcePaths.length; i++) {
-						if (/info\.plist/i.test(sourcePaths[i])) {
-							continue; // as we write this modded
-						}
-						var path_toThisAliasInORIG = sourcePaths[i];
-						var path_toThisAliasInLauncher = sourcePaths[i].replace(new RegExp(escapeRegExp(path_toFxApp), 'i'), path_toLauncher);
-						var promise_makeThisAlias = delAliasThenMake(path_toThisAliasInORIG, path_toThisAliasInLauncher);
-						promiseAllArr_copyAsAliases.push(promise_makeThisAlias);
-					}
-					
-					var promiseAll_copyAsAliases = Promise.all(promiseAllArr_copyAsAliases);
-					promiseAll_copyAsAliases.then(
-						function(aVal) {
-							console.log('Fullfilled - promiseAll_copyAsAliases - ', aVal);
-							// start - do stuff here - promiseAll_copyAsAliases
-							deferred_copyContents.resolve('successfully copied as aliases');
-							// end - do stuff here - promiseAll_copyAsAliases
-						},
-						function(aReason) {
-							var rejObj = {name:'promiseAll_copyAsAliases', aReason:aReason};
-							console.error('Rejected - promiseAll_copyAsAliases - ', rejObj);
-							deferred_copyContents.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promiseAll_copyAsAliases', aCaught:aCaught};
-							console.error('Caught - promiseAll_copyAsAliases - ', rejObj);
-							deferred_copyContents.reject(rejObj);
-						}
-					);
-				}
-				// end - do_copyAsAliases
-				
-				var promise_getFxAppContentsFilePaths = immediateChildPaths(path_toFxAppContents);
-				promise_getFxAppContentsFilePaths.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_getFxAppContentsFilePaths - ', aVal);
-						// start - do stuff here - promise_getFxAppContentsFilePaths
-						do_copyAsAliases(aVal);
-						// end - do stuff here - promise_getFxAppContentsFilePaths
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_getFxAppContentsFilePaths', aReason:aReason};
-						console.error('Rejected - promise_getFxAppContentsFilePaths - ', rejObj);
-						deferred_copyContents.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_getFxAppContentsFilePaths', aCaught:aCaught};
-						console.error('Caught - promise_getFxAppContentsFilePaths - ', rejObj);
-						deferred_copyContents.reject(rejObj);
-					}
-				);
-			}
-			// end - do_copyContents
-			
-			// start - do_writeModdedPlist
-			var do_writeModdedPlist = function() {
-				// start - do_modAndWritePlist
-				var do_modAndWritePlist = function(plist_val) {
-					plist_val = plist_val.replace(/<key>CFBundleExecutable<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b) {
-						// this function gets the original executable name (i cant assume its firefox, it might nightly etc)
-						// it also replaces it with profilist-exec
-						return a.replace(b, 'profilist-' + bundleIdentifer);
-					});
-					
-					plist_val = plist_val.replace(/<key>CFBundleIconFile<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
-						// this function replaces icon with profilist-badged.icns, so in future i can easily replace it without having to know name first, like i dont know if its firefox.icns for nightly etc
-						return a.replace(b, 'profilist-' + bundleIdentifer);
-					});
-
-					plist_val = plist_val.replace(/<key>CFBundleIdentifier<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
-						// this function replaces the bundle identifier
-						// on macs the Profilist.launcher key holds the bundle identifier
-						return a.replace(b, bundleIdentifer/*.replace(/[^a-z\.0-9]/ig, repCharForSafePath)*/); //no need for the replace as its all numbers, but i left it here so i know whats allowed in a bundle-identifier
-						//The bundle identifier string identifies your application to the system. This string must be a uniform type identifier (UTI) that contains only alphanumeric (A-Z,a-z,0-9), hyphen (-), and period (.) characters. The string should also be in reverse-DNS format. For example, if your companyâ€™s domain is Ajax.com and you create an application named Hello, you could assign the string com.Ajax.Hello as your applicationâ€™s bundle identifier. The bundle identifier is used in validating the application signature. source (apple developer: https://developer.apple.com/library/ios/#documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html#//apple_ref/doc/uid/10000123i-CH101-SW1)
-						//An identifier used by iOS and Mac OS X to recognize any future updates to your app. Your Bundle ID must be registered with Apple and unique to your app. Bundle IDs are app-type specific (either iOS or Mac OS X). The same Bundle ID cannot be used for both iOS and Mac OS X apps. source https://itunesconnect.apple.com/docs/iTunesConnect_DeveloperGuide.pdf
-					});
-					
-					var path_toLauncherPlist = OS.Path.join(path_toLauncherContents, 'info.plist');
-					var promise_writeModedString = OS.File.writeAtomic(path_toLauncherPlist, plist_val, {tmpPath:path_toLauncherPlist+'.profilist.tmp', encoding:'utf-8'});
-					promise_writeModedString.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_writeModedString - ', aVal);
-							// start - do stuff here - promise_writeModedString
-							deferred_writeModdedPlist.resolve('wrote moded plist');
-							// end - do stuff here - promise_writeModedString
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_writeModedString', aReason:aReason};
-							console.error('Rejected - promise_writeModedString - ', rejObj);
-							deferred_writeModdedPlist.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_writeModedString', aCaught:aCaught};
-							console.error('Caught - promise_writeModedString - ', rejObj);
-							deferred_writeModdedPlist.reject(rejObj);
-						}
-					);
-				}
-				// end - do_modAndWritePlist
-				
-				var path_toFxAppPlist = OS.Path.join(path_toFxApp, 'Contents', 'info.plist');
-				var promise_readPlist = read_encoded(path_toFxAppPlist, {encoding:'utf-8'});
-				promise_readPlist.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_readPlist - ', aVal);
-						// start - do stuff here - promise_readPlist
-						do_modAndWritePlist(aVal);
-						// end - do stuff here - promise_readPlist
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_readPlist', aReason:aReason};
-						console.error('Rejected - promise_readPlist - ', rejObj);
-						deferred_writeModdedPlist.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_readPlist', aCaught:aCaught};
-						console.error('Caught - promise_readPlist - ', rejObj);
-						deferred_writeModdedPlist.reject(rejObj);
-					}
-				);
-			}
-			// end - do_writeModdedPlist
-			
-			// start - do_xattr
-			function do_xattr() {
-				// start - xattr				
-				var xattr = Cc['@mozilla.org/file/local;1'].createInstance(Ci.nsILocalFile);
-				xattr.initWithPath('/usr/bin/xattr');
-				var proc = Cc['@mozilla.org/process/util;1'].createInstance(Ci.nsIProcess);
-				proc.init(xattr);
-				
-				var procFinXattr = {
-					observe: function(aSubject, aTopic, aData) {
-						console.log('incoming procFinXattr', 'aSubject:', aSubject, 'aTopic:', aTopic, 'aData', aData);
-						if (aSubject.exitValue == '0') {
-							deferred_xattr.resolve('success xattr');
-						} else {
-							deferred_xattr.resolve('exitValue is not 0, thus xattr failed, but resolving as it returns 1 when run on something which has no quarantine so had nothing to remove, exitValue is: "' + aSubject.exitValue + '"'); //note:debug i made this resolve should reject
-						}
-					}
-				};
-				
-				var xattrAargs = ['-d', 'com.apple.quarantine', path_toLauncher];
-				proc.runAsync(xattrAargs, xattrAargs.length, procFinXattr);
-				// end - xattr
-			}
-			// end - do_xattr
-			
-			// start - do_makeTopDirs
-			var do_makeTopDirs = function() {
-				var promise_makeTopLevelDirs = makeDir_Bug934283(path_toLauncherContents, {from:profToolkit.path_profilistData_root__fromDir});
-				promise_makeTopLevelDirs.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_makeTopLevelDirs - ', aVal);
-						// start - do stuff here - promise_makeTopLevelDirs
-						do_copyContents();
-						do_writeModdedPlist();
-						do_xattr();
-						// end - do stuff here - promise_makeTopLevelDirs
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_makeTopLevelDirs', aReason:aReason};
-						console.error('Rejected - promise_makeTopLevelDirs - ', rejObj);
-						deferred_makeLauncherDirAndFiles.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_makeTopLevelDirs', aCaught:aCaught};
-						console.error('Caught - promise_makeTopLevelDirs - ', rejObj);
-						deferred_makeLauncherDirAndFiles.reject(rejObj);
-					}
-				);
-			}
-			// end - do_makeTopDirs
-			
-			do_makeTopDirs();
-		}
-		// end - do_makeLauncherDirAndFiles
-
-		// start - do_writeIcon
-		var do_writeIcon = function() {
-			// start - copy icns
-			// figure out what name of icon in launcher_icons folder should be if we have one
-			var name_launcherIcns = getIconName(for_ini_key, theChName);
-			console.info('name_launcherIcns:', name_launcherIcns);
-			// name starts with `CHANNEL-REF_` then i should just copy the icns from the current build icon
-			// icon names have either TIE-ID_ or CHANNEL-REF_ but never both
-			
-			var path_toIcnsToCopy;
-			if (name_launcherIcns.indexOf('CHANNEL') == 0) {
-				// copy icon from path_toFxApp
-				path_toIcnsToCopy = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'firefox.icns'); //its firefox.icns in not just release, its same in nightly, aurora, and beta // can use path_toLauncher but for that i have to wait for aliases to finish copying
-			} else {
-				var hasLauncherIcon = true;
-				path_toIcnsToCopy = OS.Path.join(profToolkit.path_profilistData_launcherIcons, name_launcherIcns + '.icns');
-				// check if this name_launcherIcns exists in launcher_icons
-					// if it does, then it has right badge and tie so copy this
-					// else, then makeIcon .then copy that
-			}
-			
-			
-			var path_iconDestination = OS.Path.join(path_toFxApp, 'Contents', 'Resources', 'profilist-' + bundleIdentifer + '.icns');
-			// start do_theCopy
-			var do_theCopy = function(postMake) {
-				var promise_copyIcon = OS.File.copy(path_toIcnsToCopy, path_iconDestination, {noOverwrite:false});
-				promise_copyIcon.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_copyIcon - ', aVal);
-						// start - do stuff here - promise_copyIcon
-						deferred_writeIcon.resolve('icon made');
-						// end - do stuff here - promise_copyIcon
-					},
-					function(aReason) {
-						if (!postMake && hasLauncherIcon && aReason.becauseNoSuchFile) { // meaning this is first time trying copy
-							// have to make icon first as it doesnt exist
-							var promise_makeTheIconAsItDNE = makeIcon(for_ini_key);
-							promise_makeTheIconAsItDNE.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_makeTheIconAsItDNE - ', aVal);
-									// start - do stuff here - promise_makeTheIconAsItDNE
-									do_theCopy(1);
-									// end - do stuff here - promise_makeTheIconAsItDNE
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_makeTheIconAsItDNE', aReason:aReason};
-									console.error('Rejected - promise_makeTheIconAsItDNE - ', rejObj);
-									deferred_writeIcon.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_makeTheIconAsItDNE', aCaught:aCaught};
-									console.error('Caught - promise_makeTheIconAsItDNE - ', rejObj);
-									deferred_writeIcon.reject(rejObj);
-								}
-							);
-						} else {
-							var rejObj = {name:'promise_copyIcon', aReason:aReason};
-							console.error('Rejected - promise_copyIcon - ', rejObj);
-							deferred_writeIcon.reject(rejObj);
-						}
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_copyIcon', aCaught:aCaught};
-						console.error('Caught - promise_copyIcon - ', rejObj);
-						deferred_writeIcon.reject(rejObj);
-					}
-				);
-			}
-			// end do_theCopy
-			do_theCopy();
-		}
-		// end - do_writeIcon
-		
-		// start - do_writeExecAndPermIt
-		var do_writeExecAndPermIt = function() {
-				// start - do_setPerms
-				var do_setPerms = function() {
-					var promise_setPermsScript = OS.File.setPermissions(path_profilistExec, {
-						unixMode: FileUtils.PERMS_DIRECTORY
-					});
-					promise_setPermsScript.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_setPermsScript - ', aVal);
-							// start - do stuff here - promise_setPermsScript
-							deferred_writeExecAndPermIt.resolve('perms set');
-							// end - do stuff here - promise_setPermsScript
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_setPermsScript', aReason:aReason};
-							console.error('Rejected - promise_setPermsScript - ', rejObj);
-							deferred_writeExecAndPermIt.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_setPermsScript', aCaught:aCaught};
-							console.error('Caught - promise_setPermsScript - ', rejObj);
-							deferred_writeExecAndPermIt.reject(rejObj);
-						}
-					);
-				}
-				// end - do_setPerms
-				
-				// start - write exec
-				
-				var path_toLauncherBin = OS.Path.join(path_toLauncher, 'Contents', 'MacOS', 'firefox');
-				var path_profilistExec = OS.Path.join(/*path_toLauncher*/path_toFxApp, 'Contents', 'MacOS', 'profilist-' + bundleIdentifer); //i use path_toFxApp instead of path_toLauncher, so this way i dont have to wait for aliases to finish copying
-				var identJson = {
-					build: path_toFxBin,
-					iconName: getIconName(for_ini_key, theChName),
-					identifier: bundleIdentifer
-				};
-				var execConts = [
-					'#!/bin/sh',
-					'##' + JSON.stringify(identJson) + '##',
-					'exec "' + path_toLauncherBin + '" -profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
-				];
-				var promise_writeExec = OS.File.writeAtomic(path_profilistExec, execConts.join('\n'), {tmpPath:path_profilistExec+'.profilist.bkp'});
-
-				promise_writeExec.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_writeExec - ', aVal);
-						// start - do stuff here - promise_writeExec
-						do_setPerms();
-						// end - do stuff here - promise_writeExec
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_writeExec', aReason:aReason};
-						console.error('Rejected - promise_writeExec - ', rejObj);
-						writeExecAndPermIt.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_writeExec', aCaught:aCaught};
-						console.error('Caught - promise_writeExec - ', rejObj);
-						writeExecAndPermIt.reject(rejObj);
-					}
-				);
-				// end - write exec			
-		}
-		// end - do_writeExecAndPermIt
-		
-		do_makeLauncherDirAndFiles();
-		do_writeIcon();
-		do_writeExecAndPermIt();
-		do_pathsPrefContentsJson();
-	};
-	
-	// end - setup getChName this then triggers the right os shortcut mechanism
-	var do_getChName = function() {
-		var promise_getChName = getChannelNameOfProfile(for_ini_key);
-		promise_getChName.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getChName - ', aVal);
-				// start - do stuff here - promise_getChName
-				theChName = aVal;
-	
-				if (cOS == 'darwin') {
-					makeMac();		
-				} else {
-					//throw new Error('OS not supported for makeLauncher');
-					deferred_makeLauncher.reject('OS not supported for makeLauncher');
-				}
-				// end - do stuff here - promise_getChName
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getChName', aReason:aReason};
-				console.error('Rejected - promise_getChName - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getChName', aCaught:aCaught};
-				console.error('Caught - promise_getChName - ', rejObj);
-				deferred_makeLauncher.reject(rejObj);
-			}
-		);
-	};
-	// end - setup getChName
-	
-	// start - sub globals (globals used in my sub funcs)
-	var theChName;
-	var theLauncherAndAliasName;
-	// end - sub globals (globals used in my sub funcs)
-	
-	do_getChName();
-	
-	return deferred_makeLauncher.promise;
-}
-
-function getProfileSpecs(aProfilePath, ifRunningThenTakeThat, launching, skipChannelForProfile) {
-	// set ifRunningThenTakeThat
-		// to 0 to get what it should be (regardless of if its running or not)
-		// to 1 to get what it is in currently running (if its not running then it gets shouldBe)
-		
-	// set launching to true, if running this right before launching a launcher exe from profilist menu
-	// if do skipChannelForProfile, may not get iconetsetId_base
-	
-	// replacement for getIconName probably AND also getChannelNameOfProfile probably
-	// i need to change getChannelNameOfProfile to be getChannelNameOfExePath
-	// resolves
-		/*
-		{
-			iconsetId_badge: string,
-			iconsetId_base: string,
-			tieId: string,
-			path_exeForProfile: string, // the buildPath to use for aProfilePath, due to either being tied, or other
-			channel_exeForProfile: string, // channel of the path_exeForProfile
-			iconName: string
-			isRunning: bool // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
-		}
-		*/
-	// 
-
-		// calc BADGE-ID
-		// calc TIE-ID/CHANNEL-REF should be
-			// if not tied, then calc CHANNEL-REF:
-				// use current profiles build (needed when launching for_ini_key profile from current profile
-				// use launchers base
-					// launcher base can be
-						// last used build - if profile for_ini_key is currently running use whtever channel its running in (which should be the last build in the launcher << no this is not true, thinking: if user changes tie of build while its running {im thinking in this case update launcher right away when user ties while running, but dont update dock/taskbar?} << well actually on further thought it is true, because its not tied obviously at this point of my logic so then yes this should be the current running channel),  OR if default browser is not a firefox
-						// default build - if not running then use default browser channel (BUT) if default browser is not firefox/beta/dev/release then use the icon build path currently in the launcher [and if the launcher doesnt exit then use the icon of the build from which we are currently executing this function]
-			// if tied, use TIE-ID iconset for base
-	
+	*/
 	var deferredMain_getProfileSpecs = new Deferred();
 	
-	var specObj = {
-		iconsetId_badge: null,
-		iconsetId_base: null,
-		iconNameObj: null,
-		tieId: null,
-		path_exeForProfile: null, // the buildPath to use for aProfilePath, due to either being tied, or other
-		channel_exeForProfile: null, // channel of the path_exeForProfile
-		isRunning: null // tells if the path is running right now, this is only supplied if the run check was made, see conditions on when it is skipped (like when launching is true, OR if profile is tied and ifRunningThenTakeThat is set to false)
-	};
+	// globals for steps
+	var specObj = {};
+	var iniInfo; // obj
 	
-	if (aProfilePath === null && profToolkit.selectedProfile.iniKey === null) {
-		// its temporary profile
-		console.error('A PROFILE PATH IS NULL ITS GOTTA BE A TEMPORARY PROFILE esp cuz its in use');
-		console.error('YES HAS TO BE!! cuz profToolkit.selectedProfile.iniKey === null');
+	var step0 = function() {
+		// :todo: review if fxVersion is in right place, like it should above whatever depends on it
+		// resolves with obj if its of selectedProfile (either temp prof or not)
 		
-		/*
-		return {
-			channel_exeForProfile: core.firefox.channel,
-			iconNameObj: {
-				components: {
-					'CHANNEL-REF': core.firefox.channel
-				}
-				str: 'CHANNEL-REF_' + core.firefox.channel
-			},
-			iconsetId_base
-		}
-		*/
-		var props = {};
-	} else if (!(aProfilePath in ini)) {
-		console.error('key not found, key:', aProfilePath);
-		deferredMain_getProfileSpecs.reject('key not found in ini, key: "' + aProfilePath + '"');
-		return deferredMain_getProfileSpecs.promise;
-	} else {
-		var props = ini[aProfilePath].props;
-	}
-	var iconNameComponents = {};	
-	
-	if ('Profilist.badge' in props) {
-		specObj.iconsetId_badge = props['Profilist.badge'];
-		iconNameComponents['BADGE-ID'] = specObj.iconsetId_badge;
-	}
-	
-	var makeIconAndLauncherName = function() {
-		var comps = {};
-		var iconNameArr = [];
-		for (var k in iconNameComponents) {
-			iconNameArr.push(k + '_' + iconNameComponents[k]);
-		}
-		specObj.iconNameObj = { //obj contains string of the name, without extension
-			str: iconNameArr.join('__'),
-			components: iconNameComponents
-		}
-		if (specObj.channel_exeForProfile) {
-			specObj.launcherName = getLauncherName(aProfilePath, specObj.channel_exeForProfile);
-		}
-	};
-	
-	var getChannelToExePath = function() {
-		if (skipChannelForProfile || (specObj.channel_exeForProfile && specObj.iconsetId_base)) {
-			makeIconAndLauncherName();
-			deferredMain_getProfileSpecs.resolve(specObj);
-		} else {
-			var do_postGCNOEP = function(aVal) {
-				specObj.channel_exeForProfile = aVal;
-				if (!specObj.iconsetId_base) {
-					specObj.iconsetId_base = aVal;
-					iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
-				}
-				makeIconAndLauncherName();
-				deferredMain_getProfileSpecs.resolve(specObj);
+		if (aProfIniKey === profToolkit.selectedProfile.iniKey) {
+			if (isRunning === 0) {
+				throw new Error('devuser you are a fool, this is currently running profile, isRunning IS NOT 0 and thats what you said');
 			}
-			if (aProfilePath == profToolkit.selectedProfile.iniKey) {
-				do_postGCNOEP(core.firefox.channel);
+			
+			if (profToolkit.selectedProfile.isTemp) {
+				// not possible to ignoreRunning even if devuser set it to true
+				// its a temp profile
+				var step0_1 = function() {
+					// set isRunning
+					if (!ignoreRunning) {
+						specObj.isRunning = Services.appinfo.processID;
+					}
+
+					// set tieId
+						// not possible for temp profile, as no ini key exists in ini
+							// so DNE
+					
+					// path_exeForProfile (depends on ignoreRunning and tieId);
+						// not possible to depend on ignoreRunning as no tie can exist for this, so impossible to depend on tieId too
+					specObj.path_exeForProfile = profToolkit.exePath;
+					
+					// set fxVersion
+					specObj.fxVersion = core.firefox.version; // because cannot depend on ignoreRunning, it has to be this version
+					
+					// set channel_exeForProfile (depends on path_exeForProfile and if aurora then depends on fxVersion)
+					specObj.channel_exeForProfile = core.firefox.channel; // because cannot depend on ignoreRunning, it has to be this channel
+
+					// set iconsetId_badge
+						// impossible for temp profile as there is no iniKey in ini for it
+							// so DNE
+					
+					// set iconsetId_base (depends on path_exeForProfile)
+					specObj.iconsetId_base = getDevBuildPropForExePath(specObj.path_exeForProfile, 'base_icon');
+					if (!specObj.iconsetId_base) { // is null if exePath was not found in gDevBuilds meaning it has no custom icon
+						specObj.iconsetId_base = getIconsetForChannelName(specObj.channel_exeForProfile);
+					}
+					
+					// set iconnameObj (depends on iconsetId_badge and iconsetId_base)
+					specObj.iconNameObj = {}; // impossible for this to be tied as its a temp profile meaning it has no entry in ini
+					specObj.iconNameObj.components = {};
+					specObj.iconNameObj.components['BASE'] = specObj.iconsetId_base; // depends on iconsetId_base
+					// // impossible to have a badge for temp profile as there is no ini key
+					// if (specObj.iconsetId_badge) {
+						// specObj.iconNameObj.components['BADGE'] = specObj.iconsetId_badge;
+					// }
+					var iconNameObjStrArr = [];
+					for (var c in specObj.iconNameObj.components) {
+						iconNameObjStrArr.push(c + iconName_keyVal_joiner + specObj.iconNameObj.components[c]);
+					}
+					specObj.iconNameObj.str = iconNameObjStrArr.join(iconName_set_joiner);
+					
+					// set launcherName (depends on channel_exeForProfile and Name prop)
+					specObj.launcherName = getLauncherName(profToolkit.selectedProfile.iniKey, specObj.channel_exeForProfile);
+					
+					deferredMain_getProfileSpecs.resolve(specObj);
+				};
 			} else {
-				console.log('pre here, specObj:', specObj, 'aProfilePath:', aProfilePath);
-				var promise_channelForExe = getChannelNameOfExePath(specObj.path_exeForProfile);
-				promise_channelForExe.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_channelForExe - ', aVal);
-						// start - do stuff here - promise_channelForExe
-						do_postGCNOEP(aVal);
-						// end - do stuff here - promise_channelForExe
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_channelForExe', aReason:aReason};
-						console.error('Rejected - promise_channelForExe - ', rejObj);
-						deferredMain_getProfileSpecs.reject(rejObj);
+				// not temp profile
+				// is possible to ignoreRunning
+				// do stuff as if it were temporary profile (then after it i pouplate the stuff that is for a non-temp prof
+				var step0_1 = function() {
+					// set isRunning
+					if (!ignoreRunning) {
+						specObj.isRunning = Services.appinfo.processID;
 					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_channelForExe', aCaught:aCaught};
-						console.error('Caught - promise_channelForExe - ', rejObj);
-						deferredMain_getProfileSpecs.reject(rejObj);
-					}
-				);
-			}
-		}
-	};
-	
-	var useLastUsedExePath = function(_elseCurExePath) {
-		// last used exe path regardless of profilist installed
-		var do_postReadCompat = function(aVal) {
-			if (aProfilePath != profToolkit.selectedProfile.iniKey) {
-				var path_aProfileLastPlatformDir = /^LastPlatformDir=(.*?)$/m.exec(aVal); //aVal.substr(aVal.indexOf(''), aVal.indexOf(// equivalent of Services.dirsvc.get('SrchPlugns', Ci.nsIFile) from within that running profile
-				if (!path_aProfileLastPlatformDir) {
-					deferredMain_getProfileSpecs.reject('regex failed to extract path_aProfileLastPlatformDir');
-				} else {
-					path_aProfileLastPlatformDir = path_aProfileLastPlatformDir[1];
-					if (cOS == 'darwin') {
-						// :todo: test that this block work after i added in the dont readCompatIni if aProfilePath == profToolkit.selectedProfile.iniKey 052415
-						if (path_aProfileLastPlatformDir.indexOf(profToolkit.path_profilistData_root) > -1) {
-							var nsifile_aProfileLastPlatformDir = new FileUtils.File(path_aProfileLastPlatformDir);
-							path_aProfileLastPlatformDir = nsifile_aProfileLastPlatformDir.target;
-						}	
-						var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
-						var endingArr_exeCur = split_exeCur.slice(split_exeCur.indexOf('MacOS'));
-						var endingStr_exeCur = OS.Path.join.apply(OS.File, endingArr_exeCur);
-						
-						var split_aProfileLastPlatformDir = OS.Path.split(path_aProfileLastPlatformDir).components;
-						var startArr_aProfileLastPlatformDir = split_aProfileLastPlatformDir.slice(0, split_aProfileLastPlatformDir.indexOf('Contents') + 1);
-						var startStr_aProfileLastPlatformDir = OS.Path.join.apply(OS.File, startArr_aProfileLastPlatformDir);
-						specObj.path_exeForProfile = OS.Path.join(startStr_aProfileLastPlatformDir, endingStr_exeCur);
-						console.info('darwin specObj.path_exeForProfile:', specObj.path_exeForProfile);						
-					} else {
-						var split_exeCur = OS.Path.split(profToolkit.path_exeCur).components;
-						var endingStr_exeCur = split_exeCur[split_exeCur.length-1];
-						specObj.path_exeForProfile = OS.Path.join(path_aProfileLastPlatformDir, endingStr_exeCur);
-					}
-				}
-			} else {
-				specObj.path_exeForProfile = aVal;
-			}
-			getChannelToExePath();
-		};
-		
-		if (aProfilePath != profToolkit.selectedProfile.iniKey) {
-			var path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfilePath), 'compatibility.ini');
-			var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
-			promise_readCompatIni.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_readCompatIni - ', aVal);
-					// start - do stuff here - promise_readCompatIni
-						do_postReadCompat(aVal);
-					// end - do stuff here - promise_readCompatIni
-				},
-				function(aReason) {
-					var deepestReason = aReasonMax(aReason);
-					if (deepestReason.becauseNoSuchFile) {
-						if (_elseCurExePath) {
-							console.info('no such file for compatability.ini for this profile so resroting to use cur exe path, this profile path:', aProfilePath);
-							specObj.path_exeForProfile = profToolkit.path_exeCur; // current build, of the one executing this func
-							getChannelToExePath();
-							return; // prevent deeper exec, we dont want to reject the deferredMain
+
+					// set tieId
+					if ('Profilist.tie' in ini[profToolkit.selectedProfile.iniKey].props) {
+						specObj.tieId = ini[profToolkit.selectedProfile.iniKey].props['Profilist.tie'];
+					} // else DNE
+					
+					// path_exeForProfile (depends on ignoreRunning and tieId);
+					if (ignoreRunning) {
+						if ('tieId' in specObj) {
+							specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'id');
 						} else {
-							console.error('no such file, and _elseCurExePath was set to false!!');
+							specObj.path_exeForProfile = profToolkit.exePath;
 						}
+					} else {
+						specObj.path_exeForProfile = profToolkit.exePath;
 					}
-					var rejObj = {name:'promise_readCompatIni', aReason:aReason};
-					console.error('Rejected - promise_readCompatIni - ', rejObj);
-					deferredMain_getProfileSpecs.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_readCompatIni', aCaught:aCaught};
-					console.error('Caught - promise_readCompatIni - ', rejObj);
-					deferredMain_getProfileSpecs.reject(rejObj);
-				}
-			);
+					
+					// set fxVersion
+					if (specObj.path_exeForProfile == profToolkit.exePath) {
+						specObj.fxVersion = core.firefox.version;
+					} else {
+						// :todo: figure out how to get version of other exe path, not a big deal though as it just affects aurora to dev // and further insignificance as only gets here if ignoreRunning=true and i dont do that as of yet 061015
+					}
+					
+					// set channel_exeForProfile (depends on path_exeForProfile and if aurora then depends on fxVersion)
+					var path_exeForProfile_Lowered = specObj.path_exeForProfile.toLowerCase();
+					if (path_exeForProfile_Lowered == profToolkit.exePathLower) {
+						specObj.channel_exeForProfile = _cache_getChannelNameOfExePath[path_exeForProfile_Lowered]; // will respect ignoreRunning as is based on specObj.path_exeForProfile which was determined based on ignoreRunning
+					}
+					if (!specObj.channel_exeForProfile) {
+						// so ignoreRunning has got to be true, so probably path_exeForProfile is that of a tied exe path, i want to now get the channel of that exe path. // :todo: do some console logging around here to verify im not going to waste my time here as i dont know if a single situation yet where i ignoreRunning=true
+						// do promise on specObj.path_exeForProfile
+						// .then step0_2()
+						var promise_getChForExeForProfile = getChannelNameOfExePath(specObj.path_exeForProfile);
+						promise_getChForExeForProfile.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_getChForExeForProfile - ', aVal);
+								// start - do stuff here - promise_getChForExeForProfile
+								if (aVal == 'aurora' && 'fxVersion' in specObj) {
+									if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
+										specObj.channel_exeForProfile = 'dev';
+									} else {
+										specObj.channel_exeForProfile = aVal; // aVal is aurora
+									}
+								} else {
+									specObj.channel_exeForProfile = 'dev';
+								}
+								step0_2();
+								// end - do stuff here - promise_getChForExeForProfile
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_getChForExeForProfile', aReason:aReason};
+								console.warn('Rejected - promise_getChForExeForProfile - ', rejObj);
+								deferredMain_getProfileSpecs.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_getChForExeForProfile', aCaught:aCaught};
+								console.error('Caught - promise_getChForExeForProfile - ', rejObj);
+								deferredMain_getProfileSpecs.reject(rejObj);
+							}
+						);
+					} else {
+						step0_2();
+					}
+				};
+				
+				var step0_2 = function() {
+					// set iconsetId_badge
+					if ('Profilist.badge' in ini[profToolkit.selectedProfile.iniKey].props) {
+						specObj.iconsetId_badge = ini[profToolkit.selectedProfile.iniKey].props['Profilist.badge'];
+					} // else DNE
+					
+					// set iconsetId_base (depends on path_exeForProfile, this makes it respect ignoreRunning as path_exeForProfile was determined based on ignoreRunning)
+					specObj.iconsetId_base = getDevBuildPropForExePath(specObj.path_exeForProfile, 'base_icon'); // this makes it respect ignoreRunning as path_exeForProfile which was based on ignoreRunning
+					if (!specObj.iconsetId_base) { // is null if exePath was not found in gDevBuilds meaning it has no custom icon
+						specObj.iconsetId_base = getIconsetForChannelName(specObj.channel_exeForProfile); // this makes it respect ignoreRunning as channel_exeForProfile was based on path_exeForProfile which was based on ignoreRunning
+					}
+					
+					// set iconnameObj (depends on iconsetId_badge and iconsetId_base)
+					specObj.iconNameObj = {}; // impossible for this to be tied as its a temp profile meaning it has no entry in ini
+					specObj.iconNameObj.components = {};
+					specObj.iconNameObj.components['BASE'] = specObj.iconsetId_base; // depends on iconsetId_base
+					if (specObj.iconsetId_badge) {
+						specObj.iconNameObj.components['BADGE'] = specObj.iconsetId_badge;
+					}
+					var iconNameObjStrArr = [];
+					for (var c in specObj.iconNameObj.components) {
+						iconNameObjStrArr.push(c + iconName_keyVal_joiner + specObj.iconNameObj.components[c]);
+					}
+					specObj.iconNameObj.str = iconNameObjStrArr.join(iconName_set_joiner);
+					
+					// set launcherName (depends on channel_exeForProfile and Name prop)
+					specObj.launcherName = getLauncherName(profToolkit.selectedProfile.iniKey, specObj.channel_exeForProfile);
+					
+					specObj.fxVersion = core.firefox.version;
+					
+					deferredMain_getProfileSpecs.resolve(specObj);
+				};
+			}
+			
+			step0_1();
 		} else {
-			do_postReadCompat(profToolkit.path_exeCur);
+			step1();
 		}
 	};
 	
-	var postRunCheck = function() {
-		// goal here is to get path_exeForProfile then its corresponding channel and iconsetId_base
-		if ('Profilist.tie' in props) {
-			specObj.tieId = props['Profilist.tie']; //so if tied, but getting running info, the tieId will still get delievered to specObj
-			if (ifRunningThenTakeThat && specObj.isRunning) {
-				console.log('ifRunningThenTakeThat is marked true, but i never get running status for a tied, and isRunning is:', specObj.isRunning);
-				useLastUsedExePath(false); // false cuz its running, the file has to exist, it will never need to fall back onto cur exe path //if getDevBuildPropForTieId(tieId, 'exe_path') != specObj.path_exeForProfile then user tied it, but has not yet quit/started
-			} else {
-				console.log('ok here getting path_exeForProfile tieId is:', specObj.tieId);
-				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
-				specObj.iconsetId_base = getDevBuildPropForTieId(specObj.tieId, 'base_icon');
-				iconNameComponents['TIE-ID'] = specObj.iconsetId_base;
-				getChannelToExePath(); // maybe no need for getting channel, as we need channel to determine iconsetId_base, but here we already have it
-			}
-		} else {
-			// goal here is to get
-				// path_exeForProfile
-				// channel_exeForProfile
-				// iconsetId_base
-				// must not read path but must read icon, BECAUSE, if user had tied build, but then untied it. the exe is updated to be that of what it should launch into after untie. if currently running though, the icon is left unchanged.
-			if (launching) {
-				// if it is not running, then it should be set to the channel of launching profile, the current. ifRunningThenTakeThat should be set to 1
-				if (!ifRunningThenTakeThat) {
-					console.warn('getProfileSpecs when launching, should have set ifRunningThenTakeThat to 0, as should not ever supply launching unless am really launching and i do do that. i test if its running and in that case i switch to its window, else i launch');
-				}
-				specObj.path_exeForProfile = profToolkit.path_exeCur;
-				var promise_doGetChProfName = getChannelNameOfProfile(profToolkit.selectedProfile.iniKey); // supports temp profile as iniKey will be null
-				promise_doGetChProfName.then(
+	var step1 = function() {
+		// gets here as aProfIniKey is not of selectedProfile
+		// sets specObj.isRunning depending on ignoreRunning
+		// also sets path_exeForProfile
+		// also sets tieId
+		
+			// if do not ignore running
+				// if presetIsRunning is preset to yes its running > 0
+					// if running
+						// it sets specObj.isRunning to isRunning
+						// path_exeForProfile/fxVersion is set to what its running in
+					// if not running
+						// isRunning is set to 0
+						// path_exeForProfile is set to path of current build
+				// if presetIsRunning is NOT preset
+					// if running
+						// it sets isRunning to 1 on WINNT if running on on UNIX it sets to PID if running
+						// path_exeForProfile/fxVersion is set to what its running in
+					// if not running
+						// isRunning is set to 0
+						// path_exeForProfile is set to path of current build
+			// else ignore running
+				// isRunning is DNE
+				// path_exeForProfile/fxVersion set to to path of current build IF NOT TIED, if its tied then set to that of TIED
+		if ('Profilist.tie' in ini[aProfIniKey].props) {
+			specObj.tieId = ini[aProfIniKey].props['Profilist.tie'];
+		}
+		
+		if (!ignoreRunning) {
+			if (presetIsRunning === null || presetIsRunning === undefined) {
+				var promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [props.IsRelative, props.Path, profToolkit.rootPathDefault]);
+				promise_testAProfilePathRunning.then(
 					function(aVal) {
-						console.log('Fullfilled - promise_doGetChProfName - ', aVal);
-						// start - do stuff here - promise_doGetChProfName
-						specObj.channel_exeForProfile = aVal;
-						specObj.iconsetId_base = specObj.channel_exeForProfile;
-						iconNameComponents['CHANNEL-REF'] = specObj.iconsetId_base;
-						makeIconAndLauncherName();
-						deferredMain_getProfileSpecs.resolve(specObj);
-						// end - do stuff here - promise_doGetChProfName
+						console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
+						// start - do stuff here - promise_testAProfilePathRunning
+						specObj.isRunning = aVal;
+						if (aVal > 0) {
+							// not running
+							specObj.path_exeForProfile = profToolkit.exePath;
+							specObj.fxVersion = core.firefox.version;
+							step2();
+						} else {
+							// running
+							step1_1();
+						}
+						// end - do stuff here - promise_testAProfilePathRunning
 					},
 					function(aReason) {
-						var rejObj = {name:'promise_doGetChProfName', aReason:aReason};
-						console.error('Rejected - promise_doGetChProfName - ', rejObj);
+						var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
+						console.error('Rejected - promise_testAProfilePathRunning - ', rejObj);
 						deferredMain_getProfileSpecs.reject(rejObj);
 					}
 				).catch(
 					function(aCaught) {
-						var rejObj = {name:'promise_doGetChProfName', aCaught:aCaught};
-						console.error('Caught - promise_doGetChProfName - ', rejObj);
+						var rejObj = {name:'promise_testAProfilePathRunning', aCaught:aCaught};
+						console.error('Caught - promise_testAProfilePathRunning - ', rejObj);
 						deferredMain_getProfileSpecs.reject(rejObj);
 					}
 				);
 			} else {
-				if (!specObj.isRunning) {
-					var promise_path_to_exeDefaultBrowser = getDefaultBrowserPath();
-					promise_path_to_exeDefaultBrowser.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_path_to_exeDefaultBrowser - ', aVal);
-							// start - do stuff here - promise_path_to_exeDefaultBrowser
-							// aVal holds path to default browser, its null as i havent put the func togather yet
-							if (!aVal || aVal != 'esr|release|beta|aurora|dev|nightly' /*todo:*/) {
-								useLastUsedExePath(true);
-							}
-							// end - do stuff here - promise_path_to_exeDefaultBrowser
-						},
-						function(aReason) {
-							var rejObj = {name:'promise_path_to_exeDefaultBrowser', aReason:aReason};
-							console.error('Rejected - promise_path_to_exeDefaultBrowser - ', rejObj);
-							deferredMain_getProfileSpecs.reject(rejObj);
-						}
-					).catch(
-						function(aCaught) {
-							var rejObj = {name:'promise_path_to_exeDefaultBrowser', aCaught:aCaught};
-							console.error('Caught - promise_path_to_exeDefaultBrowser - ', rejObj);
-							deferredMain_getProfileSpecs.reject(rejObj);
-						}
-					);
+				// devuser preset its running status so no need to queryProfileLocked
+				specObj.isRunning = presetIsRunning;
+				if (presetIsRunning == 0) {
+					// not running
+					specObj.path_exeForProfile = profToolkit.exePath;
+					specObj.fxVersion = core.firefox.version;
+					step2();
 				} else {
-					// profile is running
-					// regardless of ifRunningThenTakeThat, in this situation i want it to always take the running exe path
-					useLastUsedExePath(false); // its running so impossible for compatability.ini to not exist
+					// running
+					step1_1();
 				}
+				step2();
+			}
+		} else {
+			if ('tieId' in specObj) {
+				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
+				if (specObj.path_exeForProfile == profToolkit.exePath) {
+					core.fxVersion = core.firefox.version;
+				} else {
+					// :todo: figure out how to get version of another exe path // and further insignificance as only gets here if ignoreRunning=true and i dont do that as of yet 061015
+				}
+			} else {
+				specObj.path_exeForProfile = profToolkit.exePath;
+				specObj.fxVersion = core.firefox.version;
+				step2();
 			}
 		}
 	};
 	
-	var promise_testAProfilePathRunning;
-	if (aProfilePath == profToolkit.selectedProfile.iniKey) {
-		specObj.isRunning = 1;
-		//var deferred_skipRunningCheck = new Deferred();
-		//promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
-		//deferred_skipRunningCheck.resolve(null);
-		postRunCheck();
-	} else if ((!ifRunningThenTakeThat && 'Profilist.tie' in props)/* || launching*/) { // reasons for not to check if aProfilePath is running
-		//// i added launching as reason to not check, i should never try to do launching when profile is running, i dont think i will so i added that as a reason to skip test if running
-		//var deferred_skipRunningCheck = new Deferred();
-		//promise_testAProfilePathRunning = deferred_skipRunningCheck.promise;
-		//deferred_skipRunningCheck.resolve(null);
-		console.log('in this block');
-		postRunCheck();
-	} else {
-		console.log('checking if locked');
-		promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [props.IsRelative, props.Path, profToolkit.rootPathDefault]);
-		promise_testAProfilePathRunning.then(
+	var step1_1 = function() {
+		// get fxVersion and path_exeForProfile for running profile
+		var promise_getFxVerAndExe = getExePathProfileLastLaunchedIn(aProfIniKey);
+		promise_getFxVerAndExe.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
-				// start - do stuff here - promise_testAProfilePathRunning
-				specObj.isRunning = aVal;
-				postRunCheck();
-				// end - do stuff here - promise_testAProfilePathRunning
+				console.log('Fullfilled - promise_getFxVerAndExe - ', aVal);
+				// start - do stuff here - promise_getFxVerAndExe
+				specObj.fxVersion = aVal.fxVersion;
+				specObj.path_exeForProfile = aVal.exePath;
+				step2();
+				// end - do stuff here - promise_getFxVerAndExe
 			},
 			function(aReason) {
-				var rejObj = {name:'promise_testAProfilePathRunning', aReason:aReason};
-				console.error('Rejected - promise_testAProfilePathRunning - ', rejObj);
+				var rejObj = {name:'promise_getFxVerAndExe', aReason:aReason};
+				console.warn('Rejected - promise_getFxVerAndExe - ', rejObj);
 				deferredMain_getProfileSpecs.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
-				var rejObj = {name:'promise_testAProfilePathRunning', aCaught:aCaught};
-				console.error('Caught - promise_testAProfilePathRunning - ', rejObj);
+				var rejObj = {name:'promise_getFxVerAndExe', aCaught:aCaught};
+				console.error('Caught - promise_getFxVerAndExe - ', rejObj);
 				deferredMain_getProfileSpecs.reject(rejObj);
 			}
 		);
-	}
+	};
+	
+	var step2 = function() {
+		// set channel_exeForProfile (depends on path_exeForProfile and fxVersion if aurora)
+		var promise_getChOfExe = getChannelNameOfExePath(specObj.path_exeForProfile);
+		promise_getChOfExe.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_getChOfExe - ', aVal);
+				// start - do stuff here - promise_getChOfExe
+				if (aVal == 'aurora' && 'fxVersion' in specObj) {
+					if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
+						specObj.channel_exeForProfile = 'dev';
+					} else {
+						specObj.channel_exeForProfile = 'aurora';
+					}
+				} else {
+					// deafult to dev, as aurora is old, its very likely they are dev now, esp due to auto firefox updates
+					specObj.channel_exeForProfile = 'dev';
+				}
+				step3();
+				// end - do stuff here - promise_getChOfExe
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_getChOfExe', aReason:aReason};
+				console.warn('Rejected - promise_getChOfExe - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_getChOfExe', aCaught:aCaught};
+				console.error('Caught - promise_getChOfExe - ', rejObj);
+				deferredMain_getProfileSpecs.reject(rejObj);
+			}
+		);
+	};
+	
+	var step3 = function() {
+		// set iconsetId_badge
+		if ('Profilist.badge' in ini[profToolkit.selectedProfile.iniKey].props) {
+			specObj.iconsetId_badge = ini[aProfIniKey].props['Profilist.badge'];
+		} // else DNE
+		
+		// set iconsetId_base (depends on path_exeForProfile, this makes it respect ignoreRunning as path_exeForProfile was determined based on ignoreRunning)
+		specObj.iconsetId_base = getDevBuildPropForExePath(specObj.path_exeForProfile, 'base_icon'); // this makes it respect ignoreRunning as path_exeForProfile which was based on ignoreRunning
+		if (!specObj.iconsetId_base) { // is null if exePath was not found in gDevBuilds meaning it has no custom icon
+			specObj.iconsetId_base = getIconsetForChannelName(specObj.channel_exeForProfile); // this makes it respect ignoreRunning as channel_exeForProfile was based on path_exeForProfile which was based on ignoreRunning
+		}
+		
+		// set iconnameObj (depends on iconsetId_badge and iconsetId_base)
+		specObj.iconNameObj = {}; // impossible for this to be tied as its a temp profile meaning it has no entry in ini
+		specObj.iconNameObj.components = {};
+		specObj.iconNameObj.components['BASE'] = specObj.iconsetId_base; // depends on iconsetId_base
+		if (specObj.iconsetId_badge) {
+			specObj.iconNameObj.components['BADGE'] = specObj.iconsetId_badge;
+		}
+		var iconNameObjStrArr = [];
+		for (var c in specObj.iconNameObj.components) {
+			iconNameObjStrArr.push(c + iconName_keyVal_joiner + specObj.iconNameObj.components[c]);
+		}
+		specObj.iconNameObj.str = iconNameObjStrArr.join(iconName_set_joiner);
+		
+		// set launcherName (depends on channel_exeForProfile and Name prop)
+		specObj.launcherName = getLauncherName(aProfIniKey, specObj.channel_exeForProfile);
+		
+		deferredMain_getProfileSpecs.resolve(specObj);
+	};
+	step0();
 	
 	return deferredMain_getProfileSpecs.promise;
 }
@@ -6692,6 +6175,7 @@ function getDefaultBrowserPath() {
 }
 
 function getIconName(for_ini_key, ch_name) {
+	// :todo: 061015 DEPRECATE
 	var nameArr_launcherIcns = [];
 	if ('Profilist.badge' in ini[for_ini_key].props) {
 		nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
@@ -6751,30 +6235,34 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	}
 }
 
-function getAppNameFromChan(theChName) {
+function getAppNameFromChan(theChName, firefox_version) {
+	// firefox_version used for determining aurora/dev for aurora
 	//based on channel name returns what the app name should be
 	// link5060513255 - see that i alias esr to release and default to nightly, and aurora to dev if version is < 35
 	switch (theChName) {
 		case 'esr':
 			return 'Firefox ESR';
-			break;
 		case 'release':
 			return 'Mozilla Firefox';
-			break;
 		case 'beta':
 			return 'Firefox Beta';
-			break;
 		case 'aurora':
-			if (Services.vc.compare(Services.appinfo.version, 35) >= 0) {
-				// aurora became dev icon in version 35
-				return 'Firefox Aurora';
+			if (firefox_version) {
+				if (Services.vc.compare(firefox_version, 35) >= 0) {
+					// aurora became dev icon in version 35
+					return 'Firefox Developer Edition';
+				} else {
+					return 'Firefox Aurora';
+				}
+			} else {
+				// default to developer as aurora is outdated so its very likely dev
+				return 'Firefox Developer';
 			}
-			return 'Firefox Developer';
 			break;
 		case 'default': // this is what it is on custom build
+			return 'Firefox Custom Build';
 		case 'nightly':
 			return 'Firefox Nightly';
-			break;
 		default:
 			console.warn('`theChName` of "' + theChName + '" is unidentified, so just returning it proper cased');
 			return theChName;
@@ -6850,155 +6338,97 @@ function launchProfile(aProfIniKey, arrOfArgs) {
 		return deferredMain_launchProfile.promise;
 	}
 	
-	var do_getProfSpecs = function(aCB) {
-		var promise_cProfSpecs = getProfileSpecs(aProfIniKey, true, true, false); // does not check if running
-		promise_cProfSpecs.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_cProfSpecs - ', aVal);
-				// start - do stuff here - promise_cProfSpecs
-				
-					aCB(aVal);
-					
-				// end - do stuff here - promise_cProfSpecs
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_cProfSpecs', aReason:aReason};
-				console.error('Rejected - promise_cProfSpecs - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_cProfSpecs', aCaught:aCaught};
-				console.error('Caught - promise_cProfSpecs - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_ensureIconExists = function(useIconNameObj, aCB) {
-		var promise_getIconName = makeIcon(aProfIniKey, useIconNameObj);
-		promise_getIconName.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_getIconName - ', aVal);
-				// start - do stuff here - promise_getIconName
-				
-					aCB();
-					
-				// end - do stuff here - promise_getIconName
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_getIconName', aReason:aReason};
-				console.error('Rejected - promise_getIconName - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_getIconName', aCaught:aCaught};
-				console.error('Caught - promise_getIconName - ', rejObj);
-				deferredMain_launchProfile.reject(rejObj);
-			}
-		);
-	};
-	
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-			
-			do_getProfSpecs(function(cProfSpec) {
+		
+				var cb_sendMsg_focusMostRecentWin = function(cProfSpec) {
+					// focus most recent window
+					// if non-winnt then isRunning holds pid
+					var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [cProfSpec.isRunning, ini[aProfIniKey].props.IsRelative, ini[aProfIniKey].props.Path, profToolkit.rootPathDefault]);
+					// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
+					promise_doFocus.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_doFocus - ', aVal);
+							// start - do stuff here - promise_doFocus
+							deferredMain_launchProfile.resolve(true);
+							// end - do stuff here - promise_doFocus
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_doFocus', aReason:aReason};
+							console.error('Rejected - promise_doFocus - ', rejObj);
+							deferredMain_launchProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_doFocus', aCaught:aCaught};
+							console.error('Caught - promise_doFocus - ', rejObj);
+							deferredMain_launchProfile.reject(rejObj);
+						}
+					);
+				};
 				
-					console.info('cProfSpec:', cProfSpec);
-					
-					if (cProfSpec.isRunning) {
-						// focus most recent window
-						// if non-winnt then isRunning holds pid
-						var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [cProfSpec.isRunning, ini[aProfIniKey].props.IsRelative, ini[aProfIniKey].props.Path, profToolkit.rootPathDefault]);
-						// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
-						promise_doFocus.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_doFocus - ', aVal);
-								// start - do stuff here - promise_doFocus
-								deferredMain_launchProfile.resolve(true);
-								// end - do stuff here - promise_doFocus
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_doFocus', aReason:aReason};
-								console.error('Rejected - promise_doFocus - ', rejObj);
-								deferredMain_launchProfile.reject(rejObj);
-							}
-						).catch(
-							function(aCaught) {
-								var rejObj = {name:'promise_doFocus', aCaught:aCaught};
-								console.error('Caught - promise_doFocus - ', rejObj);
-								deferredMain_launchProfile.reject(rejObj);
-							}
-						);
-					} else {
-						// prep launch
-						var do_sendMsgToLaunch = function() {
-							
-							// shortcut is checked to make sure it has right targetFile, icon, and args
-							var cutInfoObj = {
-								// keys for worker__createShortcuts
-								dir: profToolkit.path_profilistData_launcherExes,
-								name: cProfSpec.launcherName,
-								dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
-								args: '-profile "' + getPathToProfileDir(aProfIniKey) + '" -no-remote',
-								desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile',
-								icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
-								targetFile: cProfSpec.path_exeForProfile,
-								
-								updateIfDiff: true,
-								refreshIcon: 1,
-								
-								// keys for worker__makeLauncher
-								IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfIniKey) : null,
-								profRootDir: getPathToProfileDir(aProfIniKey)
-							};
-							/*//////// old way
-							var pathsObj = {
-								OSPath_makeFileAt: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // :todo: need to make sure that launcher was properly named, otherwise this will end up making a duplicate launcher
-								OSPath_icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
-								OSPath_targetFile: cProfSpec.path_exeForProfile,
-								jsStr_args: getPathToProfileDir(aProfIniKey),
-								jsStr_desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile'
-							};
-							*/
-							console.info('ready to send msg to launch, pathsObj:', cutInfoObj);
-							
-							var promise_doLaunch = ProfilistWorker.post('launchProfile', [cutInfoObj, arrOfArgs]);
-							promise_doLaunch.then(
-								function(aVal) {
-									console.log('Fullfilled - promise_doLaunch - ', aVal);
-									// start - do stuff here - promise_doLaunch
-									deferredMain_launchProfile.resolve(true);
-									// end - do stuff here - promise_doLaunch
-								},
-								function(aReason) {
-									var rejObj = {name:'promise_doLaunch', aReason:aReason};
-									console.error('Rejected - promise_doLaunch - ', rejObj);
-									deferredMain_launchProfile.reject(rejObj);
-								}
-							).catch(
-								function(aCaught) {
-									var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
-									console.error('Caught - promise_doLaunch - ', rejObj);
-									deferredMain_launchProfile.reject(rejObj);
-								}
-							);
-
-						};
+				var cb_sendMsg_launchProfile = function(cProfSpec) {
+					// shortcut is checked to make sure it has right targetFile, icon, and args
+					var cutInfoObj = {
+						// keys for worker__createShortcuts
+						dir: profToolkit.path_profilistData_launcherExes,
+						name: cProfSpec.launcherName,
+						dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
+						args: '-profile "' + getPathToProfileDir(aProfIniKey) + '" -no-remote',
+						desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile',
+						icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+						targetFile: cProfSpec.path_exeForProfile,
 						
-						do_ensureIconExists(cProfSpec.iconNameObj, do_sendMsgToLaunch);
-					}
-			});
-			
+						updateIfDiff: true,
+						refreshIcon: 1,
+						
+						// keys for worker__makeLauncher
+						IDHash: core.os.version_name == '7+' ? getPathToProfileDir(aProfIniKey) : null,
+						profRootDir: getPathToProfileDir(aProfIniKey)
+					};
+					
+					console.info('ready to send msg to launch, pathsObj:', cutInfoObj);
+					
+					var promise_doLaunch = ProfilistWorker.post('launchProfile', [cutInfoObj, arrOfArgs]);
+					promise_doLaunch.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_doLaunch - ', aVal);
+							// start - do stuff here - promise_doLaunch
+							deferredMain_launchProfile.resolve(true);
+							// end - do stuff here - promise_doLaunch
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_doLaunch', aReason:aReason};
+							console.error('Rejected - promise_doLaunch - ', rejObj);
+							deferredMain_launchProfile.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_doLaunch', aCaught:aCaught};
+							console.error('Caught - promise_doLaunch - ', rejObj);
+							deferredMain_launchProfile.reject(rejObj);
+						}
+					);
+				};
+		
 			break;
 		default:
 			console.error('os-unsupported');
 			deferredMain_launchProfile.reject('os-unsupported');
 			return deferredMain_launchProfile.promise;
 	}
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		if (aProfSpec.isRunning) {
+			cb_sendMsg_focusMostRecentWin(aProfSpec);
+		} else {
+			ensureIconExists_WithCB(deferredMain_launchProfile, aProfIniKey, aProfSpec, cb_sendMsg_launchProfile);
+		}
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_launchProfile, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
 	
 	return deferredMain_launchProfile.promise;
 }
@@ -7023,7 +6453,8 @@ function updateLauncherAndDeskcut(updateReason) {
 // start - CB helpers for promises, CB's are called on success
 // so far using with makeDeskcut
 function getProfileSpecs_WithCB(aDeferred, aProfIniKey, aSpecObj, aIfRunningThenTakeThat, aCB) {
-	// optional: aDeferred, aSpecObj, aIfRunningThenTakeThat
+	// aIfRunningThenTakeThat arg is useless as of 061015
+	// optional: aDeferred, aSpecObj
 	// required: aProfIniKey, aCB
 	// aCB is called with profSpecs for aProfIniKey
 	
@@ -7031,7 +6462,7 @@ function getProfileSpecs_WithCB(aDeferred, aProfIniKey, aSpecObj, aIfRunningThen
 		aCB(aSpecObj);
 		return; // to prevent deeper exec
 	}
-	var promise_cProfSpecs = getProfileSpecs(aProfIniKey, aIfRunningThenTakeThat, false, false);
+	var promise_cProfSpecs = getProfileSpecs(aProfIniKey, null, false);
 	promise_cProfSpecs.then(
 		function(aVal) {
 			console.log('Fullfilled - promise_cProfSpecs - ', aVal);
@@ -7180,9 +6611,12 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	return deferredMain_makeDeskCut.promise;
 }
 function getLauncherName(for_ini_key, theChName) {
-	if (for_ini_key === null && profToolkit.selectedProfile.iniKey === null) {
+	// theChName must be provided, it is usually gotten through a promise unless its selectedProfile
+	// for_ini_key is used to get the Name, although i can use this to get theChName if it wasnt provided, but i chose not to do this yet
+	if (for_ini_key === null) {
+		//  then obviously profToolkit.selectedProfile.isTemp
 		console.warn('this is a temporary profile');
-		var theProfName_safedForPath = getSafedForOSPath(profToolkit.selectedProfile.name);
+		var theProfName_safedForPath = myServices.sb.formatStringFromName('temporary-profile-with-dir-name', [profToolkit.selectedProfile.name], 1); //profToolkit.selectedProfile.name; // as i set this name to earlier OS.Path.basename(getPathToProfileDir(profToolkit.selectedProfile.iniKey, false)); // as we dont want to use profToolkit.selectedProfile.name as that is "Temp Profile"
 	} else {
 		var theProfName_safedForPath = getSafedForOSPath(ini[for_ini_key].props.Name);
 	}
@@ -7563,7 +6997,7 @@ function pickerIconset(tWin) {
 		// on success goes to copy_or_writeIfScaled
 		// rejects main on promise catch or promise rejected due to something other then becauseExists
 
-		if (['esr', 'release', 'beta', 'aurora', 'dev', 'nightly'].indexOf(iconsetId) > -1) {
+		if (['esr', 'release', 'beta', 'aurora', 'dev', 'nightly', 'default'].indexOf(iconsetId) > -1) {
 			//check if its a reserved word
 			iconsetId += '-1';
 		}
@@ -8157,13 +7591,13 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			function(aReason) {
 				var rejObj = {name:'promiseAll_dcipealbabs', aReason:aReason};
 				console.error('Rejected - promiseAll_dcipealbabs - ', rejObj);
-				deferred_createProfile.reject(rejObj);
+				deferredMain_makeIcon.reject(rejObj);
 			}
 		).catch(
 			function(aCaught) {
 				var rejObj = {name:'promiseAll_dcipealbabs', aCaught:aCaught};
 				console.error('Caught - promiseAll_dcipealbabs - ', rejObj);
-				deferred_createProfile.reject(rejObj);
+				deferredMain_makeIcon.reject(rejObj);
 			}
 		);
 	};
@@ -8173,7 +7607,7 @@ function makeIcon(for_ini_key, iconNameObj, doc) {
 			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
 		} else {
 			console.error('calling getProfileSpecs from makeIcon');
-			var promise_profSpecsToGetIconNameObj = getProfileSpecs(for_ini_key);
+			var promise_profSpecsToGetIconNameObj = getProfileSpecs(for_ini_key, null, false);
 			promise_profSpecsToGetIconNameObj.then(
 				function(aVal) {
 					console.log('Fullfilled - promise_profSpecsToGetIconNameObj - ', aVal);
@@ -8696,6 +8130,45 @@ function cpClientListener(aSubject, aTopic, aData) {
 				);
 				
 			break;
+		case 'query-browser-base-iconset-updated-for-tieid':
+			
+				switch (core.os.name) {
+					case 'winnt':
+					case 'winmo':
+					case 'wince':
+						
+							// check if anything is tied to this id, if it is then updateAllLaunchers
+							// if those profiles are running, then update windows, actually no need to check, as the updateWindows thing checks anyways
+							// respect running
+							var cTieId = incomingJson.tieid;
+							
+							for (var iniKey in ini) {
+								if ('num' in ini[iniKey] && 'Profilist.tie' in ini[iniKey].props && ini[iniKey].props['Profilist.tie'] == cTieId) {
+									var step1 = function() {
+										getProfileSpecs_WithCB(null, iniKey, null, true, step2);
+									};
+									
+									var step2 = function(aProfSpec) {
+										ensureIconExists_WithCB(null, iniKey, aProfSpec, step3);
+									};
+									
+									var step3 = function(cProfSpecs) {
+										updateIconToAllWindows(iniKey, cProfSpecs);
+										updateIconToSystemLaunchers(iniKey, cProfSpecs); // for winnt this will update exe's, but its not set up yet, so on winnt to update system launchers i use updateIconToLauncher with winUpdateIconToSystemShortcutLaunchers true
+										updateIconToDesktcut(iniKey, cProfSpecs);
+										updateIconToLauncher(iniKey, cProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true});
+									};									
+
+									step1();
+								}
+							}
+							
+						break;
+					default:
+						// nothing special
+				}				
+			
+			break;
 		default:
 			throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');
 	}
@@ -8717,10 +8190,8 @@ function getPathsInIconset(iconsetId, liveFetch) {
 		return null;
 	}
 
-	if (['esr','release','beta','aurora','dev','nightly'].indexOf(iconsetId) > -1) {
-		if (iconsetId == 'esr') {
-			iconsetId = 'release';
-		}
+	iconsetId = getIconsetForChannelName(iconsetId);
+	if (['release','beta','aurora','dev','nightly'].indexOf(iconsetId) > -1) { // removed esr and default from arr as i dont have iconsets with name esr or default getIconsetForChannelName should have been called before so default and esr should never get passed to here
 		var pathBase_OSPath = core.addon.path.images + 'channel-iconsets/' + iconsetId + '/' + iconsetId;
 		var pathBase_FileURI = pathBase_OSPath;
 	} else {
@@ -9435,7 +8906,7 @@ function getSystemAppUserModelId(aProfilePath) {
 	}
 }
 
-function getProfStat(aProfilePath, dontRefreshStatObj) {
+function getProfStat(aProfilePath, dontRefreshStatObj) { // better name for this would be getProfProfilistStatus
 	// updates prof stat obj and returns profile status, 0-disabled, 1-enabled, -1-uninstalled
 	// if dontRefreshStatObj is true, then it doesnt read the file
 	var deferredMain_getProfStat = new Deferred();
