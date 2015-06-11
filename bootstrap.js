@@ -1698,7 +1698,7 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 					elJson[1].style = elJson[1].style.join('; ');
 				} else {
 					//is temp profile
-					elJson[1].label = myServices.sb.formatStringFromName('temp-prof-with-dir-name', [profToolkit.selectedProfile.name], 1); //myServices.sb.GetStringFromName('temporary-profile');
+					elJson[1].label = myServices.sb.formatStringFromName('temporary-profile-with-dir-name', [profToolkit.selectedProfile.name], 1); //myServices.sb.GetStringFromName('temporary-profile');
 					elJson[1].class.push('profilist-temp-prof');
 					elJson[1].class = elJson[1].class.join(' ');
 				}
@@ -1727,7 +1727,8 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 			//console.log('str_ObjBoot', str_ObjBoot, 'str_ObjWin', str_ObjWin);
 			
 			if (str_ObjBoot != str_ObjWin) {
-
+				console.info('str_ObjWin:', str_ObjWin, 'objWin:', objWin);
+				
 				if (initialPanelDomSetup || objWin.General.props['Profilist.dev'] != myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value + '') { // :todo: need to remove Profilist.dev from objBoot.General.props['Profilist.dev']
 					if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == false) { //if (objBoot.General.props['Profilist.dev'] == 'false') {
 						aDOMWindow.Profilist.PBox.classList.remove('profilist-dev-enabled');
@@ -3670,14 +3671,20 @@ function getDevBuildPropForTieId(cTieId, getPropName, refreshDevBuildsJson) {
 function getIconsetForChannelName(channel_name, firefox_version) {
 	// firefox_version is double, used for determining if aurora is dev or aurora
 	// for a channel name it gives the name of the folder name in in core.addon.path.images + 'channel-iconsets/' + FOLDER_NAME_HERE + '/' + FOLDER_NAME_HERE + '_##.png'
+	console.error('enter:', channel_name, firefox_version);
 	switch (channel_name) {
 		case 'esr':
 		case 'release':
 		
 			return 'release';
+		
+		case 'beta':
 			
+			return 'beta'
+		
 		case 'aurora':
 		
+			/*
 			if (firefox_version) {
 				if (Services.vc.compare(firefox_version, 35) >= 0) {
 					// aurora became dev icon in version 35
@@ -3689,6 +3696,8 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 				// default to dev
 				return 'dev';
 			}
+			*/
+			return 'aurora';
 			
 		case 'dev':
 		
@@ -3934,6 +3943,18 @@ function updateIconToLauncher(aProfIniKey, useSpecObj, aOptions={}) {
 					}
 					// end determine dirs
 					
+					if (aProfIniKey === null) {
+						if (profToolkit.selectedProfile.isTemp) {
+							// its for temp profile which is selected profile
+							var profName = profToolkit.selectedProfile.name;
+						} else {
+							console.error('aProfIniKey is null but isTemp is not true, profToolkit.selectedProfile:', profToolkit.selectedProfile);
+							throw new Error('aProfIniKey is null but isTemp is not true');
+						}
+					} else {
+						var profName = ini[aProfIniKey].props.Name;
+					}
+					
 					var commonCutInfoObj = {
 						// keys for worker__createShortcuts
 						//dir: OS.Path.dirname(rezFindsArr[i]),
@@ -3941,7 +3962,7 @@ function updateIconToLauncher(aProfIniKey, useSpecObj, aOptions={}) {
 						name: cProfSpec.launcherName,
 						//dirNameLnk: rezFindsArr[i], // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
 						args: '-profile "' + getPathToProfileDir(aProfIniKey) + '" -no-remote',
-						desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[aProfIniKey].props.Name + '" Profile',
+						desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + profName + '" Profile',
 						icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
 						targetFile: cProfSpec.path_exeForProfile,
 						
@@ -5293,17 +5314,22 @@ function getExePathProfileLastLaunchedIn(aProfIniKey) {
 		// null - meaning never launched before
 		// {exePath:, fxVersion:} // fxVersion is a string it can be like `41.0a1` so have to use Services.vc to compare on it, its not a js number
 	
+	console.error('in getExePathProfileLastLaunchedIn');
+	
 	var deferredMain_getExePathProfileLastLaunchedIn = new Deferred();
 	var step0 = function() {
 		// test if its selectedProfile/tempProfile
+		console.error('in getExePathProfileLastLaunchedIn', 'aProfIniKey:', aProfIniKey);
 		if (aProfIniKey == profToolkit.selectedProfile.iniKey) {
 			// is temp or not
 			// is sleected profile though
+			console.error('in getExePathProfileLastLaunchedIn', 'equivalent so lets return cur info:', aProfIniKey, profToolkit.selectedProfile.iniKey);
 			deferredMain_getExePathProfileLastLaunchedIn.resolve({
 				exePath: profToolkit.exePath,
 				fxVersion: core.firefox.version
 			});
 		} else {
+			console.error('non equiv so going to step1');
 			step1();
 		}
 	};
@@ -5311,6 +5337,8 @@ function getExePathProfileLastLaunchedIn(aProfIniKey) {
 	var step1 = function() {
 		// read compat ini
 		var path_aProfileCompatIni = OS.Path.join(getPathToProfileDir(aProfIniKey, false), 'compatibility.ini');
+		console.error('in getExePathProfileLastLaunchedIn', 'path_aProfileCompatIni', path_aProfileCompatIni);
+		
 		var promise_readCompatIni = read_encoded(path_aProfileCompatIni, {encoding:'utf-8'});
 		promise_readCompatIni.then(
 			function(aVal) {
@@ -5344,6 +5372,8 @@ function getExePathProfileLastLaunchedIn(aProfIniKey) {
 		
 		var LastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(compatIniContents);
 		var LastVersion = /LastVersion=(.*?)_/.exec(compatIniContents);
+		console.error('in getExePathProfileLastLaunchedIn', 'LastPlatformDir', LastPlatformDir);
+		console.error('in getExePathProfileLastLaunchedIn', 'LastVersion', LastVersion);
 		
 		if (!LastPlatformDir) {
 			consolee.error('regex failed on LastPlatformDir, compatIniContents was:', compatIniContents);
@@ -5842,7 +5872,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 					specObj.iconNameObj.str = iconNameObjStrArr.join(iconName_set_joiner);
 					
 					// set launcherName (depends on channel_exeForProfile and Name prop)
-					specObj.launcherName = getLauncherName(profToolkit.selectedProfile.iniKey, specObj.channel_exeForProfile);
+					specObj.launcherName = getLauncherName(profToolkit.selectedProfile.iniKey/*is null obviously*/, specObj.channel_exeForProfile);
 					
 					deferredMain_getProfileSpecs.resolve(specObj);
 				};
@@ -5893,14 +5923,18 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 							function(aVal) {
 								console.log('Fullfilled - promise_getChForExeForProfile - ', aVal);
 								// start - do stuff here - promise_getChForExeForProfile
-								if (aVal == 'aurora' && 'fxVersion' in specObj) {
-									if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
-										specObj.channel_exeForProfile = 'dev';
+								if (aVal == 'aurora') {
+									if ('fxVersion' in specObj) {
+										if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
+											specObj.channel_exeForProfile = 'dev';
+										} else {
+											specObj.channel_exeForProfile = aVal; // aVal is aurora
+										}
 									} else {
-										specObj.channel_exeForProfile = aVal; // aVal is aurora
+										specObj.channel_exeForProfile = 'dev';
 									}
 								} else {
-									specObj.channel_exeForProfile = 'dev';
+									specObj.channel_exeForProfile = aVal;
 								}
 								step0_2();
 								// end - do stuff here - promise_getChForExeForProfile
@@ -5998,13 +6032,15 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 						console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
 						// start - do stuff here - promise_testAProfilePathRunning
 						specObj.isRunning = aVal;
-						if (aVal > 0) {
+						if (aVal == 0) {
 							// not running
+							console.error('not running so cur path');
 							specObj.path_exeForProfile = profToolkit.exePath;
 							specObj.fxVersion = core.firefox.version;
 							step2();
 						} else {
 							// running
+							console.error('sending to 1_1 1111');
 							step1_1();
 						}
 						// end - do stuff here - promise_testAProfilePathRunning
@@ -6026,17 +6062,19 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 				specObj.isRunning = presetIsRunning;
 				if (presetIsRunning == 0) {
 					// not running
+					console.error('setting path_exeForProfile to cuz not running 3');
 					specObj.path_exeForProfile = profToolkit.exePath;
 					specObj.fxVersion = core.firefox.version;
 					step2();
 				} else {
 					// running
+					console.error('sending to 1_1 2');
 					step1_1();
 				}
-				step2();
 			}
 		} else {
 			if ('tieId' in specObj) {
+				console.error('setting path_exeForProfile to tieid search 2');
 				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
 				if (specObj.path_exeForProfile == profToolkit.exePath) {
 					core.fxVersion = core.firefox.version;
@@ -6044,6 +6082,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 					// :todo: figure out how to get version of another exe path // and further insignificance as only gets here if ignoreRunning=true and i dont do that as of yet 061015
 				}
 			} else {
+				console.error('setting path_exeForProfile to cur path 1');
 				specObj.path_exeForProfile = profToolkit.exePath;
 				specObj.fxVersion = core.firefox.version;
 				step2();
@@ -6053,6 +6092,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 	
 	var step1_1 = function() {
 		// get fxVersion and path_exeForProfile for running profile
+		console.error('in step 1_1');
 		var promise_getFxVerAndExe = getExePathProfileLastLaunchedIn(aProfIniKey);
 		promise_getFxVerAndExe.then(
 			function(aVal) {
@@ -6079,20 +6119,25 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 	
 	var step2 = function() {
 		// set channel_exeForProfile (depends on path_exeForProfile and fxVersion if aurora)
+		console.error('sending for getChannelNameOfExePath for specObj.path_exeForProfile:', specObj.path_exeForProfile);
 		var promise_getChOfExe = getChannelNameOfExePath(specObj.path_exeForProfile);
 		promise_getChOfExe.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_getChOfExe - ', aVal);
 				// start - do stuff here - promise_getChOfExe
-				if (aVal == 'aurora' && 'fxVersion' in specObj) {
-					if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
-						specObj.channel_exeForProfile = 'dev';
+				if (aVal == 'aurora') {
+					if ('fxVersion' in specObj) {
+						if (Services.vc.compare(specObj.fxVersion, 35) >= 0) {
+							specObj.channel_exeForProfile = 'dev';
+						} else {
+							specObj.channel_exeForProfile = 'aurora';
+						}
 					} else {
-						specObj.channel_exeForProfile = 'aurora';
+						//default to dev
+						specObj.channel_exeForProfile = 'dev';
 					}
 				} else {
-					// deafult to dev, as aurora is old, its very likely they are dev now, esp due to auto firefox updates
-					specObj.channel_exeForProfile = 'dev';
+					specObj.channel_exeForProfile = aVal;
 				}
 				step3();
 				// end - do stuff here - promise_getChOfExe
@@ -6113,7 +6158,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 	
 	var step3 = function() {
 		// set iconsetId_badge
-		if ('Profilist.badge' in ini[profToolkit.selectedProfile.iniKey].props) {
+		if ('Profilist.badge' in ini[aProfIniKey].props) {
 			specObj.iconsetId_badge = ini[aProfIniKey].props['Profilist.badge'];
 		} // else DNE
 		
@@ -6259,6 +6304,8 @@ function getAppNameFromChan(theChName, firefox_version) {
 				return 'Firefox Developer';
 			}
 			break;
+		case 'dev':
+			return 'Firefox Developer Edition';
 		case 'default': // this is what it is on custom build
 			return 'Firefox Custom Build';
 		case 'nightly':
@@ -7452,7 +7499,7 @@ function pickerIconset(tWin) {
 			// if selectedFromProfilistDataDir is true, then resolves main with file paths and sizes
 			// if selectedFromProfilistDataDir is false, then sends to ensureNameAvailable
 			
-		var promise_doImgLoads = loadImagePaths(path_selectedIcons);
+		var promise_doImgLoads = loadImagePaths(path_selectedIcons, null, tWin.document);
 		promise_doImgLoads.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_doImgLoads - ', aVal);
@@ -8081,6 +8128,9 @@ function cpClientListener(aSubject, aTopic, aData) {
 			break;
 		case 'query-browser-base-iconset-updated-for-tieid':
 			
+				console.error('hitting query-browser-base-iconset-updated-for-tieid'); // :debug:
+				return; // :debug:
+				
 				switch (core.os.name) {
 					case 'winnt':
 					case 'winmo':
@@ -8140,7 +8190,7 @@ function getPathsInIconset(iconsetId, liveFetch) {
 	}
 
 	if (['esr','release','beta','aurora','dev','nightly','default'].indexOf(iconsetId) > -1) {
-		iconsetId = getIconsetForChannelName(iconsetId);
+		//iconsetId = getIconsetForChannelName(iconsetId);
 		var pathBase_OSPath = core.addon.path.images + 'channel-iconsets/' + iconsetId + '/' + iconsetId;
 		var pathBase_FileURI = pathBase_OSPath;
 	} else {

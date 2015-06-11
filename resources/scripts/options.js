@@ -636,10 +636,10 @@ var observers = {
 				}
 				
 				var builtinIcon = json[i][0].match(/^(?:esr|release|beta|aurora|dev|nightly|default)$/im);
-				builtinIcon = getIconsetForChannelName(builtinIcon);
 				
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
+					builtinIcon[0] = getIconsetForChannelName(builtinIcon[0]);
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
@@ -1352,7 +1352,7 @@ function getPathTo16Img(iconset_name, uncached) {
 	// copied from bootstrap.js
 	// returns file uri of path to 16x16 img of the iconset_name, if it is channel or if custom
 	if (/^(?:esr|release|beta|aurora|dev|nightly|default)$/m.test(iconset_name)) {
-		iconset_name = getIconsetForChannelName(iconset_name);
+		//iconset_name = getIconsetForChannelName(iconset_name);
 		console.info('returning', core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png');
 		return core.addon.path.images + 'channel-iconsets/' + iconset_name + '/' + iconset_name + '_16.png'; // chrome path so no need for file uri
 		//aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + core.addon.path.images + 'channel-iconsets/' + cChanImgName + '/' + cChanImgName + '_16.png' + '")';
@@ -1371,14 +1371,20 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 	// copied from bootstrap.js
 	// firefox_version is double, used for determining if aurora is dev or aurora
 	// for a channel name it gives the name of the folder name in in core.addon.path.images + 'channel-iconsets/' + FOLDER_NAME_HERE + '/' + FOLDER_NAME_HERE + '_##.png'
+console.error('enter:', channel_name, firefox_version);
 	switch (channel_name) {
 		case 'esr':
 		case 'release':
 		
 			return 'release';
+		
+		case 'beta':
 			
+			return 'beta'
+		
 		case 'aurora':
 		
+			/*
 			if (firefox_version) {
 				if (Services.vc.compare(firefox_version, 35) >= 0) {
 					// aurora became dev icon in version 35
@@ -1390,6 +1396,8 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 				// default to dev
 				return 'dev';
 			}
+			*/
+			return 'aurora';
 			
 		case 'dev':
 		
