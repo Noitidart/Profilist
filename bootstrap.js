@@ -3679,7 +3679,7 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 		case 'aurora':
 		
 			if (firefox_version) {
-				if (Services.vc.compare(Services.appinfo.version, firefox_version) >= 0) {
+				if (Services.vc.compare(firefox_version, 35) >= 0) {
 					// aurora became dev icon in version 35
 					return 'dev';
 				} else {
@@ -5342,8 +5342,8 @@ function getExePathProfileLastLaunchedIn(aProfIniKey) {
 	var step2 = function(compatIniContents) {
 		// parse compatIniContents
 		
-		var LastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(aVal);
-		var LastVersion = /LastVersion=(.*?)_/.exec(aVal);
+		var LastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(compatIniContents);
+		var LastVersion = /LastVersion=(.*?)_/.exec(compatIniContents);
 		
 		if (!LastPlatformDir) {
 			consolee.error('regex failed on LastPlatformDir, compatIniContents was:', compatIniContents);
@@ -5380,7 +5380,7 @@ function getExePathProfileLastLaunchedIn(aProfIniKey) {
 		
 		deferredMain_getExePathProfileLastLaunchedIn.resolve({
 			exePath: exePath,
-			fxVersion: LastVersion[1];
+			fxVersion: LastVersion[1]
 		});
 	};
 	
@@ -5790,7 +5790,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 		// resolves with obj if its of selectedProfile (either temp prof or not)
 		
 		if (aProfIniKey === profToolkit.selectedProfile.iniKey) {
-			if (isRunning === 0) {
+			if (presetIsRunning === 0) {
 				throw new Error('devuser you are a fool, this is currently running profile, isRunning IS NOT 0 and thats what you said');
 			}
 			
@@ -5992,7 +5992,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 		
 		if (!ignoreRunning) {
 			if (presetIsRunning === null || presetIsRunning === undefined) {
-				var promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [props.IsRelative, props.Path, profToolkit.rootPathDefault]);
+				var promise_testAProfilePathRunning = ProfilistWorker.post('queryProfileLocked', [ini[aProfIniKey].props.IsRelative, ini[aProfIniKey].props.Path, profToolkit.rootPathDefault]);
 				promise_testAProfilePathRunning.then(
 					function(aVal) {
 						console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
@@ -6428,7 +6428,7 @@ function launchProfile(aProfIniKey, arrOfArgs) {
 		}
 	};
 	
-	getProfileSpecs_WithCB(deferredMain_launchProfile, aProfIniKey, useSpecObj, true, cbPostProgSpecsGot);
+	getProfileSpecs_WithCB(deferredMain_launchProfile, aProfIniKey, null, true, cbPostProgSpecsGot);
 	
 	return deferredMain_launchProfile.promise;
 }
@@ -6498,14 +6498,13 @@ function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB) {
 	//console.error('in ensureIconExists_WithCB with aProfIniKey:', aProfIniKey);
 	
 	var cbPostProgSpecsGot = function(aProfSpec) {
-		var useIconNameObj = aProfSpec.iconNameObj;
-		var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, useIconNameObj); // if useIconNameObj is not provided, then makeIcon will get prof specs, and it will return it
+		var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, aProfSpec);
 		promise_ensureIconRdyAndMade.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
 				// start - do stuff here - promise_ensureIconRdyAndMade
 				
-					aCB(aProfSpec);
+					aCB(aVal.profSpecs);
 					
 				// end - do stuff here - promise_ensureIconRdyAndMade
 			},
@@ -6625,7 +6624,409 @@ function getLauncherName(for_ini_key, theChName) {
 // end - shortcut creation
 
 /* start - makeIcon */
+function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
+	// if forceOverwrite is true, it doesnt check existence first, and it will overwrite icon path, icon path is what is returned from specObj.iconNameObj.str
+	// has to be done on mainthread because i need to use canvas
+	
+	// resolve values:
+		// if forceOverwrite is false, and it is found to exist then
+		/*
+		{
+			prexisted: true,
+			path_icon: path_icon,
+		}
+		*/
+	
+	var deferredMain_makeIcon = new Deferred();
+	
+	// globals for steps
+	var cProfSpec;
+	var path_icon;
+	var imgObj_base;
+	var imgObj_badge;
+	var resolveObj = {};
+	
+	var step0 = function() {
+		doc.removeEventListener('DOMContentLoaded', step0, false);
+		step1();
+	};
+	
+	var step1 = function() {
+		getProfileSpecs_WithCB(deferredMain_makeIcon, aProfIniKey, useSpecObj, null, step2);
+	};
+	
+	// step2 is a bit os specific, but not enough to put it into the main switch
+	var step2 = function(aProfSpec) {
+		// set cProfSpec
+		// and check existence of icon path with respect to forceOverwrite
+		// and start loading image assets in paralell with existence check
+		// and determine path_icon;
+		
+		resolveObj.profSpec = aProfSpec;
+		cProfSpec = aProfSpec;
+		
+		var promiseAllArr_existanceAndLoadAssets = [];
+
+		// start loading assets
+		promiseAllArr_existanceAndLoadAssets.push(loadImagePaths(null, cProfSpec.iconNameObj.components['BASE'], doc));
+		if ('BADGE' in cProfSpec.iconNameObj.components) {
+			promiseAllArr_existanceAndLoadAssets.push(loadImagePaths(null, cProfSpec.iconNameObj.components['BADGE'], doc));
+		}
+
+		// determine path_icon
+		switch (core.os.name) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+			
+					path_icon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico')
+				
+				break;
+			case 'darwin':
+			
+					path_icon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.icns')
+				
+				break;
+			default:
+				
+					// path_icon is a directory which holds a bunch of pngs
+					path_icon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, iconNameObj.str)
+				
+		}
+		
+		if (!forceOverwrite) {
+			var promise_iconPrexists = OS.File.exists(path_icon);
+			promise_iconPrexists.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_iconPrexists - ', aVal);
+					// start - do stuff here - promise_iconPrexists
+					// icon already exists, and devuser asked that overwrite not happen so resolve link11564380025
+					deferredMain_makeIcon.resolve({
+						prexisted: true,
+						path_icon: path_icon,
+						profSpecs: cProfSpec
+					});
+					// end - do stuff here - promise_iconPrexists
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_iconPrexists', aReason:aReason};
+					console.warn('Rejected - promise_iconPrexists - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_iconPrexists', aCaught:aCaught};
+					console.error('Caught - promise_iconPrexists - ', rejObj);
+					deferredMain_makeIcon.reject(rejObj);
+				}
+			);
+			promiseAllArr_existanceAndLoadAssets.push(promise_iconPrexists);
+		} // else dont check for existence
+		
+		var promiseAll_existanceAndLoadAssets = Promise.all(promiseAllArr_existanceAndLoadAssets);
+		promiseAll_existanceAndLoadAssets.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_existanceAndLoadAssets - ', aVal);
+				// start - do stuff here - promiseAll_existanceAndLoadAssets
+				if (aVal.length == 3 && aVal[2] == true) {
+					// devuser asked that forceOverwrite note happen, so existance was tested, and it was found to have existed, so it link11564380025 will already have resolved deferredMain_makeIcon so do nothing
+				} else {
+					// continue to start creation/writing process
+					step3(aVal);
+				}
+				// end - do stuff here - promiseAll_existanceAndLoadAssets
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_existanceAndLoadAssets', aReason:aReason};
+				console.warn('Rejected - promiseAll_existanceAndLoadAssets - ', rejObj);
+				deferredMain_makeIcon.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_existanceAndLoadAssets', aCaught:aCaught};
+				console.error('Caught - promiseAll_existanceAndLoadAssets - ', rejObj);
+				deferredMain_makeIcon.reject(rejObj);
+			}
+		);
+		
+	};
+	
+	// step3 and onwards are os specific
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+
+				var step3 = function(aVal) {
+					imgObj_base = aVal[0];
+					if (cProfSpec.iconNameObj.components['BADGE']) {
+						imgObj_badge = aVal[1];
+					}
+					
+					// start - draw overlaid icons and turn save image data
+					var imgDataArr = [];
+					// maybe consider drawing smaller badges on beta
+					var badgeSizePerBaseSize = {
+						'16': 10,
+						'32': 16,
+						'48': 24,
+						'256': 128
+					};
+					
+					for (var baseSize in badgeSizePerBaseSize) {
+						var canvas = doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+						var ctx = canvas.getContext('2d');
+						
+						baseSize = parseInt(baseSize)
+						canvas.width = baseSize;
+						canvas.height = baseSize;
+						//ctx.clearRect(0, 0, size, size);
+						
+						// draw nearest sized base img
+						var nearestSizedBaseImg = getImg_of_exactOrNearest_Bigger_then_Smaller(baseSize, imgObj_base);
+						console.info('nearestSizedBaseImg:', nearestSizedBaseImg.toString());
+						if (nearestSizedBaseImg.height == baseSize) { //switching away from height to height as what if it is a HTMLCanvasElement instead of a HTMLImageElement (i dont think canvas'es hav height)
+							// its exact
+							console.log('base is exact at ', nearestSizedBaseImg.height , 'so no need to scale, as size it is:', baseSize);
+							ctx.drawImage(nearestSizedBaseImg, 0, 0);
+						} else {
+							// need to scale it
+							console.log('scalling base from size of ', nearestSizedBaseImg.height , 'to', baseSize);
+							ctx.drawImage(nearestSizedBaseImg, 0, 0, baseSize, baseSize);
+						}
+						
+						if (imgObj_badge) {
+							// overlay nearest sized badge
+							var badgeSize = badgeSizePerBaseSize[baseSize];
+							console.log('badgeSize needed for this size is:', badgeSize, 'base size is:', baseSize);
+							var nearestSizedBadgeImg = getImg_of_exactOrNearest_Bigger_then_Smaller(badgeSize, imgObj_badge);
+							console.info('nearestSizedBadgeImg:', nearestSizedBadgeImg.toString());
+							if (nearestSizedBadgeImg.height == badgeSize) {
+								// its exact
+								console.log('badge is exact at ', nearestSizedBadgeImg.height, 'so no need to scale, as badgeSize it is:', badgeSize);
+								ctx.drawImage(nearestSizedBadgeImg, baseSize-badgeSize, baseSize-badgeSize);
+							} else {
+								// need to scale it
+								console.log('scalling badge from size of ', nearestSizedBadgeImg.height, 'to', badgeSize);
+								ctx.drawImage(nearestSizedBadgeImg, baseSize-badgeSize, baseSize-badgeSize, badgeSize, badgeSize);
+							}
+						}
+						
+						imgDataArr.push({baseSize:baseSize, data:ctx.getImageData(0, 0, baseSize, baseSize).data});
+					}
+					// end - draw overlaid icons and turn save image data
+					
+					// start - put imageDataArr to ico container, as buffer
+					// start - ico make proc
+					var sizeof_ICONDIR = 6;
+					var sizeof_ICONDIRENTRY = 16;
+					var sizeof_BITMAPHEADER = 40;
+					var sizeof_ICONIMAGEs = 0;
+					
+					for (var i=0; i<imgDataArr.length; i++) {
+						imgDataArr[i].XOR = imgDataArr[i].data.length;
+						imgDataArr[i].AND = imgDataArr[i].baseSize * imgDataArr[i].baseSize / 8;
+						sizeof_ICONIMAGEs += imgDataArr[i].XOR;
+						sizeof_ICONIMAGEs += imgDataArr[i].AND;
+						sizeof_ICONIMAGEs += sizeof_BITMAPHEADER;
+						imgDataArr[i].sizeof_ICONIMAGE = imgDataArr[i].XOR + imgDataArr[i].AND + sizeof_BITMAPHEADER;
+					}
+					
+					// let XOR = data.length;
+					// let AND = canvas.width * canvas.height / 8;
+					// let csize = 22 /* ICONDIR + ICONDIRENTRY */ + 40 /* BITMAPHEADER */ + XOR + AND;
+					var csize = sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sizeof_ICONIMAGEs;
+					var buffer = new ArrayBuffer(csize);
+				   
+					// Every ICO file starts with an ICONDIR
+					// ICONDIR
+					/* 
+					typedef struct																	6+?
+					{
+						WORD           idReserved;   // Reserved (must be 0)						2
+						WORD           idType;       // Resource Type (1 for icons)					2
+						WORD           idCount;      // How many images?							2
+						ICONDIRENTRY   idEntries[1]; // An entry for each image (idCount of 'em)	?
+					} ICONDIR, *LPICONDIR;
+					*/
+					var lilEndian = isLittleEndian();
+					var view = new DataView(buffer);
+					//view.setUint16(0, 0, lilEndian);					//	WORD	//	idReserved	//	Reserved (must be 0) /* i commented this out because its not needed, by default the view value is 0 */
+					view.setUint16(2, 1, lilEndian);					//	WORD	//	idType		//	Resource Type (1 for icons)
+					view.setUint16(4, imgDataArr.length, lilEndian);	//	WORD	//	idCount;	// How many images?
+					
+					// There exists one ICONDIRENTRY for each icon image in the file
+					/*
+					typedef struct																16
+					{
+						BYTE        bWidth;          // Width, in pixels, of the image			1
+						BYTE        bHeight;         // Height, in pixels, of the image			1
+						BYTE        bColorCount;     // Number of colors in image (0 if >=8bpp)	1
+						BYTE        bReserved;       // Reserved ( must be 0)					1
+						WORD        wPlanes;         // Color Planes							2
+						WORD        wBitCount;       // Bits per pixel							2
+						DWORD       dwBytesInRes;    // How many bytes in this resource?		4
+						DWORD       dwImageOffset;   // Where in the file is this image?		4
+					} ICONDIRENTRY, *LPICONDIRENTRY;
+					*/
+					// ICONDIRENTRY creation for each image
+					var sumof__prior_sizeof_ICONIMAGE = 0;
+					for (var i=0; i<imgDataArr.length; i++) {
+						/*
+						var countof_ICONIMAGES_prior_to_this_ICONIMAGE = i;
+						var sizeof_ICONIMAGES_prior_to_this_ICONIMAGE = 0;
+						for (var i=0; i<countof_ICONIMAGES_prior_to_this_ICONIMAGE; i++) {
+							sizeof_ICONIMAGES_prior_to_this_ICONIMAGE += path_data[paths[i]].sizeof_ICONIMAGE;
+						}
+						*/
+						
+						view = new DataView(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * i /* sum_of_ICONDIRENTRYs_before_this_one */));
+						view.setUint8(0, imgDataArr[i].baseSize /* % 256 i dont understand why the modulus?? */ );																		// BYTE        bWidth;          // Width, in pixels, of the image
+						view.setUint8(1, imgDataArr[i].baseSize /* % 256 i dont understand why the modulus?? */);																		// BYTE        bHeight;         // Height, in pixels, of the image
+						//view.setUint8(2, 0);																																					// BYTE        bColorCount;     // Number of colors in image (0 if >=8bpp)
+						//view.setUint8(3, 0);																																					// BYTE        bReserved;       // Reserved ( must be 0)
+						view.setUint16(4, 1, lilEndian);																																		// WORD        wPlanes;         // Color Planes
+						view.setUint16(6, 32, lilEndian);																																		// WORD        wBitCount;       // Bits per pixel
+						view.setUint32(8, imgDataArr[i].sizeof_ICONIMAGE /* sizeof_BITMAPHEADER + imgDataArr[i].XOR + imgDataArr[i].AND */, lilEndian);											// DWORD       dwBytesInRes;    // How many bytes in this resource?			// data size
+						view.setUint32(12, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE /*sizeof_ICONIMAGES_prior_to_this_ICONIMAGE*/, lilEndian);		// DWORD       dwImageOffset;   // Where in the file is this image?			// data start
+						
+						sumof__prior_sizeof_ICONIMAGE += imgDataArr[i].sizeof_ICONIMAGE;
+					}
+					/*
+					typdef struct
+					{
+					   BITMAPINFOHEADER   icHeader;      // DIB header
+					   RGBQUAD         icColors[1];   // Color table
+					   BYTE            icXOR[1];      // DIB bits for XOR mask
+					   BYTE            icAND[1];      // DIB bits for AND mask
+					} ICONIMAGE, *LPICONIMAGE;
+					*/
+					// ICONIMAGE creation for each image
+					var sumof__prior_sizeof_ICONIMAGE = 0;
+					for (var i=0; i<imgDataArr.length; i++) {
+						/*
+						typedef struct tagBITMAPINFOHEADER {
+						  DWORD biSize;				4
+						  LONG  biWidth;			4
+						  LONG  biHeight;			4
+						  WORD  biPlanes;			2
+						  WORD  biBitCount;			2
+						  DWORD biCompression;		4
+						  DWORD biSizeImage;		4
+						  LONG  biXPelsPerMeter;	4
+						  LONG  biYPelsPerMeter;	4
+						  DWORD biClrUsed;			4
+						  DWORD biClrImportant;		4
+						} BITMAPINFOHEADER, *PBITMAPINFOHEADER;		40
+						*/
+						// BITMAPHEADER
+						view = new DataView(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE);
+						view.setUint32(0, sizeof_BITMAPHEADER, lilEndian); // BITMAPHEADER size
+						view.setInt32(4, imgDataArr[i].baseSize, lilEndian);
+						view.setInt32(8, imgDataArr[i].baseSize * 2, lilEndian);
+						view.setUint16(12, 1, lilEndian); // Planes
+						view.setUint16(14, 32, lilEndian); // BPP
+						view.setUint32(20, imgDataArr[i].XOR + imgDataArr[i].AND, lilEndian); // size of data
+						
+						// Reorder RGBA -> BGRA
+						for (var ii = 0; ii < imgDataArr[i].XOR; ii += 4) {
+							var temp = imgDataArr[i].data[ii];
+							imgDataArr[i].data[ii] = imgDataArr[i].data[ii + 2];
+							imgDataArr[i].data[ii + 2] = temp;
+						}
+						var ico = new Uint8Array(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE + sizeof_BITMAPHEADER);
+						var stride = imgDataArr[i].baseSize * 4;
+						
+						// Write bottom to top
+						for (var ii = 0; ii < imgDataArr[i].baseSize; ++ii) {
+							var su = imgDataArr[i].data.subarray(imgDataArr[i].XOR - ii * stride, imgDataArr[i].XOR - ii * stride + stride);
+							ico.set(su, ii * stride);
+						}
+						
+						sumof__prior_sizeof_ICONIMAGE += imgDataArr[i].sizeof_ICONIMAGE; /*imgDataArr[i].XOR + imgDataArr[i].AND + sizeof_BITMAPHEADER;*/
+					}
+					
+					//return buffer;
+					// end - put imageDataArr to ico container, as buffer
+					
+					// start - save it to disk
+					// note: i use here `resolveObj.OSPath` which is set in the promise_iconPrexists, for WINNT and Darwin
+					// IMPORTANT TODO: if a iconsetId from profilist_data/iconsets gets deleted DELETE icon files associated with it. i discovered this in windows. it makes sense for all os though. as user may bring back the same iconsetId but with a different image/art/drawing. so just checking if path exists will return true, but the art/drawing work inside the icon is different
+					var promise_writeIco = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_icon, new Uint8Array(buffer), {tmpPath:path_icon+'.tmp'}], profToolkit.path_iniDir);
+					promise_writeIco.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_writeIco - ', aVal);
+							// start - do stuff here - promise_writeIco
+							step4();
+							// end - do stuff here - promise_writeIco
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_writeIco', aReason:aReason};
+							console.error('Rejected - promise_writeIco - ', rejObj);
+							deferredMain_makeIcon.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_writeIco', aCaught:aCaught};
+							console.error('Caught - promise_writeIco - ', rejObj);
+							deferredMain_makeIcon.reject(rejObj);
+						}
+					);
+					// end - save it to disk
+				};
+				
+				var step4 = function() {
+					// start - this is done after save to disk
+					// cuz if same badge-id and channel-ref/tie-id combo existed before, it uses the old one
+					var refreshIconAtPath = function() {
+						var promise_refIco = ProfilistWorker.post('refreshIconAtPath', [path_icon]);
+						promise_refIco.then(
+							function(aVal) {
+								console.log('Fullfilled - promise_refIco - ', aVal);
+								// start - do stuff here - promise_refIco
+								deferredMain_makeIcon.resolve(resolveObj);
+								// end - do stuff here - promise_refIco
+							},
+							function(aReason) {
+								var rejObj = {name:'promise_refIco', aReason:aReason};
+								console.error('Rejected - promise_refIco - ', rejObj);
+								deferredMain_makeIcon.reject(rejObj);
+							}
+						).catch(
+							function(aCaught) {
+								var rejObj = {name:'promise_refIco', aCaught:aCaught};
+								console.error('Caught - promise_refIco - ', rejObj);
+								deferredMain_makeIcon.reject(rejObj);
+							}
+						);
+					}
+					// end - this is done after save to disk
+				};
+			
+			break;
+		default:
+			console.error('os-unsupported');
+			deferredMain_makeIcon.reject('os-unsupported');
+			return deferredMain_makeIcon.promise;
+	}
+	
+	// main
+	if (!doc) {
+		doc = Services.appShell.hiddenDOMWindow.document;
+		if (doc.readyState != 'complete') {
+			doc.addEventListener('DOMContentLoaded', step0, false);
+		} else {
+			step1();
+		}
+	} else {
+		step1();
+	}
+	
+	return deferredMain_makeIcon.promise;
+};
+
 // start - helper functions for makeIcon
+
 function getImg_of_exactOrNearest_Bigger_then_Smaller(targetSize, objOfImgs) {
 	// objOfImgs should be an object with key's representing the size of the image. images are expected to be square. so size is == height == width of image
 	// objOfImgs should hvae the Image() loaded in objOfImgs[k].Image
@@ -6681,8 +7082,7 @@ function getImg_of_exactOrNearest_Bigger_then_Smaller(targetSize, objOfImgs) {
 	
 	return objOfImgs[nearestKey].Image;
 }
-// end - helper functions for makeIcon
-// start - loadImagePaths
+
 function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 	// need to make all rejection 1st arr el be hyphenated for localization see link3632035, after clicking on badge the promise reject handles showing alert localized
 	// arrOfOsPaths is os paths OR chrome:// paths
@@ -6705,7 +7105,7 @@ function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 		throw new Error('as developer you should know not to pass both arr of paths and iconsetid, just one or the other');
 	}
 	if (!doc) {
-		doc = Services.appShell.hiddenDOMWindow.document;
+		throw new Error('doc must be provided');
 	}
 	
 	var imgsObj = {};
@@ -6840,7 +7240,8 @@ function loadImagePaths(arrOfOsPaths, iconsetId, doc) {
 		
 	return deferredMain_loadImagePaths.promise;
 }
-// end - loadImagePaths
+// end - helper functions for makeIcon
+
 // start - a helper
 function getIniKeyOfProfileName(aProfileName) {
 	// returns string on success
@@ -7233,459 +7634,7 @@ function pickerIconset(tWin) {
 // end - pickerIconset
 
 // start - makeIcon
-function makeIcon(for_ini_key, iconNameObj, doc) {
-	// returns promise
-	// resolves with:
-		// {cProfilePath:for_ini_key, profSpecs:getProfileSpecs(), OSPath:of_icon_created, alreadyExisted:false} // profSpecs is not there if iconNameObj was passed into makeIcon as second arg
-		
-	// makes icon if it doesnt exist
-	
-	// LOGIC
-		// checks platform
-		// if iconNameObj not there then gets it with getProfileSpecs
-		// PARALLEL 0 - loadImages on badge (if exists) and base (reject deferredMain if iconsets are corrupt, meaning missing size etc) // this heavily relies on user not messing with stuff in profilist_data/ folder (i dont do this in parallel to PARALLEL A because i want to make sure that there is no corruption in iconsets before going forth)
-		// PARALLEL 0 - test if platDependent icon installed (meaning for win/mac its in launcher_icons/ and for nix its in all the size folders)
-		// this was PARALLEL A test platform, setup stuff needed and start to draw all sizes onto canvases - the base, overlay it with badge (if has one)
-			// WINNT
-				// tell drawings to be converted to imageData array like this, push it in order of size asc: [[size, data], [size,data]]
-				// after all datas are done put it into ico, return buffer
-				// save to profilist_data/launcher_icons/
-			// Darwin
-				// make .iconset in profilist_data/launcher_icons/ then start the drawings onto canvas and tell them to save to this place after drawing is done
-				// after all sizes saved to .iconset then runIconutil
-				// delete .iconset
-			// Linux
-				//not yet setup
-		
-		
-	console.error('eneterd makeIcon with iniKey of:', for_ini_key);
-	
-	var deferredMain_makeIcon = new Deferred();
-
-	if (!doc) {
-		doc = Services.appShell.hiddenDOMWindow.document;
-	}
-	
-	var resolveObj = {
-		cProfilePath: for_ini_key
-	};
-	
-	var do_platDependentSetup_and_StartOverlayDrawings = function() {
-		if (cOS == 'darwin') {
-			
-		} else if (cOS == 'winnt') {
-			// start - draw overlaid icons and turn save image data
-			var imgDataArr = [];
-			// maybe consider drawing smaller badges on beta
-			var badgeSizePerBaseSize = {
-				'16': 10,
-				'32': 16,
-				'48': 24,
-				'256': 128
-			};
-			
-			for (var baseSize in badgeSizePerBaseSize) {
-				var canvas = doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
-				var ctx = canvas.getContext('2d');
-				
-				baseSize = parseInt(baseSize)
-				canvas.width = baseSize;
-				canvas.height = baseSize;
-				//ctx.clearRect(0, 0, size, size);
-				
-				// draw nearest sized base img
-				var nearestSizedBaseImg = getImg_of_exactOrNearest_Bigger_then_Smaller(baseSize, imgObj_base);
-				console.info('nearestSizedBaseImg:', nearestSizedBaseImg.toString());
-				if (nearestSizedBaseImg.height == baseSize) { //switching away from height to height as what if it is a HTMLCanvasElement instead of a HTMLImageElement (i dont think canvas'es hav height)
-					// its exact
-					console.log('base is exact at ', nearestSizedBaseImg.height , 'so no need to scale, as size it is:', baseSize);
-					ctx.drawImage(nearestSizedBaseImg, 0, 0);
-				} else {
-					// need to scale it
-					console.log('scalling base from size of ', nearestSizedBaseImg.height , 'to', baseSize);
-					ctx.drawImage(nearestSizedBaseImg, 0, 0, baseSize, baseSize);
-				}
-				
-				if (imgObj_badge) {
-					// overlay nearest sized badge
-					var badgeSize = badgeSizePerBaseSize[baseSize];
-					console.log('badgeSize needed for this size is:', badgeSize, 'base size is:', baseSize);
-					var nearestSizedBadgeImg = getImg_of_exactOrNearest_Bigger_then_Smaller(badgeSize, imgObj_badge);
-					console.info('nearestSizedBadgeImg:', nearestSizedBadgeImg.toString());
-					if (nearestSizedBadgeImg.height == badgeSize) {
-						// its exact
-						console.log('badge is exact at ', nearestSizedBadgeImg.height, 'so no need to scale, as badgeSize it is:', badgeSize);
-						ctx.drawImage(nearestSizedBadgeImg, baseSize-badgeSize, baseSize-badgeSize);
-					} else {
-						// need to scale it
-						console.log('scalling badge from size of ', nearestSizedBadgeImg.height, 'to', badgeSize);
-						ctx.drawImage(nearestSizedBadgeImg, baseSize-badgeSize, baseSize-badgeSize, badgeSize, badgeSize);
-					}
-				}
-				
-				imgDataArr.push({baseSize:baseSize, data:ctx.getImageData(0, 0, baseSize, baseSize).data});
-			}
-			// end - draw overlaid icons and turn save image data
-			
-			// start - put imageDataArr to ico container, as buffer
-			// start - ico make proc
-			var sizeof_ICONDIR = 6;
-			var sizeof_ICONDIRENTRY = 16;
-			var sizeof_BITMAPHEADER = 40;
-			var sizeof_ICONIMAGEs = 0;
-			
-			for (var i=0; i<imgDataArr.length; i++) {
-				imgDataArr[i].XOR = imgDataArr[i].data.length;
-				imgDataArr[i].AND = imgDataArr[i].baseSize * imgDataArr[i].baseSize / 8;
-				sizeof_ICONIMAGEs += imgDataArr[i].XOR;
-				sizeof_ICONIMAGEs += imgDataArr[i].AND;
-				sizeof_ICONIMAGEs += sizeof_BITMAPHEADER;
-				imgDataArr[i].sizeof_ICONIMAGE = imgDataArr[i].XOR + imgDataArr[i].AND + sizeof_BITMAPHEADER;
-			}
-			
-			// let XOR = data.length;
-			// let AND = canvas.width * canvas.height / 8;
-			// let csize = 22 /* ICONDIR + ICONDIRENTRY */ + 40 /* BITMAPHEADER */ + XOR + AND;
-			var csize = sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sizeof_ICONIMAGEs;
-			var buffer = new ArrayBuffer(csize);
-		   
-			// Every ICO file starts with an ICONDIR
-			// ICONDIR
-			/* 
-			typedef struct																	6+?
-			{
-				WORD           idReserved;   // Reserved (must be 0)						2
-				WORD           idType;       // Resource Type (1 for icons)					2
-				WORD           idCount;      // How many images?							2
-				ICONDIRENTRY   idEntries[1]; // An entry for each image (idCount of 'em)	?
-			} ICONDIR, *LPICONDIR;
-			*/
-			var lilEndian = isLittleEndian();
-			var view = new DataView(buffer);
-			//view.setUint16(0, 0, lilEndian);			//	WORD	//	idReserved	//	Reserved (must be 0) /* i commented this out because its not needed, by default the view value is 0 */
-			view.setUint16(2, 1, lilEndian);			//	WORD	//	idType		//	Resource Type (1 for icons)
-			view.setUint16(4, imgDataArr.length, lilEndian);	//	WORD	//	idCount;	// How many images?
-			
-			// There exists one ICONDIRENTRY for each icon image in the file
-			/*
-			typedef struct																16
-			{
-				BYTE        bWidth;          // Width, in pixels, of the image			1
-				BYTE        bHeight;         // Height, in pixels, of the image			1
-				BYTE        bColorCount;     // Number of colors in image (0 if >=8bpp)	1
-				BYTE        bReserved;       // Reserved ( must be 0)					1
-				WORD        wPlanes;         // Color Planes							2
-				WORD        wBitCount;       // Bits per pixel							2
-				DWORD       dwBytesInRes;    // How many bytes in this resource?		4
-				DWORD       dwImageOffset;   // Where in the file is this image?		4
-			} ICONDIRENTRY, *LPICONDIRENTRY;
-			*/
-			// ICONDIRENTRY creation for each image
-			var sumof__prior_sizeof_ICONIMAGE = 0;
-			for (var i=0; i<imgDataArr.length; i++) {
-				/*
-				var countof_ICONIMAGES_prior_to_this_ICONIMAGE = i;
-				var sizeof_ICONIMAGES_prior_to_this_ICONIMAGE = 0;
-				for (var i=0; i<countof_ICONIMAGES_prior_to_this_ICONIMAGE; i++) {
-					sizeof_ICONIMAGES_prior_to_this_ICONIMAGE += path_data[paths[i]].sizeof_ICONIMAGE;
-				}
-				*/
-				
-				view = new DataView(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * i /* sum_of_ICONDIRENTRYs_before_this_one */));
-				view.setUint8(0, imgDataArr[i].baseSize /* % 256 i dont understand why the modulus?? */ );																		// BYTE        bWidth;          // Width, in pixels, of the image
-				view.setUint8(1, imgDataArr[i].baseSize /* % 256 i dont understand why the modulus?? */);																		// BYTE        bHeight;         // Height, in pixels, of the image
-				//view.setUint8(2, 0);																																					// BYTE        bColorCount;     // Number of colors in image (0 if >=8bpp)
-				//view.setUint8(3, 0);																																					// BYTE        bReserved;       // Reserved ( must be 0)
-				view.setUint16(4, 1, lilEndian);																																		// WORD        wPlanes;         // Color Planes
-				view.setUint16(6, 32, lilEndian);																																		// WORD        wBitCount;       // Bits per pixel
-				view.setUint32(8, imgDataArr[i].sizeof_ICONIMAGE /* sizeof_BITMAPHEADER + imgDataArr[i].XOR + imgDataArr[i].AND */, lilEndian);											// DWORD       dwBytesInRes;    // How many bytes in this resource?			// data size
-				view.setUint32(12, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE /*sizeof_ICONIMAGES_prior_to_this_ICONIMAGE*/, lilEndian);		// DWORD       dwImageOffset;   // Where in the file is this image?			// data start
-				
-				sumof__prior_sizeof_ICONIMAGE += imgDataArr[i].sizeof_ICONIMAGE;
-			}
-			/*
-			typdef struct
-			{
-			   BITMAPINFOHEADER   icHeader;      // DIB header
-			   RGBQUAD         icColors[1];   // Color table
-			   BYTE            icXOR[1];      // DIB bits for XOR mask
-			   BYTE            icAND[1];      // DIB bits for AND mask
-			} ICONIMAGE, *LPICONIMAGE;
-			*/
-			// ICONIMAGE creation for each image
-			var sumof__prior_sizeof_ICONIMAGE = 0;
-			for (var i=0; i<imgDataArr.length; i++) {
-				/*
-				typedef struct tagBITMAPINFOHEADER {
-				  DWORD biSize;				4
-				  LONG  biWidth;			4
-				  LONG  biHeight;			4
-				  WORD  biPlanes;			2
-				  WORD  biBitCount;			2
-				  DWORD biCompression;		4
-				  DWORD biSizeImage;		4
-				  LONG  biXPelsPerMeter;	4
-				  LONG  biYPelsPerMeter;	4
-				  DWORD biClrUsed;			4
-				  DWORD biClrImportant;		4
-				} BITMAPINFOHEADER, *PBITMAPINFOHEADER;		40
-				*/
-				// BITMAPHEADER
-				view = new DataView(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE);
-				view.setUint32(0, sizeof_BITMAPHEADER, lilEndian); // BITMAPHEADER size
-				view.setInt32(4, imgDataArr[i].baseSize, lilEndian);
-				view.setInt32(8, imgDataArr[i].baseSize * 2, lilEndian);
-				view.setUint16(12, 1, lilEndian); // Planes
-				view.setUint16(14, 32, lilEndian); // BPP
-				view.setUint32(20, imgDataArr[i].XOR + imgDataArr[i].AND, lilEndian); // size of data
-				
-				// Reorder RGBA -> BGRA
-				for (var ii = 0; ii < imgDataArr[i].XOR; ii += 4) {
-					var temp = imgDataArr[i].data[ii];
-					imgDataArr[i].data[ii] = imgDataArr[i].data[ii + 2];
-					imgDataArr[i].data[ii + 2] = temp;
-				}
-				var ico = new Uint8Array(buffer, sizeof_ICONDIR + (sizeof_ICONDIRENTRY * imgDataArr.length) + sumof__prior_sizeof_ICONIMAGE + sizeof_BITMAPHEADER);
-				var stride = imgDataArr[i].baseSize * 4;
-				
-				// Write bottom to top
-				for (var ii = 0; ii < imgDataArr[i].baseSize; ++ii) {
-					var su = imgDataArr[i].data.subarray(imgDataArr[i].XOR - ii * stride, imgDataArr[i].XOR - ii * stride + stride);
-					ico.set(su, ii * stride);
-				}
-				
-				sumof__prior_sizeof_ICONIMAGE += imgDataArr[i].sizeof_ICONIMAGE; /*imgDataArr[i].XOR + imgDataArr[i].AND + sizeof_BITMAPHEADER;*/
-			}
-			
-			//return buffer;
-			// end - put imageDataArr to ico container, as buffer
-			
-			
-			// start - this is done after save to disk
-			// cuz if same badge-id and channel-ref/tie-id combo existed before, it uses the old one
-			var refreshIconAtPath = function() {
-				var promise_refIco = ProfilistWorker.post('refreshIconAtPath', [resolveObj.OSPath]);
-				promise_refIco.then(
-					function(aVal) {
-						console.log('Fullfilled - promise_refIco - ', aVal);
-						// start - do stuff here - promise_refIco
-						deferredMain_makeIcon.resolve(resolveObj);
-						// end - do stuff here - promise_refIco
-					},
-					function(aReason) {
-						var rejObj = {name:'promise_refIco', aReason:aReason};
-						console.error('Rejected - promise_refIco - ', rejObj);
-						deferredMain_makeIcon.reject(rejObj);
-					}
-				).catch(
-					function(aCaught) {
-						var rejObj = {name:'promise_refIco', aCaught:aCaught};
-						console.error('Caught - promise_refIco - ', rejObj);
-						deferredMain_makeIcon.reject(rejObj);
-					}
-				);
-			}
-			// end - this is done after save to disk
-			
-			// start - save it to disk
-			// note: i use here `resolveObj.OSPath` which is set in the promise_iconPrexists, for WINNT and Darwin
-			// IMPORTANT TODO: if a iconsetId from profilist_data/iconsets gets deleted DELETE icon files associated with it. i discovered this in windows. it makes sense for all os though. as user may bring back the same iconsetId but with a different image/art/drawing. so just checking if path exists will return true, but the art/drawing work inside the icon is different
-			var promise_writeIco = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [resolveObj.OSPath, new Uint8Array(buffer), {tmpPath:resolveObj.OSPath + '.tmp'}], profToolkit.path_iniDir);
-			promise_writeIco.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_writeIco - ', aVal);
-					// start - do stuff here - promise_writeIco
-					//deferredMain_makeIcon.resolve(resolveObj);
-					refreshIconAtPath();
-					// end - do stuff here - promise_writeIco
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_writeIco', aReason:aReason};
-					console.error('Rejected - promise_writeIco - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_writeIco', aCaught:aCaught};
-					console.error('Caught - promise_writeIco - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			);
-			// end - save it to disk
-		} else {
-			console.error('IMPOSSIBLE TO GET HERE, as if cOS wasnt one of the above it should have rejected the deferredMain_makeIcon');
-		}
-	};
-	
-	var imgObj_badge;
-	var imgObj_base;
-	var do_checkIfPreExisting_and_loadBadgeAndBaseSets = function() {
-		var promiseAllArr_dcipealbabs = [];
-		
-		if (iconNameObj.components['CHANNEL-REF']) {
-			promiseAllArr_dcipealbabs.push(loadImagePaths(null, iconNameObj.components['CHANNEL-REF'], doc));
-		} else if (iconNameObj.components['TIE-ID']) {
-			promiseAllArr_dcipealbabs.push(loadImagePaths(null, iconNameObj.components['TIE-ID'], doc));
-		} else {
-			console.error('icon name object does not have a base icon, iconNameObj:', iconNameObj);
-			deferredMain_makeIcon.reject('icon name object does not have a base icon');
-			return; // prev deeper exec
-		}
-
-		if (iconNameObj.components['BADGE-ID']) {
-			promiseAllArr_dcipealbabs.push(loadImagePaths(null, iconNameObj.components['BADGE-ID'], null));
-		}
-		
-		if (cOS == 'darwin' || cOS == 'winnt') {
-			var iconExt = cOS == 'darwin' ? 'icns' : 'ico';
-			var deferred_notPrexisting = new Deferred();
-			promiseAllArr_dcipealbabs.push(deferred_notPrexisting.promise);
-			
-			var path_prexistanceIconOSPath = OS.Path.join(profToolkit.path_profilistData_launcherIcons, iconNameObj.str + '.' + iconExt)
-			var promise_iconPrexists = OS.File.exists(path_prexistanceIconOSPath);
-		}
-		promise_iconPrexists.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_iconPrexists - ', aVal);
-				// start - do stuff here - promise_iconPrexists
-				resolveObj.OSPath = path_prexistanceIconOSPath;
-				if (aVal) {
-					resolveObj.alreadyExisted = true;
-					deferredMain_makeIcon.resolve(resolveObj);
-				} else {
-					// does not prexist, go forth making the icon
-				}
-				deferred_notPrexisting.resolve({prexists:aVal});
-				// end - do stuff here - promise_iconPrexists
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_iconPrexists', aReason:aReason};
-				console.error('Rejected - promise_iconPrexists - ', rejObj);
-				deferredMain_makeIcon.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_iconPrexists', aCaught:aCaught};
-				console.error('Caught - promise_iconPrexists - ', rejObj);
-				deferredMain_makeIcon.reject(rejObj);
-			}
-		);
-		
-		var promiseAll_dcipealbabs = Promise.all(promiseAllArr_dcipealbabs);
-		promiseAll_dcipealbabs.then(
-			function(aVal) {
-				console.log('Fullfilled - promiseAll_dcipealbabs - ', aVal);
-				// start - do stuff here - promiseAll_dcipealbabs
-				// the last one in aVal will be the promise_iconPrexists one as it was the last one we pushed into promiseAllArr_dcipealbabs
-				if (aVal[aVal.length-1].prexists) {
-					// dont do anything as the deferredMain_makeIcon should have already been resolved when it found it was existing
-				} else {
-					imgObj_base = aVal[0];
-					if (iconNameObj.components['BADGE-ID']) {
-						imgObj_badge = aVal[1];
-					}
-					do_platDependentSetup_and_StartOverlayDrawings();
-				}
-				// end - do stuff here - promiseAll_dcipealbabs
-			},
-			function(aReason) {
-				var rejObj = {name:'promiseAll_dcipealbabs', aReason:aReason};
-				console.error('Rejected - promiseAll_dcipealbabs - ', rejObj);
-				deferredMain_makeIcon.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promiseAll_dcipealbabs', aCaught:aCaught};
-				console.error('Caught - promiseAll_dcipealbabs - ', rejObj);
-				deferredMain_makeIcon.reject(rejObj);
-			}
-		);
-	};
-	
-	var do_getIconNameObj = function() {
-		if (iconNameObj) {
-			do_checkIfPreExisting_and_loadBadgeAndBaseSets();
-		} else {
-			console.error('calling getProfileSpecs from makeIcon');
-			var promise_profSpecsToGetIconNameObj = getProfileSpecs(for_ini_key, null, false);
-			promise_profSpecsToGetIconNameObj.then(
-				function(aVal) {
-					console.log('Fullfilled - promise_profSpecsToGetIconNameObj - ', aVal);
-					// start - do stuff here - promise_profSpecsToGetIconNameObj
-					resolveObj.profSpecs = aVal;
-					iconNameObj = aVal.iconNameObj;
-					do_checkIfPreExisting_and_loadBadgeAndBaseSets();
-					// end - do stuff here - promise_profSpecsToGetIconNameObj
-				},
-				function(aReason) {
-					var rejObj = {name:'promise_profSpecsToGetIconNameObj', aReason:aReason};
-					console.error('Rejected - promise_profSpecsToGetIconNameObj - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			).catch(
-				function(aCaught) {
-					var rejObj = {name:'promise_profSpecsToGetIconNameObj', aCaught:aCaught};
-					console.error('Caught - promise_profSpecsToGetIconNameObj - ', rejObj);
-					deferredMain_makeIcon.reject(rejObj);
-				}
-			);
-		}
-	};
-	
-	// start - os support check
-	var do_platCheck = function() {
-		// rejects derredMain_makeIcon
-		// on success goes to 
-		var platformSupported;
-		
-		if (cOS == 'darwin') { // this if block should similar 67864810
-			var userAgent = myServices.hph.userAgent;
-			//console.info('userAgent:', userAgent);
-			var version_osx = userAgent.match(/Mac OS X 10\.([\d]+)/);
-			//console.info('version_osx matched:', version_osx);
-			
-			if (!version_osx) {
-				console.error('Could not identify Mac OS X version.');
-				platformSupported = false;
-			} else {		
-				version_osx = parseFloat(version_osx[1]);
-				console.info('version_osx parseFloated:', version_osx);
-				if (version_osx >= 0 && version_osx < 6) {
-					//will never happen, as my min support of profilist is for FF29 which is min of osx10.6
-					//deferred_makeIcnsOfPaths.reject('OS X < 10.6 is not supported, your version is: ' + version_osx);
-					platformSupported = true;
-				} else if (version_osx >= 6 && version_osx < 7) {
-					//deferred_makeIcnsOfPaths.reject('Mac OS X 10.6 support coming soon. I need to figure out how to use MacMemory functions then follow the outline here: https://github.com/philikon/osxtypes/issues/3');
-					platformSupported = true;
-				} else if (version_osx >= 7) {
-					// ok supported
-					platformSupported = true;
-				} else {
-					//deferred_makeIcnsOfPaths.reject('Some unknown value of version_osx was found:' + version_osx);
-					platformSupported = false; //its already false
-				}
-			}
-		} else if (cOS == 'winnt') {
-			platformSupported = true;
-		}
-		
-		if (!platformSupported) {
-			console.info('platformSupported:', platformSupported);
-			deferredMain_makeIcon.reject('OS not supported for makeIcon');
-			//return; //no deeper exec so no need for return
-		} else {
-			do_getIconNameObj();
-		}
-	}
-	// end - os support check
-	
-	// start - main
-	do_platCheck();
-	// end - main
-	
-	return deferredMain_makeIcon.promise;
-}
-/* end - makeIcon */
+// end - makeIcon
 
 function getIniKeyFromProfName(aProfName) {
 	// case sensitive
@@ -8190,8 +8139,8 @@ function getPathsInIconset(iconsetId, liveFetch) {
 		return null;
 	}
 
-	iconsetId = getIconsetForChannelName(iconsetId);
-	if (['release','beta','aurora','dev','nightly'].indexOf(iconsetId) > -1) { // removed esr and default from arr as i dont have iconsets with name esr or default getIconsetForChannelName should have been called before so default and esr should never get passed to here
+	if (['esr','release','beta','aurora','dev','nightly','default'].indexOf(iconsetId) > -1) {
+		iconsetId = getIconsetForChannelName(iconsetId);
 		var pathBase_OSPath = core.addon.path.images + 'channel-iconsets/' + iconsetId + '/' + iconsetId;
 		var pathBase_FileURI = pathBase_OSPath;
 	} else {
@@ -8199,10 +8148,10 @@ function getPathsInIconset(iconsetId, liveFetch) {
 		var pathBase_FileURI = OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, iconsetId, iconsetId));
 	}
 	var imgObj = {};
-	for (var i=0; i<iconsetSizes_Profilist[cOS].length; i++) {
-		imgObj[iconsetSizes_Profilist[cOS][i]] = {
-			OSPath: pathBase_OSPath + '_' + iconsetSizes_Profilist[cOS][i] + '.png',
-			FileURI: pathBase_FileURI + '_' + iconsetSizes_Profilist[cOS][i] + '.png'
+	for (var i=0; i<iconsetSizes_OS[cOS].length; i++) {
+		imgObj[iconsetSizes_OS[cOS][i]] = {
+			OSPath: pathBase_OSPath + '_' + iconsetSizes_OS[cOS][i] + '.png',
+			FileURI: pathBase_FileURI + '_' + iconsetSizes_OS[cOS][i] + '.png'
 		};
 	}
 	

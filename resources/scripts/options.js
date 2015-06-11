@@ -1380,7 +1380,7 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 		case 'aurora':
 		
 			if (firefox_version) {
-				if (Services.vc.compare(Services.appinfo.version, firefox_version) >= 0) {
+				if (Services.vc.compare(firefox_version, 35) >= 0) {
 					// aurora became dev icon in version 35
 					return 'dev';
 				} else {
