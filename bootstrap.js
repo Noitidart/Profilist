@@ -6031,18 +6031,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 					function(aVal) {
 						console.log('Fullfilled - promise_testAProfilePathRunning - ', aVal);
 						// start - do stuff here - promise_testAProfilePathRunning
-						specObj.isRunning = aVal;
-						if (aVal == 0) {
-							// not running
-							console.error('not running so cur path');
-							specObj.path_exeForProfile = profToolkit.exePath;
-							specObj.fxVersion = core.firefox.version;
-							step2();
-						} else {
-							// running
-							console.error('sending to 1_1 1111');
-							step1_1();
-						}
+						step1_05b(aVal);
 						// end - do stuff here - promise_testAProfilePathRunning
 					},
 					function(aReason) {
@@ -6059,39 +6048,63 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 				);
 			} else {
 				// devuser preset its running status so no need to queryProfileLocked
-				specObj.isRunning = presetIsRunning;
-				if (presetIsRunning == 0) {
-					// not running
-					console.error('setting path_exeForProfile to cuz not running 3');
-					specObj.path_exeForProfile = profToolkit.exePath;
-					specObj.fxVersion = core.firefox.version;
-					step2();
-				} else {
-					// running
-					console.error('sending to 1_1 2');
-					step1_1();
-				}
+				step1_05b(presetIsRunning);
 			}
 		} else {
+			step1_05a();
+		}
+	};
+	
+	var step1_05a = function() {
+		// post stuff after step1 if ignoreRunning is true
+		// goes to step2
+		if ('tieId' in specObj) {
+			console.error('setting path_exeForProfile to tieid search 2');
+			specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
+			if (specObj.path_exeForProfile == profToolkit.exePath) {
+				specObj.fxVersion = core.firefox.version;
+			} else {
+				// :todo: figure out how to get version of another exe path // and further insignificance as only gets here if ignoreRunning=true and i dont do that as of yet 061015
+				//specObj.fxVersion = core.firefox.version; // this is wrong i need to figure out the fxVersion of the exeForProfile IF its aurora, this is lo priority as defaulting to dev is super likely like 90% // link788036830231
+			}
+		} else {
+			console.error('setting path_exeForProfile to cur path 1');
+			specObj.path_exeForProfile = profToolkit.exePath;
+			specObj.fxVersion = core.firefox.version;
+		}
+		step2();
+	};
+	
+	var step1_05b = function(obtainedRunningVal) {
+		// post stuff after step1 if ignoreRunning is false
+		// goes to step1_1
+		specObj.isRunning = obtainedRunningVal;
+		if (specObj.isRunning == 0) {
+			// not running
+			console.error('not running so cur path or tie if tied');
 			if ('tieId' in specObj) {
-				console.error('setting path_exeForProfile to tieid search 2');
-				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path');
+				specObj.path_exeForProfile = getDevBuildPropForTieId(specObj.tieId, 'exe_path'); //note: will make this go into one of the areas where it has no fxVersion so if aurora for channel it will default to dev
 				if (specObj.path_exeForProfile == profToolkit.exePath) {
-					core.fxVersion = core.firefox.version;
+					specObj.fxVersion = core.firefox.version;
 				} else {
 					// :todo: figure out how to get version of another exe path // and further insignificance as only gets here if ignoreRunning=true and i dont do that as of yet 061015
+					//specObj.fxVersion = core.firefox.version; // this is wrong i need to figure out the fxVersion of the exeForProfile IF its aurora, this is lo priority as defaulting to dev is super likely like 90% // link788036830231
 				}
 			} else {
-				console.error('setting path_exeForProfile to cur path 1');
 				specObj.path_exeForProfile = profToolkit.exePath;
 				specObj.fxVersion = core.firefox.version;
-				step2();
 			}
+			step2();
+		} else {
+			// running
+			console.error('sending to 1_1');
+			step1_1();
 		}
 	};
 	
 	var step1_1 = function() {
 		// get fxVersion and path_exeForProfile for running profile
+		// goes to step2
 		console.error('in step 1_1');
 		var promise_getFxVerAndExe = getExePathProfileLastLaunchedIn(aProfIniKey);
 		promise_getFxVerAndExe.then(

@@ -639,14 +639,17 @@ var observers = {
 				
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
+					console.error('match found:', builtinIcon[0]);
 					builtinIcon[0] = getIconsetForChannelName(builtinIcon[0]);
+					console.error('getIconsetForChannelName ran on it, its now:', builtinIcon[0]);
+					
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
 					rowDomJson[2][1].class = ''; //remove the release class
 					rowDomJson[2][1].style = 'background-image:url("' + OS.Path.toFileURI(OS.Path.join(profToolkit.path_profilistData_iconsets, json[i][0], json[i][0] + '_16.png'))  + '#' + Math.random() + '")'; // the math.random here is for on mouseleave, we see if its same or diff
 				}
 				rowDomJson[3][2][1].value = json[i][1]; //textbox value
-				if (json[i][1].toLowerCase() == pathExe.toLowerCase()) {
+				if (json[i][1].toLowerCase() == profToolkit.exePathLower) {
 					if (rowDomJson[1].class != '') {
 						rowDomJson[1].class += ' current-build-on-this';
 					} else {
@@ -893,7 +896,7 @@ var observers = {
 	// end - drag stuff
 	
 	var selfBuildPathInUse = false;
-	var pathExe = FileUtils.getFile('XREExeF', []).path;
+	var pathExe = profToolkit.exePath;
 	
 	function devBuildTextChange(e) {
 		var cont = this.parentNode.parentNode.parentNode;
@@ -908,7 +911,7 @@ var observers = {
 			}
 			div.classList.add('error');
 			if (div.classList.contains('current-build-on-this')) {
-				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+				if (this.value.toLowerCase() == profToolkit.exePathLower) {
 					//ok we're good
 					console.log('paths match 3');
 				} else {
@@ -924,7 +927,7 @@ var observers = {
 			}
 			
 			if (div.classList.contains('current-build-on-this')) {
-				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+				if (this.value.toLowerCase() == profToolkit.exePathLower) {
 					//ok we're good
 					console.log('paths match');
 				} else {
@@ -933,7 +936,7 @@ var observers = {
 					cont.classList.remove('current-build-used');
 				}
 			} else {
-				if (this.value.toLowerCase() == pathExe.toLowerCase()) {
+				if (this.value.toLowerCase() == profToolkit.exePathLower) {
 					console.log('paths match 2');
 					cont.classList.add('current-build-used');
 					div.classList.add('current-build-on-this');
@@ -956,8 +959,8 @@ var observers = {
 		var div = this.parentNode.parentNode;
 		var text = div.querySelector('input');
 		var iconSpan = div.querySelector('span');
-		iconSpan.setAttribute('class', core.firefox.channel);
-		text.value = pathExe;
+		iconSpan.setAttribute('class', getIconsetForChannelName(core.firefox.channel));
+		text.value = profToolkit.exePath;
 		div.classList.add('current-build-on-this');
 		cont.classList.add('current-build-used');
 		div.classList.remove('error');
