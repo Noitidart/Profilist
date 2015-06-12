@@ -4093,7 +4093,6 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHin
 		for (var aOSPath in objOfMatchingLaunchers) {
 			if (objOfMatchingLaunchers[aOSPath].profIniKey in profSpecsOfIniKeyNeedingIconUpdate) {
 				console.info('need to update launcher at path:', aOSPath);
-				/* :debug: temp remove to independently test update icon to windows portion
 				arrOfObjsOfCutUpdates.push({
 					dirNameLnk: aOSPath,
 					desc: 'Launches ' + getAppNameFromChan(profSpecsOfIniKeyNeedingIconUpdate[objOfMatchingLaunchers[aOSPath].profIniKey].channel_exeForProfile) + ' with "' + ini[objOfMatchingLaunchers[aOSPath].profIniKey].props.Name + '" Profile',
@@ -4102,7 +4101,6 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHin
 					refreshIcon: 1,
 					exists: true
 				});
-				*/
 			} else {
 				console.error('WILL NOT update launcher at path:', aOSPath);
 			}
