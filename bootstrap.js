@@ -3762,15 +3762,439 @@ function winnt_getSearchDirs(aOptions) {
 	return searchDirs;
 	// end determine dirs - block link06503977
 };
-function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath) {
+function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHintIconName_BASE) {
 	// returns promise
+	
+	var deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath = new Deferred();
 	
 	// globals for steps
 	var path_icon;
 	var base_icon;
+	var aExePathLowered = aExePath.toLowerCase();
+	var objOfMatchingLaunchers = {}; // matching aExePath. key is os path of launcher
+	var objOfMatchingRunningIniKeys = {}; // matching aExePath. key is iniKey
+	var i_of_iniKey_in_promiseAllArr_getRunningProfs = {}; // used in step0 and step1
+	var profSpecsOfIniKeyNeedingIconUpdate = {}; // key is aProfIniKey and value is profSpecs object
 	
+	// its possible that an iniKey is found in running wins and NOT found in launchers. as if just installed profilist to a profile, and no launchers were created for it yet is that possibility.
+	
+	// i have to do hybrid of do_runningWins and do_sysLaunchers_Launcher
+		// after getting iniKey for all profiles of launchers and runningWins
+			// go getProfileSpecs on each of the nique iniKey
+				// then go through and see if profSpecs.iconNameObj.components.BASE == aHintIconName
+					// if it doesnt then remove it, as that launcher is tied to something else or something
+					// now with the remaining ensure icon for all of them
+						// then update all running wins
+						// and update all launchers
+	
+	var osNeedsRunningWin_iconUpdates = true;
+	
+	var step0 = function() { 
+		// goal of step
+		// kick off promise to find launchers with aExePath, populate objOfMatchingLaunchers they will be matched to aExePath
+		// kick off promise to find all running profiles, populate objOfMatchingRunningIniKeys they will not be matched yet to aExePath, but they will be of all the profiles that are RUNNING
+		
+		var promiseAllArr_step0 = [];
+		
+		var deferred_populatedObjOfMatchingRunningIniKeys = new Deferred();
+		//var deferred_populatedObjOfMatchingLaunchers = new Deferred(); // i use promise_populatedObjOfMatchingLaunchers
+		
+		// collect all iniKeys for launchers and running wins if osNeedsRunningWin_iconUpdates
+		
+		// find all launchers that have this aExePath, return them to mainthread
+		var searchDirs = winnt_getSearchDirs({
+			winUpdateIconToProfilistLauncher: true,
+			winUpdateIconToSystemShortcutLaunchers: true
+		});
+		var promise_populatedObjOfMatchingLaunchers = ProfilistWorker.post('findLaunchersByExePath', [searchDirs, aExePath, {returnObj:true}]);
+		promiseAllArr_step0.push(promise_populatedObjOfMatchingLaunchers);
+		
+		// get all running iniKeys
+		promiseAllArr_step0.push(deferred_populatedObjOfMatchingRunningIniKeys);
+		if (osNeedsRunningWin_iconUpdates) {
+			var promiseAllArr_getRunningProfs = [];
+			for (var iniKey in ini) {
+				if ('num' in ini[iniKey]) {
+					if (!profToolkit.selectedProfile.isTemp && iniKey == profToolkit.selectedProfile.iniKey) {
+						var deferred_trickSelfRun = new Deferred();
+						deferred_trickSelfRun.resolve(true); // as we know its running for sure, no need to queryProfileLocked current profile
+						promiseAllArr_getRunningProfs.push(deferred_trickSelfRun.promise);
+						i_of_iniKey_in_promiseAllArr_getRunningProfs[iniKey] = promiseAllArr_getRunningProfs.length - 1;
+					} else {
+						promiseAllArr_getRunningProfs.push(ProfilistWorker.post('queryProfileLocked', [ini[iniKey].props.IsRelative, ini[iniKey].props.Path, profToolkit.rootPathDefault]));
+						i_of_iniKey_in_promiseAllArr_getRunningProfs[iniKey] = promiseAllArr_getRunningProfs.length - 1;
+					}
+				}
+			}
+			var promiseAll_getRunningProfs = Promise.all(promiseAllArr_getRunningProfs);
+			promiseAll_getRunningProfs.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAll_getRunningProfs - ', aVal);
+					// start - do stuff here - promiseAll_getRunningProfs
+					for (var iniKey in i_of_iniKey_in_promiseAllArr_getRunningProfs) {
+						if (aVal[i_of_iniKey_in_promiseAllArr_getRunningProfs[iniKey]] > 0) {
+							// its running
+							objOfMatchingRunningIniKeys[iniKey] = 1;
+						}// else its not running
+					}
+					deferred_populatedObjOfMatchingLaunchers.resolve();
+					// end - do stuff here - promiseAll_getRunningProfs
+				},
+				function(aReason) {
+					var rejObj = {name:'promiseAll_getRunningProfs', aReason:aReason};
+					console.warn('Rejected - promiseAll_getRunningProfs - ', rejObj);
+					deferred_populatedObjOfMatchingRunningIniKeys.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promiseAll_getRunningProfs', aCaught:aCaught};
+					console.error('Caught - promiseAll_getRunningProfs - ', rejObj);
+					deferred_populatedObjOfMatchingRunningIniKeys.reject(rejObj);
+				}
+			);
+		} else {
+			deferred_populatedObjOfMatchingLaunchers.resolve();
+		}
+
+		// main step promise all
+		var promiseAll_step0 = Promise.all(promiseAllArr_step0);
+		promiseAll_step0.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_step0 - ', aVal);
+				// start - do stuff here - promiseAll_step0
+				step1();
+				// end - do stuff here - promiseAll_step0
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_step0', aReason:aReason};
+				console.warn('Rejected - promiseAll_step0 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_step0', aCaught:aCaught};
+				console.error('Caught - promiseAll_step0 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		);
+
+	}
+	
+	var step1 = function() {
+		// goal is to missing info from the two obj's
+			// get filtered objOfMatchingRunningIniKeys based on if it is running in aExePath
+			// get iniKey for each objOfMatchingLaunchers
+		
+		var promiseAllArr_step1 = [];
+		var deferred_missingInfoGotForObjOfMatchingLaunchers = new Deferred();
+		var deferred_missingInfoGotForObjOfRunningIniKeys = new Deferred();
+		
+		promiseAllArr_step1 = [
+			deferred_missingInfoGotForObjOfMatchingLaunchers,
+			deferred_missingInfoGotForObjOfRunningIniKeys
+		];
+		
+		// get missing info for objOfMatchingRunningIniKeys
+		var promiseAllArr_getLastExePaths = [];
+		var i_of_iniKey_in_promiseAllArr_getLastExePaths = {};
+		for (var aProfIniKey in objOfMatchingRunningIniKeys) {
+			i_of_iniKey_in_promiseAllArr_getLastExePaths[aProfIniKey] = promiseAllArr_getLastExePaths.length;
+			promiseAllArr_getLastExePaths.push(getExePathProfileLastLaunchedIn(aProfIniKey));
+		}
+		if (promiseAllArr_getLastExePaths.length == 0) {
+			deferred_missingInfoGotForObjOfRunningIniKeys.resolve();
+		} else {
+			var promiseAll_getLastExePaths = Promise.all(promiseAllArr_getLastExePaths);
+			promiseAll_getLastExePaths.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAll_getLastExePaths - ', aVal);
+					// start - do stuff here - promiseAll_getLastExePaths
+					for (var iniKey in objOfMatchingRunningIniKeys) {
+						if (aVal[i_of_iniKey_in_promiseAllArr_getLastExePaths[iniKey]].exePath.toLowerCase() != aExePathLowered) {
+							delete objOfMatchingRunningIniKeys[iniKey];
+						}
+					}
+					deferred_missingInfoGotForObjOfRunningIniKeys.resolve();
+					// end - do stuff here - promiseAll_getLastExePaths
+				},
+				function(aReason) {
+					var rejObj = {name:'promiseAll_getLastExePaths', aReason:aReason};
+					console.warn('Rejected - promiseAll_getLastExePaths - ', rejObj);
+					deferred_missingInfoGotForObjOfRunningIniKeys.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promiseAll_getLastExePaths', aCaught:aCaught};
+					console.error('Caught - promiseAll_getLastExePaths - ', rejObj);
+					deferred_missingInfoGotForObjOfRunningIniKeys.reject(rejObj);
+				}
+			);
+		}
+		
+		// get missing info for objOfMatchingLaunchers (i do this after getting missing info for objOfMatchingRunningIniKeys because that kicks of promises) so i can parallel task
+		for (var l in objOfMatchingLaunchers) {
+			objOfMatchingLaunchers[l].TargetArgsLower = objOfMatchingLaunchers[l].TargetArgs.toLowerCase();
+			objOfMatchingLaunchers[l].TargetPathLower = objOfMatchingLaunchers[l].TargetPath.toLowerCase();
+			for (var iniKey in ini) {
+				if (!('num' in ini[iniKey])) { continue }
+				if ('Default' in ini[iniKey].props && ini[iniKey].props.Default == '1') { // :todo: perf enhancment, use Profilist.defaultProfileIniKey once im confident in it
+					if (objOfMatchingLaunchers[l].TargetArgsLower.search('-p') == -1) { // should get /-(?:p|profile)/
+						objOfMatchingLaunchers[l].profIniKey = iniKey
+						break; // break inner for
+					}
+				}
+				if (objOfMatchingLaunchers[l].TargetArgsLower.indexOf('-profile "' + getPathToProfileDir(iniKey).toLowerCase() + '"') > -1) {
+					objOfMatchingLaunchers[l].profIniKey = iniKey;
+					break; // break inner for
+				}
+			}
+			if (!('profIniKey' in objOfMatchingLaunchers[l])) {
+				// remove it from the object becuase it could be a left over launcher, as launcher wasnt deleted even though profile was or something
+				console.error('remove this launcher from obj as no profIniKey found for launcher at path:', l, 'obj:', objOfMatchingLaunchers[l]);
+				delete objOfMatchingLaunchers[l];
+			}
+		}
+		deferred_missingInfoGotForObjOfMatchingLaunchers.resolve();
+		
+		// main step promise all
+		var promiseAll_step1 = Promise.all(promiseAllArr_step1);
+		promiseAll_step1.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_step1 - ', aVal);
+				// start - do stuff here - promiseAll_step1
+				step2();
+				// end - do stuff here - promiseAll_step1
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_step1', aReason:aReason};
+				console.warn('Rejected - promiseAll_step1 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_step1', aCaught:aCaught};
+				console.error('Caught - promiseAll_step1 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		);
+	};
+	
+	var step2 = function() {
+		// goal of this step is to getProfileSpecs on all iniKeys (without doubling)
+		// yes its a good idea to wait for iniKey's to be populated in objOfMatchingLaunchers, and aExePath filtered in objOfMatchingRunningIniKeys so then i can kick of getProfileSpecs without doubling
+		
+		var promiseAllArr_getProfSpecs = [];
+		var kickedOffGetProfSpecsForIniKeys = {};
+		
+		for (var iniKey in objOfMatchingRunningIniKeys) {
+			if (!(iniKey in kickedOffGetProfSpecsForIniKeys)) {
+				kickedOffGetProfSpecsForIniKeys[iniKey] = 0;
+				promiseAllArr_getProfSpecs.push(getProfileSpecs(iniKey, null, false);
+			}
+		}
+		
+		for (var aOSPath in objOfMatchingLaunchers) {
+			var iniKey = objOfMatchingLaunchers[aOSPath].profIniKey;
+			if (!(iniKey in kickedOffGetProfSpecsForIniKeys)) {
+				kickedOffGetProfSpecsForIniKeys[iniKey] = 0;
+				promiseAllArr_getProfSpecs.push(getProfileSpecs(iniKey, null, false);
+			}
+		}
+		
+		
+		var promiseAll_getProfSpecs = Promise.all(promiseAllArr_getProfSpecs);
+		promiseAll_getProfSpecs.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_getProfSpecs - ', aVal);
+				// start - do stuff here - promiseAll_getProfSpecs
+				for (var i=0; i<aVal.length; i++) {
+					profSpecsOfIniKeyNeedingIconUpdate[aVal[i].profIniKey] = aVal[i];
+				}
+				step3();
+				// end - do stuff here - promiseAll_getProfSpecs
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_getProfSpecs', aReason:aReason};
+				console.warn('Rejected - promiseAll_getProfSpecs - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_getProfSpecs', aCaught:aCaught};
+				console.error('Caught - promiseAll_getProfSpecs - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		);
+	};
+	
+	var step3 = function() {
+		// all of the getProfileSpecs on the matched iniKey's to aExePath in both running and launchers are available in profSpecsOfIniKeyNeedingIconUpdate
+		// goal of this step is to filter out profSpecsOfIniKeyNeedingIconUpdate based on if it needs icon update or not
+			// by testing if profSpec.iconNameObj.components.BASE == aHintIconName_BASE, if it doesnt then remove that iniKey
+		
+		for (iniKey in profSpecsOfIniKeyNeedingIconUpdate) {
+			console.log('testing iniKey:', iniKey, 'if it needs icon update to aHintIconName_BASE, its base:', profSpecsOfIniKeyNeedingIconUpdate[iniKey].iconNameObj.components.BASE, 'and aHintIconName_BASE:', aHintIconName_BASE);
+			if (profSpecsOfIniKeyNeedingIconUpdate[iniKey].iconNameObj.components.BASE != aHintIconName_BASE) {
+				console.error('not needed on iniKey of:', iniKey, 'its profSpecs before deleting is:', profSpecsOfIniKeyNeedingIconUpdate[iniKey]); // made console.error just so it grabs my attention
+				delete profSpecsOfIniKeyNeedingIconUpdate[iniKey];
+			}
+		}
+		
+		step4();
+	};
+	
+	var step4 = function() {
+		// goal here is to go through iniKey's in profSpecsOfIniKeyNeedingIconUpdate and ensure icon exists for them all
+		var promiseAllArr_ensureIcon = [];
+		
+		for (var iniKeyNeedingUp in profSpecsOfIniKeyNeedingIconUpdate) {
+			promiseAllArr_ensureIcon.push(makeIcon(iniKeyNeedingUp, profSpecsOfIniKeyNeedingIconUpdate[iniKeyNeedingUp], Services.wm.getMostRecentWindow(null)));
+		}
+		
+		var promiseAll_ensureIcon = Promise.all(promiseAllArr_ensureIcon);
+		promiseAll_ensureIcon.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_ensureIcon - ', aVal);
+				// start - do stuff here - promiseAll_ensureIcon
+				step5();
+				// end - do stuff here - promiseAll_ensureIcon
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_ensureIcon', aReason:aReason};
+				console.warn('Rejected - promiseAll_ensureIcon - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_ensureIcon', aCaught:aCaught};
+				console.error('Caught - promiseAll_ensureIcon - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		);
+	};
+	
+	var step5 = function() {
+		// goal here is to go through iniKey's in profSpecsOfIniKeyNeedingIconUpdate and ...
+			// ... update its running windows if iniKey is found in objOfMatchingRunningIniKeys
+			// ... update its launchers if iniKey is found in objOfMatchingLaunchers
+		
+		var deferred_launchersUpdated = new Deferred();
+		var deferred_windowsUpdated = new Deferred();
+		
+		// update all launchers with the icon paths
+		var arrOfObjsOfCutUpdates = [];
+		var iniKeysInObjOfMatchingLaunchers = {};
+		for (var aOSPath in objOfMatchingLaunchers) {
+			iniKeysInObjOfMatchingLaunchers[objOfMatchingLaunchers[aOSPath].profIniKey] = aOSPath;
+		}
+		for (var iniKeyNeedingUp in profSpecsOfIniKeyNeedingIconUpdate) {
+			if (iniKeyNeedingUp in iniKeysInObjOfMatchingLaunchers) {
+				arrOfObjsOfCutUpdates.push({
+					dirNameLnk: iniKeysInObjOfMatchingLaunchers[iniKeyNeedingUp],
+					desc: 'Launches ' + getAppNameFromChan(profSpecsOfIniKeyNeedingIconUpdate[iniKeyNeedingUp].channel_exeForProfile) + ' with "' + ini[aObjOfLaunchers[l].iniKeyNeedingUp].props.Name + '" Profile',
+					icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, profSpecsOfIniKeyNeedingIconUpdate[iniKeyNeedingUp].iconNameObj.str + '.ico'),
+
+					refreshIcon: 1
+				});
+			}
+		}
+		
+		if (arrOfObjsOfCutUpdates.length > 0) {
+			console.error('STARTTTTTTTING LAUNCHER UPDATES HEREEEEEEEE');
+			var promise_updateIconToArrOfLauncherPaths = ProfilistWorker.post('createShortcuts', [arrOfObjsOfCutUpdates]);
+			promise_updateIconToArrOfLauncherPaths.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_updateIconToArrOfLauncherPaths - ', aVal);
+					// start - do stuff here - promise_updateIconToArrOfLauncherPaths
+					deferred_launchersUpdated.resolve();
+					// end - do stuff here - promise_updateIconToArrOfLauncherPaths
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_updateIconToArrOfLauncherPaths', aReason:aReason};
+					console.warn('Rejected - promise_updateIconToArrOfLauncherPaths - ', rejObj);
+					deferred_launchersUpdated.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_updateIconToArrOfLauncherPaths', aCaught:aCaught};
+					console.error('Caught - promise_updateIconToArrOfLauncherPaths - ', rejObj);
+					deferred_launchersUpdated.reject(rejObj);
+				}
+			);
+		} else {
+			deferred_launchersUpdated.resolve();
+		}
+		
+		
+		// update all windows with the icon paths
+		var promiseAllArr_updateIconToAllWindows = [];
+		/* commented out block to :debug: just want to see update all launchers independently first
+		for (var iniKeyNeedingUp in profSpecsOfIniKeyNeedingIconUpdate) {
+			if (iniKeyNeedingUp in objOfMatchingRunningIniKeys) {
+				promiseAllArr_updateIconToAllWindows.push(updateIconToAllWindows(iniKeyNeedingUp, objOfMatchingRunningIniKeys[iniKeyNeedingUp], {presetIconExists:true})); // setting presetIconExists to true makes updateIconToAllWindows not do makeIcon and passing a useSpecObj makes it not to a getProfileSpecs_WithCB so it just goes straight to the applying
+			}
+		}
+		*/
+		var promiseAll_updateIconToAllWindows = Promise.all(promiseAllArr_updateIconToAllWindows); // if promiseAllArr_updateIconToAllWindows is empty it goes to then resolve right away, this is good and as i hoped
+		promiseAll_updateIconToAllWindows.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_updateIconToAllWindows - ', aVal);
+				// start - do stuff here - promiseAll_updateIconToAllWindows
+				deferred_windowsUpdated.resolve();
+				// end - do stuff here - promiseAll_updateIconToAllWindows
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_updateIconToAllWindows', aReason:aReason};
+				console.warn('Rejected - promiseAll_updateIconToAllWindows - ', rejObj);
+				deferred_windowsUpdated.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_updateIconToAllWindows', aCaught:aCaught};
+				console.error('Caught - promiseAll_updateIconToAllWindows - ', rejObj);
+				deferred_windowsUpdated.reject(rejObj);
+			}
+		);
+		
+		
+		// main step promise
+		var promiseAll_step5 = Promise.all([deferred_launchersUpdated, deferred_windowsUpdated]);
+		promiseAll_step5.then(
+			function(aVal) {
+				console.log('Fullfilled - promiseAll_step5 - ', aVal);
+				// start - do stuff here - promiseAll_step5
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.resolve();
+				// end - do stuff here - promiseAll_step5
+			},
+			function(aReason) {
+				var rejObj = {name:'promiseAll_step5', aReason:aReason};
+				console.warn('Rejected - promiseAll_step5 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promiseAll_step5', aCaught:aCaught};
+				console.error('Caught - promiseAll_step5 - ', rejObj);
+				deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+			}
+		);
+	}
+	
+	step0();
+	
+	return deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.promise;
+	
+	/* // this block has the working do_sysLaunchers_Launcher implementation
 	var do_runningWins = function() {
 		var deferred_doRunningWins = new Deferred();
+		
+		// to find exes of running profiles
+			// iterate through all profiles in ini and find out whats running
+				// for the ones that are running get getExePathProfileLastLaunchedIn
+				
+		// rather then getProfileSpecs on every profile in ini, do a quick queryProfileLocked on each...
+			// then getProfileSpecs for the running ones
+			// and of the launchers iniKeys
 		
 		var step0 = function() {
 			// does this os need window updates?
@@ -3952,6 +4376,7 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath) {
 	promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.push(do_sysLaunchers_Launcher());
 	
 	return Promise.all(promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath);
+	*/
 	
 	////////////// wrong way which is how i started
 	/*
@@ -3999,7 +4424,10 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	// resolves
 		// true if done	
 		// false if not needed
-		
+	
+	// aOptions
+		// presetIconExists - default is false. set it to true if you know icon path supplied by useSpecObj exists for sure. doing so and it wont bother with makeIcon (to ensure that it exists). it will go straight to applying to windows. you dont have to pass in a useSpecObj, but i would think if you knew if the icon existed for sure you would have had to get a specObj to see the icon needed, so pass just pass so this saves doing a getProfileSpecs too
+	
 	var deferredMain_updateIconToAllWindows = new Deferred();
 	
 	switch (core.os.name) {
@@ -4148,7 +4576,7 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	
 	var cbPostProgSpecsGot = function(aProfSpec) {
 		console.error('ok going to call get ensure icon now');
-		ensureIconExists_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+		ensureIconExists_WithCB(deferredMain_updateIconToAllWindows, aProfIniKey, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured, aOptions.presetIconExists);
 	};
 	
 	console.error('going to call get prof spec now');
@@ -5309,7 +5737,7 @@ function writePrefToIni(oldVal, newVal, rejObj) {
 									// if not then updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(exe_path)
 									// else dont do anything
 							} else if (shiftedObj.reason == 1) {
-								updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(exe_path);
+								updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(exe_path, getDevBuildPropForExePath(exe_path, 'base_icon'));
 							} else {
 								throw new Error('unknown reason on tieidsPendingBaseIconUpdateOnOsLevel', shiftedObj);
 							}
@@ -6833,40 +7261,45 @@ function getProfileSpecs_WithCB(aDeferred, aProfIniKey, aSpecObj, aIfRunningThen
 	);
 };
 
-function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB) {
-	// optinal: aDeferred, useSpecObj
+function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB, presetIconExists) {
+	// optinal: aDeferred, useSpecObj, presetIconExists
 	// required: aProfIniKey, aCB
 	// aCB is called with profSpecs for aProfIniKey
+	// presetIconExists set to true if you know if the icon exists for sure, and it will not do anything it will just go straight to aCB
 	
 	//console.error('in ensureIconExists_WithCB with aProfIniKey:', aProfIniKey);
 	
 	var cbPostProgSpecsGot = function(aProfSpec) {
-		var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, aProfSpec);
-		promise_ensureIconRdyAndMade.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
-				// start - do stuff here - promise_ensureIconRdyAndMade
-				
-					aCB(aVal.profSpecs);
+		if (presetIconExists) {
+			aCB(aProfSpec);
+		} else {
+			var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, aProfSpec);
+			promise_ensureIconRdyAndMade.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
+					// start - do stuff here - promise_ensureIconRdyAndMade
 					
-				// end - do stuff here - promise_ensureIconRdyAndMade
-			},
-			function(aReason) {
-				var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
-				console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
-				if (aDeferred) {
-					aDeferred.reject(rejObj);
+						aCB(aVal.profSpecs); // can just do `aCB(aProfSpec)` its same
+						
+					// end - do stuff here - promise_ensureIconRdyAndMade
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_ensureIconRdyAndMade', aReason:aReason};
+					console.error('Rejected - promise_ensureIconRdyAndMade - ', rejObj);
+					if (aDeferred) {
+						aDeferred.reject(rejObj);
+					}
 				}
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
-				console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
-				if (aDeferred) {
-					aDeferred.reject(rejObj);
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_ensureIconRdyAndMade', aCaught:aCaught};
+					console.error('Caught - promise_ensureIconRdyAndMade - ', rejObj);
+					if (aDeferred) {
+						aDeferred.reject(rejObj);
+					}
 				}
-			}
-		);
+			);
+		}
 	};
 	
 	if (!useSpecObj) {
@@ -10024,4 +10457,4 @@ function isDOMWindowFocused(aDOMWindow) {
 
 	return (focusedChildWindow === childTargetWindow);
 }
-// end - common helper functions
+// end - common helper functionss
