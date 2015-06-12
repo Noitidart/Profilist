@@ -1534,6 +1534,120 @@ function changeIconForAllWindows(iconPath, arrWinHandlePtrStrs, winntPathToWatch
 	
 }
 
+function getPtrStrToWinOfProfObj(arrProfilePID, allWin, visWinOnly) {
+	// returns object with key pid and value array of string ptrs
+	
+	// do not have duplicates in arrProfilePID, but it might not be so bad it might not cause issues, but dont be a fool see link02098604
+	
+	// have to use one of the profile PID obtaining methods before using this function (on nix/max can use queryProfileLocked) (windows has to use getPidForProfile)
+	// dont be an idiot, dont run this function when not running, but if you do this it will go through everything and find no window and return null, but be smart, its much better perf to use the isRunning function (queryProfileLocked) first, especially on windows
+	
+	// resolves to string of ptr of window handle
+		// if allWin is true then an array of all string of ptr of windows of the pid
+	// if allWin is false, and visWinOnly is true
+		// it will return the first found handle regardless of visibility, so it ingore visWinOnly
+		// if allWin is true, then it returns array with strPtrs of only visible windows
+	// aProfilePID should be jsInt
+	
+	var objProfilePID = {};
+	for (var i=0; i<arrProfilePID.length; i++) {
+		objProfilePID[arrProfilePID[i]] = [];
+	}
+	
+	var objPidForWhichOneWinFound = {}; // used for if !allWin, to keep track of if i found a window for this pid already, and if all pids are in here, then return
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				// find first window that has aProfilePID
+				
+				// https://gist.github.com/Noitidart/1f9d574451b8aaaef219#file-_ff-addon-snippet-winapi_getrunningpids-js-L47
+				
+				var PID = ostypes.TYPE.DWORD();
+				
+				var arrWinPtrStrs = [];
+				var found = 0;
+				var SearchPD = function(hwnd, lparam) {
+					var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
+					//console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
+					if (PID.value in objProfilePID) {
+						found = true;
+						if (!allWin) {
+							if (PID.value in objPidForWhichOneWinFound) {
+								return false; // already pushed first win into rezObj which is objProfilePID so dont care anymore to find more and obviously there are more PIDs to find for so continue enum
+							}
+						}
+						
+						if (visWinOnly) {
+							// test if visible
+							var hwndStyle = ostypes.API('GetWindowLongPtr')(hwnd, ostypes.CONST.GWL_STYLE);
+							if (cutils.jscEqual(hwndStyle, 0)) {
+								throw new Error('Failed to GetWindowLongPtr');
+							}
+							hwndStyle = parseInt(cutils.jscGetDeepest(hwndStyle));
+							
+							if ((hwndStyle & ostypes.CONST.WS_VISIBLE) && (hwndStyle & ostypes.CONST.WS_CAPTION)) {
+								objProfilePID[PID.value].push(cutils.strOfPtr(hwnd));
+								// block link54654554545
+								if (!allWin) {
+									// check if any other PIDs remain for which we need to find a win for
+									if (Object.keys(objProfilePID).length == Object.keys(objProfilePID).length /*arrProfilePID.length*/) { // i use `Object.keys(objProfilePID).length` instead of `arrProfilePID.length` in case devuser is a fool and puts duplicates into arrProfilePID link02098604
+										return true; // found all so stop enum
+									}
+								}
+								// end block
+							} else {
+								// win not visible
+							}
+						} else {
+							// i dont care if its vis or not
+							objProfilePID[PID.value].push(cutils.strOfPtr(hwnd));
+							
+							// block link54654554545
+							if (!allWin) {
+								// check if any other PIDs remain for which we need to find a win for
+								if (Object.keys(objProfilePID).length == Object.keys(objProfilePID).length /*arrProfilePID.length*/) { // i use `Object.keys(objProfilePID).length` instead of `arrProfilePID.length` in case devuser is a fool and puts duplicates into arrProfilePID link02098604
+									return true; // found all so stop enum
+								}
+							}
+							// end block
+							
+						}
+						return false; // continue enum, the quitting of enum will be done by blocks of link54654554545
+					} else {
+						return true;
+					}
+				}
+				var SearchPD_ptr = ostypes.TYPE.WNDENUMPROC.ptr(SearchPD);
+				var wnd = ostypes.TYPE.LPARAM(0);
+				var rez_EnuMWindows = ostypes.API('EnumWindows')(SearchPD_ptr, wnd);
+				
+				if (found) {
+					console.info('found this:', objProfilePID);
+					//var ancestor = ostypes.API('GetAncestor')(foundMatchingHwnd, ostypes.CONST.GA_PARENT);
+					//console.info('ancestor:', ancestor.toString());
+					//var ptrStr = ancestor.toString();
+					//var ptrStr = ancestor.toString();
+					//ptrStr = ptrStr.match(/.*"(.*?)"/)[1]; // aleternatively do: `ptrStr = '0x' + ctypes.cast(foundMatchingHwnd, ctypes.uintptr_t).value.toString(16)` this is `hwndToHexStr` from: https://github.com/foudfou/FireTray/blob/master/src/modules/winnt/FiretrayWin32.jsm#L52
+					if (allWin) {
+						return arrWinPtrStrs;
+					} else {
+						return arrWinPtrStrs[0];
+					}
+				} else {
+					return 0;
+				}
+				return foundMatchingHwnd;
+			
+			break;
+			
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
 function getPtrStrToWinOfProf(aProfilePID, allWin, visWinOnly) {
 	// have to use one of the profile PID obtaining methods before using this function (on nix/max can use queryProfileLocked) (windows has to use getPidForProfile)
 	// dont be an idiot, dont run this function when not running, but if you do this it will go through everything and find no window and return null, but be smart, its much better perf to use the isRunning function (queryProfileLocked) first, especially on windows
@@ -1561,7 +1675,7 @@ function getPtrStrToWinOfProf(aProfilePID, allWin, visWinOnly) {
 				var found = 0;
 				var SearchPD = function(hwnd, lparam) {
 					var rez_GWTPI = ostypes.API('GetWindowThreadProcessId')(hwnd, PID.address());
-					console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
+					//console.log(['PID.value: ', PID.value, PID.value == aProfilePID].join(' '));
 					if (PID.value == aProfilePID) {
 						found = true;
 						if (visWinOnly) {

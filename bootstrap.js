@@ -4093,6 +4093,7 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHin
 		for (var aOSPath in objOfMatchingLaunchers) {
 			if (objOfMatchingLaunchers[aOSPath].profIniKey in profSpecsOfIniKeyNeedingIconUpdate) {
 				console.info('need to update launcher at path:', aOSPath);
+				/* :debug: temp remove to independently test update icon to windows portion
 				arrOfObjsOfCutUpdates.push({
 					dirNameLnk: aOSPath,
 					desc: 'Launches ' + getAppNameFromChan(profSpecsOfIniKeyNeedingIconUpdate[objOfMatchingLaunchers[aOSPath].profIniKey].channel_exeForProfile) + ' with "' + ini[objOfMatchingLaunchers[aOSPath].profIniKey].props.Name + '" Profile',
@@ -4101,6 +4102,7 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHin
 					refreshIcon: 1,
 					exists: true
 				});
+				*/
 			} else {
 				console.error('WILL NOT update launcher at path:', aOSPath);
 			}
@@ -4135,13 +4137,11 @@ function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath, aHin
 		
 		// update all windows with the icon paths
 		var promiseAllArr_updateIconToAllWindows = [];
-		/* commented out block to :debug: just want to see update all launchers independently first
 		for (var iniKeyNeedingUp in profSpecsOfIniKeyNeedingIconUpdate) {
 			if (iniKeyNeedingUp in objOfMatchingRunningIniKeys) {
-				promiseAllArr_updateIconToAllWindows.push(updateIconToAllWindows(iniKeyNeedingUp, objOfMatchingRunningIniKeys[iniKeyNeedingUp], {presetIconExists:true})); // setting presetIconExists to true makes updateIconToAllWindows not do makeIcon and passing a useSpecObj makes it not to a getProfileSpecs_WithCB so it just goes straight to the applying
+				promiseAllArr_updateIconToAllWindows.push(updateIconToAllWindows(iniKeyNeedingUp, profSpecsOfIniKeyNeedingIconUpdate[iniKeyNeedingUp], {presetIconExists:true})); // setting presetIconExists to true makes updateIconToAllWindows not do makeIcon and passing a useSpecObj makes it not to a getProfileSpecs_WithCB so it just goes straight to the applying
 			}
 		}
-		*/
 		var promiseAll_updateIconToAllWindows = Promise.all(promiseAllArr_updateIconToAllWindows); // if promiseAllArr_updateIconToAllWindows is empty it goes to then resolve right away, this is good and as i hoped
 		promiseAll_updateIconToAllWindows.then(
 			function(aVal) {
@@ -4434,7 +4434,7 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	
 	// aOptions
 		// presetIconExists - default is false. set it to true if you know icon path supplied by useSpecObj exists for sure. doing so and it wont bother with makeIcon (to ensure that it exists). it will go straight to applying to windows. you dont have to pass in a useSpecObj, but i would think if you knew if the icon existed for sure you would have had to get a specObj to see the icon needed, so pass just pass so this saves doing a getProfileSpecs too
-	
+		// objPidWins - an object with key of pid, and value an array of string ptrs to windows of it
 	var deferredMain_updateIconToAllWindows = new Deferred();
 	
 	switch (core.os.name) {
@@ -4503,38 +4503,55 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 							
 							var step1_2 = function(aProfPID) {
 								// collect all visible window handles
-								var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true, true]); // returns array of hwnd ptr str's
-								promise_getWinHandleForPid.then(
-									function(aVal) {
-										console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
-										// start - do stuff here - promise_getWinHandleForPid
-										// aVal is a string to pointer on success, else it is 0
-											// i set allWin to true so it will be a an array of strings
-										if (!aVal) {
-											console.error('no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`');
-											deferredMain_updateIconToAllWindows.resolve(false);
-										} else {
-											winntPathToWatchedFile = {
-												fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
-												fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
-											};
-											cWinHandlePtrStr = aVal;
-											step2();
+								if (!aOptions.objPidWins || !(aProfPID in aOptions.objPidWins)) {
+									if (aOptions.objPidWins) {
+										console.warn('WARRRRRRRNING, aOptions.objPidWins was set, but pid needed:', aProfPID, 'was not found in it, so having to ctypes fetch them, here is the objPidWins:', aOptions.objPidWins);
+									}
+									var promise_getWinHandleForPid = ProfilistWorker.post('getPtrStrToWinOfProf', [aProfPID, true, true]); // returns array of hwnd ptr str's
+									promise_getWinHandleForPid.then(
+										function(aVal) {
+											console.log('Fullfilled - promise_getWinHandleForPid - ', aVal);
+											// start - do stuff here - promise_getWinHandleForPid
+											// aVal is a string to pointer on success, else it is 0
+												// i set allWin to true so it will be a an array of strings
+											if (!aVal) {
+												console.error('no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`');
+												deferredMain_updateIconToAllWindows.resolve(false);
+											} else {
+												winntPathToWatchedFile = {
+													fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
+													fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
+												};
+												cWinHandlePtrStr = aVal;
+												step2();
+											}
+											// end - do stuff here - promise_getWinHandleForPid
+										},
+										function(aReason) {
+											var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
+											console.error('Rejected - promise_getWinHandleForPid - ', rejObj);
+											deferredMain_updateIconToAllWindows.reject(rejObj);
 										}
-										// end - do stuff here - promise_getWinHandleForPid
-									},
-									function(aReason) {
-										var rejObj = {name:'promise_getWinHandleForPid', aReason:aReason};
-										console.error('Rejected - promise_getWinHandleForPid - ', rejObj);
-										deferredMain_updateIconToAllWindows.reject(rejObj);
+									).catch(
+										function(aCaught) {
+											var rejObj = {name:'promise_getWinHandleForPid', aCaught:aCaught};
+											console.error('Caught - promise_getWinHandleForPid - ', rejObj);
+											deferredMain_updateIconToAllWindows.reject(rejObj);
+										}
+									);
+								} else {
+									if (aOptions.objPidWins[aProfPID].length == 0) {
+										console.error('no windows found, maybe not running anymore? unlikely but this should not happen as only get here if didnt get 0 for pid in `promise_pidOfProfile`');
+										deferredMain_updateIconToAllWindows.resolve(false);
+									} else {
+										winntPathToWatchedFile = {
+											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
+											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
+										};
+										cWinHandlePtrStr = aOptions.objPidWins[aProfPID];
+										step2();
 									}
-								).catch(
-									function(aCaught) {
-										var rejObj = {name:'promise_getWinHandleForPid', aCaught:aCaught};
-										console.error('Caught - promise_getWinHandleForPid - ', rejObj);
-										deferredMain_updateIconToAllWindows.reject(rejObj);
-									}
-								);
+								}
 							}
 							
 							step1_1();
@@ -7278,6 +7295,7 @@ function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB, preset
 	
 	var cbPostProgSpecsGot = function(aProfSpec) {
 		if (presetIconExists) {
+			console.error('prsetIconExists is true so calling aCB without doing makeIcon and aProfSpec is:', aProfSpec);
 			aCB(aProfSpec);
 		} else {
 			var promise_ensureIconRdyAndMade = makeIcon(aProfIniKey, aProfSpec);
