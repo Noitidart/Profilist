@@ -634,6 +634,82 @@ function launchProfile(pathsObj, arrOfArgs) { // checkExistanceFirst to check if
 	}
 }
 
+function findLaunchersByExePath(objDirDepth, aExePath, aOptions={}) {
+	// returns array of paths to launchers found that launch aProfRootDirOsPath, if profile is default, then it also returns all launchers that launch into default profile
+	/* objDirDepth is like this:
+	{
+		path1: depth jsInt OR null for no max depth
+		path2: depth jsInt
+	}
+	*/
+	// aProfRootDirOsPath is required
+	// optional: aOptions
+	/* aOptions
+	{
+		isDefaultProf: jsBool, // cuases exes to be found too on windows
+		profName: jsStr, // another check type `-P "name_here"` not yet impelemnted
+		returnObj: false is default and an array of paths is returned, if false, if true WINNT it returs obj with info on the launchers
+	}
+	*/
+	
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				// find shortcut launchers
+				var arrLauncherPaths = [];
+				var arrCollectedPaths = []; // paths of all of the files found in the selected paths
+				var dlgtCollect = function(aEntry) {
+					if (!aEntry.isDir) {
+						if (aEntry.path.substr(-3).toLowerCase() == 'lnk') {
+							arrCollectedPaths.push(aEntry.path);
+						}
+					}
+				};
+				
+				// get cut details
+				for (var p in objDirDepth) {
+					enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
+				}
+				
+				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths, {
+					winGetTargetPath: true,
+					winGetArgs: true
+				});
+				console.info('cutInfos:', cutInfos);
+				
+				// filter out based on cuts that launch this profile
+				var criteriaForMatchingCut = [];
+				criteriaForMatchingCut.push(aExePath.toLowerCase());
+				//console.log('testing for', criteriaForMatchingCut[0]);
+				for (var p in cutInfos) {
+					//console.log('testing', cutInfos[p].TargetArgs, 'test:', cutInfos[p].TargetArgs.indexOf(criteriaForMatchingCut[0]));
+					if (cutInfos[p].TargetPath.toLowerCase().indexOf(criteriaForMatchingCut[0]) > -1) {
+						arrLauncherPaths.push(p);
+					} else {
+						if (aOptions.returnObj) {
+							delete cutInfos[p];
+						}
+					}
+				}
+				
+				console.error('ok these are filtered:', arrLauncherPaths);
+				if (aOptions.returnObj) {
+					return cutInfos;
+				} else {
+					return arrLauncherPaths;
+				}
+				// end find shortcut launchers
+				
+				// :todo: find exe launchers
+				
+			break;
+		default:
+			throw new Error('os-unsupported')
+	}	
+};
+
 function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 	// returns array of paths to launchers found that launch aProfRootDirOsPath, if profile is default, then it also returns all launchers that launch into default profile
 	/* objDirDepth is like this:
@@ -673,7 +749,7 @@ function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 					enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
 				}
 				
-				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths);
+				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths, {winGetArgs:true});
 				
 				console.info('cutInfos:', cutInfos);
 				
@@ -711,7 +787,7 @@ function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 			break;
 		default:
 			throw new Error('os-unsupported')
-	}		
+	}
 }
 
 function createShortcuts(aArrOfObjs) {
@@ -1700,13 +1776,20 @@ function getPidForRunningProfile(IsRelative, Path, path_DefProfRt) {
 	
 }
 
-function winnt_getInfoOnShortcuts(arrOSPath) {
+function winnt_getInfoOnShortcuts(arrOSPath, aOptions) {
 	// winnt only
 	// returns an object key:values are:
 		// win7+ only - SystemAppUserModelID - jsStr
 		// target path
 		// target args
 		// icon path
+	
+	// aOptions:
+		// cross-platform
+			// getIconPath - default false.
+		// winnt
+			// winGetTargetPath - default false.
+			// winGetArgs - default false.
 	
 	var references = {
 		//propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
@@ -1732,23 +1815,28 @@ function winnt_getInfoOnShortcuts(arrOSPath) {
 			// :todo: perf enhancement. consider setting in the updateIfDiff option, or add option updateIfArgHasProf so then i dont have to do findLaunchers then iterate again with COM to update launchers/createShortcuts
 			
 			// i dont use these from this yet
-			// var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
-			// var piIcon = ostypes.TYPE.INT();
-			// var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
-			// ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			// rezObj[arrOSPath[i]].OSPath_icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			if (aOptions.getIconPath) {
+				var pszIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+				var piIcon = ostypes.TYPE.INT();
+				var hr_GetIconLocation = references.shellLink.GetIconLocation(references.shellLinkPtr, pszIconPath/*.address()*/, OS.Constants.Win.MAX_PATH, piIcon.address());
+				ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+				rezObj[arrOSPath[i]].OSPath_icon = cutils.readAsChar8ThenAsChar16(pszIconPath);
+			}
 			
-			// var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
-			// var fFlags = ostypes.CONST.SLGP_RAWPATH;
-			// var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
-			// ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
-			// rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
+			if (aOptions.winGetTargetPath) {
+				var pszFile = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+				var fFlags = ostypes.CONST.SLGP_RAWPATH;
+				var hr_GetPath = references.shellLink.GetPath(references.shellLinkPtr, pszFile/*.address()*/, OS.Constants.Win.MAX_PATH, null, fFlags);
+				ostypes.HELPER.checkHRESULT(hr_GetIconLocation);
+				rezObj[arrOSPath[i]].TargetPath = cutils.readAsChar8ThenAsChar16(pszFile).toLowerCase();
+			}
 			
-			var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
-			var hr_GetArguments = references.shellLink.GetArguments(references.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
-			ostypes.HELPER.checkHRESULT(hr_GetArguments);
-			rezObj[arrOSPath[i]].TargetArgs = cutils.readAsChar8ThenAsChar16(pszArgs).toLowerCase();
-			
+			if (aOptions.winGetArgs) {
+				var pszArgs = ostypes.TYPE.LPTSTR.targetType.array(ostypes.CONST.INFOTIPSIZE)();
+				var hr_GetArguments = references.shellLink.GetArguments(references.shellLinkPtr, pszArgs/*.address()*/, ostypes.CONST.INFOTIPSIZE);
+				ostypes.HELPER.checkHRESULT(hr_GetArguments);
+				rezObj[arrOSPath[i]].TargetArgs = cutils.readAsChar8ThenAsChar16(pszArgs).toLowerCase();
+			}
 			// if (core.os.version_name == '7+') {
 				// rezObj[arrOSPath[i]].SystemAppUserModelID = ostypes.HELPER.IPropertyStore_GetValue(references.propertyStorePtr, references.propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), null);
 			// }

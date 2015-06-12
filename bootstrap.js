@@ -125,6 +125,8 @@ var devBuildsArrStruct = { // holds index of key
 
 var tbb_msg_restore_handlers = {};
 
+var tieidsPendingBaseIconUpdateOnOsLevel = {};
+
 // Lazy Imports
 const myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
@@ -3734,6 +3736,261 @@ function getPathTo16Img(iconset_name, uncached) {
 	}
 }
 // start - functions to update icons at various locations
+function winnt_getSearchDirs(aOptions) {
+	// determine dirs - block link06503977
+	var searchDirs = {};
+	if (aOptions.winUpdateIconToProfilistLauncher) {
+		searchDirs[profToolkit.path_profilistData_launcherExes] = 1; // profilist launcher dir
+	}
+	if (aOptions.winUpdateIconToSystemShortcutLaunchers) {
+		// for updateIconToSystemLaunchers
+		if (core.os.version_name == '7+') {
+			searchDirs[profToolkit.path_system_dirForNormalPins] = 1; // win7+ pinned taskbar
+			searchDirs[profToolkit.path_system_dirForRelaunchCmdPins] = 2; // win7+ pinned taskbar
+			if (core.os.version == 6.2 || core.os.version == 6.3) {
+				//searchDirs[profToolkit.path_system_dirStartScreen] = 1; // win8+ start screen, when programs are pinned to start screen on install, they are found here I THINK i asked q on stackoverflow here: http://stackoverflow.com/questions/30682241/location-of-shortcuts-pinned-to-win8-8-1-start-screen?noredirect=1#comment49426104_30682241 // it seems its this path for non start screen pin too on win8/win81 i havent tested other os yet // many progs were inside a subfolder, so depth may need to be 2 here, however firefox was not in a subfolder
+			}
+		}
+		if (core.os.version < 6.2) {
+			// if less then win8 i think the start menu program shortctus are here:
+			//searchDirs[profToolkit.path_system_dirPrograms] = 1;
+		}
+		
+		// untested, as it didnt play a role in win81, which is what i devd on, path_system_dirQuickLaunch, path_system_dirPrograms
+		//searchDirs[profToolkit.path_system_dirQuickLaunch] = 1;
+	}
+	return searchDirs;
+	// end determine dirs - block link06503977
+};
+function updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(aExePath) {
+	// returns promise
+	
+	// globals for steps
+	var path_icon;
+	var base_icon;
+	
+	var do_runningWins = function() {
+		var deferred_doRunningWins = new Deferred();
+		
+		var step0 = function() {
+			// does this os need window updates?
+		};
+		
+		var step1 = function() {
+			// find running profiles
+		};
+		
+		var step2 = function() {
+			// figure out which of the running profiles are running in aExePath
+		};
+		
+		var step3 = function() {
+			// get appropriate icon paths and ensure icon exists for each of those profiles
+		};
+		
+		var step4 = function() {
+			// collect window handles for all the windows
+		};
+		
+		var step5 = function() {
+			// set the window props (and write file for IPC for WINNT)
+		};
+		
+		// step0(); // :debug:
+		deferred_doRunningWins.resolve(':debug:'); // :debug:
+		
+		return deferred_doRunningWins.promise;
+	};
+	
+	var do_sysLaunchers_Launcher = function() {
+		var deferred_doSysLaunchersLauncher = new Deferred();
+		
+		var step1 = function() {
+			// find all launchers that have this aExePath, return them to mainthread
+			var searchDirs = winnt_getSearchDirs({
+				winUpdateIconToProfilistLauncher: true,
+				winUpdateIconToSystemShortcutLaunchers: true
+			});
+			var promise_findLaunchers = ProfilistWorker.post('findLaunchersByExePath', [searchDirs, aExePath, {returnObj:true}]);
+			promise_findLaunchers.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_findLaunchers - ', aVal);
+					// start - do stuff here - promise_findLaunchers
+					step2(aVal);
+					// end - do stuff here - promise_findLaunchers
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_findLaunchers', aReason:aReason};
+					console.warn('Rejected - promise_findLaunchers - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_findLaunchers', aCaught:aCaught};
+					console.error('Caught - promise_findLaunchers - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			);
+		};
+		
+		var step2 = function(objOfLaunchers) {
+			// get profile ini keys for each of those launchers and ensure appropriate icon path exists
+				// perf enhance: rather then blindly update all - figure out if the launcher needs an update to this new aExePath icon, like if it was tied to something else, it will never need this aExePath icon so then remove from the array
+			
+			var profIniKeysMadeIconFor = {};
+			var promiseAllArr_iconsEnsured = [];
+			for (var l in objOfLaunchers) {
+				objOfLaunchers[l].TargetArgsLower = objOfLaunchers[l].TargetArgs.toLowerCase();
+				objOfLaunchers[l].TargetPathLower = objOfLaunchers[l].TargetPath.toLowerCase();
+				for (var iniKey in ini) {
+					if (!('num' in ini[iniKey])) { continue }
+					if ('Default' in ini[iniKey].props && ini[iniKey].props.Default == '1') { // :todo: perf enhancment, use Profilist.defaultProfileIniKey once im confident in it
+						if (objOfLaunchers[l].TargetArgsLower.search('-p') == -1) { // should get /-(?:p|profile)/
+							objOfLaunchers[l].profIniKey = iniKey
+							break; // break inner for
+						}
+					}
+					if (objOfLaunchers[l].TargetArgsLower.indexOf('-profile "' + getPathToProfileDir(iniKey).toLowerCase() + '"') > -1) {
+						objOfLaunchers[l].profIniKey = iniKey;
+						break; // break inner for
+					}
+				}
+				if (!('profIniKey' in objOfLaunchers[l])) {
+					// remove it from the object becuase it could be a left over launcher, as launcher wasnt deleted even though profile was or something
+					console.error('remove this launcher from obj as no profIniKey found for launcher at path:', l, 'obj:', objOfLaunchers[l]);
+					delete objOfLaunchers[l];
+					//throw new Error('no profIniKey found for launcher: ' + l);
+				} else {
+					if (!(objOfLaunchers[l].profIniKey in profIniKeysMadeIconFor)) { // for perf, otherwise can be doing redundant makeIcon on same iniKey's
+						profIniKeysMadeIconFor[objOfLaunchers[l].profIniKey] = 0;
+						promiseAllArr_iconsEnsured.push(makeIcon(objOfLaunchers[l].profIniKey));
+					}
+				}
+			}
+			
+			var promiseAll_iconsEnsured = Promise.all(promiseAllArr_iconsEnsured);
+			promiseAll_iconsEnsured.then(
+				function(aVal) {
+					console.log('Fullfilled - promiseAll_iconsEnsured - ', aVal);
+					// start - do stuff here - promiseAll_iconsEnsured
+					// put respective profSpecs into each objOfLaunchers
+					for (var l in objOfLaunchers) {
+						for (var i=0; i<aVal.length; i++) {
+							if (objOfLaunchers[l].profIniKey == aVal[i].profSpecs.profIniKey) {
+								objOfLaunchers[l].profSpecs = aVal[i].profSpecs;
+								break;
+							}
+						}
+						if (!('profSpecs' in objOfLaunchers[l])) {
+							console.error('could not find profSpecs for objOfLaunchers l:', l, 'aVal which is arr of makeIcon resolveds which should have profSpecs in it:', aVal);
+							throw new Error('could not find profSpecs for objOfLaunchers l: ' + l);
+						}
+					}
+					step3(objOfLaunchers);
+					// end - do stuff here - promiseAll_iconsEnsured
+				},
+				function(aReason) {
+					var rejObj = {name:'promiseAll_iconsEnsured', aReason:aReason};
+					console.warn('Rejected - promiseAll_iconsEnsured - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promiseAll_iconsEnsured', aCaught:aCaught};
+					console.error('Caught - promiseAll_iconsEnsured - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			);
+		};
+		
+		var step3 = function(aObjOfLaunchers) {
+			// update all launchers with the icon paths
+			console.info('ok got to step3 aObjOfLaunchers:', aObjOfLaunchers);
+			
+			var arrOfObjsOfCutUpdates = [];
+			for (var l in aObjOfLaunchers) {
+				arrOfObjsOfCutUpdates.push({
+					dirNameLnk: l,
+					desc: 'Launches ' + getAppNameFromChan(aObjOfLaunchers[l].profSpecs.channel_exeForProfile) + ' with "' + ini[aObjOfLaunchers[l].profIniKey].props.Name + '" Profile',
+					icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, aObjOfLaunchers[l].profSpecs.iconNameObj.str + '.ico'),
+
+					refreshIcon: 1
+				});
+			};
+
+			console.error('STARTTTTTTTING LAUNCHER UPDATES HEREEEEEEEE');
+			var promise_updateIconToArrOfLauncherPaths = ProfilistWorker.post('createShortcuts', [arrOfObjsOfCutUpdates]);
+			promise_updateIconToArrOfLauncherPaths.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_updateIconToArrOfLauncherPaths - ', aVal);
+					// start - do stuff here - promise_updateIconToArrOfLauncherPaths
+					deferred_doSysLaunchersLauncher.resolve(true);
+					// end - do stuff here - promise_updateIconToArrOfLauncherPaths
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_updateIconToArrOfLauncherPaths', aReason:aReason};
+					console.warn('Rejected - promise_updateIconToArrOfLauncherPaths - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_updateIconToArrOfLauncherPaths', aCaught:aCaught};
+					console.error('Caught - promise_updateIconToArrOfLauncherPaths - ', rejObj);
+					deferred_doSysLaunchersLauncher.reject(rejObj);
+				}
+			);
+		};
+		
+		step1();
+		
+		return deferred_doSysLaunchersLauncher.promise;
+	};
+	
+	var promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath = [];
+	
+	promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.push(do_runningWins());
+	promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.push(do_sysLaunchers_Launcher());
+	
+	return Promise.all(promiseAllArr_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath);
+	
+	////////////// wrong way which is how i started
+	/*
+	// check gDevBuilds, if its there then use that icon, else use icon of channel of aExePath
+	// get icon path
+	var step1 = function() {
+		// figure out base_icon
+		var base_icon = getDevBuildPropForExePath(aExePath, 'base_icon');
+		if (!base_icon) {
+			var promise_getChForExe = getChannelNameOfExePath(aExePath);
+			promise_getChForExe.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_getChForExe - ', aVal);
+					// start - do stuff here - promise_getChForExe
+					base_icon = getIconsetForChannelName(aVal);
+					step2();
+					// end - do stuff here - promise_getChForExe
+				},
+				function(aReason) {
+					var rejObj = {name:'promise_getChForExe', aReason:aReason};
+					console.warn('Rejected - promise_getChForExe - ', rejObj);
+					deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+				}
+			).catch(
+				function(aCaught) {
+					var rejObj = {name:'promise_getChForExe', aCaught:aCaught};
+					console.error('Caught - promise_getChForExe - ', rejObj);
+					deferredMain_updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath.reject(rejObj);
+				}
+			);
+		}
+	};
+	
+	var step2 = function() {
+		// take base_icon to icon_path os specific
+		path_icon = OS.Path.join(profToolkit.path_profilistData_launcherIcons, 
+	};
+	*/
+};
 function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 	// if aProfilePath is of cur profile it uses XPCOM to get all windows
 	
@@ -3921,27 +4178,10 @@ function updateIconToLauncher(aProfIniKey, useSpecObj, aOptions={}) {
 		
 				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
 					// start link060609853
-					// determine dirs
-					var searchDirs = {};
-					searchDirs[profToolkit.path_profilistData_launcherExes] = 1; // profilist launcher dir
-					if (aOptions.winUpdateIconToSystemShortcutLaunchers) {
-						// for updateIconToSystemLaunchers
-						if (core.os.version_name == '7+') {
-							searchDirs[profToolkit.path_system_dirForNormalPins] = 1; // win7+ pinned taskbar
-							searchDirs[profToolkit.path_system_dirForRelaunchCmdPins] = 2; // win7+ pinned taskbar
-							if (core.os.version == 6.2 || core.os.version == 6.3) {
-								//searchDirs[profToolkit.path_system_dirStartScreen] = 1; // win8+ start screen, when programs are pinned to start screen on install, they are found here I THINK i asked q on stackoverflow here: http://stackoverflow.com/questions/30682241/location-of-shortcuts-pinned-to-win8-8-1-start-screen?noredirect=1#comment49426104_30682241 // it seems its this path for non start screen pin too on win8/win81 i havent tested other os yet // many progs were inside a subfolder, so depth may need to be 2 here, however firefox was not in a subfolder
-							}
-						}
-						if (core.os.version < 6.2) {
-							// if less then win8 i think the start menu program shortctus are here:
-							//searchDirs[profToolkit.path_system_dirPrograms] = 1;
-						}
-						
-						// untested, as it didnt play a role in win81, which is what i devd on, path_system_dirQuickLaunch, path_system_dirPrograms
-						//searchDirs[profToolkit.path_system_dirQuickLaunch] = 1;
-					}
-					// end determine dirs
+					var searchDirs = winnt_getSearchDirs({
+						winUpdateIconToProfilistLauncher: true,
+						winUpdateIconToSystemShortcutLaunchers: true
+					});
 					
 					if (aProfIniKey === null) {
 						if (profToolkit.selectedProfile.isTemp) {
@@ -5055,6 +5295,56 @@ function writePrefToIni(oldVal, newVal, rejObj) {
 							// throw aCaught;
 						}
 					);
+					if (rejObj.pref_name == 'dev-builds') {
+						// update json of gDevBuilds
+						gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']);
+						
+						// start - handle WINNT os level base_icon change update
+						for (var exe_path in tieidsPendingBaseIconUpdateOnOsLevel) {
+							var shiftedObj = tieidsPendingBaseIconUpdateOnOsLevel[exe_path];
+							delete tieidsPendingBaseIconUpdateOnOsLevel[exe_path]; // so no one else jumps in on this accdientally
+							if (shiftedObj.reason == 0) {
+								// deleted
+								// check if old_icon_name was not that of channel of exe_path
+									// if not then updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(exe_path)
+									// else dont do anything
+							} else if (shiftedObj.reason == 1) {
+								updateIconTo_SysLaunchers_Launcher_RunningWins_ofExePath(exe_path);
+							} else {
+								throw new Error('unknown reason on tieidsPendingBaseIconUpdateOnOsLevel', shiftedObj);
+							}
+							for (var iniKey in ini) {
+								//console.log('testing iniKey:', ini[iniKey]);
+								// actually not just updating the ones tied to it, but anything that is using this base
+								// updateIconToAllLaunchersFoundWithExePath
+								// find all running profiles that are using this exe_path, and update their windows
+								// if deleted, check if oldIcon was that of the channel, if it was then no need to update, as after delete, they will still be icon of the channel which it normally would be
+								
+								/*
+								if ('num' in ini[iniKey] && 'Profilist.tie' in ini[iniKey].props && ini[iniKey].props['Profilist.tie'] == tieid) {
+									var step1 = function() {
+										getProfileSpecs_WithCB(null, iniKey, null, true, step2);
+									};
+									
+									var step2 = function(aProfSpec) {
+										ensureIconExists_WithCB(null, iniKey, aProfSpec, step3);
+									};
+									
+									var step3 = function(cProfSpecs) {
+										updateIconToAllWindows(iniKey, cProfSpecs);
+										updateIconToSystemLaunchers(iniKey, cProfSpecs); // for winnt this will update exe's, but its not set up yet, so on winnt to update system launchers i use updateIconToLauncher with winUpdateIconToSystemShortcutLaunchers true
+										updateIconToDesktcut(iniKey, cProfSpecs);
+										updateIconToLauncher(iniKey, cProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true});
+									};									
+
+									console.error('need to update due to tieid on this guy:', ini[iniKey]);
+									//step1();	// :debug:							
+								}
+								*/
+							}
+						}
+						// end - handle WINNT os level base_icon change update
+					}
 				}
 				console.info('POST info', 'value_in_ini:', value_in_ini, 'newVal:', newVal, 'uneval(ini.General.props)', uneval(ini.General.props))
 				//updateOptionTabsDOM(rejObj.pref_name, newVal);
@@ -5792,6 +6082,7 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 	
 	/* returns object like this:
 	{
+		profIniKey: aProfIniKey,
 		channel_exeForProfile: esr|release|beta|aurora|dev|nightly, // will give aurora if < fx35 and dev if >= 35 // for firefox builds, the channel is "default" this gets replaced with "nightly" // requires channel check
 		iconNameObj: {
 			components: {
@@ -5812,7 +6103,9 @@ function getProfileSpecs(aProfIniKey, presetIsRunning, ignoreRunning) {
 	var deferredMain_getProfileSpecs = new Deferred();
 	
 	// globals for steps
-	var specObj = {};
+	var specObj = {
+		profIniKey: aProfIniKey
+	};
 	var iniInfo; // obj
 	
 	var step0 = function() {
@@ -6232,25 +6525,8 @@ function getDefaultBrowserPath() {
 	return deferredMain_getDefaultBrowserPath.promise;
 }
 
-function getIconName(for_ini_key, ch_name) {
-	// :todo: 061015 DEPRECATE
-	var nameArr_launcherIcns = [];
-	if ('Profilist.badge' in ini[for_ini_key].props) {
-		nameArr_launcherIcns.push('BADGE-ID_' + ini[for_ini_key].props['Profilist.badge']);
-	}
-	if ('Profilist.tie' in ini[for_ini_key].props) { //ini[Profilist.tie] should hold a generated tie id
-		nameArr_launcherIcns.push('TIE-ID_' + ini[for_ini_key].props['Profilist.tie']); //TIE-ID is used to get base paths
-	} else {
-		nameArr_launcherIcns.push('CHANNEL-REF_' + channelNameTo_refName(ch_name));
-	}
-	// name starts with `CHANNEL-REF_` then i should just copy the icns from the current build icon
-	
-	// icon names have either TIE-ID_ or CHANNEL-REF_ but never both
-	
-	var name_launcherIcns = nameArr_launcherIcns.join('__')/* + '.icns'*/;
-	return name_launcherIcns;	
-}
-
+var _cache_getPathToProfileDir_root = {};
+var _cache_getPathToProfileDir_local = {};
 function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 	// returns root dir
 	// if set objOfRootAndLocal to true, it returns an object, and the object holds two keys. root for rootdir of prof. and local IF it is a IsRelative=1 prof.
@@ -6274,7 +6550,10 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 		}
 		
 		if (ini[for_ini_key].props.IsRelative == '1') {
-			return OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)));
+			if (!(for_ini_key in _cache_getPathToProfileDir_root)) {
+				_cache_getPathToProfileDir_root[for_ini_key] = OS.Path.join(profToolkit.rootPathDefault, OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path)))
+			}
+			return _cache_getPathToProfileDir_root[for_ini_key];
 		} else {
 			return ini[for_ini_key].props.Path;
 		}
@@ -6282,9 +6561,13 @@ function getPathToProfileDir(for_ini_key, objOfRootAndLocal) {
 		var rezObj = {};
 		if (ini[for_ini_key].props.IsRelative == '1') {
 			// root and local
-			var theDirName = OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path));
-			rezObj.OSPath_root = OS.Path.join(profToolkit.rootPathDefault, theDirName);
-			rezObj.OSPath_local = OS.Path.join(profToolkit.localPathDefault, theDirName);
+			if ((!(for_ini_key in _cache_getPathToProfileDir_root)) || (!(for_ini_key in _cache_getPathToProfileDir_local))) {
+				var theDirName = OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path));
+				_cache_getPathToProfileDir_root[for_ini_key] = OS.Path.join(profToolkit.rootPathDefault, theDirName);
+				_cache_getPathToProfileDir_local[for_ini_key] = OS.Path.join(profToolkit.localPathDefault, theDirName);
+			}
+			rezObj.OSPath_root = _cache_getPathToProfileDir_root[for_ini_key];
+			rezObj.OSPath_local = _cache_getPathToProfileDir_local[for_ini_key];
 		} else {
 			// just a root dir
 			rezObj.OSPath_root = ini[for_ini_key].props.Path;
@@ -8041,6 +8324,20 @@ function cpClientListener(aSubject, aTopic, aData) {
 		case 'update-pref-so-ini-too-with-user-setting':
 			var pref_name = subDataArr[0];
 			var user_set_val = subDataArr[1];
+			var optionalJsonStr = subDataArr[2]; // is undefined if json was sent, can get json for many reasons, right now the only reason is for os level update to icons on base_icon change WINNT
+			
+			if (optionalJsonStr) {
+				var optJsonObj = JSON.parse(optionalJsonStr);
+				// start - handle WINNT os level base_icon change update
+				if (optJsonObj.s == 'winnt_os_icon') {
+					tieidsPendingBaseIconUpdateOnOsLevel[optJsonObj.exe_path] = { // mark for update after ini obj is updated, otherwise if run update before ini is updated, old icon gets applied
+						old_icon_name: optJsonObj.old_icon_name,
+						reason: optJsonObj.reason // 0:deleted, 1:changed
+					};
+				}
+				// end - handle WINNT os level base_icon change update
+			}
+			
 			if (!(pref_name in myPrefListener.watchBranches[myPrefBranch].prefNames)) {
 				throw new Error('pref_name of ' + pref_name + ' not found in myPrefListener watchedBranches');
 				return;
@@ -8138,48 +8435,6 @@ function cpClientListener(aSubject, aTopic, aData) {
 					}
 				);
 				
-			break;
-		case 'query-browser-base-iconset-updated-for-tieid':
-			
-				console.error('hitting query-browser-base-iconset-updated-for-tieid'); // :debug:
-				return; // :debug:
-				
-				switch (core.os.name) {
-					case 'winnt':
-					case 'winmo':
-					case 'wince':
-						
-							// check if anything is tied to this id, if it is then updateAllLaunchers
-							// if those profiles are running, then update windows, actually no need to check, as the updateWindows thing checks anyways
-							// respect running
-							var cTieId = incomingJson.tieid;
-							
-							for (var iniKey in ini) {
-								if ('num' in ini[iniKey] && 'Profilist.tie' in ini[iniKey].props && ini[iniKey].props['Profilist.tie'] == cTieId) {
-									var step1 = function() {
-										getProfileSpecs_WithCB(null, iniKey, null, true, step2);
-									};
-									
-									var step2 = function(aProfSpec) {
-										ensureIconExists_WithCB(null, iniKey, aProfSpec, step3);
-									};
-									
-									var step3 = function(cProfSpecs) {
-										updateIconToAllWindows(iniKey, cProfSpecs);
-										updateIconToSystemLaunchers(iniKey, cProfSpecs); // for winnt this will update exe's, but its not set up yet, so on winnt to update system launchers i use updateIconToLauncher with winUpdateIconToSystemShortcutLaunchers true
-										updateIconToDesktcut(iniKey, cProfSpecs);
-										updateIconToLauncher(iniKey, cProfSpecs, {winUpdateIconToSystemShortcutLaunchers:true});
-									};									
-
-									step1();
-								}
-							}
-							
-						break;
-					default:
-						// nothing special
-				}				
-			
 			break;
 		default:
 			throw new Error('"profilist-cp-server": aTopic of "' + aTopic + '" is unrecognized');

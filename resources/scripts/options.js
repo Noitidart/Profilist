@@ -1,6 +1,5 @@
 const {interfaces: Ci, utils: Cu, classes: Cc} = Components;
-const myPrefBranch = 'extensions.Profilist@jetpack.';
-const subDataSplitter = ':~:~:~:'; //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to //note: must batch subDataSplitter in bootstrap.js
+var subDataSplitter = ':~:~:~:'; //used if observer from cp-server wants to send a subtopic and subdata, as i cant use subject in notifyObserver, which sucks, my other option is to register on a bunch of topics like `profilist.` but i dont want to //note: must batch subDataSplitter in bootstrap.js
 const clientId = Math.random();
 
 Cu.import('resource://gre/modules/osfile.jsm');
@@ -21,6 +20,12 @@ var buildsCont;
 var nextTieId = 0;
 var transObj = {};
 
+var devBuildsArrStruct = { // holds index of key
+	id: 2,
+	exe_path: 1,
+	base_icon: 0 // folder name in iconset
+};
+
 var core = {};
 var profToolkit = {};
 /*end - global el holders*/
@@ -32,220 +37,20 @@ window.onbeforeunload = function(e) {
 	if (ini.General.props['Profilist.dev'] == 'true') {
 		var err1 = document.querySelector('.browse'); //if any custom browse buttons are visible
 		if (err1) {
-			console.error('cannot save as errors exist');
+			console.log('cannot save as errors exist');
 			e.returnValue = 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
 			return 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
 		}
 		var err2 = document.querySelector('.error'); //any errors on the rows?
 		if (err2) {
-			console.error('cannot save as errors exist');
+			console.log('cannot save as errors exist');
 			e.returnValue = 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
 			return 'You have unsaved changes in the "Firefox Builds" section". Are you sure you want to leave?';
 		}
 	}
 };
 // start - common helper functions
-function Deferred() {
-	if (Promise.defer) {
-		//need import of Promise.jsm for example: Cu.import('resource:/gree/modules/Promise.jsm');
-		return Promise.defer();
-	} else if (PromiseUtils.defer) {
-		//need import of PromiseUtils.jsm for example: Cu.import('resource:/gree/modules/PromiseUtils.jsm');
-		return PromiseUtils.defer();
-	} else {
-		/* A method to resolve the associated Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} value : This value is used to resolve the promise
-		 * If the value is a Promise then the associated promise assumes the state
-		 * of Promise passed as value.
-		 */
-		this.resolve = null;
 
-		/* A method to reject the assocaited Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} reason: The reason for the rejection of the Promise.
-		 * Generally its an Error object. If however a Promise is passed, then the Promise
-		 * itself will be the reason for rejection no matter the state of the Promise.
-		 */
-		this.reject = null;
-
-		/* A newly created Pomise object.
-		 * Initially in pending state.
-		 */
-		this.promise = new Promise(function(resolve, reject) {
-			this.resolve = resolve;
-			this.reject = reject;
-		}.bind(this));
-		Object.freeze(this);
-	}
-}
-
-function makeDir_Bug934283(path, options) {
-	// pre FF31, using the `from` option would not work, so this fixes that so users on FF 29 and 30 can still use my addon
-	// the `from` option should be a string of a folder that you know exists for sure. then the dirs after that, in path will be created
-	// for example: path should be: `OS.Path.join('C:', 'thisDirExistsForSure', 'may exist', 'may exist2')`, and `from` should be `OS.Path.join('C:', 'thisDirExistsForSure')`
-
-	if (!('from' in options)) {
-		throw new Error('you have no need to use this, as this is meant to allow creation from a folder that you know for sure exists');
-	}
-
-	if (path.toLowerCase().indexOf(options.from.toLowerCase()) == -1) {
-		throw new Error('The `from` string was not found in `path` string');
-	}
-
-	var options_from = options.from;
-	delete options.from;
-
-	var dirsToMake = OS.Path.split(path).components.slice(OS.Path.split(options_from).components.length);
-	console.log('dirsToMake:', dirsToMake);
-
-	var deferred_makeDir_Bug934283 = new Deferred();
-	var promise_makeDir_Bug934283 = deferred_makeDir_Bug934283.promise;
-
-	var pathExistsForCertain = options_from;
-	var makeDirRecurse = function() {
-		pathExistsForCertain = OS.Path.join(pathExistsForCertain, dirsToMake[0]);
-		dirsToMake.splice(0, 1);
-		var promise_makeDir = OS.File.makeDir(pathExistsForCertain);
-		promise_makeDir.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_makeDir - ', 'ensured/just made:', pathExistsForCertain, aVal);
-				if (dirsToMake.length > 0) {
-					makeDirRecurse();
-				} else {
-					deferred_makeDir_Bug934283.resolve('this path now exists for sure: "' + pathExistsForCertain + '"');
-				}
-			},
-			function(aReason) {
-				var rejObj = {
-					promiseName: 'promise_makeDir',
-					aReason: aReason,
-					curPath: pathExistsForCertain
-				};
-				console.warn('Rejected - ' + rejObj.promiseName + ' - ', rejObj);
-				deferred_makeDir_Bug934283.reject(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var refObj = {name:'promise_makeDir', aCaught:aCaught};
-				console.error('Caught - promise_makeDir - ', refObj);
-				deferred_makeDir_Bug934283.reject(refObj); // throw aCaught;
-			}
-		);
-	};
-	makeDirRecurse();
-
-	return promise_makeDir_Bug934283;
-}
-
-function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir) {
-	// i use this with writeAtomic, copy, i havent tested with other things
-	// argsOfOsFileFunc is array of args
-	// will execute nameOfOsFileFunc with argsOfOsFileFunc, if rejected and reason is directories dont exist, then dirs are made then rexecute the nameOfOsFileFunc
-	// returns promise
-	
-	var deferred_tryOsFile_ifDirsNoExistMakeThenRetry = new Deferred();
-	
-	if (['writeAtomic', 'copy'].indexOf(nameOfOsFileFunc) == -1) {
-		deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
-		// not supported because i need to know the source path so i can get the toDir for makeDir on it
-		return; //just to exit further execution
-	}
-	
-	// setup retry
-	var retryIt = function() {
-		var promise_retryAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
-		promise_retryAttempt.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_retryAttempt - ', aVal);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('retryAttempt succeeded');
-			},
-			function(aReason) {
-				var refObj = {name:'promise_retryAttempt', aReason:aReason};
-				console.warn('Rejected - promise_retryAttempt - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
-			}
-		).catch(
-			function(aCaught) {
-				var refObj = {name:'promise_retryAttempt', aCaught:aCaught};
-				console.error('Caught - promise_retryAttempt - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
-			}
-		);
-	};
-	
-	// setup recurse make dirs
-	var makeDirs = function() {
-		var toDir;
-		switch (nameOfOsFileFunc) {
-			case 'writeAtomic':
-				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
-				break;
-				
-			case 'copy':
-				toDir = OS.Path.dirname(argsOfOsFileFunc[1]);
-				break;
-				
-			default:
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
-				return; // to prevent futher execution
-		}
-		var promise_makeDirsRecurse = makeDir_Bug934283(toDir, {from: fromDir});
-		promise_makeDirsRecurse.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_makeDirsRecurse - ', aVal);
-				retryIt();
-			},
-			function(aReason) {
-				var refObj = {name:'promise_makeDirsRecurse', aReason:aReason};
-				console.warn('Rejected - promise_makeDirsRecurse - ', refObj);
-				if (aReason.becauseNoSuchFile) {
-					console.log('make dirs then do retryAttempt');
-					makeDirs();
-				} else {
-					// did not get becauseNoSuchFile, which means the dirs exist (from my testing), so reject with this error
-					deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
-				}
-			}
-		).catch(
-			function(aCaught) {
-				var refObj = {name:'promise_makeDirsRecurse', aCaught:aCaught};
-				console.error('Caught - promise_makeDirsRecurse - ', refObj);
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
-			}
-		);
-	};
-	
-	// do initial attempt
-	var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
-	promise_initialAttempt.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_initialAttempt - ', aVal);
-			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('initialAttempt succeeded');
-		},
-		function(aReason) {
-			var refObj = {name:'promise_initialAttempt', aReason:aReason};
-			console.warn('Rejected - promise_initialAttempt - ', refObj);
-			if (aReason.becauseNoSuchFile) {
-				console.log('make dirs then do secondAttempt');
-				makeDirs();
-			} else {
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); //throw refObj;
-			}
-		}
-	).catch(
-		function(aCaught) {
-			var refObj = {name:'promise_initialAttempt', aCaught:aCaught};
-			console.error('Caught - promise_initialAttempt - ', refObj);
-			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(refObj); // throw aCaught;
-		}
-	);
-	
-	
-	return deferred_tryOsFile_ifDirsNoExistMakeThenRetry.promise;
-}
 // end - common helper functions
 
 function setup() {
@@ -440,7 +245,6 @@ var observers = {
 							target.style.backgroundImage = 'url(' + responseJson.img + '#' + Math.random() + ')'; //may need to add math.random to bypass weird cache issue
 							saveDevBuilds();
 							var row = target.parentNode;
-							cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
 						}
 								
 					break;
@@ -639,9 +443,9 @@ var observers = {
 				
 				console.log('builtinIcon match:', builtinIcon);
 				if (builtinIcon) {
-					console.error('match found:', builtinIcon[0]);
+					console.log('match found:', builtinIcon[0]);
 					builtinIcon[0] = getIconsetForChannelName(builtinIcon[0]);
-					console.error('getIconsetForChannelName ran on it, its now:', builtinIcon[0]);
+					console.log('getIconsetForChannelName ran on it, its now:', builtinIcon[0]);
 					
 					rowDomJson[2][1].class = builtinIcon[0].toLowerCase();
 				} else {
@@ -896,7 +700,6 @@ var observers = {
 	// end - drag stuff
 	
 	var selfBuildPathInUse = false;
-	var pathExe = profToolkit.exePath;
 	
 	function devBuildTextChange(e) {
 		var cont = this.parentNode.parentNode.parentNode;
@@ -978,6 +781,7 @@ var observers = {
 	}
 	
 	function deleteThisBuild(e) {
+		// do not decrement nextTieid, it will jack stuff up (especially when working across multi CP's, ie: multi browsers or multi tabs etc), nextTieid should always be incrmenting
 		var div = this.parentNode.parentNode;
 		if (div.nextSibling == null) { //is last div so cannot delete
 			console.warn('last div, cannot delete');
@@ -1062,12 +866,12 @@ var observers = {
 		//reads and creates dev-builds string from the dom
 		var err1 = document.querySelector('.browse'); //if any custom browse buttons are visible
 		if (err1) {
-			console.error('cannot save as errors exist');
+			console.log('cannot save as errors exist');
 			return;
 		}
 		var err2 = document.querySelector('.error'); //any errors on the rows?
 		if (err2) {
-			console.error('cannot save as errors exist');
+			console.log('cannot save as errors exist');
 			return;
 		}
 		
@@ -1081,7 +885,7 @@ var observers = {
 			if (icon == '') {
 				icon = iconSpan.getAttribute('class').match(/(?:release|beta|dev|aurora|nightly)/i); // removed esr and default from here as i dont have an esr or default iconset
 				if (!icon) {
-					console.error('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
+					console.log('failed to figure out icon, had no bg image, then tried to match class, on row:', i, t.innerHTML);
 					return;
 				} else {
 					icon = icon[0];
@@ -1089,7 +893,7 @@ var observers = {
 			} else {
 				var iconUrl = icon.match(/.*\/(.*?)_16\.png#/); //its a file uri so its safe to hard code it path seperator
 				if (!iconUrl) {
-					console.error('failed to run regex on background image', icon, i, t.innerHTML);
+					console.log('failed to run regex on background image', icon, i, t.innerHTML);
 				} else {
 					icon = unescape(iconUrl[1]); //.substr(profToolkit.path_profilistData_iconsets.length);
 				}
@@ -1122,38 +926,106 @@ var observers = {
 			console.log('sending to server for update of dev-builds');
 			oldPropValForDevBuilds = newStr; //i do this so it doesnt unnecesarily refresh the dom on the current one
 			var selectedValue = newStr;
-			cpCommPostMsg(['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue].join(subDataSplitter));
+			var postMsgArr = ['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue];
+			
+			// start - figure out if a tieid had base icon changed so can emit msg to update os level icons
+			var oldArr = JSON.parse(oldStr);
+			var newArr = JSON.parse(newStr);
+			
+			var oldObj = {};
+			var newObj = {};
+			for (var i=0; i<oldArr.length; i++) {
+				var tieid = oldArr[i][devBuildsArrStruct.id];
+				var base_icon = oldArr[i][devBuildsArrStruct.base_icon];
+				var exe_path = oldArr[i][devBuildsArrStruct.exe_path].toLowerCase();
+				oldObj[exe_path] = {
+					tieid: tieid,
+					base_icon: base_icon,
+					exe_path: exe_path
+				};
+			}
+			for (var i=0; i<newArr.length; i++) {
+				var tieid = newArr[i][devBuildsArrStruct.id];
+				var base_icon = newArr[i][devBuildsArrStruct.base_icon];
+				var exe_path = oldArr[i][devBuildsArrStruct.exe_path].toLowerCase();
+				newObj[exe_path] = {
+					tieid: tieid,
+					base_icon: base_icon,
+					exe_path: exe_path
+				};
+			}
+			
+			for (var exe_path in oldObj) {
+				if (exe_path in newObj) {
+					if (newObj[exe_path].base_icon != oldObj[exe_path].base_icon) {
+						postMsgArr.push(JSON.stringify({
+							s: 'winnt_os_icon',
+							exe_path: newObj[exe_path].exe_path,
+							old_icon_name: oldObj[exe_path].base_icon,
+							reason: 1 // changed
+						}));
+					}
+				} else if (!(exe_path in newObj)) {
+						// if deleted we dont care to update UNLESS they deleted something that had a custom icon. if they deleted a path that had no custom icon, then it will just fall back to what it normally is for the channel
+						//if (oldObj[exe_path].base_icon != the icon of the channel of exe_path) {
+						// ok check is on bootstrap side
+							postMsgArr.push(JSON.stringify({
+								s: 'winnt_os_icon',
+								exe_path: oldObj[exe_path].exe_path,
+								old_icon_name: oldObj[exe_path].base_icon,
+								reason: 0 // deleted
+							}));
+						//} // else i dont cuz i just deleted a base_icon that it would normally be anyways
+				}
+			}
+			// i dont care to iterate through newObj to see if new tieid's exist, as if new one added then 
+			// end - figure out if a tieid had base icon changed so can emit msg to update os level icons
+			
+			cpCommPostMsg(postMsgArr.join(subDataSplitter));
 		}
 	}
 	
-	var enteredIconClass;
-	var enteredIconBG;
+	var enteredIconClass = {};
+	var enteredIconBG = {};
 	
 	function iconChangerEnter(e) {
 		e.stopPropagation(); //so it doenst bubble to children
-		enteredIconBG = e.target.style.backgroundImage;
-		enteredIconClass = e.target.getAttribute('class');
+		
+		var row = e.target.parentNode;
+		var tieid = row.getAttribute('tieid')
+		
+		if (!(tieid in enteredIconBG)) {
+			enteredIconBG[tieid] = {};
+			enteredIconBG[tieid] = {};
+		}
+		enteredIconBG[tieid] = e.target.style.backgroundImage;
+		enteredIconClass[tieid] = e.target.getAttribute('class');
+		
+		console.error('entered tieid:', tieid);
 	}
 	
 	function iconChangerLeave(e) {
 		setTimeout(function() {
+			var row = e.target.parentNode;
+			var tieid = row.getAttribute('tieid')
+			console.error('left tieid:', tieid);
+			
 			var leaveIconBG = e.target.style.backgroundImage;
 			var leaveIconClass = e.target.getAttribute('class');
-			if (enteredIconBG != leaveIconBG) {
-				console.log('running save cuz icongBg differs');
+			if (enteredIconBG[tieid] != leaveIconBG) {
+				console.log('running save cuz icongBG differs', 'was:', enteredIconBG[tieid], 'now:', leaveIconBG);
 				saveDevBuilds();
-				var row = e.target.parentNode;
-				console.error('info2:', row);
-				cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
+				var row = e.target.parentNode.parentNode;
 				return;
 			}
 			
-			if (enteredIconClass != leaveIconClass) {
-				console.log('running save cuz iconClass differs');
+			if (enteredIconClass[tieid] != leaveIconClass) {
+				if (leaveIconClass == 'browse') {
+					return;
+				}
+				console.log('running save cuz iconClass differs', 'was:', enteredIconClass[tieid], 'now:', leaveIconClass);
 				saveDevBuilds();
 				var row = e.target.parentNode;
-				console.error('info3:', row);
-				cpCommPostJson('query-browser-base-iconset-updated-for-tieid', {tieid: row.getAttribute('tieid')});
 				return;
 			}
 		}, 100); //do the wait because if leaving after file picker, it needs some time to take
@@ -1203,7 +1075,7 @@ var observers = {
 				//show dev sect
 				newVal = 1;
 			}
-			console.error('in sizeinnerbgToDev');
+			console.log('in sizeinnerbgToDev');
 
 			
 			var sect_gen_height = sect_gen.offsetHeight;
@@ -1225,7 +1097,7 @@ var observers = {
 	var onSettingChange = { //keys are pref_name
 		'dev': function(newVal) {
 			//purpose of this is to toggle the sect-div-on class
-			console.error('in onSettingChange dev newVal == ', newVal);
+			console.log('in onSettingChange dev newVal == ', newVal);
 			if (newVal == 'true' || newVal == true) {
 				newVal = 1;
 			} else if (newVal == 'false' || newVal == false) {
@@ -1374,7 +1246,7 @@ function getIconsetForChannelName(channel_name, firefox_version) {
 	// copied from bootstrap.js
 	// firefox_version is double, used for determining if aurora is dev or aurora
 	// for a channel name it gives the name of the folder name in in core.addon.path.images + 'channel-iconsets/' + FOLDER_NAME_HERE + '/' + FOLDER_NAME_HERE + '_##.png'
-console.error('enter:', channel_name, firefox_version);
+console.log('enter:', channel_name, firefox_version);
 	switch (channel_name) {
 		case 'esr':
 		case 'release':
