@@ -1060,7 +1060,7 @@ function createShortcuts(aArrOfObjs) {
 			}
 			
 			var hr_Save = refs.persistFile.Save(refs.persistFilePtr, fullPath, false);
-			console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
+			//console.info('hr_Save:', hr_Save.toString(), uneval(hr_Save));
 			ostypes.HELPER.checkHRESULT(hr_Save, 'Save');
 			
 			console.log('Shortcut succesfully saved on fullPath:', fullPath);
@@ -1799,7 +1799,7 @@ function winnt_getInfoOnShortcuts(arrOSPath, aOptions) {
 		
 		for (var i=0; i<arrOSPath.length; i++) {
 			
-			console.info('trying to load arrOSPath[i]:', arrOSPath[i]);
+			//console.info('trying to load arrOSPath[i]:', arrOSPath[i]);
 			var ext = arrOSPath[i].substr(-3);
 			if (ext != 'lnk'/* && ext != 'exe'*/) { // cannot do this as IPersistFile::Load doesnt work on exe files, just lnk files from my experience
 				console.log('skipping path as it is not a shortcut .lnk and Load will fail', arrOSPath[i]);
@@ -1809,7 +1809,7 @@ function winnt_getInfoOnShortcuts(arrOSPath, aOptions) {
 			rezObj[arrOSPath[i]] = {};
 			
 			var hr_Load = references.persistFile.Load(references.persistFilePtr, arrOSPath[i], 0);
-			console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
+			//console.info('hr_Load:', hr_Load.toString(), uneval(hr_Load));
 			ostypes.HELPER.checkHRESULT(hr_Load, 'Load');
 			
 			// :todo: perf enhancement. consider setting in the updateIfDiff option, or add option updateIfArgHasProf so then i dont have to do findLaunchers then iterate again with COM to update launchers/createShortcuts
