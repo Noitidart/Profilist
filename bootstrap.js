@@ -3371,6 +3371,8 @@ function tbb_box_click(e) {
 							);
 						},
 						oncancel: function() {
+							// disconinuted focus on esc cuz if they want they can just click the toolbarbutton and it will focus
+							/*
 							// focus the most recent window then
 							var promise_doFocus = ProfilistWorker.post('focusMostRecentWindowOfProfile', [isRunning, ini[cProfIniKey].props.IsRelative, ini[cProfIniKey].props.Path, profToolkit.rootPathDefault]);
 							// consider, if rejected, then should re-loop function or something, till it launches (as im guessing if tries to focus because isRunning, and focus fails, then that profile was in shutdown process)
@@ -3393,6 +3395,7 @@ function tbb_box_click(e) {
 									//deferredMain_launchProfile.reject(rejObj);
 								}
 							);
+							*/
 						}
 					};
 					tbb_msg('prompt-force-restart' + cProfIniKey, 'Profile is running, force restart?', 'restoreStyleKeyPress', origTarg.ownerDocument.defaultView, box, origTarg, cCB, false);
@@ -7317,7 +7320,8 @@ function ensureIconExists_WithCB(aDeferred, aProfIniKey, useSpecObj, aCB, preset
 				function(aVal) {
 					console.log('Fullfilled - promise_ensureIconRdyAndMade - ', aVal);
 					// start - do stuff here - promise_ensureIconRdyAndMade
-					
+					// cur issue not launching tied prof
+						console.info('ensureIconExists_WithCB aVal:', aVal);
 						aCB(aVal.profSpecs); // can just do `aCB(aProfSpec)` its same
 						
 					// end - do stuff here - promise_ensureIconRdyAndMade
@@ -7476,7 +7480,7 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 		// and start loading image assets in paralell with existence check
 		// and determine path_icon;
 		
-		resolveObj.profSpec = aProfSpec;
+		resolveObj.profSpecs = aProfSpec;
 		cProfSpec = aProfSpec;
 		console.info('ok got cProfSpec:', cProfSpec);
 		var promiseAllArr_existanceAndLoadAssets = [];
@@ -7516,11 +7520,9 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 					// start - do stuff here - promise_iconPrexists
 					if (aVal) {
 						//console.error('icon already exists, and devuser asked that overwrite not happen so resolve link11564380025, path_icon:', path_icon);
-						deferredMain_makeIcon.resolve({
-							prexisted: true,
-							path_icon: path_icon,
-							profSpecs: cProfSpec
-						});
+						resolveObj.prexisted = true;
+						resolveObj.path_icon = path_icon;
+						deferredMain_makeIcon.resolve(resolveObj);
 					}
 					// end - do stuff here - promise_iconPrexists
 				},
@@ -7800,6 +7802,7 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 						function(aVal) {
 							console.log('Fullfilled - promise_refIco - ', aVal);
 							// start - do stuff here - promise_refIco
+							resolveObj.path_icon = path_icon;
 							deferredMain_makeIcon.resolve(resolveObj);
 							// end - do stuff here - promise_refIco
 						},
