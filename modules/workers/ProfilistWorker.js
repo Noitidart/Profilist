@@ -375,6 +375,7 @@ function makeLauncher(pathsObj) {
 				}
 				
 				tryOsFile_ifDirsNoExistMakeThenRetry('makeDir', [pathsObj.dir], OS.Constants.Path.userApplicationDataDir); // assumption that drom dir is userApplicationDataDir
+				
 				// :todo: make tryOsFile_ifDirsNoExistMakeThenRetry return differently, letting me know if it made the dir, or it was already there, cuz if it wasnt there, then i can skip the findLaunchers proc as the folder didnt exist so its obvious the launcher didnt exist
 				
 				// check launch directory if it already exists and just needs rename
@@ -419,7 +420,9 @@ function makeDeskcut(cutInfoObj) {
 					throw new Error('makeDeskcut requires that renameToName not be set, because it relies on the fed dirNameLnk');
 				}
 				
-				if (cutInfoObj.IfExists_ThenDontCreateShortcuts) { // default of IfExists_ThenDontCreateShortcuts is false/null/undefined
+				if (cutInfoObj.IfExists_ThenDontCreateLauncher) { // default of IfExists_ThenDontCreateLauncher is false/null/undefined
+					delete cutInfoObj.IfExists_ThenDontCreateLauncher; // this key was specifically for makeDeskcut
+					
 					console.error('will check if launcher exists, if it does then it wont makeLauncher');
 					if (!('exists' in cutInfoObj)) {
 						// `exists` wasnt in obj so check existance, this is required before a hard link can be made
@@ -680,7 +683,16 @@ function findLaunchersByExePath(objDirDepth, aExePath, aOptions={}) {
 				
 				// get cut details
 				for (var p in objDirDepth) {
-					enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
+					try {
+						enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
+					} catch(ex) {
+						if ('winLastError' in ex && ex.winLastError == 2) {
+							// the directory at p doesnt exist so continue
+						} else {
+							console.error('findLaunchers', 2.6, 'ex on enumChildEntries:', ex.winLastError, 'ex:', ex);
+							throw new Error(ex.toString());
+						}
+					}
 				}
 				
 				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths, {
@@ -2192,6 +2204,8 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			// make dirs first
 			makeDirs();
 		}
+	} else {
+		doInitialAttempt();
 	}
 	
 }

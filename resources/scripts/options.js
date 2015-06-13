@@ -928,7 +928,7 @@ var observers = {
 			var selectedValue = newStr;
 			var postMsgArr = ['update-pref-so-ini-too-with-user-setting', pref_name, selectedValue];
 			
-			// start - figure out if a tieid had base icon changed so can emit msg to update os level icons
+			// start - figure out if a exe_path had base icon changed so can emit msg to update os level icons
 			var oldArr = JSON.parse(oldStr);
 			var newArr = JSON.parse(newStr);
 			
@@ -947,7 +947,7 @@ var observers = {
 			for (var i=0; i<newArr.length; i++) {
 				var tieid = newArr[i][devBuildsArrStruct.id];
 				var base_icon = newArr[i][devBuildsArrStruct.base_icon];
-				var exe_path = oldArr[i][devBuildsArrStruct.exe_path].toLowerCase();
+				var exe_path = newArr[i][devBuildsArrStruct.exe_path].toLowerCase();
 				newObj[exe_path] = {
 					tieid: tieid,
 					base_icon: base_icon,

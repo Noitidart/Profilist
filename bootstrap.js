@@ -1753,12 +1753,12 @@ function updateOnPanelShowing(e, aDOMWindow, dontRefreshIni, forCustomizationTab
 				}
 				
 				console.info('pref val dev:', myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value);
-				if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
+				//if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {
 					if (initialPanelDomSetup || objWin.General.props['Profilist.currentThisBuildsIconPath'] != objBoot.General.props['Profilist.currentThisBuildsIconPath']) {
 						// :todo: consider if currentThisBuildsIconPath is same name, but user deleted old img with that name and saved new img with that, so i probably need a force update of backgroundImage or something to compare string paths with Math.random
 						aDOMWindow.Profilist.PBox.style.backgroundImage = 'url("' + objBoot.General.props['Profilist.currentThisBuildsIconPath'] + '#' + Math.random() + '")';
 					}
-				}
+				//}
 
 				/* no need for this, as this is handled on a profile tbb level
 				if (initialPanelDomSetup || objWin.General.props['Profilist.defaultProfileIniKey'] != objBoot.General.props['Profilist.defaultProfileIniKey']) {
@@ -7356,71 +7356,70 @@ function makeDeskCut(for_ini_key, useSpecObj) {
 	
 	// creates desktop shortcut to the launcher
 	// if launcher doesnt exist it makes it first
-	
+
 	var deferredMain_makeDeskCut = new Deferred();
 	
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
-
-				var cbPostGetProfSpecs = function(cProfSpec) {
-					console.info('cProfSpec:', cProfSpec);
-					var cbPostIconEnsured = function() {
-						var cutInfoObj = {
-							// keys for worker__createShortcut
-							dir: profToolkit.path_profilistData_launcherExes,
-							name: cProfSpec.launcherName,
-							dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
-							args: '-profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote',
-							desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[for_ini_key].props.Name + '" Profile',
-							icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
-							targetFile: cProfSpec.path_exeForProfile,
-							
-							updateIfDiff: true,
-							refreshIcon: 1,
-							
-							// keys for worker__makeLauncher
-							IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null,
-							profRootDir: getPathToProfileDir(for_ini_key),
-							
-							// keys for worker__makeDeskcut
-							IfExists_ThenDontCreateShortcuts: false // i want it to updateIfDiff
-						};
+		
+				var cbPost_ProgSpecsGot_and_IconEnsured = function(cProfSpec) {
+					var cutInfoObj = {
+						// keys for worker__createShortcut
+						dir: profToolkit.path_profilistData_launcherExes,
+						name: cProfSpec.launcherName,
+						dirNameLnk: OS.Path.join(profToolkit.path_profilistData_launcherExes, cProfSpec.launcherName + '.lnk'), // worker__makeDeskcut requires path safed dirNameLnk, specObj returns path safed name so no need to do it here
+						args: '-profile "' + getPathToProfileDir(for_ini_key) + '" -no-remote',
+						desc: 'Launches ' + getAppNameFromChan(cProfSpec.channel_exeForProfile) + ' with "' + ini[for_ini_key].props.Name + '" Profile',
+						icon: OS.Path.join(profToolkit.path_profilistData_launcherIcons, cProfSpec.iconNameObj.str + '.ico'),
+						targetFile: cProfSpec.path_exeForProfile,
 						
-						var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [cutInfoObj]);
-						promise_doMakeDeskcut.then(
-							function(aVal) {
-								console.log('Fullfilled - promise_doMakeDeskcut - ', aVal);
-								// start - do stuff here - promise_doMakeDeskcut
-								deferredMain_makeDeskCut.resolve(true);
-								// end - do stuff here - promise_doMakeDeskcut
-							},
-							function(aReason) {
-								var rejObj = {name:'promise_doMakeDeskcut', aReason:aReason};
-								console.error('Rejected - promise_doMakeDeskcut - ', rejObj);
-								deferredMain_makeDeskCut.reject(rejObj);
-							}
-						).catch(
-							function(aCaught) {
-								var rejObj = {name:'promise_doMakeDeskcut', aCaught:aCaught};
-								console.error('Caught - promise_doMakeDeskcut - ', rejObj);
-								deferredMain_makeDeskCut.reject(rejObj);
-							}
-						);
-
+						updateIfDiff: true,
+						refreshIcon: 1,
+						
+						// keys for worker__makeLauncher
+						IDHash: core.os.version_name == '7+' ? getPathToProfileDir(for_ini_key) : null,
+						profRootDir: getPathToProfileDir(for_ini_key),
+						
+						// keys for worker__makeDeskcut
+						IfExists_ThenDontCreateLauncher: false // i want it to overwrite or if it exists it createShortcuts wont overwrite it, it will updateIfDiff
 					};
 					
-					ensureIconExists_WithCB(deferredMain_makeDeskCut, for_ini_key, cProfSpec.iconNameObj, cbPostIconEnsured);
+					var promise_doMakeDeskcut = ProfilistWorker.post('makeDeskcut', [cutInfoObj]);
+					promise_doMakeDeskcut.then(
+						function(aVal) {
+							console.log('Fullfilled - promise_doMakeDeskcut - ', aVal);
+							// start - do stuff here - promise_doMakeDeskcut
+							deferredMain_makeDeskCut.resolve(true);
+							// end - do stuff here - promise_doMakeDeskcut
+						},
+						function(aReason) {
+							var rejObj = {name:'promise_doMakeDeskcut', aReason:aReason};
+							console.error('Rejected - promise_doMakeDeskcut - ', rejObj);
+							deferredMain_makeDeskCut.reject(rejObj);
+						}
+					).catch(
+						function(aCaught) {
+							var rejObj = {name:'promise_doMakeDeskcut', aCaught:aCaught};
+							console.error('Caught - promise_doMakeDeskcut - ', rejObj);
+							deferredMain_makeDeskCut.reject(rejObj);
+						}
+					);
 				};
-				
-				getProfileSpecs_WithCB(deferredMain_makeDeskCut, for_ini_key, useSpecObj, true, cbPostGetProfSpecs);
-
+		
 			break;
 		default:
-			// nothing special
-			throw new Error(['os-unsupported', OS.Constants.Sys.Name]);
+			console.error('os-unsupported');
+			deferredMain_makeDeskCut.reject('os-unsupported');
+			return deferredMain_makeDeskCut.promise;
 	}
+	
+	var cbPostProgSpecsGot = function(aProfSpec) {
+		ensureIconExists_WithCB(deferredMain_makeDeskCut, for_ini_key, aProfSpec, cbPost_ProgSpecsGot_and_IconEnsured);
+	};
+	
+	getProfileSpecs_WithCB(deferredMain_makeDeskCut, for_ini_key, useSpecObj, true, cbPostProgSpecsGot);
 	
 	return deferredMain_makeDeskCut.promise;
 }
@@ -7479,7 +7478,7 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 		
 		resolveObj.profSpec = aProfSpec;
 		cProfSpec = aProfSpec;
-		
+		console.info('ok got cProfSpec:', cProfSpec);
 		var promiseAllArr_existanceAndLoadAssets = [];
 
 		// start loading assets
