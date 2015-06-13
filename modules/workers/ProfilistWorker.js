@@ -319,11 +319,18 @@ function refreshIconAtPath(iconPath) {
 function winnt_updateFoundShortcutLaunchers_withObj(objDirDepth, aProfRootDirOsPath, commonCutInfoObj) {
 	// if shortcut found in these dirs, it is updated
 		// if launcher is not found it is not made
-		
+	
+	// console.error('winnt_updateFoundShortcutLaunchers_withObj', 'ENTERED');
+	
+	// console.info('objDirDepth:', objDirDepth);
+	// console.info('aProfRootDirOsPath:', aProfRootDirOsPath);
+	// console.info('commonCutInfoObj:', commonCutInfoObj);
+	
 	var rezFindsArr = findLaunchers(objDirDepth, aProfRootDirOsPath);
 	
 	var cArrOfObjs = [];
 	for (var i=0; i<rezFindsArr.length; i++) {
+		console.info('i:', i);
 		cArrOfObjs.push({
 			dirNameLnk: rezFindsArr[i],
 			args: commonCutInfoObj.args,
@@ -339,8 +346,11 @@ function winnt_updateFoundShortcutLaunchers_withObj(objDirDepth, aProfRootDirOsP
 			cArrOfObjs[cArrOfObjs.length-1].appUserModelId = HashStringHelper(aProfRootDirOsPath);
 		}
 	}
+	// console.error('winnt_updateFoundShortcutLaunchers_withObj', 'cArrOfObjs:', cArrOfObjs);
 	
-	createShortcuts(cArrOfObjs);
+	createShortcuts(cArrOfObjs); // if length of objs is 0 it will not do anything
+	
+	// console.error('winnt_updateFoundShortcutLaunchers_withObj', 'DONE');
 }
 
 function makeLauncher(pathsObj) {
@@ -734,6 +744,7 @@ function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 		case 'wince':
 		
 				// find shortcut launchers
+				
 				var arrLauncherPaths = [];
 				var arrCollectedPaths = []; // paths of all of the files found in the selected paths
 				var dlgtCollect = function(aEntry) {
@@ -746,7 +757,16 @@ function findLaunchers(objDirDepth, aProfRootDirOsPath, aOptions={}) {
 				
 				// get cut details
 				for (var p in objDirDepth) {
-					enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
+					try {
+						enumChildEntries(p, dlgtCollect, objDirDepth[p], false);
+					} catch(ex) {
+						if ('winLastError' in ex && ex.winLastError == 2) {
+							// the directory at p doesnt exist so continue
+						} else {
+							console.error('findLaunchers', 2.6, 'ex on enumChildEntries:', ex.winLastError, 'ex:', ex);
+							throw new Error(ex.toString());
+						}
+					}
 				}
 				
 				var cutInfos = winnt_getInfoOnShortcuts(arrCollectedPaths, {winGetArgs:true});
@@ -821,6 +841,10 @@ function createShortcuts(aArrOfObjs) {
 		
 		MUST provide either (OSPath_dir AND jsStr_name) OR OSPath_dirNameLnk
 	*/
+	
+	if (aArrOfObjs.length == 0) {
+		return true; // nothing to make
+	};
 	
 	var refs = {};
 	ostypes.HELPER.InitShellLinkAndPersistFileConsts();
@@ -1905,6 +1929,10 @@ function winnt_getInfoOnShortcuts(arrOSPath, aOptions) {
 			// winGetTargetPath - default false.
 			// winGetArgs - default false.
 	
+	if (arrOSPath.length == 0) {
+		return {};
+	}
+	
 	var references = {
 		//propertyStore: undefined // this tells winntShellFile_DoerAndFinalizer to get IPropertyStore interface
 	}
@@ -2087,7 +2115,10 @@ function read_encoded(path, options) {
 	}
 }
 
-function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir) {
+function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir, aOptions={}) {
+	// last update 061215 0540p - to add support for aOptions.causesNeutering
+	// aOptions
+		// causesNeutering - default is false, if you use writeAtomic or another function and use an ArrayBuffer then set this to true, it will ensure directory exists first before trying. if it tries then fails the ArrayBuffer gets neutered and the retry will fail with "invalid arguments"
 	// sync version of the one from bootstrap
 	//argsOfOsFileFunc must be array
 	
@@ -2107,9 +2138,9 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 		// no try so it throws if errors
 	};
 	
-	// setup recurse make dirs
-	var makeDirs = function() {
-		var toDir;
+	// popToDir
+	var toDir;
+	var popToDir = function() {
 		switch (nameOfOsFileFunc) {
 			case 'writeAtomic':
 				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
@@ -2126,20 +2157,43 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			default:
 				throw new Error('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
 		}
+	};
+	
+	// setup recurse make dirs
+	var makeDirs = function() {
+		if (!toDir) {
+			popToDir();
+		}
 		makeDir_Bug934283(toDir, {from: fromDir});
 		return retryIt();
 	};
 	
 	// do initial attempt
-	try {
-		var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
-		return 'initialAttempt succeeded'
-	} catch (ex) {
-		if (ex.becauseNoSuchFile) {
-			console.log('make dirs then do secondAttempt');
-			return makeDirs();
+	var doInitialAttempt = function() {
+		try {
+			var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
+			return 'initialAttempt succeeded'
+		} catch (ex) {
+			if (ex.becauseNoSuchFile) {
+				console.log('make dirs then do secondAttempt');
+				return makeDirs();
+			}
 		}
 	}
+	
+	if (aOptions.causesNeutering) {
+		// check exists first
+		popToDir();
+		var promise_firstCheckDirExists = OS.File.exists(toDir);
+		if (promise_firstCheckDirExists) {
+			//yes exists
+			doInitialAttempt();
+		} else {
+			// make dirs first
+			makeDirs();
+		}
+	}
+	
 }
 
 function makeDir_Bug934283(path, options) {
@@ -2229,6 +2283,9 @@ function HashStringHelper(aText) {
 }
 
 function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
+	// update 061215 0401p - just comments on throwing link10000002551
+	// if pathToDir does not exist this will throw on link10000002551
+	
 	// sync version of https://gist.github.com/Noitidart/0104294ce25386e4788f
 	// C:\Users\Vayeate\Pictures\enumChildEntries sync version varviewer.png
 	// if delegate returns true, then enumChildEntries returns the entry it ended on
@@ -2289,7 +2346,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
 		for (var h=0; h<sLen; h++) {
 			try {
 				var iterrator = new OS.File.DirectoryIterator(subdirs[depth-1][h]);
-				var aVal = iterrator.nextBatch();
+				var aVal = iterrator.nextBatch();  // this will throw if path at str doesnt exist, this only happens on pathToDir though, as the rest is on stuff thats found link10000002551 i got this: `message:"Error: Win error 2 during operation DirectoryIterator.prototype.next on file C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\profilist_data\launcher_exes (The system cannot find the file specified.)`
 			} finally {
 				iterrator.close();
 			}

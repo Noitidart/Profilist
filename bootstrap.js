@@ -252,6 +252,12 @@ current builds icon if dev mode is enabled
 					}
 				}
 			}
+			
+			// ensure that iniObj_thatAffectDOM has General key as i use it for some non ini written stuff
+			if (!('General' in iniObj_thatAffectDOM)) {
+				iniObj_thatAffectDOM.General = {props:{}};
+			}
+			
 			//iniStr_thatAffectDOM = JSON.stringify(iniObj_thatAffectDOM); //dont do this here as i need to first update currentThisBuildsIconPath
 			console.info('iniObj_thatAffectDOM:', iniObj_thatAffectDOM);
 			//update watchBranches[myPrefBranch] AND make boolean type prefs, boolean type in ini object
@@ -288,8 +294,10 @@ current builds icon if dev mode is enabled
 			
 			//update icon `currentThisBuildsIconPath`
 			//if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) { //if (ini.General.props['Profilist.dev'] == 'true') { //OR I can test `if (myPrefListener.watchBranches[myPrefBranch].prefNames['dev'].value == true) {` but if i use this pref test method then i need to update watch branches block before this currentBuildIcons
-			
+
+				// setup gDevBuilds
 				if ('Profilist.dev-builds' in ini.General.props) {
+					console.error('ini.General.props[\'Profilist.dev-builds\']:', ini.General.props['Profilist.dev-builds']);
 					gDevBuilds = JSON.parse(ini.General.props['Profilist.dev-builds']); // JSON.parse(myPrefListener.watchBranches[myPrefBranch].prefNames['dev-builds'].value);
 					
 					// also update iniObj_thatAffectDOM with base icons used
@@ -313,7 +321,10 @@ current builds icon if dev mode is enabled
 							}
 						}
 					}
+				} else {
+					gDevBuilds = [];
 				}
+				
 				//start the generic-ish check stuff
 				// copy block link011012154 slight modif
 				currentThisBuildsIconPath = '';
@@ -1397,12 +1408,14 @@ function initProfToolkit() {
 	profToolkit.path_profilistData_launcherIcons = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_icons');
 	profToolkit.path_profilistData_launcherExes = OS.Path.join(profToolkit.path_profilistData_root, 'launcher_exes');
 	profToolkit.path_profilistData_idsJson = OS.Path.join(profToolkit.path_profilistData_root, 'ids.json');
+	
+	profToolkit.path_profilistData_watchDir = OS.Path.join(profToolkit.path_profilistData_root, 'watch_dir'); // dir which i use for ipc between other running instances of profilist
 	switch (cOS) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 		
-				profToolkit.path_profilistData_winntWatchDir = OS.Path.join(profToolkit.path_profilistData_root, 'winnt_watch_dir');
+				//profToolkit.path_profilistData_winntWatchDir = OS.Path.join(profToolkit.path_profilistData_root, 'winnt_watch_dir');
 				if (core.os.version_name == '7+') {
 					profToolkit.path_system_dirForNormalPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'); // :note: implementation specific, test on win10 and all windows version
 					profToolkit.path_system_dirForRelaunchCmdPins = OS.Path.join(OS.Constants.Path.winAppDataDir, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'ImplicitAppShortcuts'); // :note: implementation specific, test on win10 and all windows version
@@ -4517,7 +4530,7 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 												deferredMain_updateIconToAllWindows.resolve(false);
 											} else {
 												winntPathToWatchedFile = {
-													fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
+													fullPathToFile: OS.Path.join(profToolkit.path_profilistData_watchDir, getSafedForOSPath(aProfIniKey) + '.json'),
 													fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
 												};
 												cWinHandlePtrStr = aVal;
@@ -4543,7 +4556,7 @@ function updateIconToAllWindows(aProfIniKey, useSpecObj, aOptions={}) {
 										deferredMain_updateIconToAllWindows.resolve(false);
 									} else {
 										winntPathToWatchedFile = {
-											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(aProfIniKey) + '.json'),
+											fullPathToFile: OS.Path.join(profToolkit.path_profilistData_watchDir, getSafedForOSPath(aProfIniKey) + '.json'),
 											fromDir: profToolkit.path_profilistData_root__fromDir // this is used in case the dirs leading to fullPathToFile dont exist
 										};
 										cWinHandlePtrStr = aOptions.objPidWins[aProfPID];
@@ -5482,7 +5495,7 @@ PrefListener.prototype.watchBranches[myPrefBranch] = { //have to do it this way 
 		},
 		'dev-builds': {
 			owned: true,
-			default: '',
+			default: '[]',
 			value: undefined,
 			type: Ci.nsIPrefBranch.PREF_STRING,
 			on_PrefOnObj_Change: writePrefToIni
@@ -5898,7 +5911,7 @@ function activated(e) {
 				// its a temp prof, dont do this
 				break;
 			}
-			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_winntWatchDir, getSafedForOSPath(profToolkit.selectedProfile.iniKey) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
+			var fullFilePathToWM_SETICON = OS.Path.join(profToolkit.path_profilistData_watchDir, getSafedForOSPath(profToolkit.selectedProfile.iniKey) + '.json') // profToolkit.selectedProfile.iniKey == profToolkit.selectedProfile.iniKey.props.Path
 			var promise_checkWmSeticoned = read_encoded(fullFilePathToWM_SETICON, {encoding:'utf8'});
 			promise_checkWmSeticoned.then(
 				function(aVal) {
@@ -5911,7 +5924,10 @@ function activated(e) {
 										  .treeOwner
 										  .QueryInterface(Ci.nsIInterfaceRequestor)
 										  .getInterface(Ci.nsIBaseWindow).nativeHandle;
-					var contents_JSON = JSON.parse(aVal);					
+					var contents_JSON = JSON.parse(aVal);
+					
+					// :todo: test if contents_JSON is applicable, like time of that is greater then the time i last applied icon with a read of ini -- otherwise if profilist wasnt installed in profile and then user changed icon of that profile while it was running, it gets a file but its not applicable as if user installs profilist during same session then it will read ini and use that value to apply it, //// actually it is valid, as the new icons will not apply until the WmSeticoned are removed! but see if i can throw a session id into that json, as if its not the same session then its not valid, and actually due to this case writing a file is actually the right solution, as ipc would fail if its not installed there and user installs profilist later into same session // the wisest solution is probably dont WmSeticon to the profile if profilist isnt installed
+					
 					var promise_removeWinIcons_thenSetLong = ProfilistWorker.post('removeWmSetIcons_thenSetLong', [contents_JSON, fullFilePathToWM_SETICON, mostRecWinHwndPtrStr]);
 					promise_removeWinIcons_thenSetLong.then(
 						function(aVal) {
@@ -7499,12 +7515,14 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 				function(aVal) {
 					console.log('Fullfilled - promise_iconPrexists - ', aVal);
 					// start - do stuff here - promise_iconPrexists
-					//console.error('icon already exists, and devuser asked that overwrite not happen so resolve link11564380025, path_icon:', path_icon);
-					deferredMain_makeIcon.resolve({
-						prexisted: true,
-						path_icon: path_icon,
-						profSpecs: cProfSpec
-					});
+					if (aVal) {
+						//console.error('icon already exists, and devuser asked that overwrite not happen so resolve link11564380025, path_icon:', path_icon);
+						deferredMain_makeIcon.resolve({
+							prexisted: true,
+							path_icon: path_icon,
+							profSpecs: cProfSpec
+						});
+					}
 					// end - do stuff here - promise_iconPrexists
 				},
 				function(aReason) {
@@ -7752,7 +7770,7 @@ function makeIcon(aProfIniKey, useSpecObj, doc, forceOverwrite) {
 					// start - save it to disk
 					// note: i use here `resolveObj.OSPath` which is set in the promise_iconPrexists, for WINNT and Darwin
 					// IMPORTANT TODO: if a iconsetId from profilist_data/iconsets gets deleted DELETE icon files associated with it. i discovered this in windows. it makes sense for all os though. as user may bring back the same iconsetId but with a different image/art/drawing. so just checking if path exists will return true, but the art/drawing work inside the icon is different
-					var promise_writeIco = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_icon, new Uint8Array(buffer), {tmpPath:path_icon+'.tmp'}], profToolkit.path_iniDir);
+					var promise_writeIco = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_icon, new Uint8Array(buffer), {tmpPath:path_icon+'.tmp'}], profToolkit.path_iniDir, {causesNeutering:true});
 					promise_writeIco.then(
 						function(aVal) {
 							console.log('Fullfilled - promise_writeIco - ', aVal);
@@ -8094,7 +8112,7 @@ function pickerIconset(tWin) {
             // reader.result contains the ArrayBuffer.			
 			var arrview = new Uint8Array(reader.result);
 			
-			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp'}], profToolkit.path_iniDir);
+			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp'}], profToolkit.path_iniDir, {causesNeutering:true});
 
 			promise_writeArrView.then(
 				function(aVal) {
@@ -9013,7 +9031,7 @@ function showPick4Badging(win) {
             // reader.result contains the ArrayBuffer.			
 			var arrview = new Uint8Array(reader.result);
 			
-			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp', encoding:'utf-8'}], fromPathBase);
+			var promise_writeArrView = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [path_to_save_at, arrview, {tmpPath:path_to_save_at+'.tmp', encoding:'utf-8'}], fromPathBase, {causesNeutering:true});
 
 			promise_writeArrView.then(
 				function(aVal) {
@@ -9762,7 +9780,7 @@ function updateProfStatObj(markObj) {
 	}
 	
 	var do_writeProfStatFile = function() {
-		var promise_writeProfStatFile = OS.File.writeAtomic(profToolkit.path_profilistData_idsJson, JSON.stringify(profStatObj), {encoding:'utf-8'});
+		var promise_writeProfStatFile = tryOsFile_ifDirsNoExistMakeThenRetry('writeAtomic', [profToolkit.path_profilistData_idsJson, JSON.stringify(profStatObj), {encoding:'utf-8'}], profToolkit.path_iniDir);
 		promise_writeProfStatFile.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_writeProfStatFile - ', aVal);
@@ -9994,7 +10012,11 @@ function makeDir_Bug934283(path, options) {
 	return promise_makeDir_Bug934283;
 }
 
-function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir) {
+function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc, fromDir, aOptions={}) {
+	//last update: 061215 0303p - verified worker version didnt have the fix i needed to land here ALSO FIXED so it handles neutering of Fx37 for writeAtomic and I HAD TO implement this fix to worker version, fix was to introduce aOptions.causesNeutering
+	// aOptions:
+		// causesNeutering - default is false, if you use writeAtomic or another function and use an ArrayBuffer then set this to true, it will ensure directory exists first before trying. if it tries then fails the ArrayBuffer gets neutered and the retry will fail with "invalid arguments"
+		
 	// i use this with writeAtomic, copy, i havent tested with other things
 	// argsOfOsFileFunc is array of args
 	// will execute nameOfOsFileFunc with argsOfOsFileFunc, if rejected and reason is directories dont exist, then dirs are made then rexecute the nameOfOsFileFunc
@@ -10011,6 +10033,7 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 	
 	// setup retry
 	var retryIt = function() {
+		console.info('tryosFile_ retryIt', 'nameOfOsFileFunc:', nameOfOsFileFunc, 'argsOfOsFileFunc:', argsOfOsFileFunc);
 		var promise_retryAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
 		promise_retryAttempt.then(
 			function(aVal) {
@@ -10031,9 +10054,9 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 		);
 	};
 	
-	// setup recurse make dirs
-	var makeDirs = function() {
-		var toDir;
+	// popToDir
+	var toDir;
+	var popToDir = function() {
 		switch (nameOfOsFileFunc) {
 			case 'writeAtomic':
 				toDir = OS.Path.dirname(argsOfOsFileFunc[0]);
@@ -10051,6 +10074,13 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject('nameOfOsFileFunc of "' + nameOfOsFileFunc + '" is not supported');
 				return; // to prevent futher execution
 		}
+	};
+	
+	// setup recurse make dirs
+	var makeDirs = function() {
+		if (!toDir) {
+			popToDir();
+		}
 		var promise_makeDirsRecurse = makeDir_Bug934283(toDir, {from: fromDir});
 		promise_makeDirsRecurse.then(
 			function(aVal) {
@@ -10060,13 +10090,17 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			function(aReason) {
 				var rejObj = {name:'promise_makeDirsRecurse', aReason:aReason};
 				console.error('Rejected - promise_makeDirsRecurse - ', rejObj);
+				/*
 				if (aReason.becauseNoSuchFile) {
 					console.log('make dirs then do retryAttempt');
 					makeDirs();
 				} else {
 					// did not get becauseNoSuchFile, which means the dirs exist (from my testing), so reject with this error
+				*/
 					deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
+				/*
 				}
+				*/
 			}
 		).catch(
 			function(aCaught) {
@@ -10076,31 +10110,64 @@ function tryOsFile_ifDirsNoExistMakeThenRetry(nameOfOsFileFunc, argsOfOsFileFunc
 			}
 		);
 	};
-	
-	// do initial attempt
-	var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
-	promise_initialAttempt.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_initialAttempt - ', aVal);
-			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('initialAttempt succeeded');
-		},
-		function(aReason) {
-			var rejObj = {name:'promise_initialAttempt', aReason:aReason};
-			console.error('Rejected - promise_initialAttempt - ', rejObj);
-			if (aReason.becauseNoSuchFile) {
-				console.log('make dirs then do secondAttempt');
-				makeDirs();
-			} else {
-				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
+
+	var doInitialAttempt = function() {
+		var promise_initialAttempt = OS.File[nameOfOsFileFunc].apply(OS.File, argsOfOsFileFunc);
+		console.info('tryosFile_ initial', 'nameOfOsFileFunc:', nameOfOsFileFunc, 'argsOfOsFileFunc:', argsOfOsFileFunc);
+		promise_initialAttempt.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_initialAttempt - ', aVal);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.resolve('initialAttempt succeeded');
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_initialAttempt', aReason:aReason};
+				console.error('Rejected - promise_initialAttempt - ', rejObj);
+				if (aReason.becauseNoSuchFile) { // this is the flag that gets set to true if parent dir(s) dont exist, i saw this from experience
+					console.log('make dirs then do secondAttempt');
+					makeDirs();
+				} else {
+					deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); //throw rejObj;
+				}
 			}
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promise_initialAttempt', aCaught:aCaught};
-			console.error('Caught - promise_initialAttempt - ', rejObj);
-			deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); // throw aCaught;
-		}
-	);
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_initialAttempt', aCaught:aCaught};
+				console.error('Caught - promise_initialAttempt - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj); // throw aCaught;
+			}
+		);
+	};
+	
+	if (!aOptions.causesNeutering) {
+		doInitialAttempt();
+	} else {
+		// ensure dir exists, if it doesnt then go to makeDirs
+		popToDir();
+		var promise_checkDirExistsFirstAsCausesNeutering = OS.File.exists(toDir);
+		promise_checkDirExistsFirstAsCausesNeutering.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_checkDirExistsFirstAsCausesNeutering - ', aVal);
+				// start - do stuff here - promise_checkDirExistsFirstAsCausesNeutering
+				if (!aVal) {
+					makeDirs();
+				} else {
+					doInitialAttempt(); // this will never fail as we verified this folder exists
+				}
+				// end - do stuff here - promise_checkDirExistsFirstAsCausesNeutering
+			},
+			function(aReason) {
+				var rejObj = {name:'promise_checkDirExistsFirstAsCausesNeutering', aReason:aReason};
+				console.warn('Rejected - promise_checkDirExistsFirstAsCausesNeutering - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {name:'promise_checkDirExistsFirstAsCausesNeutering', aCaught:aCaught};
+				console.error('Caught - promise_checkDirExistsFirstAsCausesNeutering - ', rejObj);
+				deferred_tryOsFile_ifDirsNoExistMakeThenRetry.reject(rejObj);
+			}
+		);
+	}
 	
 	
 	return deferred_tryOsFile_ifDirsNoExistMakeThenRetry.promise;
