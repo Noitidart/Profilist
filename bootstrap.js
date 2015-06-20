@@ -2839,7 +2839,7 @@ function tbb_box_click(e) {
 						//console.error('got onconfirm aInput:', aInput);
 						
 						var do_checkCustPath = function() {
-							if (aEvent.altKey && aEvent.shiftKey) {
+							if (aEvent.ctrlKey && aEvent.shiftKey) {
 								// create absolute path profile
 								var dirpath = OS.Path.dirname(aInput);
 								var profname = OS.Path.basename(aInput);
@@ -2923,7 +2923,7 @@ function tbb_box_click(e) {
 										},
 										onrestore: tbbFinalizer
 									}, true);
-									if (aEvent.ctrlKey) {
+									if (aEvent.altKey) {
 										// launch on create
 										launchProfile(aVal);
 									} else {
