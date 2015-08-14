@@ -87,7 +87,7 @@
 
 .PanelUI-profilist:not([disabled]):hover,
 .PanelUI-profilist:not([disabled]):hover:active,
-.PanelUI-profilist.perm-hover:not([disabled]):active, {
+.PanelUI-profilist.perm-hover:not([disabled]):active {
   outline: none;
 }
 
