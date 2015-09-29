@@ -3,40 +3,36 @@
 	   - License, v. 2.0. If a copy of the MPL was not distributed with this
 	   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 	<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:em="http://www.mozilla.org/2004/em-rdf#">
-	  <Description about="urn:mozilla:install-manifest">
-		<em:id>Profilist@jetpack</em:id>
-		<em:version>2.0</em:version>
-		<em:type>2</em:type>
-		<em:bootstrap>true</em:bootstrap>
-		<em:optionsType>3</em:optionsType>
-		<em:optionsURL>chrome://profilist/content/options.xhtml</em:optionsURL>
-		<em:iconURL>chrome://profilist/content/resources/images/icon48.png</em:iconURL>
-		<!--<em:icon64URL>chrome://profilist/content/resources/images/icon64.png</em:icon64URL>-->
-		
-		<!-- Firefox -->
-		<em:targetApplication>
-			<Description>
-				<em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
-				<em:minVersion>29.0</em:minVersion> <!-- due to designed for Australis+ -->
-				<em:maxVersion>38.0</em:maxVersion>
-			</Description>
-		</em:targetApplication>
-		
-		<!-- Front End MetaData -->
-		<!-- must provide default non-localized because It's used as a default on AMO. It's used as a default by the add-on manager, with the possibility of other locales overriding it. Failure to provide a non-localized name will lead to failed upload on AMO. -->
-		<em:name>Profilist</em:name>
-		<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox</em:description>
-		<em:creator>Noitidart</em:creator>
-		<em:contributor>Stephen Hutchings for Icons</em:contributor>
-		<!-- start localizing - For each entry in default data MUST have equivalent in each localized block -->
-		<em:localized>
-			<Description>
-				<em:locale>en-US</em:locale>
-				<em:name>Profilist</em:name>
-				<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox</em:description>
-				<em:creator>Noitidart</em:creator>
-				<em:contributor>Stephen Hutchings for Icons</em:contributor>
-			</Description>
-		</em:localized>
-	  </Description>
+		<Description about="urn:mozilla:install-manifest">
+			<em:id>Profilist@jetpack</em:id>
+			<em:version>1.2</em:version>
+			<em:type>2</em:type>
+			<em:bootstrap>true</em:bootstrap>
+			<em:optionsType>3</em:optionsType>
+			<em:optionsURL>chrome://profilist/content/options.xhtml</em:optionsURL>
+
+			<!-- Firefox -->
+			<em:targetApplication>
+				<Description>
+					<em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
+					<em:minVersion>7.0</em:minVersion>
+					<em:maxVersion>27.0</em:maxVersion>
+				</Description>
+			</em:targetApplication>
+
+			<!-- Front End MetaData -->
+			<em:name>Profilist</em:name>
+			<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox</em:description>
+			<em:creator>Noitidart</em:creator>
+			<em:contributor>Stephen Hutchings for Icons</em:contributor>
+			<em:localized>
+				<Description>
+					<em:locale>en-US</em:locale>
+					<em:name>Profilist</em:name>
+					<em:description>Inlays a simple and quick access profile manager into the new panel-based main menu. Designed for the Australis update to Firefox</em:description>
+					<em:creator>Noitidart</em:creator>
+					<em:contributor>Stephen Hutchings for Icons</em:contributor>
+				</Description>
+			</em:localized>
+		</Description>
 	</RDF>

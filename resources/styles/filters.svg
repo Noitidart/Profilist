@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg">
-    <filter id="grayscale">
-        <feColorMatrix type="saturate" values="0"/>
-    </filter> 
-</svg>

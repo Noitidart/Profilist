@@ -1,0 +1,417 @@
+/* start - get the background image from proflist_box to dev-build */
+.profilist-tbb-box[status] .profilist-submenu,
+.profilist-tbb-box[status],
+#profilist_box > stack {
+	background-image: inherit;
+	background-repeat: no-repeat;
+	background-position: 0px -30px;
+}
+
+#profilist_box {
+	background-repeat: no-repeat;
+	background-position: 0px -30px; /*because the height of the image i set it to is 16px i should be able to set this to -16px, because purpose of background-image from here inherits all the way down to profilist-dev*/
+	overflow:hidden;
+}
+/* end - get the background image from proflist_box to dev-build */
+
+.profilist-display-stack {
+	margin: 0;
+	padding: 0;
+	margin-right: 25px;
+}
+.profilist-display-stack * {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.profilist-display-stack input {
+	font-size: inherit;
+	font-family: inherit;
+	outline: 1px solid hsla(210,4%,10%,.12);
+}
+
+#profilist_box > stack {
+	width:100%;
+	overflow:hidden;
+	transition:height 0ms;
+}
+/* start deletion handling
+.profilist-tbb-box.profilist-deleting > *{
+	transition: opacity 500ms;
+	opacity: 0 !important;
+	cursor: default;
+}
+/* end deletion handling */
+
+/* start drawer look */
+.profilist-hovered .profilist-tbb-box.profilist-cur-profile { /*current profile*/
+	box-shadow: 0 0px 2px 1px #b4b4b4;
+	background-color: rgba(24, 25, 26, 0.07);
+}
+
+/*
+.profilist-tbb-box[status='active'] {
+	background-color: rgba(24, 25, 26, 0.07);
+}
+*/
+
+.profilist-hovered .profilist-tbb-box:not(.profilist-cur-profile) { /*drawer look*/
+	border-color: rgba(24, 25, 26, 0.04) transparent transparent; /*based on border-color of `.profilist-tbb-box`*/
+	background-color: rgba(24, 25, 26, 0.04);
+}
+
+/*
+.profilist-create { *//*last .profilist-tbb-box*//*
+	border: 1px solid green;
+}
+*/
+
+#profilist_box.profilist-hovered ~ toolbarbutton:not([hidden]):last-of-type { /*first button after profilist box, have to use last of type as things are reversed here*/
+	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.28);
+	border-top-color: #fff;
+}
+
+#profilist_box.profilist-hovered ~ toolbarbutton:not([hidden]):last-of-type:hover { /* actually i need this hover, as when im keeping menu expanded during renaming they can hover other things, but no need for :active on it as a click on it will collapse the menu*/
+	box-shadow: 0px -1px 0px 0px rgba(24, 25, 26, 0.28);
+	border-top-color: rgba(255,255,255,0.7);
+}
+
+/* end drawer look */
+
+.profilist-tbb-box {
+	-moz-binding: url('chrome://profilist/content/xbl.xml#tbb-box');
+	display:flex;
+	border-style: solid;
+	border-width: 1px 0; /*border top and bottom at 1, left and right at 0*/
+	border-color: rgba(24, 25, 26, 0.14) transparent transparent; /*left, right, bottom: transparent, top is colored*/
+	margin-bottom: -1px;
+	
+	-moz-box-align: center;
+	-moz-box-pack: center;
+	transition-property: background-color;
+	max-width: 0;
+}
+
+#profilist_box .profilist-tbb-box:hover {
+	background-color: hsla(210,4%,10%,.07);
+}
+#profilist_box .profilist-tbb-box:not(.profilist-tbb-box-inactivatable):active {
+	background-color: hsla(210,4%,10%,.12);
+}
+
+.profilist-tbb-box:not(.profilist-edit) .profilist-input {
+	display: none;
+}
+
+.profilist-tbb {
+	-moz-appearance: none;
+	padding: 10px 0px 10px 15px;
+	flex-grow: 1;
+	border:0;
+	display:flex;
+	/*-moz-binding: url('chrome://profilist/content/xbl.xml#tbb');*/
+	/*height: 36px;*/
+	box-sizing: border-box;
+	flex-basis: 0%;
+	-moz-box-align: center;
+	-moz-box-pack: center;
+	-moz-image-region: rect(0px, 16px, 16px, 0px);
+	-moz-user-select: none;
+	align-items: center;
+}
+
+.profilist-tbb * {
+	flex-shrink: 0;
+}
+.profilist-tbb .toolbarbutton-text {
+	flex-shrink: 1;
+	text-align: left;
+	padding-top: 1px;
+}
+
+/*start - badge*/
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon {
+	cursor: pointer;
+	opacity: 1;
+	transition: opacity 0.5s; /*link651432 reverse of ZED*/
+}
+
+.profilist-tbb-box .profilist-tbb .profilist-badge {
+	margin-right: 5px;
+}
+
+.profilist-tbb-box[status='inactive'] .toolbarbutton-icon {
+	list-style-image: url('chrome://profilist/content/inactive-user.png');
+}
+.profilist-tbb-box[status='active']	.toolbarbutton-icon {
+	list-style-image: url('chrome://profilist/content/active-user.png');
+}
+.profilist-tbb-box.profilist-create .toolbarbutton-icon {
+	list-style-image: url(chrome://profilist/content/plus.png);
+}
+
+#profilist-loading .toolbarbutton-icon {
+	list-style-image: url(chrome://profilist/content/icon16.png);
+}
+
+.profilist-tbb:not([badge]) .profilist-badge {
+	list-style-image: none;
+}
+
+/* start - custom badging */
+.profilist-tbb-box[status] .profilist-tbb .profilist-badge {
+	list-style-image: url(chrome://mozapps/skin/places/defaultFavicon.png);
+	transform: translate(-2px, 6px) scale(10);
+	transition: opacity 0.5s ease 1s, transform 0.5s; /*link987436154 reverse of ABC*/
+	pointer-events: none;
+}
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon:hover {
+	opacity: 0;
+	transition: opacity 0.5s ease 0.5s; /*link651432 reverse of ZED but more delay here than delay on opacity in complement*/
+}
+
+.profilist-tbb-box:not([badge]) .profilist-badge {
+	opacity: 0;
+}
+
+.profilist-tbb-box[status] .profilist-tbb .toolbarbutton-icon:hover + image {
+	transform: translate(-9px, -1px) scale(16); /*this transforms to be exactly over the toolbarbutton-icon*/
+	opacity: 1;
+	transition: opacity 0.5s, transform 0.5s ease 0.5s; /*link987436154 reverse of ABC*/
+}
+
+/* start - no delay transform as already badged*/
+.profilist-tbb-box[badge] .profilist-tbb .toolbarbutton-icon:hover + image {
+	transition: opacity 0.5s, transform 0.5s ease; /*link987436154 reverse of ABC*/
+}
+.profilist-tbb-box[badge] .profilist-tbb .toolbarbutton-icon:hover {
+	transition: opacity 0.5s ease; /*link651432 reverse of ZED but more delay here than delay on opacity in complement*/
+}
+/* end - no delay transform as already badged*/
+
+/* start - clicked so force it */
+.profilist-tbb-box.profilist-in-badge-change .profilist-tbb .toolbarbutton-icon {
+	transition: opacity 0.5s ease; /* make it immediate */
+	opacity: 0;
+}
+
+.profilist-tbb-box.profilist-in-badge-change .profilist-tbb .toolbarbutton-icon + image {
+	transform: translate(-9px, -1px) scale(16); /*this transforms to be exactly over the toolbarbutton-icon*/
+	transition: opacity 0.5s, transform 0.5s ease; /*link987436154 no delay of ABC*/
+	opacity: 1;
+}
+/* end - clicked so force it */
+/* start - post clicked experimental */
+.profilist-tbb-box.profilist-POST-badge-change:not[badge] .profilist-tbb .toolbarbutton-icon {
+	transition: opacity 0.5s ease 1s; /* make it immediate */
+}
+.profilist-tbb-box.profilist-POST-badge-change:not[badge] .profilist-tbb .toolbarbutton-icon + image {
+	transition: opacity 0.5s ease 1.5s, transform 0.5s ease 1s; /*link987436154 no delay of ABC*/
+}
+/* end - post clicked */
+/* end - custom badging */
+/*end - badge*/
+
+/* start submenu*/
+.profilist-tbb-box:not([status]):not(.profilist-create) .profilist-submenu {
+	display:none;
+}
+
+.profilist-submenu {
+	display: flex;
+	transition: width 300ms, opacity 150ms;
+	opacity: 0;
+	width: calc(1*18px); /* 18px is the width of the images */
+}
+
+.profilist-tbb-box:hover .profilist-submenu {
+	opacity: 1;
+}
+
+/* start submenu for profilist-create*/
+.profilist-create .profilist-submenu  {
+/* clone button*/
+	margin-right: 10px;
+	/*border-radius: 100%;*/
+	margin-top: 2px;
+	margin-bottom: 2px;
+	transition: /*background-color 150ms, */opacity 150ms;
+	opacity: 0;
+	overflow: hidden;
+	width: 32px;
+}
+.profilist-create .profilist-submenu:hover  {
+	/*background-color: hsla(210,4%,10%,.06);*/
+	opacity: 1;
+}
+.profilist-create .profilist-submenu:active  {
+	/*background-color: hsla(210,4%,10%,.12);*/
+	opacity: 1;
+	transition: opacity 150ms;
+}
+/* end submenu for profilist-create*/
+
+
+/*start - submenu positions when dev disabled*/
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=active] .profilist-submenu:hover {
+	width: calc(2*18px);
+}
+#profilist_box:not(.profilist-dev-enabled) .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
+	width: calc(3*18px);
+}
+/*end - submenu positions when dev disabled*/
+
+/*start - submenu positions when dev enabled*/
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=active] .profilist-submenu:hover {
+	width: calc(4*18px);
+}
+#profilist_box.profilist-dev-enabled .profilist-tbb-box[status=inactive] .profilist-submenu:hover {
+	width: calc(5*18px);
+}
+/*end - submenu positions when dev enabled*/
+
+.profilist-tbb-box.profilist-tied .profilist-submenu {
+	width: calc(10px + 18px + 5px);
+}
+
+/* end submenu*/
+
+
+/* dots */
+.profilist-tbb-box .profilist-submenu box.profilist-dots {
+	/*padding: 11px 5px 9px 5px; /*because dots dont like centered if i dont set top 11 and bottom 9*/
+	/* list-style-image: url(chrome://profilist/content/3dots.png); */
+	background: url(chrome://profilist/content/3dots_shifted.png) no-repeat center center transparent;
+	filter: none;
+	opacity: 1;
+	flex-shrink: 0;
+	width: 18px;
+	/*transition: opacity 150ms ease 150ms, width 150ms, padding 150ms;*/
+	/*/*transition: opacity 300ms;*/
+}
+
+.profilist-tbb-box.profilist-tied .profilist-submenu box.profilist-dots {
+	width: 8px;
+	/*background-image: url(chrome://profilist/content/3dots_shifted.png); *//*margin-top: 1px;*/ /*margin-top 1px messes up the hover, there is 1px sliver at top where still wtihin tbb-box but it hides the submenu*/
+	margin-left: 3px;
+}
+
+.profilist-tbb-box.profilist-tied .profilist-submenu:not(:hover) box.profilist-dev-safe {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.profilist-submenu:hover .profilist-dots {
+	/*/*opacity: 0;*/
+	display: none;
+}
+/*
+.profilist-submenu:hover .profilist-dots {
+	opacity: 0;
+	width: 0;
+	padding: 0;
+	transition: opacity 150ms, width 150ms ease 200ms, padding 150ms ease 200ms;
+}
+*/
+/* dots */
+.profilist-tbb-box .profilist-submenu box:not(.profilist-dots):not(.profilist-clone) {
+	/*padding: 10px 1px;*/
+	width: 18px;
+}
+
+#profilist_box:not(.profilist-dev-enabled) [class*="profilist-dev-"] {
+	display: none;
+}
+
+.profilist-submenu {
+	overflow: hidden;
+}
+
+#profilist_box:not(.profilist-show-is-default) .profilist-is-default {
+	display: none;
+}
+
+
+
+.profilist-submenu box:not(.profilist-dots) {
+	filter: url(filters.svg#grayscale);
+	opacity: .2;
+	transition: opacity 300ms;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.profilist-submenu box:not(.profilist-dots):hover {
+	opacity: 1;
+}
+.profilist-submenu box:not(.profilist-dots):not(.profilist-dev-build):hover { /*special for dev build no filter removal*/
+	filter: none;
+}
+
+.profilist-tbb-box[status=active] .profilist-inactive-del {
+	display:none;
+}
+.profilist-inactive-del {
+	/* list-style-image: url(chrome://profilist/content/bullet_delete.png); */
+	background: url(chrome://profilist/content/bullet_delete.png) no-repeat center center transparent;
+}
+.profilist-rename {
+	/*list-style-image: url(chrome://profilist/content/bullet_edit.png);*/
+	background: url(chrome://profilist/content/bullet_edit.png) no-repeat center center transparent;
+}
+.profilist-default {
+	background: url(chrome://profilist/content/bullet_gray.png) no-repeat center center transparent;
+}
+.profilist-is-default {
+	/*used to show which other profile is the current default one when user hovers over ".profilist-default"*/
+	/* list-style-image: url(chrome://profilist/content/bullet_blue.png); */
+	background: url(chrome://profilist/content/bullet_blue.png) no-repeat center center transparent;
+}
+.profilist-dev-safe {
+	/* list-style-image: url(chrome://profilist/content/bullet_wrench.png); */
+	background: url(chrome://profilist/content/bullet_wrench.png) no-repeat center center transparent;
+}
+.profilist-dev-build {
+	/* list-style-image: url(chrome://branding/content/icon16.png); */
+	background-image: inherit;
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-color: transparent;
+	/*background: url(chrome://branding/content/icon16.png) no-repeat center center transparent;*/
+	filter: url(filters.svg#grayscale);
+}
+	/*
+	.profilist-tbb-box.profilist-tied-release .profilist-dev-build {
+		background: url(chrome://profilist/content/bullet_release.png) no-repeat center center transparent;
+	}
+	.profilist-tbb-box.profilist-tied-beta .profilist-dev-build {
+		background: url(chrome://profilist/content/bullet_beta.png) no-repeat center center transparent;
+	}
+	.profilist-tbb-box.profilist-tied-aurora .profilist-dev-build {
+		background: url(chrome://profilist/content/bullet_aurora.png) no-repeat center center transparent;
+	}
+	.profilist-tbb-box.profilist-tied-nightly .profilist-dev-build {
+		background: url(chrome://profilist/content/bullet_nightly.png) no-repeat center center transparent;
+	}
+	*/
+.profilist-tbb-box.profilist-tied .profilist-dev-build {
+	opacity: 1;
+	filter: none;
+}
+.profilist-tbb-box:not(.profilist-create) .profilist-clone {
+	display: none;
+}
+.profilist-create .profilist-submenu box.profilist-clone {
+	/* list-style-image: url(chrome://profilist/content/clone.png); */
+	background: url(chrome://profilist/content/clone.png) no-repeat center center transparent;
+	width: 32px;
+}
+.profilist-create .profilist-submenu box:not(.profilist-clone) {
+	display: none;
+}
+/* end submenu*/
+
+#profilistLoading .profilist-tbb {
+	list-style-image: url(chrome://profilist/content/icon16.png);
+}

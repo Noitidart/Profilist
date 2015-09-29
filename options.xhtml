@@ -1,18 +1,18 @@
 <!DOCTYPE html SYSTEM "chrome://profilist/locale/options.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>&profilist.options.title;</title>
+  <title>&profilist.options.profilist; | &profilist.options.control-panel;</title>
   <meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
   <meta name="description" content="Control Panel for Profilist a Firefox Add-on" />
-  <link rel="shortcut icon" href="chrome://profilist/content/resources/images/icon16.png" type="image/png" />
-  <link rel="stylesheet" type="text/css" media="screen" href="chrome://profilist/content/resources/styles/options.css" />
-  <script src="chrome://profilist/content/resources/scripts/options.js"></script>
+  <link rel="shortcut icon" href="icon16.png" type="image/png" />
+  <link rel="stylesheet" type="text/css" media="screen" href="options_resources/options.css" />
+  <script src="options_resources/xpcom.js"></script>
 </head>
 <body class="login">
 
 
         <div class="glb-bdy">
-          <h1><img src="chrome://profilist/content/resources/images/icon48.png" /><span>&profilist.options.profilist;</span><small>&profilist.options.control-panel;</small></h1>
+          <h1><img src="icon.png" /><span>&profilist.options.profilist;</span><small>&profilist.options.control-panel;</small></h1>
 
           <div id="login-dialog">
             <div class="hd"></div>
@@ -21,7 +21,7 @@
 			<div id="innerbg" class="inner-bg">
               <div class="section log-in sect-gen sect-dev-on" id="sectGen">
                 <h2>&profilist.options.general;</h2>
-                <form name="login">
+                <form name="login" action="/eum/login" method="post">
                   <fieldset>
                     <div class="row">
                       <label class="input-hint">&profilist.options.automatic-updates;</label>
@@ -82,7 +82,7 @@
                         </option>
                       </select>
 					  <label id="scLoader" style="float: right; position: relative; width: auto; margin: 6px 3px 3px; pointer-events:none; opacity:0; transition:opacity 200ms;" class="input-hint">
-						<img src="chrome://profilist/content/resources/images/loading.gif" />
+						<img src="options_resources/loading.gif" />
 					  </label>
                     </div><!--next row-->
                   </fieldset>
@@ -115,7 +115,34 @@
 						</span>
                       </div>
 					  
-
+                      <div class="attn">
+                        <span onclick="changeIcon(event)" class="beta">
+							<span class="icon change-icon"></span>
+							<span class="icon browse-icon" onmouseenter="browseEnter(event)" onmouseleave="browseLeave(event)"></span>
+						</span>
+                        <span>
+							<input type="text"/> <span class="icon"></span>
+						</span>
+                        <span>
+							<span class="icon cancel"></span>
+							<span class="icon updown"></span>
+							<span class="icon current-build"></span>
+						</span>
+                      </div>
+                      <div class="attn">
+                        <span onclick="changeIcon(event)" class="nightly">
+							<span class="icon change-icon"></span>
+							<span class="icon browse-icon" onmouseenter="browseEnter(event)" onmouseleave="browseLeave(event)"></span>
+						</span>
+                        <span>
+							<input type="text"/><span class="icon"></span>
+						</span>
+                        <span>
+							<span class="icon cancel"></span>
+							<span class="icon updown"></span>
+							<span class="icon current-build"></span>
+						</span>
+                      </div>
 					  
                     </div>
                   </fieldset>

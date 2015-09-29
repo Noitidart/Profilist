@@ -1,0 +1,25 @@
+when panel is popupshowing do this:
+1. gets `PanelUI` dom element by taking from either `e` or `aDOMWindow` [ELEMENT]
+{i added this in when following the notes}1b. check if profilist is in window, if not then insert loading
+2. determines if `PUIsync_height` has been declared, and if it wasnt then it figures it out and declares it
+3. gets `stack` dom element from `PanelUI` [ELEMENT]
+4. makes sure `collapsedheight` is delcared as `PUIsync_height`
+5. makes `stack` to `collapsedheight` if it isnt necessary
+6. readIni
+	6a. if ini is not touched by profilist, readIniBkp
+		6a-i. if IniBkp doesnt exist then touch IniObj and go on, async start writeIniBkp [PENDING: write IniObj]
+		6a-ii. if it exists then read it into IniObj [PENDING: write IniObj]
+	6b. if touched then go on
+7. do post readIni stuff {doing this in readIniAndParseObjs, except for the initProfToolkit part}
+	7a. make sure constants in profToolkit exist [DO NOT DO, move this to startup]
+	7b. update prefs with setVal {what i actually did when following these notes: moved this to readIniAndParseObjs}
+		7b-i. if a pref is not found in ini, then use whatever value is currently in config system and update IniObj.General [PENDING: write IniObj] {doing this in readIniAndParseObjs}
+	7c. if dev mode is enabled maybe do checkIfIconIsRight here
+	7d. Maybe get name of selectedProfile {havent done this yet, deciding if should do in readIniAndParseObjs}
+		7d-i. if path of current profile not in found in ini, then mark active as "Temporary Profile"
+	{added}7e. figured out default profile, and if one is selected
+8. create json.stringify of ini with just prefs and and profile info that affects panel dom {doing this in readIniAndParseObjs}
+9. check windows panel dom json, if it matches, the do nothing, if its different then update, and update windows panel dom json object
+	9a. if it has no old json, then need to insert profilistHBoxJSON and set up `mouseenter` and `mouseleave` stuff
+10. update running icons
+11. if diabled from customize, then re-enable

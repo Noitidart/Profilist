@@ -1,0 +1,481 @@
+.builds-cont input[type=text] {
+	width: 90%;
+	padding-left: 3px;
+	padding-right: 3px;
+}
+
+.builds-cont {
+	display: flex; flex-direction: column; text-align: center;
+	margin-left: 5px;
+}
+
+.builds-cont > div {
+	margin-bottom: 5px; /*note: if change this margin then must change margin in xpcom.js deleteThisBuild()*/
+	/*note: if add more margin or padding should also adjust in the setting to 0 in deleteThisBuild() AND ALSO devBuildsStrToDom()*/
+}
+
+.builds-cont > div > span {
+	flex-shrink:0; display: flex; flex-direction: row;
+	align-items: center;
+	justify-content: center;
+}
+
+.builds-cont > div > span:nth-of-type(1) {
+	width: 35px;
+	position: relative; /* for positioning of the change icon icon*/
+	/*background-color: springgreen;*/
+}
+
+.builds-cont > div:not(:first-of-type)> span:nth-of-type(1) {
+	cursor: pointer;
+	padding-bottom: 2px;
+}
+
+.builds-cont > div > span:nth-of-type(2) {
+	flex-grow: 1;
+	/*background-color: steelblue;*/
+	position: relative; /*for sizing input by %*/
+}
+
+.builds-cont > div > span:nth-of-type(3) {
+	/* outline: 1px solid red; */
+	width: 60px; /*cuz im putting 3 icons in there who each have width 17 and padding 1 left 1 right*/
+}
+
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(3) {
+	/*display: none;*/
+}
+
+.builds-cont > div {
+	display:flex; flex-direction: row;
+}
+
+.sect-dev {
+	position: absolute;
+	transition: opacity 300ms;
+}
+
+/*
+.sect-gen:not(.sect-dev-on) ~ .sect-dev {
+	position: static;
+	transition: opacity 300ms;
+}
+
+.sect-gen.sect-dev-on ~ .sect-dev {
+	position: static;
+	transition: opacity 300ms;
+}
+*/
+
+/* start toggling build */
+
+div:not(:first-of-type) > span:nth-of-type(1).browse {
+	background-image: none;
+}
+
+div:not(:first-of-type) > span:nth-of-type(1):not(.browse) .browse-icon {
+	display: none;
+}
+
+div:not(:first-of-type) > span:nth-of-type(1).release {
+	background-image: url(../ff-channel-base-iconsets/release/release16.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).beta {
+	background-image: url(../ff-channel-base-iconsets/beta/beta16.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).dev {
+	background-image: url(../ff-channel-base-iconsets/dev/dev16.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).aurora {
+	background-image: url(../ff-channel-base-iconsets/aurora/aurora16.png);
+}
+div:not(:first-of-type) > span:nth-of-type(1).nightly {
+	background-image: url(../ff-channel-base-iconsets/nightly/nightly16.png);
+}
+
+div:not(:first-of-type) > span:nth-of-type(1) {
+	background-repeat: no-repeat;
+	background-attachment: scroll;
+	background-position: center calc(50% - 1px);
+	background-color: transparent;
+}
+/*
+resourceURI.asciiSpec: jar:file:///C:/Users/Vayeate/AppData/Roaming/Mozilla/Firefox/Profiles/j0a1zjle.Unnamed%20Profile%201/extensions/Profilist@jetpack.xpi!/
+installPath.path: C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\Profiles\j0a1zjle.Unnamed Profile 1\extensions\Profilist@jetpack.xpi
+*/
+
+/* start icons stuff */
+
+.cancel:before {
+	content: '\e800';
+}
+
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1).noswitch span.change-icon:before {
+	opacity: 0 !important;
+	transition: opacity 200ms!important;
+}
+
+/*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover:before {*/
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .change-icon:before {
+	opacity: 0.5 !important;
+	transition: opacity 300ms !important;
+}
+
+/*.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {*/
+.change-icon:before {
+	/*change-icon icon*/
+	content: '\e806';
+	position: absolute;
+	top: calc(50% - 10px);
+	left: -10px;
+	font-size: 13px !important;
+	opacity: 0 !important;
+	transition: opacity 200ms !important;
+}
+
+.builds-cont > div:not(:first-of-type) > span.browse:nth-of-type(1):hover .change-icon:after {
+	opacity: 0 !important;
+}
+.builds-cont > div:not(:first-of-type) > span.browse:nth-of-type(1) .change-icon:after {
+	/*change-icon icon*/
+	color: rgba(187, 59, 1, 1);
+	content: '\e804';
+	position: absolute;
+	top: calc(50% - 9px);
+	right: -8px; /*right: 12px;*/ /*12px centers it*/
+	font-size: 13px !important;
+	opacity: 1 !important;
+	transition: opacity 200ms !important;
+	z-index: 0;
+	font-family: "fontello";
+	font-style: normal;
+	font-weight: normal;
+	speak: none;
+}
+
+.updown:before {
+	content: '\e805';
+	cursor: ns-resize !important;
+}
+
+.builds-cont > div:last-of-type .updown:before {
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default !important;
+}
+
+.builds-cont > div:last-of-type .cancel:before {
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default !important;
+}
+
+.current-build:before {
+	content: '\e809';
+}
+
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:before {
+	opacity: .4 !important;
+}
+
+.browse-icon:before {
+	content: '\e80d';
+	position: absolute;
+	top: calc(50% - 9px);
+	left: calc(50% - 8px);
+	opacity: .2 !important;
+}
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):hover .browse-icon:hover:before {
+	opacity: 1 !important;
+}
+
+div  > span:nth-of-type(2) > input[type=text] {
+	transition: width 300ms;
+}
+
+div  > span:nth-of-type(2) > .icon:before {
+	content: '\e804';
+	opacity: 1 !important;
+	width: 0;
+	color: #000;
+	text-align:right;
+	overflow: hidden;
+	transition: width 150ms, border-color 300ms, color 0ms ease 150ms;  /*so the color doesnt change to black right away when hiding*/
+}
+
+div.error  > span:nth-of-type(2) > .icon:before {
+	color: rgba(187, 59, 1, 1); /*#bb3b01;*/
+	transition: width 150ms, border-color 300ms, color 0ms ease 0ms;  /*so the color doesnt change to black right away*/
+}
+
+div.warn  > span:nth-of-type(2) > .icon:before {
+	color: rgba(232, 188, 0, 1); /*#e8bc00;*/
+	transition: width 150ms, border-color 300ms, color 0ms ease 0ms; /*so the color doesnt change to black right away*/
+}
+
+.builds-cont.single-build .updown {
+	display: none;
+}
+
+.builds-cont.single-build.current-build-used > div > span:nth-of-type(3) {
+	/*width: 20px;*/
+}
+.builds-cont.current-build-used > div > span:nth-of-type(3),
+.builds-cont.single-build > div > span:nth-of-type(3) {
+	/*width: 40px;*/
+}
+
+.builds-cont.current-build-used .current-build.icon:before {
+	/*display: none;*/
+	opacity: 0.1 !important;
+	color: #999;
+	cursor: default;
+}
+
+div.warn  > span:nth-of-type(2) > .icon:before,
+div.error  > span:nth-of-type(2) > .icon:before  {
+	width: 19px;
+}
+
+
+div.warn  > span:nth-of-type(2) > input[type=text],
+div.error  > span:nth-of-type(2) > input[type=text] {
+	width: 80%;
+}
+
+div.error  > span:nth-of-type(2) > input[type=text] {
+	border: 1px solid rgba(187, 59, 1, 1); /*#bb3b01;*/
+	/*background-color: rgba(187, 59, 1, .1);*/
+	background: url('bg_error.png') repeat scroll left top #fff; /*because i want the opacity of red bg on white bg, i have to use image*/
+}
+
+div.warn  > span:nth-of-type(2) > input[type=text] {
+	border: 1px solid rgba(232, 188, 0, 1); /*#e8bc00;*/
+	/*background-color: rgba(232, 188, 0, .1);*/
+	background: url('bg_warn.png') repeat scroll left top #fff;
+}
+
+.tools:before {
+	content: '\e801';
+	opacity: 1 !important;
+	color: inherit !important;
+	cursor: text !important;
+	font-size: inherit !important;
+}
+
+@font-face {
+  font-family: 'fontello';
+  src: url('fontello.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  /* unicodes
+	<glyph glyph-name="cancel-circle" unicode="&#xe800;"
+	<glyph glyph-name="tools" unicode="&#xe801;"
+	<glyph glyph-name="up-circle" unicode="&#xe802;"
+	<glyph glyph-name="down-circle" unicode="&#xe803;"
+	<glyph glyph-name="loop" unicode="&#xe806;"
+  */
+}
+
+.icon:before,
+.builds-cont > div:not(:first-of-type) > span:nth-of-type(1):before {
+	font-size: 16px;
+	color: #000;
+	cursor: pointer;
+	
+  font-family: "fontello";
+  font-style: normal;
+  font-weight: normal;
+  speak: none;
+ 
+  display: inline-block;
+  text-decoration: inherit;
+  
+  opacity: 0.1;
+  margin: 0 1px 0 0;
+  padding: 0;
+ 
+  /* For safety - reset parent styles, that can break glyph codes*/
+  font-variant: normal;
+  text-transform: none;
+  transition: opacity 200ms, width 200ms;
+}
+
+.builds-cont > div:hover span:nth-of-type(3):hover .icon:hover:before {
+	/*color: crimson;*/
+	opacity: 1;
+}
+
+.builds-cont > div:hover .icon:before {
+	opacity: .2;
+}
+
+.builds-cont > div:hover span:nth-of-type(3):hover .icon:before {
+	opacity: .4;
+}
+
+.builds-cont > div:hover > span:nth-of-type(3) {
+	display: inline-flex; /*for use if i decide to hide tools in the row and show only on hover*/
+}
+
+
+/*start - pge stuff molded*/
+	body {
+	    font-size: 13px;
+    width: 100%;
+    height: 100%;
+    background: none repeat scroll 0% 0% #FFF;
+    min-width: 810px;
+margin: 0px;
+padding: 0px;
+font: 74%/1.4em arial,helvetica,sans-serif;
+color: #666;
+
+}
+
+h1 {
+	vertical-align: middle;
+background: none repeat scroll 0% 0% transparent;
+text-indent: 0px;
+color: #000;
+padding: 0;
+font-size: 1.9em;
+font-weight: bold;
+line-height: 1em;
+width: 476px;
+display: flex;
+align-items: center;
+margin: 0 0 7px 0;
+flex-shrink: 0;
+}
+
+h1 img {
+vertical-align: middle;
+margin-right: 10px;
+flex-shrink: 0;
+border: 0px none;
+}
+
+h1 small {
+text-align: right;
+flex-grow: 1;
+}
+
+.glb-bdy {
+position: relative;
+margin: 0px auto;
+padding: 0px;
+height: 95%;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+}
+
+#login-dialog {
+	width: 486px;
+	text-align: left;
+margin: 0px;
+padding: 0px;
+}
+
+.hd {
+background: url('eum_box_top.png') no-repeat scroll left top transparent;
+height: 10px;
+width: 486px;
+margin: 0px;
+padding: 0px;
+}
+
+#login-dialog-inner {
+background: url('eum_box_slice.png') repeat-y scroll left top transparent;
+width: 486px;
+float: left;
+padding: 0px 5px;
+position: relative;
+margin: 0px;
+}
+
+.section {
+width: 396px;
+padding: 10px 40px;
+margin: 0px;
+}
+
+h2 {
+	padding-top: 8px;
+font-size: 20px;
+line-height: 130%;
+color: #333;
+font-weight: bold;
+padding: 8px 0px 10px;
+margin: 0px 0px 15px;
+border-bottom: 1px solid #CCC;
+}
+
+form {
+padding: 0px;
+margin: 0px;
+}
+
+fieldset {
+clear: both;
+border: 0px none;
+margin: 0px;
+padding: 0px;
+}
+
+.row:after {
+content: ".";
+display: block;
+height: 0px;
+clear: both;
+visibility: hidden;
+}
+
+.row {
+position: relative;
+margin: 0px;
+padding: 0px 0px 10px;
+clear: both;
+}
+
+.input-hint {
+color: #666 !important;
+margin: 3px 0px 0px 0px;
+cursor: text;
+padding-left: 0.2em;
+width: 165px;
+float: left;
+vertical-align: middle;
+}
+
+input[type=text], select, textarea {
+margin-left: 3px;
+padding: 3px;
+color: #333;
+vertical-align: middle;
+font: 99% verdana,geneva,sans-serif;
+float: right;
+border: 1px solid #abadb3;
+}
+
+.ft {
+background: url('eum_box_btm.png') no-repeat scroll left top transparent;
+color: #FFF;
+font-size: 0.93em;
+float: left;
+height: 10px;
+padding-top: 5px;
+width: 500px;
+}
+
+.inner-bg {
+	width: 476px;
+	background: linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top transparent;
+	border-radius: 0 0px 5px 5px;
+	transition: height 300ms; /*note: if i choose not to do 300ms here than change xpcom.js deleteThisBuild() transition time*/
+	overflow: hidden;
+	position: relative;
+}
+/*end - pge stuff molded*/
