@@ -1,0 +1,105 @@
+/* start - initial state */
+/* level - max parent */
+#profilist_menu {
+	background-color: #EFEFEF;
+	display: flex;
+	overflow: hidden;
+	flex-direction: column;
+	height: 100px;
+	position: relative;
+	font-family: Segoe UI;
+	font-size: 12px;
+	
+	height: 100px; /*:debug:*/
+}
+/* level - children depth 1 */
+#profilist_menu .profilist-tbb {
+	top: 0;
+	bottom: 0;
+	background-color: inherit;
+	border: 1px solid #D7D7D7;
+	border-left: 0;
+	border-right: 0;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-start;
+	align-items: center;
+	
+	padding: 11px 5px 11px 15px;
+	overflow: hidden;
+	position:relative;
+}
+/* level - children depth 2 */
+#profilist_menu .profilist-tbb .profilist-tbb-hover {
+	background-color: transparent;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 1;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary {
+	flex: 1 0 auto;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-start;
+	align-items: center;
+	padding-right: 3px;
+}
+
+#profilist_menu .profilist-tbb .profilist-tbb-submenu {
+	flex: 0 1 auto;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	align-items: center;
+}
+/* level - children depth 3 */
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon {
+	flex: 0 1 auto;
+	display: inline-block;
+	z-index: 3;
+	padding: 2px;
+	margin-right: 4px;
+	cursor: pointer;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-textbox {
+	flex: 1 0 auto;
+	display: inline-block;
+	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
+	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
+	z-index: 3;
+	border: 1px solid #A6A6A6;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-textbox[disabled] {
+	border: 1px solid transparent;
+	background-color: transparent;
+	color: #000;
+	pointer-events: none; /* so the poitner goes through to the -hover element */
+}
+#profilist_menu .profilist-tbb .profilist-tbb-submenu .profilist-subicon {
+	flex: 1 0 auto;
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	background: transparent url("chrome://mozapps/skin/places/defaultFavicon.png") no-repeat scroll center center;
+	z-index: 3;
+}
+/* level - children depth 4 */
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon .profilist-icon-badge {
+	pointer-events: none;
+	position: absolute;
+	z-index: 2;
+	transform: translate(50%, 50%) scale(.5);
+	transition: transform 1s;
+}
+/* end - initial state */
+/* start - hover state */
+#profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
+	background-color: #E0E0E0;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon:hover .profilist-icon-badge {
+	transform: none;
+}
+/* end - hover state */
