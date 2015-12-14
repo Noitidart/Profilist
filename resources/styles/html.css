@@ -6,8 +6,9 @@
 	overflow: hidden;
 	flex-direction: column;
 	position: relative;
-	font-family: Segoe UI;
-	font-size: 12px;
+	font-family: Segoe UI;/* link123213*/
+	font-size: 12px;/* link93849848*/
+	-moz-user-select: none;
 }
 /* level - children depth 1 */
 #profilist_menu .profilist-tbb {
@@ -21,8 +22,8 @@
 	flex-direction: row;
 	justify-content: flex-start;
 	align-items: center;
-	
-	padding: 11px 5px 11px 15px;
+	/*padding: 11px 5px 11px 15px;*/
+	height: 40px;
 	overflow: hidden;
 	position:relative;
 }
@@ -42,7 +43,8 @@
 	flex-direction: row;
 	justify-content: flex-start;
 	align-items: center;
-	padding-right: 3px;
+	padding: 0 5px 0 15px;
+	height: 100%;
 }
 
 #profilist_menu .profilist-tbb .profilist-tbb-submenu {
@@ -51,6 +53,7 @@
 	flex-direction: row;
 	justify-content: flex-end;
 	align-items: center;
+	height: 100%;
 }
 /* level - children depth 3 */
 #profilist_menu .profilist-tbb:not([data-tbb-type*=active]) .profilist-tbb-primary .profilist-tbb-icon {
@@ -58,19 +61,49 @@
 }
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon {
 	flex: 0 1 auto;
-	display: inline-block;
 	z-index: 3;
 	padding: 2px;
 	margin-right: 4px;
 	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	height: 60%; /* to increase the mouseover target */
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox {
+#profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary {
+	text-align: center;
+	padding: 0;
+}
+#profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary .profilist-tbb-textbox {
+	text-align: center;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox,
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight {
 	flex: 1 0 auto;
 	display: inline-block;
 	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
 	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
 	z-index: 3;
 	border: 1px solid #A6A6A6;
+	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
+	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight {
+	position: absolute;
+	border: 1px solid transparent;
+	pointer-events: none;
+	color: red;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	background-color: lightblue;
+	position: absolute;
+	top: 0;
+	height: 100%;
+	margin: -1px 0px 0px 1px; /* this is to get the text to overlap the textbox perfectly */
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox:not([disabled]) {
+	-moz-user-select: text;
 }
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox[disabled] {
 	border: 1px solid transparent;
@@ -85,6 +118,7 @@
 	height: 20px;
 	background: transparent url("chrome://mozapps/skin/places/defaultFavicon.png") no-repeat scroll center center;
 	z-index: 3;
+	height: 100%;
 }
 /* level - children depth 4 */
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {

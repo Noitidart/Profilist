@@ -66,23 +66,105 @@ var Menu = React.createClass({
     displayName: 'Menu',
 	getInitialState: function() {
 		return {
-			iniObj: []
+			iniObj: [],
+			searchPhrase: '',
+			searchResultsCount: 0,
+			arrowIndex: '' // when user does up/down arrow keys this will keep track of the index it has selected
 		};
 	},
 	componentDidMount: function() {
 		MyStore.updateStatedIniObj = this.updateStatedIniObj;
+		MyStore.setState = this.setState;
+		
+		document.addEventListener('keypress', this.onKeyPress, false);
 	},
 	updateStatedIniObj: function() {
 		this.setState({
 			iniObj: iniObj
 		});
 	},
+	executeSearch: function() {
+		// this.state.searchPhrase var should be set - then this func will calc search results, and then do setState
+		
+		var cResultsCount = 0;
+		if (this.state.searchPhrase == '') {
+			for (var i=0; i<this.state.iniObj.length; i++) {
+				if (this.state.iniObj[i].Path) {
+					// its a profile
+					cResultsCount++;
+				}
+			}
+		} else {
+			var searchPatt = new RegExp(escapeRegExp(this.state.searchPhrase), 'i');
+			for (var i=0; i<this.state.iniObj.length; i++) {
+				if (this.state.iniObj[i].Path && searchPatt.test(this.state.iniObj[i].Name)) {
+					// its a profile
+					cResultsCount++;
+				}
+			}
+		}
+		this.setState({
+			searchPhrase: this.state.searchPhrase,
+			searchResultsCount: cResultsCount
+		});
+		console.log('cResultsCount:', cResultsCount);
+	},
+	onKeyPress: function(e) {
+		console.log('onKeyPress, e:', e);
+		switch (e.key) {
+			case 'ArrowUp':
+			
+					console.log('ok move arrowIndex up 1');
+					
+				break;
+			case 'ArrowDown':
+			
+					console.log('ok move arrowIndex up 1');
+					
+				break;
+			case 'Backspace':
+			
+					if (this.state.searchPhrase.length > 0) {
+						this.state.searchPhrase = this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1);
+						this.executeSearch();
+					}
+					
+				break;
+			case 'Escape':
+				
+					// if editing something, then cancel edit. if mouse is not over the stack, then close profilist_menu. as during edit, force open happens
+					// if cloning, then cancel clone.
+					
+					if (this.state.searchPhrase.length > 1) {
+						this.state.searchPhrase = '';
+						this.executeSearch();
+					}
+					
+				break;
+			default:
+				if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
+					// append to searchPhrase
+					this.state.searchPhrase = this.state.searchPhrase + e.key;
+					
+					this.executeSearch();
+				} // else do nothing
+		}
+		
+		console.log('this.state.searchPhrase:', this.state.searchPhrase);
+	},
     render: function render() {
-		var addToolbarButton = function(aPath) {
+		var THAT = this;
+		var addToolbarButton = function(aPath, aOtherProps) {
 			// only pass nohting for aPath when its initial state. to show the loading tbb
 			console.log('addToolbarButton, aPath:', aPath);
+			var cProps = {key: aPath, path: aPath};
+			
+			for (var p in aOtherProps) {
+				cProps[p] = aOtherProps[p];
+			}
+			
 			list.push(
-				React.createElement(ToolbarButton, {key: aPath, path: aPath})  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
+				React.createElement(ToolbarButton, cProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
 			);
 		};
 		
@@ -94,9 +176,15 @@ var Menu = React.createClass({
 		} else {
 			for (var i=0; i<this.state.iniObj.length; i++) {
 				if (this.state.iniObj[i].Path) { // so we dont make one for "General"
-					addToolbarButton(this.state.iniObj[i].Path);
+					addToolbarButton(this.state.iniObj[i].Path, {
+						searchPhrase: this.state.searchPhrase
+					});
 				}
 			}
+			addToolbarButton('noresultsfor', {
+				searchPhrase: this.state.searchPhrase,
+				searchResultsCount: this.state.searchResultsCount
+			});
 			addToolbarButton('createnewprofile');
 		}
 		
@@ -160,29 +248,30 @@ var ToolbarButton = React.createClass({
     render: function render() {
 		//var cPath = this.props.key; // link1049403002 this is a reason why i have to set key to aPath --- never mind learned that key is not accessible via this.props.key
 		var cPath = this.props.path;
-		console.log('ToolbarButton-render, cPath:', cPath);
-		var cIniEntry = getIniEntryOf(cPath); // will be undefined for 'loading', 'createnewprofile'
+		console.log('ToolbarButton-render, cPath:', cPath, 'this:', this);
+		var cIniEntry = getIniEntryOf(cPath); // will be undefined for 'loading', 'createnewprofile' // if it exists i assume its a profile, which obviously makes sesne
 		console.log('ToolbarButton-render, cIniEntry:', cIniEntry);
-		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive'))}, // , 'data-loading': cIniEntry ? undefined : '1'
+		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive')), style: (cPath == 'noresultsfor' ? (this.props.searchResultsCount == 0 && this.props.searchPhrase != '' ? undefined : {display:'none'}) : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
 			React.createElement('div', {className: 'profilist-tbb-primary'},
-				React.createElement('div', {className: 'profilist-tbb-hover'}),
-				React.createElement('div', {className: 'profilist-tbb-icon'},
+				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
+				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
 					React.createElement('img', {className: 'profilist-tbb-badge', src: (!cIniEntry ? '' : getBadgeImgPathOf(cPath))}),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
-				React.createElement('div', {className: 'profilist-tbb-textbox', disabled:'disabled'},
+				!cIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-highlight'},
 					cIniEntry ? cIniEntry.Name : myServices.sb.GetStringFromName(cPath)
-				)
+				),
+				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', defaultValue: (cIniEntry ? cIniEntry.Name : undefined), value: (!cIniEntry ? (cPath == 'noresultsfor' ? myServices.sb.formatStringFromName(cPath, [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(cPath)) : undefined) })
 			),
-			React.createElement('div', {className: 'profilist-tbb-submenu'},
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
-				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
+			cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
+				cPath != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
+				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
 			)
         );
     }
@@ -511,6 +600,7 @@ var bootstrapMsgListener = {
 };
 contentMMFromContentWindow_Method2(content).addMessageListener(core.addon.id, bootstrapMsgListener);
 // end - server/framescript comm layer
+*/
 // start - common helper functions
 function contentMMFromContentWindow_Method2(aContentWindow) {
 	if (!gCFMM) {
@@ -540,5 +630,11 @@ function Deferred() {
 		throw new Error('Promise not available!');
 	}
 }
+function escapeRegExp(text) {
+	if (!arguments.callee.sRE) {
+		var specials = ['/', '.', '*', '+', '?', '|', '(', ')', '[', ']', '{', '}', '\\'];
+		arguments.callee.sRE = new RegExp('(\\' + specials.join('|\\') + ')', 'g');
+	}
+	return text.replace(arguments.callee.sRE, '\\$1');
+}
 // end - common helper functions
-*/
