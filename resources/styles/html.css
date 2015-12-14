@@ -5,12 +5,9 @@
 	display: flex;
 	overflow: hidden;
 	flex-direction: column;
-	height: 100px;
 	position: relative;
 	font-family: Segoe UI;
 	font-size: 12px;
-	
-	height: 100px; /*:debug:*/
 }
 /* level - children depth 1 */
 #profilist_menu .profilist-tbb {
@@ -56,7 +53,10 @@
 	align-items: center;
 }
 /* level - children depth 3 */
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon {
+#profilist_menu .profilist-tbb:not([data-tbb-type*=active]) .profilist-tbb-primary .profilist-tbb-icon {
+	pointer-events: none;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon {
 	flex: 0 1 auto;
 	display: inline-block;
 	z-index: 3;
@@ -64,7 +64,7 @@
 	margin-right: 4px;
 	cursor: pointer;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-textbox {
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox {
 	flex: 1 0 auto;
 	display: inline-block;
 	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
@@ -72,13 +72,13 @@
 	z-index: 3;
 	border: 1px solid #A6A6A6;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-textbox[disabled] {
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox[disabled] {
 	border: 1px solid transparent;
 	background-color: transparent;
 	color: #000;
 	pointer-events: none; /* so the poitner goes through to the -hover element */
 }
-#profilist_menu .profilist-tbb .profilist-tbb-submenu .profilist-subicon {
+#profilist_menu .profilist-tbb .profilist-tbb-submenu .profilist-tbb-submenu-subicon {
 	flex: 1 0 auto;
 	display: inline-block;
 	width: 20px;
@@ -87,19 +87,47 @@
 	z-index: 3;
 }
 /* level - children depth 4 */
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon .profilist-icon-badge {
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
 	pointer-events: none;
 	position: absolute;
 	z-index: 2;
 	transform: translate(50%, 50%) scale(.5);
-	transition: transform 1s;
+	transition: transform 500ms; /* link104911 should be same time */
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	opacity: 1;
+	transition: opacity 500ms; /* link104911 should be same time */
+}
+
+#profilist_menu .profilist-tbb:not([data-tbb-type*=active]) .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
+	display: none;
+}
+#profilist_menu .profilist-tbb[data-tbb-type=inactive] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* link123123 position important*/
+	background: transparent url("chrome://profilist/content/resources/images/status-inactive.png") no-repeat scroll center center;
+}
+#profilist_menu .profilist-tbb[data-tbb-type=active] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status {
+	background: transparent url("chrome://profilist/content/resources/images/status-active.png") no-repeat scroll center center;
+}
+#profilist_menu .profilist-tbb[data-tbb-type=loading] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* this needs to come after link123123 otherwise it will take inactive state */
+	background: transparent url("chrome://profilist/content/resources/images/icon16.png") no-repeat scroll center center;
+	/*opacity: 0.3;*/
+}
+#profilist_menu .profilist-tbb[data-tbb-type=createnewprofile] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* this needs to come after link123123 otherwise it will take inactive state */
+	background: transparent url("chrome://profilist/content/resources/images/plus.png") no-repeat scroll center center;
+	/*opacity: 0.3;*/
 }
 /* end - initial state */
 /* start - hover state */
 #profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
 	background-color: #E0E0E0;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-icon:hover .profilist-icon-badge {
+#profilist_menu .profilist-tbb[data-tbb-type*=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge {
 	transform: none;
+}
+#profilist_menu .profilist-tbb[data-tbb-type*=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-status {
+	opacity: 0;
 }
 /* end - hover state */
