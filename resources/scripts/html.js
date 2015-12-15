@@ -41,7 +41,7 @@ var iniObj = [ // notesObj are not written to file
 	{
 		groupName: 0, // 'Profile0',
 		notesObj: {},
-		Name: 'default',
+		Name: 'defaulted',
 		IsRelative: '1',
 		Path: 'Profiles/4hraqsqx.default',
 		Default: '1'
@@ -49,7 +49,7 @@ var iniObj = [ // notesObj are not written to file
 	{
 		groupName: 1, // 'Profile1',
 		notesObj: {},
-		Name: 'Dev',
+		Name: 'Developer',
 		IsRelative: '1',
 		Path: 'Profiles/m2b8zkct.Unnamed Profile 1'
 	},
@@ -85,6 +85,8 @@ var Menu = React.createClass({
 	},
 	executeSearch: function() {
 		// this.state.searchPhrase var should be set - then this func will calc search results, and then do setState
+		
+		console.log('this.state.searchPhrase:', this.state.searchPhrase);
 		
 		var cResultsCount = 0;
 		if (this.state.searchPhrase == '') {
@@ -124,9 +126,12 @@ var Menu = React.createClass({
 				break;
 			case 'Backspace':
 			
-					if (this.state.searchPhrase.length > 0) {
-						this.state.searchPhrase = this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1);
-						this.executeSearch();
+					// search stuff
+					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+						if (this.state.searchPhrase.length > 0) {
+							this.state.searchPhrase = this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1);
+							this.executeSearch();
+						}
 					}
 					
 				break;
@@ -135,22 +140,27 @@ var Menu = React.createClass({
 					// if editing something, then cancel edit. if mouse is not over the stack, then close profilist_menu. as during edit, force open happens
 					// if cloning, then cancel clone.
 					
-					if (this.state.searchPhrase.length > 1) {
-						this.state.searchPhrase = '';
-						this.executeSearch();
+					// search stuff
+					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+						if (this.state.searchPhrase.length > 0) {
+							this.state.searchPhrase = '';
+							this.executeSearch();
+						}
 					}
 					
 				break;
 			default:
-				if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
-					// append to searchPhrase
-					this.state.searchPhrase = this.state.searchPhrase + e.key;
-					
-					this.executeSearch();
-				} // else do nothing
+			
+				// search stuff
+				if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+					if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
+						// append to searchPhrase
+						this.state.searchPhrase = this.state.searchPhrase + e.key;
+						
+						this.executeSearch();
+					} // else do nothing
+				}
 		}
-		
-		console.log('this.state.searchPhrase:', this.state.searchPhrase);
 	},
     render: function render() {
 		var THAT = this;
@@ -266,7 +276,7 @@ var ToolbarButton = React.createClass({
 				// its a profile
 				var searchPatt = new RegExp(escapeRegExp(this.props.searchPhrase), 'ig');
 				while (searchPatt.exec(cIniEntry.Name)) {
-					searchMatchedAtIndex.push(searchPatt.lastIndex);
+					searchMatchedAtIndex.push(searchPatt.lastIndex - this.props.searchPhrase.length);
 				}
 				if (searchMatchedAtIndex.length == 0) {
 					hideDueToSearch = true;
@@ -280,14 +290,12 @@ var ToolbarButton = React.createClass({
 		
 		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
 			React.createElement('div', {className: 'profilist-tbb-primary'},
-				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
+				cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
 					React.createElement('img', {className: 'profilist-tbb-badge', src: (!cIniEntry ? '' : getBadgeImgPathOf(cPath))}),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
-				!cIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-highlight'},
-					cIniEntry ? cIniEntry.Name : myServices.sb.GetStringFromName(cPath)
-				),
+				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:cIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, searchPhrase: this.props.searchPhrase}),
 				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', defaultValue: (cIniEntry ? cIniEntry.Name : undefined), value: (!cIniEntry ? (cPath == 'noresultsfor' ? myServices.sb.formatStringFromName(cPath, [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(cPath)) : undefined) })
 			),
 			cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
@@ -304,6 +312,33 @@ var ToolbarButton = React.createClass({
     }
 });
 
+var LabelHighlighted = React.createClass({
+    displayName: 'ToolbarButton',
+	render: function render() {
+		var inner = [];
+		
+		console.info('this.props.searchMatchedAtIndex:', this.props.searchMatchedAtIndex);
+		var leaveOffIndex = 0;
+		for (var i=0; i<this.props.searchMatchedAtIndex.length; i++) {
+			if (leaveOffIndex < this.props.searchMatchedAtIndex[i]) {
+				inner.push(this.props.value.substring(leaveOffIndex, this.props.searchMatchedAtIndex[i]));
+				leaveOffIndex = this.props.searchMatchedAtIndex[i] + 1;
+			}
+			console.log('start index:', this.props.searchMatchedAtIndex[i]);
+			inner.push(React.createElement('span', {className:'profilist-tbb-highlight-this'},
+				this.props.value.substr(this.props.searchMatchedAtIndex[i], this.props.searchPhrase.length)
+			));
+			leaveOffIndex = this.props.searchMatchedAtIndex[i] + this.props.searchPhrase.length;
+		}
+		
+		if (leaveOffIndex < this.props.value.length) {
+			inner.push(this.props.value.substr(leaveOffIndex));
+		}
+		return React.createElement('div', {className: 'profilist-tbb-highlight'},
+			inner
+		);
+	}
+});
 /*
 var Label = React.createClass({
     displayName: 'ProfilistLabel',
