@@ -34,32 +34,123 @@ var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'html.properties?' + core.addon.cache_key); });
 
 
-/* notes on notesObj
+/* notes on noWriteObj
 status: bool. tells whethere its running or not. if not set, undefined is equivlanet of false
 */
-var iniObj = [ // notesObj are not written to file
+var keyInfo = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
+	ProfilistStatus: {
+		// pref: false		// i dont need this key. i can just test for lack of any of the keys only for prefs. but anyways fallse/missing means not a preference. means its programtically set
+		possibleValues: [	// if not provided, then the value can be set to anything
+			'0',			// installed BUT disabled
+			'1'				// installed AND enabled
+		]
+	},
+	ProfilistDev: {				// developer mode on/off
+		pref: true,				// i dont really need this key, i can detect if its pref by testing if it has any of the "this key only for prefs"
+		specificOnly: false,	// means, it cannot be set across all profiles // this key only for prefs
+		defaultSpecific: false,	// means by default it affects all profiles (its unspecific) // this key only for prefs // this key only for prefs with specificOnly:false
+		defaultValue: '0',		// this key only for prefs // if value not found in profile group, or general group. then this value is used. // if value found in general, but specific is set to true by user, then use the value from general. // if value found in profile, and specific is set to false by user, then set general value, and delete the one from profile group
+		possibleValues: [
+			'0',				// devmode off
+			'1'					// devmode on
+		]
+	},
+	ProfilistSort: {			// the order in which to show the other-profiles in the profilist menu.
+		pref: true,
+		specificOnly: false,
+		defaultSpecific: false,
+		defaultValue: '2',
+		possibleValues: [
+			'0',				// by created date ASC
+			'1',				// by created date DESC
+			'2',				// by alpha-numeric ASC
+			'3'					// by alpha-numeric DESC
+		]
+	},
+	ProfilistNotif: {			// whether or not to show notifications
+		pref: true,
+		specificOnly: false,
+		defaultSpecific: false,
+		defaultValue: '1',
+		possibleValues: [
+			'0',				// dont show
+			'1'					// show
+		]
+	},
+	ProfilistLaunch: {			// whether on user click "create new profile" if should launch right away using default naming scheme for Path and Name
+		pref: true,
+		specificOnly: false,
+		defaultSpecific: false,
+		defaultValue: '1',
+		possibleValues: [
+			'0',				// dont launch right away, allow user to type a path, then hit enter (just create dont launch), alt+enter (create with this name then launch) // if user types a system path, then it is created as IsRelative=0
+			'1'					// launch right away, as IsRelative=1, with default naming scheme for Path and Name
+		]
+	},
+	ProfilistBadge: {			// slug_of_icon_in_icons_folder
+		specificOnly: true
+	},
+	ProfilistTie: {			// slug_of_icon_in_icons_folder
+		specificOnly: true
+		// value should be id of something in the ProfilistBuilds.
+	},
+	ProfilistTemp: {			// tells whether (temporary profiles found && that did NOT have profilist installed) into them (so no ProfilistStatus), should remain in ini after it is found to be not running. only way to remove is to delete from menu. // if profilist is installed into that profile, it will be a temporary profile still so group will be [TempProfile#] but it will stay regardless of this key setting
+		unspecificOnly: true,
+		defaultValue: '0',
+		possibleValues: [
+			'0',				// do not keep them in ini, after it is found to be not running
+			'1'					// keep them in ini even after it is found to be not running
+		]
+	},
+	ProfilistBuilds: {			// whether or not to show notifications
+		pref: true,
+		unspecificOnly: true	// this pref affects all profiles, cannot be set to currently running (specific)
+		// value should be a json array of objects. ie: [{id:date_get_time_on_create, i:slug_of_icon_in_icons_folder, p:path_to_exe},{i:slug_of_icon_in_icons_folder, p:path_to_exe}] // id should be date in ms on create, so no chance of ever getting reused
+	}
+};
+
+var iniObj = [ // noWriteObj are not written to file
 	{
-		groupName: 0, // 'Profile0',
-		notesObj: {},
+		groupName: 'Profile0',
+		noWriteObj: { // noWriteObj is not written to ini
+			currentProfile: true // indicates that the running profile is this one
+		},
 		Name: 'defaulted',
 		IsRelative: '1',
 		Path: 'Profiles/4hraqsqx.default',
-		Default: '1'
+		Default: '1',
+		ProfilistStatus: '1'
 	},
 	{
-		groupName: 1, // 'Profile1',
-		notesObj: {},
+		groupName: 'Profile1',
+		noWriteObj: {},
 		Name: 'Developer',
 		IsRelative: '1',
 		Path: 'Profiles/m2b8zkct.Unnamed Profile 1'
+		//ProfilistStatus: '1' // if it does not have this key, then profilist is not installed in it
 	},
 	{
 		groupName: 'General',
-		notesObj: {},
+		noWriteObj: {},
 		StartWithLastProfile: '1'
+	},
+	{
+		groupName: 'TempProfile1',
+		noWriteObj: {},
+		Name: 'Temp1',
+		IsRelative: '1',
+		Path: 'blah/temp1'
+		// NOWRITE: true // because profilist is not installed into here (no ProfilistStatus) // actually i decided to discontinue NOWRITE on these. i will write it to file. because so user can name the profiels while they are running and the name will show consistent across all profiles
+	},
+	{
+		groupName: 'TempProfile2',
+		noWriteObj: {},
+		Name: 'Temp2',
+		IsRelative: '1',
+		Path: 'blah/temp2',
+		ProfilistStatus: '1' // because profilist is installed in it, it must be written to ini
 	}
 ];
-
 var MyStore = {};
 
 var Menu = React.createClass({
@@ -227,14 +318,14 @@ function getBadgeImgPathOf(aPath) {
 }
 function getStatusImgOf(aPath) {
 	// returns string, of the image to use
-	// should have something to run to get status, and on resolve, this will just obtain the key from notesObj
+	// should have something to run to get status, and on resolve, this will just obtain the key from noWriteObj
 	var cIniEntry = getIniEntryOf(aPath);
 	if (!cIniEntry) {
 		// this should never happen
 		// actually this will happen when aPath == 'loading';
 		return 'chrome://profilist/content/resources/images/icon16.png';
 	} else {
-		if (cIniEntry.notesObj.status) {
+		if (cIniEntry.noWriteObj.status) {
 			return 'chrome://profilist/content/resources/images/status-active.png';
 		} else {
 			return 'chrome://profilist/content/resources/images/status-inactive.png';
@@ -249,7 +340,7 @@ function getStatusOf(aPath) {
 		// actually this will happen when aPath == 'loading';
 		return false;
 	} else {
-		return cIniEntry.notesObj.status === undefined ? false : cIniEntry.notesObj.status;
+		return cIniEntry.noWriteObj.status === undefined ? false : cIniEntry.noWriteObj.status;
 	}
 }
 var ToolbarButton = React.createClass({
@@ -288,7 +379,7 @@ var ToolbarButton = React.createClass({
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
 		
-		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
+		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
@@ -375,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	}, 2000);
 	
 	setTimeout(function() {
-		iniObj[0].notesObj.status = true
+		iniObj[0].noWriteObj.status = true
 		MyStore.updateStatedIniObj();
 	}, 4000);
 }, false);

@@ -162,6 +162,9 @@
 #profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
 	background-color: #E0E0E0;
 }
+#profilist_menu .profilist-tbb .profilist-tbb-hover:active {
+	background-color: #D5D5D5;
+}
 #profilist_menu .profilist-tbb[data-tbb-type*=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge {
 	transform: none;
 }
