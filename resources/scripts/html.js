@@ -1,5 +1,6 @@
 // Imports
 const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
+Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 
@@ -25,6 +26,11 @@ var core = {
 			pages: 'chrome://profilist/content/resources/pages/'
 		},
 		cache_key: Math.random() // set to version on release
+	},
+	profilist: {
+		path: {
+			icons: OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons')
+		}
 	}
 };
 
@@ -166,6 +172,7 @@ var Menu = React.createClass({
 	componentDidMount: function() {
 		MyStore.updateStatedIniObj = this.updateStatedIniObj;
 		MyStore.setState = this.setState;
+		MyStore.forceUpdate = this.forceUpdate.bind(this);
 		
 		document.addEventListener('keypress', this.onKeyPress, false);
 	},
@@ -204,6 +211,9 @@ var Menu = React.createClass({
 	},
 	onKeyPress: function(e) {
 		console.log('onKeyPress, e:', e);
+		if (e.ctrlKey || e.altKey || e.metaKey) {
+			return;
+		}
 		switch (e.key) {
 			case 'ArrowUp':
 			
@@ -255,17 +265,30 @@ var Menu = React.createClass({
 	},
     render: function render() {
 		var THAT = this;
-		var addToolbarButton = function(aPath, aOtherProps) {
+		var addToolbarButton = function(aProps) {
+			// note: aProps must contain key of nonProfileType OR iniEntry. never both.
+			if ((aProps.nonProfileType && aProps.iniEntry) || (!aProps.nonProfileType && !aProps.iniEntry)) {
+				throw new Error('aProps must contain key of nonProfileType OR iniEntry. never both.');
+			}
 			// only pass nohting for aPath when its initial state. to show the loading tbb
-			console.log('addToolbarButton, aPath:', aPath);
-			var cProps = {key: aPath, path: aPath};
 			
-			for (var p in aOtherProps) {
-				cProps[p] = aOtherProps[p];
+			// if set field name of "key" in props, the prop of "key" will not show up in props in the react-child
+			// set key to avoid react-reconciliation
+			if (aProps.nonProfileType) {
+				// note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813
+				if (['createnewprofile', 'loading', 'noresultsfor'].indexOf(aProps.nonProfileType) == -1) { // link9391813
+					throw new Error('Unrecgonized value for nonProfileType');
+				}
+				aProps.key = aProps.nonProfileType;
+			} else {
+				// no "nonProfileType" key so its "profile" type toolbarbutton
+				aProps.key = aProps.iniEntry.Path;
 			}
 			
+			console.log('addToolbarButton of key:', aProps.key);
+			
 			list.push(
-				React.createElement(ToolbarButton, cProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
+				React.createElement(ToolbarButton, aProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
 			);
 		};
 		
@@ -273,20 +296,26 @@ var Menu = React.createClass({
 		
 		if (this.state.iniObj.length == 0) {
 			// creating loading item
-			addToolbarButton('loading');
+			addToolbarButton({
+				nonProfileType: 'loading'
+			});
 		} else {
 			for (var i=0; i<this.state.iniObj.length; i++) {
 				if (this.state.iniObj[i].Path) { // so we dont make one for "General"
-					addToolbarButton(this.state.iniObj[i].Path, {
-						searchPhrase: this.state.searchPhrase
+					addToolbarButton({
+						searchPhrase: this.state.searchPhrase,
+						iniEntry: this.state.iniObj[i]
 					});
 				}
 			}
-			addToolbarButton('noresultsfor', {
+			addToolbarButton({
+				nonProfileType: 'noresultsfor',
 				searchPhrase: this.state.searchPhrase,
 				searchResultsCount: this.state.searchResultsCount
 			});
-			addToolbarButton('createnewprofile');
+			addToolbarButton({
+				nonProfileType: 'createnewprofile'
+			});
 		}
 		
         return React.createElement(
@@ -295,63 +324,13 @@ var Menu = React.createClass({
         );
     }
 });
-
-function getIniEntryOf(aPathOrGroupName) {
-	// returns reference to the object in ini
-	// aPath can be "loading", it will return undefined though in that case
-	console.log('in getIniEntryOf, aPath:', aPathOrGroupName);
-	for (var i=0; i<iniObj.length; i++) {
-		if (('Path' in iniObj[i] && iniObj[i].Path == aPathOrGroupName) || iniObj[i].groupName == aPathOrGroupName) {
-			return iniObj[i];
-		}
-	}
-	// return undefined; // no need, by default it returns undefined
-}
-function getBadgeImgPathOf(aPath) {
-	// returns a string, which is path to image of the badge, for profile with Path == aPath
-	var cIniEntry = getIniEntryOf(aPath);
-	if (!cIniEntry || !cIniEntry.profilistBadge) { // is `!cIniEntry` when aPath == 'loading' as duh its not found in iniObj
-		return 'chrome://mozapps/skin/places/defaultFavicon.png';
-	} else {
-		return cIniEntry.profilistBadge;
-	}
-}
-function getStatusImgOf(aPath) {
-	// returns string, of the image to use
-	// should have something to run to get status, and on resolve, this will just obtain the key from noWriteObj
-	var cIniEntry = getIniEntryOf(aPath);
-	if (!cIniEntry) {
-		// this should never happen
-		// actually this will happen when aPath == 'loading';
-		return 'chrome://profilist/content/resources/images/icon16.png';
-	} else {
-		if (cIniEntry.noWriteObj.status) {
-			return 'chrome://profilist/content/resources/images/status-active.png';
-		} else {
-			return 'chrome://profilist/content/resources/images/status-inactive.png';
-		}
-	}
-}
-function getStatusOf(aPath) {
-	// returns bool
-	var cIniEntry = getIniEntryOf(aPath);
-	if (!cIniEntry) {
-		// this should never happen
-		// actually this will happen when aPath == 'loading';
-		return false;
-	} else {
-		return cIniEntry.noWriteObj.status === undefined ? false : cIniEntry.noWriteObj.status;
-	}
-}
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 
     render: function render() {
-		//var cPath = this.props.key; // link1049403002 this is a reason why i have to set key to aPath --- never mind learned that key is not accessible via this.props.key
-		var cPath = this.props.path;
-		console.log('ToolbarButton-render, cPath:', cPath, 'this:', this);
-		var cIniEntry = getIniEntryOf(cPath); // will be undefined for 'loading', 'createnewprofile' // if it exists i assume its a profile, which obviously makes sesne
-		console.log('ToolbarButton-render, cIniEntry:', cIniEntry);
+		// this.props.iniEntry is not set, so undefined, for non-porilfes, so for "loading", "createnewprofile"
+			// instead, the nonProfileType key will be set, so this.props.nonProfileType // so if nonProfileType not set, then assume its "profile" (so "inactive" or "active") toolbarbutton
+		console.log('ToolbarButton-render, this.props.iniEntry:', this.props.iniEntry);
 		
 		// test if in search mode
 		var hideDueToSearch = false;
@@ -359,14 +338,14 @@ var ToolbarButton = React.createClass({
 		var searchMatchedAtIndex = []; // holds index at which searchPhrase was found in name. the end is obviously known, its the index PLUS searchPhrase length
 		if (this.props.searchPhrase != '') {
 			// searchInProccess = true;
-			if (cPath == 'noresultsfor') {
+			if (this.props.nonProfileType == 'noresultsfor') {
 				if (this.props.searchResultsCount > 0) {
 					hideDueToSearch = true;
 				} // else { hideDueToSearch = false; } // no need as it inits at false
-			} else if (cIniEntry && cIniEntry.Path) {
+			} else if (this.props.iniEntry && this.props.iniEntry.Path) {
 				// its a profile
 				var searchPatt = new RegExp(escapeRegExp(this.props.searchPhrase), 'ig');
-				while (searchPatt.exec(cIniEntry.Name)) {
+				while (searchPatt.exec(this.props.iniEntry.Name)) {
 					searchMatchedAtIndex.push(searchPatt.lastIndex - this.props.searchPhrase.length);
 				}
 				if (searchMatchedAtIndex.length == 0) {
@@ -374,30 +353,30 @@ var ToolbarButton = React.createClass({
 				}
 			}
 		} else {
-			if (cPath == 'noresultsfor') {
+			if (this.props.nonProfileType == 'noresultsfor') {
 				hideDueToSearch = true;
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
 		
-		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
+		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!this.props.iniEntry ? this.props.nonProfileType : (this.props.iniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
-				cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
-				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
-					React.createElement('img', {className: 'profilist-tbb-badge', src: (!cIniEntry ? '' : getBadgeImgPathOf(cPath))}),
+				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
+				this.props.nonProfileType == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
+					!this.props.iniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.iniEntry.ProfilistBadge ? OS.Path.join(core.profilist.path.icons, this.props.iniEntry.ProfilistBadge, this.props.iniEntry.ProfilistBadge + '16.png') : 'chrome://mozapps/skin/places/defaultFavicon.png' }),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
-				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:cIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, searchPhrase: this.props.searchPhrase}),
-				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', defaultValue: (cIniEntry ? cIniEntry.Name : undefined), value: (!cIniEntry ? (cPath == 'noresultsfor' ? myServices.sb.formatStringFromName(cPath, [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(cPath)) : undefined) })
+				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.iniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, searchPhrase: this.props.searchPhrase}),
+				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', /*defaultValue: (!this.props.iniEntry ? undefined : this.props.iniEntry.Name),*/ value: (this.props.iniEntry ? /*undefined*/ this.props.iniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
 			),
-			cPath == 'noresultsfor' || cPath == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
-				cPath != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
-				cPath == 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
+			this.props.nonProfileType != 'createnewprofile' && !this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
+				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
+				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
 			)
         );
     }
@@ -466,8 +445,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	}, 2000);
 	
 	setTimeout(function() {
-		iniObj[0].noWriteObj.status = true
-		MyStore.updateStatedIniObj();
+		iniObj[0].noWriteObj.status = true;
+		iniObj[0].Name = 'RAWR';
+		MyStore.forceUpdate();
 	}, 4000);
 }, false);
 
@@ -544,147 +524,6 @@ function initPage(isReInit) {
 		}
 	);
 }
-
-// create dom of options
-BC.options = [ // order here is the order it is displayed in, in the dom
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.general'),
-		label: myServices.sb.GetStringFromName('profilist.cp.auto-up'),
-		type: 'select',
-		pref_name: 'Profilist.automatic_updates',
-		pref_type: 'bool', // pref_type is custom, so the setter handles
-		values: {
-			0: myServices.sb.GetStringFromName('profilist.cp.off'),
-			1: myServices.sb.GetStringFromName('profilist.cp.on')
-		},
-		desc: myServices.sb.GetStringFromName('profilist.cp.auto-up-desc'),
-		// default_value: 1, // sent over from bootstrap
-		// default_profile_specificness: true, // sent over from bootstrap
-		// value: ? // sent over from bootstrap
-		// profile_specificness: ? // sent over from bootstrap
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.general'),
-		label: myServices.sb.GetStringFromName('profilist.cp.restore-defaults'),
-		type: 'button',
-		values: [ // for type button. values is an arr holding objects
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.restore'),
-				action: function() { alert('ok restoring defaults :debug:') }
-			}
-		],
-		desc: myServices.sb.GetStringFromName('profilist.cp.restore-defaults-desc')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-gen'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-port'),
-		type: 'button',
-		values: [
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.export'),
-				action: BC.export
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.import'),
-				action: BC.import
-			}
-		],
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-multispeed'),
-		type: 'text',
-		pref_name: 'multi-speed',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-multispeed')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-holdduration'),
-		type: 'text',
-		pref_name: 'hold-duration',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-holdduration')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-clickspeed'),
-		type: 'text',
-		pref_name: 'click-speed',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-clickspeed')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-ignoreautorepeatduration'),
-		type: 'text',
-		pref_name: 'ignore-autorepeat-duration',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-ignoreautorepeatduration')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-tabs'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-newtabpos'),
-		type: 'select',
-		pref_name: 'new-tab-pos',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.endofbar'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.nexttocur')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-tabs'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-duptabpos'),
-		type: 'select',
-		pref_name: 'dup-tab-pos',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.endofbar'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.nexttocur')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomlabel'),
-		type: 'select',
-		pref_name: 'zoom-indicator',
-		pref_type: 'bool',
-		values: {
-			'false': myServices.sb.GetStringFromName('profilist.cp.hide'),
-			'true': myServices.sb.GetStringFromName('profilist.cp.show')
-		},
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-zoomlabel')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomcontext'),
-		type: 'select',
-		pref_name: 'zoom-context',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.allcont'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.txtonly')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomstyle'),
-		type: 'select',
-		pref_name: 'zoom-style',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.global'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.sitespec'),
-			'2': myServices.sb.GetStringFromName('profilist.cp.temp')
-		},
-		desc: ''
-	}
-];
 
 // End - Page Functionalities
 
