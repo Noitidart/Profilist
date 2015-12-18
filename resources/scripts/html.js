@@ -43,7 +43,7 @@ XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.stri
 /* notes on noWriteObj
 status: bool. tells whethere its running or not. if not set, undefined is equivlanet of false
 */
-var keyInfo = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
+var gKeyInfoStore = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
 	ProfilistStatus: {
 		// pref: false		// i dont need this key. i can just test for lack of any of the keys only for prefs. but anyways fallse/missing means not a preference. means its programtically set
 		possibleValues: [	// if not provided, then the value can be set to anything
@@ -115,7 +115,7 @@ var keyInfo = { //info on the Profilist keys i write into ini // all values must
 	}
 };
 
-var iniObj = [ // noWriteObj are not written to file
+var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile0',
 		noWriteObj: { // noWriteObj is not written to ini
@@ -163,7 +163,7 @@ var Menu = React.createClass({
     displayName: 'Menu',
 	getInitialState: function() {
 		return {
-			iniObj: [],
+			sIniObj: [], // sIniObj stands for stateIniObject
 			searchPhrase: '',
 			searchResultsCount: 0,
 			arrowIndex: '' // when user does up/down arrow keys this will keep track of the index it has selected
@@ -178,7 +178,7 @@ var Menu = React.createClass({
 	},
 	updateStatedIniObj: function() {
 		this.setState({
-			iniObj: iniObj
+			sIniObj: gIniObj
 		});
 	},
 	executeSearch: function(newSearchPhrase) {
@@ -187,16 +187,16 @@ var Menu = React.createClass({
 		
 		var cResultsCount = 0;
 		if (newSearchPhrase == '') {
-			for (var i=0; i<this.state.iniObj.length; i++) {
-				if (this.state.iniObj[i].Path) {
+			for (var i=0; i<this.state.sIniObj.length; i++) {
+				if (this.state.sIniObj[i].Path) {
 					// its a profile
 					cResultsCount++;
 				}
 			}
 		} else {
 			var searchPatt = new RegExp(escapeRegExp(newSearchPhrase), 'i');
-			for (var i=0; i<this.state.iniObj.length; i++) {
-				if (this.state.iniObj[i].Path && searchPatt.test(this.state.iniObj[i].Name)) {
+			for (var i=0; i<this.state.sIniObj.length; i++) {
+				if (this.state.sIniObj[i].Path && searchPatt.test(this.state.sIniObj[i].Name)) {
 					// its a profile
 					cResultsCount++;
 				}
@@ -227,7 +227,7 @@ var Menu = React.createClass({
 			case 'Backspace':
 			
 					// search stuff
-					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.searchPhrase.length > 0) {
 							this.executeSearch(this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1));
 							// e.preventDefault(); // so page doesnt go back // needed if decide to use div contentEditable. For textbox this is not needed
@@ -241,7 +241,7 @@ var Menu = React.createClass({
 					// if cloning, then cancel clone.
 					
 					// search stuff
-					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.searchPhrase.length > 0) {
 							this.executeSearch('');
 						}
@@ -251,7 +251,7 @@ var Menu = React.createClass({
 			default:
 			
 				// search stuff
-				if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
+				if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 					if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
 						// append to searchPhrase
 						this.executeSearch(this.state.searchPhrase + e.key);
@@ -290,17 +290,17 @@ var Menu = React.createClass({
 		
 		var list = [];
 		
-		if (this.state.iniObj.length == 0) {
+		if (this.state.sIniObj.length == 0) {
 			// creating loading item
 			addToolbarButton({
 				nonProfileType: 'loading'
 			});
 		} else {
-			for (var i=0; i<this.state.iniObj.length; i++) {
-				if (this.state.iniObj[i].Path) { // so we dont make one for "General"
+			for (var i=0; i<this.state.sIniObj.length; i++) {
+				if (this.state.sIniObj[i].Path) { // so we dont make one for "General"
 					addToolbarButton({
 						searchPhrase: this.state.searchPhrase,
-						iniEntry: this.state.iniObj[i]
+						iniEntry: this.state.sIniObj[i]
 					});
 				}
 			}
@@ -320,6 +320,115 @@ var Menu = React.createClass({
         );
     }
 });
+function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
+	//*******************************************
+	// DESC
+	// 	Iterates through the ini object provided, once it finds an entry that has aKey that equals aValue it returns it
+	//	If nothing is found then it returns NULL
+	// RETURNS
+	//	null
+	//	an element in the aIniObj
+	// ARGS
+	//	aIniObj - the ini object you want to get value from
+	// 	aKey - the name of the field
+	//	aVal - the value the field should be
+	//*******************************************
+
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aKey in aIniObj[i] && aIniObj[i][aKey] == aValue) {
+			return aIniObj[i];
+		}
+	}
+	
+	return null;
+}
+function getKeyValForIniEntry(aKeyName, aProfIniEntryOrProfPath) {
+	//*******************************************
+	// DESC
+	// 	Gets value from provied iniEntr or gets it from gIniObj. and if value is not found it returns default if has one. if no default then returns NULL.
+	// 	This function is read only on which xIniObj is provided
+	// RETURNS
+	//	string value if aKeyName found OR not found but has defaultValue
+	//	null if no entry found for aKeyName AND no defaultValue
+	// ARGS
+	//	aKeyName - the name of key from ini you want, such as ProfilistBadge
+	// 	aProfIniEntryOrProfPath - if typeof is object, it is assumed aIniEntry. else it is aProfilePath which will be used to iterate through gIniObj
+	//	aOptions - optonal
+	//		aIniObj - set it to sIniObj or gIniObj - only needed if aProfIniEntryOrProfPath is a string && aOptions.aGenIniEntry is not provided
+	//		aGenIniEntry - if not set, it will call getIniEntryByKeyValue
+	// LOGIC
+	// 	if gKeyInfoStore[aKeyName].unspecificOnly
+	// 		true - if aKeyName in cGenIniEntry
+	// 			true - return cGenIniEntry[aKeyName]
+	// 			false - if defaultValue in gKeyInfoStore[aKeyName]
+	// 				true - return gKeyInfoStore[aKeyName].defaultValue
+	// 				false - return null
+	// 		false - if NOT gKeyInfoStore[aKeyName].specificOnly
+	// 			true - if aKeyName in cGenIniEntry # check if profile-unspecific value exists return else continue on
+	// 				true - return cGenIniEntry[aKeyName]
+	// 			# return profile-specific value else null
+	// 				if aKeyName in cIniEntry
+	// 					true - return cIniEntry[aKeyName]
+	// 					false - if defaultValue in gKeyInfoStore[aKeyName]
+	// 						true - return gKeyInfoStore[aKeyName].defaultValue
+	// 						false - return null
+	//*******************************************
+	
+	var cIniObj = aOptions.aIniObj ? aOptions.aIniObj : gIniObj;
+	var cIniEntry = typeof(aProfIniEntryOrProfPath) == 'string' ? getIniEntryByKeyValue(cIniObj, 'Path', aProfIniEntryOrProfPath) : aProfIniEntryOrProfPath;
+	var cGenIniEntry = aOptions.aGenIniEntry ? aOptions.aGenIniEntry : getIniEntryByKeyValue(cIniObj, 'groupName', 'General');
+	
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	if (gKeyInfoStore[aKeyName].unspecificOnly) {
+		// get profile-unspecific value else null
+		if (aKeyName in cGenIniEntry) {
+			return cGenIniEntry[aKeyName];
+		} else {
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				return null;
+			}
+		}
+	} else {
+		// check if profile-unspecific value exists return else continue on
+		if (!gKeyInfoStore[aKeyName].specificOnly) {
+			if (aKeyName in cGenIniEntry) {
+				return cGenIniEntry[aKeyName];
+			}
+		}
+		// return profile-specific value else null
+		if (aKeyName in cIniEntry) {
+			return cIniEntry[aKeyName];
+		} else {
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				return null;
+			}
+		}
+	}
+	
+	
+	if (aKeyName in cGenIniEntry) {
+		// user set it to profile-unspecific
+		return cGenIniEntry[aKeyName];
+	} else {
+		// user set it to profile-specific
+		if (aKeyName in cIniEntry) {
+			return cIniEntry[aKeyName];
+		} else {
+			// not found so return default value if it has one
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) { // no need to test `'defaultValue' in gKeyInfoStore[aKeyName]` because i expect all values in xIniObj to be strings // :note: :important: all values in xIniObj must be strings!!!
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				// no default value
+				return null;
+			}
+		}
+	}
+}
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 
@@ -444,8 +553,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	}, 2000);
 	
 	setTimeout(function() {
-		iniObj[0].noWriteObj.status = true;
-		iniObj[0].Name = 'RAWR';
+		gIniObj[0].noWriteObj.status = true;
+		gIniObj[0].Name = 'RAWR';
 		MyStore.forceUpdate();
 	}, 4000);
 }, false);
