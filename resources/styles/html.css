@@ -115,15 +115,6 @@
 	color: #000;
 	pointer-events: none; /* so the poitner goes through to the -hover element */
 }
-#profilist_menu .profilist-tbb .profilist-tbb-submenu .profilist-tbb-submenu-subicon {
-	flex: 1 0 auto;
-	display: inline-block;
-	width: 20px;
-	height: 20px;
-	background: transparent url("chrome://mozapps/skin/places/defaultFavicon.png") no-repeat scroll center center;
-	z-index: 3;
-	height: 100%;
-}
 /* level - children depth 4 */
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
 	pointer-events: none;
@@ -172,3 +163,51 @@
 	opacity: 0;
 }
 /* end - hover state */
+/* start - submenu */
+/* subicon */
+#profilist_menu .profilist-tbb-submenu-subicon {
+	flex: 1 0 auto;
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	background: transparent url("chrome://mozapps/skin/places/defaultFavicon.png") no-repeat scroll center center;
+	z-index: 3;
+	height: 100%;
+	transition: filter 200ms;
+}
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots) { /* link3920284 - match the not specificity or the hover doesnt work */
+	filter: grayscale(100%);
+}
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots) { /* link3920284 - match the not specificity or the hover doesnt work */
+	cursor: pointer;
+}
+/* subicon hover */
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):hover { /* link3920284 - match the not specificity or the hover doesnt work */
+	filter: grayscale(0%);
+}
+/* specific images */
+#profilist_menu .profilist-si-clone {
+	background-image: url("chrome://profilist/content/resources/images/subicon-clone.png");
+}
+#profilist_menu .profilist-si-isdefault {
+	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
+}
+#profilist_menu .profilist-si-build {
+	background-image: url("chrome://profilist/content/defaultFavicon.png");
+}
+#profilist_menu .profilist-si-dots {
+	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
+}
+#profilist_menu .profilist-si-safe {
+	background-image: url("chrome://profilist/content/resources/images/subicon-wrench.png");
+}
+#profilist_menu .profilist-si-setdefault {
+	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
+}
+#profilist_menu .profilist-si-rename {
+	background-image: url("chrome://profilist/content/resources/images/subicon-edit.png");
+}
+#profilist_menu .profilist-si-del {
+	background-image: url("chrome://profilist/content/resources/images/subicon-delete.png");
+}
+/* end - subicon menu */
