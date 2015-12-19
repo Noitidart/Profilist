@@ -175,14 +175,14 @@
 	height: 100%;
 	transition: filter 200ms;
 }
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots) { /* link3920284 - match the not specificity or the hover doesnt work */
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) { /* link3920284 - match the not specificity or the hover doesnt work */
 	filter: grayscale(100%);
 }
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots) { /* link3920284 - match the not specificity or the hover doesnt work */
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) {
 	cursor: pointer;
 }
 /* subicon hover */
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):hover { /* link3920284 - match the not specificity or the hover doesnt work */
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint):hover { /* link3920284 - match the not specificity or the hover doesnt work */
 	filter: grayscale(0%);
 }
 /* specific images */
@@ -192,7 +192,10 @@
 #profilist_menu .profilist-si-isdefault {
 	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
 }
-#profilist_menu .profilist-si-build {
+#profilist_menu .profilist-si-buildhint {
+	background-image: url("chrome://profilist/content/defaultFavicon.png");
+}
+#profilist_menu .profilist-si-tie {
 	background-image: url("chrome://profilist/content/defaultFavicon.png");
 }
 #profilist_menu .profilist-si-dots {
