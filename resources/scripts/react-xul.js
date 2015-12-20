@@ -9934,7 +9934,7 @@ var ReactEventListener = {
 
   monitorScrollValue: function (refresh) {
     var callback = scrollValueMonitor.bind(null, refresh);
-    EventListener.listen(window, 'scroll', callback);
+    // EventListener.listen(window, 'scroll', callback);
   },
 
   dispatchEvent: function (topLevelType, nativeEvent) {
@@ -16847,7 +16847,7 @@ var NONVISIBLE_TEST = /<(!--|link|noscript|meta|script|style)[ \r\n\t\f\/>]/;
  * @internal
  */
 var setInnerHTML = function (node, html) {
-  node.innerHTML = html;
+  // node.innerHTML = html;
 };
 
 // Win8 apps: Allow all html to be inserted
@@ -17647,7 +17647,6 @@ module.exports = EventListener;
 'use strict';
 
 var canUseDOM = !!(typeof window !== 'undefined' && window.document && window.document.createElement);
-Services.prompt.alert(null, 'canUseDOM', canUseDOM);
 
 /**
  * Simple, lightweight module assisting with the detection and context of
@@ -17668,6 +17667,10 @@ var ExecutionEnvironment = {
   isInWorker: !canUseDOM // For now, this is true - might change in the future.
 
 };
+
+Services.prompt.alert(null, 'canUseDOM', canUseDOM);
+Services.prompt.alert(null, 'ExecutionEnvironment.canUseWorkers', ExecutionEnvironment.canUseWorkers);
+Services.prompt.alert(null, 'ExecutionEnvironment.isInWorker', ExecutionEnvironment.isInWorker);
 
 module.exports = ExecutionEnvironment;
 },{}],131:[function(_dereq_,module,exports){
