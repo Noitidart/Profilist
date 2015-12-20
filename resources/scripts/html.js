@@ -591,7 +591,7 @@ var ToolbarButton = React.createClass({
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.nonProfileType == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
-					!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.tbbIniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.tbbIniEntry.ProfilistBadge) : 'chrome://mozapps/skin/places/defaultFavicon.png' }),
+					!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.tbbIniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.tbbIniEntry.ProfilistBadge) : core.addon.path.images + 'missing.png' }),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
 				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.tbbIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, sSearchPhrase: this.props.sSearchPhrase}),
@@ -609,7 +609,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
-				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
+				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry})
 			)
         );
     }
@@ -641,6 +641,37 @@ var LabelHighlighted = React.createClass({
 			inner
 		);
 		// return React.createElement.apply(this, ['div', {className: 'profilist-tbb-highlight'}].concat(inner)); // this method throws no warning of ```"Warning: Each child in an array or iterator should have a unique "key" prop. Check the render method of `ToolbarButton`. See https://fb.me/react-warning-keys for more information." react.dev.js:18780:9``` // but the above doesnt need apply or concat, so its two less functions so ill go with that // see link1958939383
+	}
+});
+var SubiconDel = React.createClass({
+    displayName: 'SubiconDel',
+	click: function() {
+		
+		if (this.props.tbbIniEntry.noWriteObj.status) {
+			alert('error! cannot delete this profile because it is currently running!');
+		} else {
+			var cIniObj = gIniObj;
+			for (var i=0; i<cIniObj.length; i++) {
+				if (cIniObj[i].Path && cIniObj[i].Path == this.props.tbbIniEntry.Path) {
+					cIniObj.splice(i, 1);
+					MyStore.updateStatedIniObj();
+					return;
+				}
+			}
+		}
+		
+	},
+	render: function render() {
+		// props
+		//	tbbIniEntry
+
+		var aProps = {
+			className: 'profilist-tbb-submenu-subicon profilist-si-del',
+			onClick: this.click
+		};
+		
+		var aRendered = React.createElement('div', aProps);
+		return aRendered;
 	}
 });
 var SubiconTie = React.createClass({

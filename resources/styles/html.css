@@ -170,7 +170,7 @@
 	display: inline-block;
 	width: 20px;
 	height: 20px;
-	background: transparent url("chrome://mozapps/skin/places/defaultFavicon.png") no-repeat scroll center center;
+	background: transparent url("chrome://profilist/content/resources/images/missing.png") no-repeat scroll center center;
 	z-index: 3;
 	height: 100%;
 	transition: filter 200ms;
