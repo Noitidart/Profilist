@@ -251,7 +251,34 @@ var ToolbarButton = React.createClass({
 		console.log('ToolbarButton-render, cPath:', cPath, 'this:', this);
 		var cIniEntry = getIniEntryOf(cPath); // will be undefined for 'loading', 'createnewprofile' // if it exists i assume its a profile, which obviously makes sesne
 		console.log('ToolbarButton-render, cIniEntry:', cIniEntry);
-		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive')), style: (cPath == 'noresultsfor' ? (this.props.searchResultsCount == 0 && this.props.searchPhrase != '' ? undefined : {display:'none'}) : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
+		
+		// test if in search mode
+		var hideDueToSearch = false;
+		
+		var searchMatchedAtIndex = []; // holds index at which searchPhrase was found in name. the end is obviously known, its the index PLUS searchPhrase length
+		if (this.props.searchPhrase != '') {
+			// searchInProccess = true;
+			if (cPath == 'noresultsfor') {
+				if (this.props.searchResultsCount > 0) {
+					hideDueToSearch = true;
+				} // else { hideDueToSearch = false; } // no need as it inits at false
+			} else if (cIniEntry && cIniEntry.Path) {
+				// its a profile
+				var searchPatt = new RegExp(escapeRegExp(this.props.searchPhrase), 'ig');
+				while (searchPatt.exec(cIniEntry.Name)) {
+					searchMatchedAtIndex.push(searchPatt.lastIndex);
+				}
+				if (searchMatchedAtIndex.length == 0) {
+					hideDueToSearch = true;
+				}
+			}
+		} else {
+			if (cPath == 'noresultsfor') {
+				hideDueToSearch = true;
+			} // else { hideDueToSearch = false; } // no need as it inits at false
+		}
+		
+		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)}, // , 'data-loading': cIniEntry ? undefined : '1'
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				cPath == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
