@@ -181,13 +181,12 @@ var Menu = React.createClass({
 			iniObj: iniObj
 		});
 	},
-	executeSearch: function() {
-		// this.state.searchPhrase var should be set - then this func will calc search results, and then do setState
+	executeSearch: function(newSearchPhrase) {
 		
-		console.log('this.state.searchPhrase:', this.state.searchPhrase);
+		console.log('newSearchPhrase:', newSearchPhrase);
 		
 		var cResultsCount = 0;
-		if (this.state.searchPhrase == '') {
+		if (newSearchPhrase == '') {
 			for (var i=0; i<this.state.iniObj.length; i++) {
 				if (this.state.iniObj[i].Path) {
 					// its a profile
@@ -195,7 +194,7 @@ var Menu = React.createClass({
 				}
 			}
 		} else {
-			var searchPatt = new RegExp(escapeRegExp(this.state.searchPhrase), 'i');
+			var searchPatt = new RegExp(escapeRegExp(newSearchPhrase), 'i');
 			for (var i=0; i<this.state.iniObj.length; i++) {
 				if (this.state.iniObj[i].Path && searchPatt.test(this.state.iniObj[i].Name)) {
 					// its a profile
@@ -204,7 +203,7 @@ var Menu = React.createClass({
 			}
 		}
 		this.setState({
-			searchPhrase: this.state.searchPhrase,
+			searchPhrase: newSearchPhrase,
 			searchResultsCount: cResultsCount
 		});
 		console.log('cResultsCount:', cResultsCount);
@@ -230,8 +229,8 @@ var Menu = React.createClass({
 					// search stuff
 					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.searchPhrase.length > 0) {
-							this.state.searchPhrase = this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1);
-							this.executeSearch();
+							this.executeSearch(this.state.searchPhrase.substr(0, this.state.searchPhrase.length - 1));
+							// e.preventDefault(); // so page doesnt go back // needed if decide to use div contentEditable. For textbox this is not needed
 						}
 					}
 					
@@ -244,8 +243,7 @@ var Menu = React.createClass({
 					// search stuff
 					if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.searchPhrase.length > 0) {
-							this.state.searchPhrase = '';
-							this.executeSearch();
+							this.executeSearch('');
 						}
 					}
 					
@@ -256,9 +254,7 @@ var Menu = React.createClass({
 				if (this.state.iniObj.length > 0) { // test to make sure its not in "loading" state
 					if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
 						// append to searchPhrase
-						this.state.searchPhrase = this.state.searchPhrase + e.key;
-						
-						this.executeSearch();
+						this.executeSearch(this.state.searchPhrase + e.key);
 					} // else do nothing
 				}
 		}
@@ -367,6 +363,9 @@ var ToolbarButton = React.createClass({
 				),
 				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.iniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, searchPhrase: this.props.searchPhrase}),
 				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', /*defaultValue: (!this.props.iniEntry ? undefined : this.props.iniEntry.Name),*/ value: (this.props.iniEntry ? /*undefined*/ this.props.iniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
+				// React.createElement('div', {className: 'profilist-tbb-textbox', contentEditable:true, disabled:'disabled'},
+				// 	(this.props.iniEntry ? /*undefined*/ this.props.iniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.searchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType)))
+				// )
 			),
 			this.props.nonProfileType != 'createnewprofile' && !this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
@@ -387,14 +386,14 @@ var LabelHighlighted = React.createClass({
 	render: function render() {
 		var inner = [];
 		
-		console.info('this.props.searchMatchedAtIndex:', this.props.searchMatchedAtIndex);
+		// console.info('this.props.searchMatchedAtIndex:', this.props.searchMatchedAtIndex);
 		var leaveOffIndex = 0;
 		for (var i=0; i<this.props.searchMatchedAtIndex.length; i++) {
 			if (leaveOffIndex < this.props.searchMatchedAtIndex[i]) {
 				inner.push(this.props.value.substring(leaveOffIndex, this.props.searchMatchedAtIndex[i]));
 				leaveOffIndex = this.props.searchMatchedAtIndex[i] + 1;
 			}
-			console.log('start index:', this.props.searchMatchedAtIndex[i]);
+			// console.log('start index:', this.props.searchMatchedAtIndex[i]);
 			inner.push(React.createElement('span', {className:'profilist-tbb-highlight-this'},
 				this.props.value.substr(this.props.searchMatchedAtIndex[i], this.props.searchPhrase.length)
 			));
