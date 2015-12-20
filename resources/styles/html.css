@@ -94,13 +94,17 @@
 	pointer-events: none;
 	color: red;
 	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	background-color: lightblue;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-start;
 	position: absolute;
 	top: 0;
 	height: 100%;
 	margin: -1px 0px 0px 1px; /* this is to get the text to overlap the textbox perfectly */
+	opacity: 0.5;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight .profilist-tbb-highlight-this {
+	text-shadow: 0 0 1px red;
 }
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox:not([disabled]) {
 	-moz-user-select: text;
