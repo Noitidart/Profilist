@@ -92,7 +92,7 @@
 	position: absolute;
 	border: 1px solid transparent;
 	pointer-events: none;
-	color: red;
+	color: transparent;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
