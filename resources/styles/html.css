@@ -163,6 +163,31 @@
 	opacity: 0;
 }
 /* end - hover state */
+/* start - message*/
+/* when message is shown */
+#profilist_menu .profilist-tbb-show-msg .profilist-tbb-textbox {
+	opacity: 0;
+	transition: opacity 200ms ease 200ms;
+	transition: opacity 200ms;
+}
+#profilist_menu .profilist-tbb-show-msg .profilist-tbb-msg {
+	opacity: 1;
+	pointer-events: none;
+	transition: opacity 200ms;
+}
+/* inate */
+#profilist_menu .profilist-tbb-msg {
+	z-index: 3;
+	position: absolute;
+	margin: auto 0;
+	height: 100%;
+	top: 0;
+	display: flex;
+	align-items: center;
+	opacity: 0;
+	transition: opacity 200ms ease 200ms;
+}
+/* end - message */
 /* start - submenu */
 /* subicon */
 #profilist_menu .profilist-tbb-submenu-subicon {

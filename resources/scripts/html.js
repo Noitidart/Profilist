@@ -230,10 +230,10 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 
 // start - xIniObj functions with no options
 function getTieValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
-	// returns null if aTieId is not found, or undefiend if aKeyName is not found ELSE value
+	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
 	for (var i=0; i<aJProfilistBuilds.length; i++) {
 		if (aJProfilistBuilds[i].id == aTieId) {
-			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefiend
+			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
 		}
 	}
 	
@@ -335,12 +335,13 @@ var Menu = React.createClass({
 			sIniObj: [], // sIniObj stands for stateIniObject
 			sSearchPhrase: '',
 			sSearchHasResults: false,
-			sArrowIndex: '' // when user does up/down arrow keys this will keep track of the index it has selected
+			sArrowIndex: '', // when user does up/down arrow keys this will keep track of the index it has selected
+			sMsgObj: {} // key is sKey, value is object
 		};
 	},
 	componentDidMount: function() {
-		MyStore.updateStatedIniObj = this.updateStatedIniObj;
-		MyStore.setState = this.setState;
+		MyStore.updateStatedIniObj = this.updateStatedIniObj; // no need for bind here else React warns "Warning: bind(): You are binding a component method to the component. React does this for you automatically in a high-performance way, so you can safely remove this call. See Menu"
+		MyStore.setState = this.setState.bind(this);
 		
 		document.addEventListener('keypress', this.onKeyPress, false);
 	},
@@ -410,6 +411,17 @@ var Menu = React.createClass({
 					// if editing something, then cancel edit. if mouse is not over the stack, then close profilist_menu. as during edit, force open happens
 					// if cloning, then cancel clone.
 					
+					// tbb-msg stuff
+					if (this.state.sMsgObj) {
+						if (this.state.sMsgObj.onCancel) {
+							this.state.sMsgObj.onCancel();
+						} else {
+							this.setState({
+								sMsgObj: {}
+							});
+						}
+					}
+					
 					// search stuff
 					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.sSearchPhrase.length > 0) {
@@ -417,6 +429,21 @@ var Menu = React.createClass({
 						}
 					}
 					
+				break;
+				
+			case 'Enter':
+				
+					// tbb-msg stuff
+					if (this.state.sMsgObj) {
+						if (this.state.sMsgObj.onAccept) {
+							this.state.sMsgObj.onAccept();
+						} else {
+							this.setState({
+								sMsgObj: {}
+							});
+						}
+					}
+				
 				break;
 			default:
 			
@@ -431,25 +458,16 @@ var Menu = React.createClass({
 	},
     render: function render() {
 		
+		var THAT = this;
 		var addToolbarButton = function(aProps) {
 			// note: aProps must contain key of nonProfileType OR tbbIniEntry. never both.
 			if ((aProps.nonProfileType && aProps.tbbIniEntry) || (!aProps.nonProfileType && !aProps.tbbIniEntry)) { console.error('aProps must contain key of nonProfileType OR tbbIniEntry. never both.'); throw new Error('aProps must contain key of nonProfileType OR tbbIniEntry. never both.'); }  // on same line as console as its a dev error
-			// only pass nohting for aPath when its initial state. to show the loading tbb
 			
-			// if set field name of "key" in props, the prop of "key" will not show up in props in the react-child
-			// set key to avoid react-reconciliation
-			if (aProps.nonProfileType) {
-				// note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813
-				if (['createnewprofile', 'loading', 'noresultsfor'].indexOf(aProps.nonProfileType) == -1) { // link9391813
-					throw new Error('Unrecgonized value for nonProfileType');
-				}
-				aProps.key = aProps.nonProfileType;
-			} else {
-				// no "nonProfileType" key so its "profile" type toolbarbutton
-				aProps.key = aProps.tbbIniEntry.Path;
-			}
-			
-			console.log('addToolbarButton of key:', aProps.key);
+			// start - common props, everything should get these
+			aProps.key = aProps.nonProfileType ? aProps.nonProfileType : aProps.tbbIniEntry.Path; // note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813 // i set key to avoid react-reconciliation
+			aProps.sKey = aProps.key; // because this.props.key is not accessible to the child i pass it to, i have to create sKey. its a react thing.
+			aProps.sMsgObj = THAT.state.sMsgObj.aKey == aProps.key ? THAT.state.sMsgObj : undefined;
+			// end - common props, everything should get these
 			
 			list.push(
 				React.createElement(ToolbarButton, aProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
@@ -587,13 +605,19 @@ var ToolbarButton = React.createClass({
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
 		
-		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
+		
+		var cClassList = ['profilist-tbb'];
+		if (this.props.sMsgObj) {
+			cClassList.push('profilist-tbb-show-msg');
+		}
+		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.nonProfileType == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
 					!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.tbbIniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.tbbIniEntry.ProfilistBadge) : core.addon.path.images + 'missing.png' }),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
+				!this.props.sMsgObj /*sMsgObj is only set if .sKey == .sMsgObj.aKey*/ ? undefined : React.createElement(TBBMsg, {sKey: this.props.sKey, sMsgObj: this.props.sMsgObj}),
 				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.tbbIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, sSearchPhrase: this.props.sSearchPhrase}),
 				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', /*defaultValue: (!this.props.tbbIniEntry ? undefined : this.props.tbbIniEntry.Name),*/ value: (this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
 				// React.createElement('div', {className: 'profilist-tbb-textbox', contentEditable:true, disabled:'disabled'},
@@ -609,7 +633,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
-				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry})
+				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey})
 			)
         );
     }
@@ -643,6 +667,34 @@ var LabelHighlighted = React.createClass({
 		// return React.createElement.apply(this, ['div', {className: 'profilist-tbb-highlight'}].concat(inner)); // this method throws no warning of ```"Warning: Each child in an array or iterator should have a unique "key" prop. Check the render method of `ToolbarButton`. See https://fb.me/react-warning-keys for more information." react.dev.js:18780:9``` // but the above doesnt need apply or concat, so its two less functions so ill go with that // see link1958939383
 	}
 });
+var TBBMsg = React.createClass({
+    displayName: 'TBBMsg',
+	render: function render() {
+		// props
+		//	sKey
+		//	sMsgObj
+		//	
+		
+		var cElType;
+		var cDefaultVal;
+		var cLabel;
+		if (this.props.sMsgObj.text) {
+			cElType = 'input';
+			cDefaultVal = this.props.sMsgObj.text;
+			cLabel = undefined;
+		} else {
+			cElType = 'div';
+			cDefaultVal = undefined;
+			cLabel = this.props.sMsgObj.label;
+		}
+		
+		var aRender = React.createElement(cElType, {className: 'profilist-tbb-msg', defaultValue: cDefaultVal},
+			cLabel
+		);
+		
+		return aRender;
+	}
+});
 var SubiconDel = React.createClass({
     displayName: 'SubiconDel',
 	click: function() {
@@ -650,14 +702,26 @@ var SubiconDel = React.createClass({
 		if (this.props.tbbIniEntry.noWriteObj.status) {
 			alert('error! cannot delete this profile because it is currently running!');
 		} else {
-			var cIniObj = gIniObj;
-			for (var i=0; i<cIniObj.length; i++) {
-				if (cIniObj[i].Path && cIniObj[i].Path == this.props.tbbIniEntry.Path) {
-					cIniObj.splice(i, 1);
-					MyStore.updateStatedIniObj();
-					return;
+			var THAT = this;
+			MyStore.setState({
+				sMsgObj: {
+					aKey: this.props.sKey,
+					label: myServices.sb.GetStringFromName('confirm-delete'),
+					onAccept: function() {
+						var cIniObj = gIniObj;
+						for (var i=0; i<cIniObj.length; i++) {
+							if (cIniObj[i].Path && cIniObj[i].Path == THAT.props.tbbIniEntry.Path) {
+								cIniObj.splice(i, 1);
+								MyStore.setState({
+									sIniObj: cIniObj,
+									sMsgObj: {}
+								});
+								return;
+							}
+						}
+					}
 				}
-			}
+			});
 		}
 		
 	},
