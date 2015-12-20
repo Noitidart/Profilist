@@ -110,6 +110,7 @@ var gKeyInfoStore = { //info on the Profilist keys i write into ini // all value
 	},
 	ProfilistBuilds: {			// whether or not to show notifications
 		pref: true,
+		defaultValue: '[]',
 		unspecificOnly: true	// this pref affects all profiles, cannot be set to currently running (specific)
 		// value should be a json array of objects. ie: [{id:date_get_time_on_create, i:slug_of_icon_in_icons_folder, p:path_to_exe},{i:slug_of_icon_in_icons_folder, p:path_to_exe}] // id should be date in ms on create, so no chance of ever getting reused
 	}
@@ -128,9 +129,10 @@ var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile1',
 		noWriteObj: { // noWriteObj is not written to ini
-			currentProfile: true // indicates that the running profile is this one
-			exePath: '', // should be path to exe it is currently running in. this key is only available when it is running, meaning noWriteObj.status == true // THIS MAY NOT BE NEEDED - i was thinking i needed, to tell that its tied to something else but running in something else, but maybe not needed
-			exeIcon: '' // should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status == true // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
+			status: true, // this is obvious, because if its currentProfile then it is obviously running
+			currentProfile: true, // indicates that the running profile is this one
+			exePath: Services.dirsvc.get('XREExeF', Ci.nsIFile).path, // is needed if devmode is on. needed for mouseLeave of SubiconTie. needed ONLY for currentProfile:true entry
+			exeIconSlug: 'beta' // should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status == true // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-buildhint
 		},
 		Name: 'Developer',
 		IsRelative: '1',
@@ -140,7 +142,8 @@ var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'General',
 		noWriteObj: {},
-		StartWithLastProfile: '1'
+		StartWithLastProfile: '1',
+		ProfilistBuilds: '[{"id":8,"p":"C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\nightly.exe","i":"nightly"}]'
 	},
 	{
 		groupName: 'TempProfile2',
@@ -365,19 +368,27 @@ var Menu = React.createClass({
 			
 			// end - sort it properly and put currentProfile at top
 			
+			var keyValDevMode = getKeyValForIniEntry('ProfilistDev', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
+				aGenIniEntry: cGenIniEntry
+			});
+			
 			// add in the profiles in order
 			for (var i=0; i<onlyProfilesIniObj.length; i++) {
 				if (i == 0) {
 					// add button without searchPhrase
 					addToolbarButton({
 						iniEntry: onlyProfilesIniObj[i],
-						genIniEntry: cGenIniEntry
+						genIniEntry: cGenIniEntry,
+						sIniObj: this.state.sIniObj,
+						aCurProfIniEntry: keyValDevMode != '1' ? undefined : curProfIniEntry
 					});
 				} else {
 					addToolbarButton({
 						searchPhrase: this.state.searchPhrase,
 						iniEntry: onlyProfilesIniObj[i],
-						genIniEntry: cGenIniEntry
+						sIniObj: this.state.sIniObj,
+						genIniEntry: cGenIniEntry,
+						aCurProfIniEntry: keyValDevMode != '1' ? undefined : curProfIniEntry
 					});
 				}
 			}
@@ -420,6 +431,78 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 	}
 	
 	return null;
+}
+function getImgPathOfTieId(aTieId, aOptions={}) {
+	//*******************************************
+	// DESC
+	// 	Provided aTieId, it will search JSON.parse'd of getIniEntryByKeyValue(aIniObj, 'General')
+	// RETURNS
+	//	null
+	//	string
+	// ARGS
+	//	aSlug - icon short name
+	//	aOptions - optional
+	//		aGenIniEntry - ini entry to be used, if this is supplied, no need to supply aOptions.aIniObj
+	//		aIniObj - if thisi is not provided, then gIniObj is used. this is not used if aGenIniEntry is provided
+	//*******************************************
+	
+	console.info('getImgPathOfTieId, aOptions:', aOptions);
+	
+	var cGenIniEntry;
+	var cIniObj;
+	
+	if (aOptions.aGenIniEntry) {
+		cGenIniEntry = aOptions.aGenIniEntry;
+	} else if (aOptions.aIniObj) {
+		cIniObj = aOptions.aIniObj;
+		cGenIniEntry = getIniEntryByKeyValue(cIniObj, 'groupName', 'General');
+	} else {
+		cIniObj = gIniObj;
+		cGenIniEntry = getIniEntryByKeyValue(cIniObj, 'groupName', 'General');
+	}
+	
+	var keyValBuilds = getKeyValForIniEntry('ProfilistBuilds', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
+		aGenIniEntry: cGenIniEntry,
+		aIniObj: cIniObj
+	});
+	
+	var parsed = JSON.parse(keyValBuilds);
+	for (var i=0; i<parsed.length; i++) {
+		if (parsed[i].id == aTieId) {
+			return getImgPathOfSlug(parsed[i].i);
+		}
+	}
+	
+	return null;
+}
+function getImgPathOfSlug(aSlug) {
+	//*******************************************
+	// DESC
+	// 	Provided aSlug, such as "esr", "release", "beta", "dev", "nightly", or any user defined one, this will return the full path to that image
+	// RETURNS
+	//	null
+	//	string
+	// ARGS
+	//	aSlug - icon short name
+	//*******************************************
+
+	console.info('getImgPathOfSlug, aSlug:', aSlug);
+	
+	switch (aSlug) {
+		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
+		case 'release':
+		case 'beta':
+		case 'dev':
+		case 'aurora':
+		case 'nightly':
+				
+				return core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_16.png';
+				
+			break;
+		default:
+			
+				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
+	}
 }
 function getKeyValForIniEntry(aKeyName, aProfIniEntryOrProfPath, aOptions={}) {
 	//*******************************************
@@ -542,15 +625,18 @@ var ToolbarButton = React.createClass({
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
 		
-		var keyValDevMode = getKeyValForIniEntry('ProfilistDev', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
-			aGenIniEntry: this.props.genIniEntry
-		});
+		var keyValDevMode;
+		if (this.props.iniEntry) {
+			keyValDevMode = getKeyValForIniEntry('ProfilistDev', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
+				aGenIniEntry: this.props.genIniEntry
+			});
+		}
 		
 		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!this.props.iniEntry ? this.props.nonProfileType : (this.props.iniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.nonProfileType == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
-					!this.props.iniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.iniEntry.ProfilistBadge ? OS.Path.join(core.profilist.path.icons, this.props.iniEntry.ProfilistBadge, this.props.iniEntry.ProfilistBadge + '16.png') : 'chrome://mozapps/skin/places/defaultFavicon.png' }),
+					!this.props.iniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.iniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.iniEntry.ProfilistBadge) : 'chrome://mozapps/skin/places/defaultFavicon.png' }),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
 				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.iniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, searchPhrase: this.props.searchPhrase}),
@@ -562,9 +648,9 @@ var ToolbarButton = React.createClass({
 			this.props.nonProfileType != 'createnewprofile' && !this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
 				!this.props.iniEntry || !this.props.iniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				!this.props.iniEntry || !this.props.iniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon'}),
+				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' || (!this.props.iniEntry.noWriteObj.status && !this.props.iniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.iniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.iniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied, if it wasnt running and NOT tied it would never render this element*/ getImgPathOfTieId(this.props.iniEntry.ProfilistTie, {aGenIniEntry: this.props.genIniEntry})) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
+				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement(SubiconTie, {aIniEntry: this.props.iniEntry, aGenIniEntry: this.props.genIniEntry, aCurProfIniEntry: this.props.aCurProfIniEntry}),
 				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
@@ -599,6 +685,163 @@ var LabelHighlighted = React.createClass({
 		return React.createElement('div', {className: 'profilist-tbb-highlight'},
 			inner
 		);
+	}
+});
+var SubiconTie = React.createClass({
+    displayName: 'SubiconTie',
+	getInitialState: function() {
+		console.warn('getting initail state on subicontie');
+		return {
+			bi: -3, // stands for build_index_tied_to // -3 means not yet initialized, so check if ini has one and initialize it
+			onent: -2, // means tie on onMouseEnter
+			parsedBuilds: [] // should be a prop, really.
+		}
+	},
+	click: function() {
+		var newBi;
+		if (this.state.bi == -2) { // its untied
+			newBi = -1; // tie to current
+		} else {
+			var i = this.state.bi + 1;
+			// find next entry that isnt currentProfile's exePath
+			while (i < this.state.parsedBuilds.length) {
+				console.log('while i:', i);
+				if (this.state.parsedBuilds[i].p.toLowerCase() != this.props.aCurProfIniEntry.noWriteObj.exePath.toLowerCase()) {
+					newBi = i;
+					break;
+				}
+				i++;
+			}
+			if (newBi === undefined) {
+				// nothing found so untie it
+				newBi = -2;
+			}
+		}
+
+		this.setState({
+			bi: newBi
+		});
+	},
+	mouseEnter: function() {
+
+		this.setState({
+			onent: this.state.bi
+		});
+	},
+	mouseLeave: function() {
+		if (this.state.bi != this.state.onent) {
+			console.log('will now save');
+			// :todo: send message to bootstrap to save to ini
+			var gIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.aIniEntry.Path);
+			console.log('gIniEntry:', gIniEntry);
+			
+			if (this.state.bi == -2) {
+				// means untied
+				delete gIniEntry.ProfilistTie;
+				console.log('gIniEntry after deleting tie:', gIniEntry);
+			} else {
+				// tied to current or something else
+				
+				var cTieId;
+				if (this.state.bi == -1) {
+					// when send message to bootstrap here as well, read below for what it should do
+					// get aTieId(ProfilistTie) from bi
+						// if current is not in there, add it at last index, bootstrap will do the same but bootstrap will also write it to file :todo:
+					
+					var cMaxId = 0; // if need to add, this is what bootstrap will do as well, so minimum id to set should be 1 :note: :todo: :link: :important: // i set this to aMinId - 1
+					for (var i=0; i<this.state.parsedBuilds.length; i++) {
+						if (this.state.parsedBuilds[i].p.toLowerCase() == this.props.aCurProfIniEntry.noWriteObj.exePath.toLowerCase()) {
+							cTieId = this.state.parsedBuilds[i].id;
+							cMaxId = null; // not needed, as i only need this for if currentProfile
+							break;
+						}
+						if (this.state.parsedBuilds[i].id > cMaxId) {
+							cMaxId = this.state.parsedBuilds[i].id;
+						}
+					}
+					if (!cTieId) { // especially because of this test, minimum id to set should be 1
+						var cNextId = cMaxId + 1;
+						cTieId = cNextId;
+						
+						this.state.parsedBuilds.push({
+							id: cTieId,
+							p: this.props.aCurProfIniEntry.noWriteObj.exePath,
+							i: this.props.aCurProfIniEntry.noWriteObj.exeIconSlug
+						});
+						
+						var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+						gGenIniEntry.ProfilistBuilds = JSON.stringify(this.state.parsedBuilds);
+					}
+				} else {
+					cTieId = this.state.parsedBuilds[this.state.bi].id;
+				}
+				gIniEntry.ProfilistTie = cTieId + '';
+				
+				console.log('gIniEntry after adding tie:', gIniEntry);
+			}
+			
+			MyStore.updateStatedIniObj();
+		}
+	},
+	render: function render() {
+		// props
+		//		aGenIniEntry
+		//		aCurProfIniEntry
+		//		aIniEntry
+		// getImgPathOfSlug(this.props.aCurProfIniEntry.noWriteObj.exeIconSlug)
+		console.info('this.props:', this.props);
+		console.log('parsedBuilds:', this.state.parsedBuilds);
+		// if current is not in ProfilistBuilds then add it in
+		var keyValBuilds = getKeyValForIniEntry('ProfilistBuilds', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
+			aGenIniEntry: this.props.aGenIniEntry,
+			aIniObj: gIniObj // not used as I supplied aGenIniEntry and ProfilistBuilds is in it
+		});
+		
+		var parsedBuilds = JSON.parse(keyValBuilds);
+		this.state.parsedBuilds = parsedBuilds;
+		
+		var aProps = {
+			className: 'profilist-tbb-submenu-subicon profilist-si-tie profilist-devmode',
+			style: {},
+			onMouseEnter: this.mouseEnter,
+			onMouseLeave: this.mouseLeave,
+			onClick: this.click
+		};
+		
+		if (this.state.bi == -3) {
+			// first render of component, so component is uninted, so check if aIniEntry is tied, and if it then store its index in parsedBuilds to this.state.bi
+			if (this.props.aIniEntry.ProfilistTie) {
+				for (var i=0; i<this.state.parsedBuilds.length; i++) {
+					if (this.state.parsedBuilds[i].id == this.props.aIniEntry.ProfilistTie) {
+						this.state.bi = i;
+						break;
+					}
+				}
+				if (this.state.bi == -3) {
+					console.error('error error! this should never happen, how can its aIniEntry have a ProfilistTie but then I couldnt find it in parsedBuilds???', 'parsedBuilds:', this.state.parsedBuilds, 'aIniEntry:', this.props.aIniEntry);
+					throw new Error('error error!!!!! should never get here!!! so i have no fallback setup!!!');
+				}
+			} else {
+				this.state.bi = -2; // its untied
+			}
+		}
+		
+		if (this.state.bi > -1) {
+			// its tied to something other then current
+			aProps.style.filter = 'grayscale(0%)';
+			aProps.style.backgroundImage = 'url("' + getImgPathOfTieId(this.state.parsedBuilds[this.state.bi].id) + '")';
+		} else {
+			if (this.state.bi == -1) {
+				// its tied to current
+				aProps.style.filter = 'grayscale(0%)';
+			} else { // its untied (this.state.bi should be -2), so show current
+				aProps.style.filter = 'grayscale(100%)';
+			}
+			aProps.style.backgroundImage = 'url("' + getImgPathOfSlug(this.props.aCurProfIniEntry.noWriteObj.exeIconSlug) + '")';
+		}
+		
+		var aRendered = React.createElement('div', aProps); // , this.state.bi, ' ', this.state.onent
+		return aRendered;
 	}
 });
 var myMenu = React.createElement(Menu);
