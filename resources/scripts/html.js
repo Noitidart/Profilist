@@ -31,7 +31,205 @@ var core = {
 
 // Lazy imports
 var myServices = {};
-XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'cp.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
+XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'html.properties?' + core.addon.cache_key); });
+
+
+/* notes on notesObj
+status: bool. tells whethere its running or not. if not set, undefined is equivlanet of false
+*/
+var iniObj = [ // notesObj are not written to file
+	{
+		groupName: 0, // 'Profile0',
+		notesObj: {},
+		Name: 'default',
+		IsRelative: '1',
+		Path: 'Profiles/4hraqsqx.default',
+		Default: '1'
+	},
+	{
+		groupName: 1, // 'Profile1',
+		notesObj: {},
+		Name: 'Dev',
+		IsRelative: '1',
+		Path: 'Profiles/m2b8zkct.Unnamed Profile 1'
+	},
+	{
+		groupName: 'General',
+		notesObj: {},
+		StartWithLastProfile: '1'
+	}
+];
+
+var MyStore = {};
+
+var Menu = React.createClass({
+    displayName: 'Menu',
+	getInitialState: function() {
+		return {
+			iniObj: []
+		};
+	},
+	componentDidMount: function() {
+		MyStore.updateStatedIniObj = this.updateStatedIniObj;
+	},
+	updateStatedIniObj: function() {
+		this.setState({
+			iniObj: iniObj
+		});
+	},
+    render: function render() {
+		var addToolbarButton = function(aPath) {
+			// only pass nohting for aPath when its initial state. to show the loading tbb
+			console.log('addToolbarButton, aPath:', aPath);
+			list.push(
+				React.createElement(ToolbarButton, {key: aPath, path: aPath})  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
+			);
+		};
+		
+		var list = [];
+		
+		if (this.state.iniObj.length == 0) {
+			// creating loading item
+			addToolbarButton('loading');
+		} else {
+			for (var i=0; i<this.state.iniObj.length; i++) {
+				if (this.state.iniObj[i].Path) { // so we dont make one for "General"
+					addToolbarButton(this.state.iniObj[i].Path);
+				}
+			}
+			addToolbarButton('createnewprofile');
+		}
+		
+        return React.createElement(
+            'div', {id: 'profilist_menu'},
+				list
+        );
+    }
+});
+
+function getIniEntryOf(aPathOrGroupName) {
+	// returns reference to the object in ini
+	// aPath can be "loading", it will return undefined though in that case
+	console.log('in getIniEntryOf, aPath:', aPathOrGroupName);
+	for (var i=0; i<iniObj.length; i++) {
+		if (('Path' in iniObj[i] && iniObj[i].Path == aPathOrGroupName) || iniObj[i].groupName == aPathOrGroupName) {
+			return iniObj[i];
+		}
+	}
+	// return undefined; // no need, by default it returns undefined
+}
+function getBadgeImgPathOf(aPath) {
+	// returns a string, which is path to image of the badge, for profile with Path == aPath
+	var cIniEntry = getIniEntryOf(aPath);
+	if (!cIniEntry || !cIniEntry.profilistBadge) { // is `!cIniEntry` when aPath == 'loading' as duh its not found in iniObj
+		return 'chrome://mozapps/skin/places/defaultFavicon.png';
+	} else {
+		return cIniEntry.profilistBadge;
+	}
+}
+function getStatusImgOf(aPath) {
+	// returns string, of the image to use
+	// should have something to run to get status, and on resolve, this will just obtain the key from notesObj
+	var cIniEntry = getIniEntryOf(aPath);
+	if (!cIniEntry) {
+		// this should never happen
+		// actually this will happen when aPath == 'loading';
+		return 'chrome://profilist/content/resources/images/icon16.png';
+	} else {
+		if (cIniEntry.notesObj.status) {
+			return 'chrome://profilist/content/resources/images/status-active.png';
+		} else {
+			return 'chrome://profilist/content/resources/images/status-inactive.png';
+		}
+	}
+}
+function getStatusOf(aPath) {
+	// returns bool
+	var cIniEntry = getIniEntryOf(aPath);
+	if (!cIniEntry) {
+		// this should never happen
+		// actually this will happen when aPath == 'loading';
+		return false;
+	} else {
+		return cIniEntry.notesObj.status === undefined ? false : cIniEntry.notesObj.status;
+	}
+}
+var ToolbarButton = React.createClass({
+    displayName: 'ToolbarButton',
+
+    render: function render() {
+		//var cPath = this.props.key; // link1049403002 this is a reason why i have to set key to aPath --- never mind learned that key is not accessible via this.props.key
+		var cPath = this.props.path;
+		console.log('ToolbarButton-render, cPath:', cPath);
+		var cIniEntry = getIniEntryOf(cPath); // will be undefined for 'loading', 'createnewprofile'
+		console.log('ToolbarButton-render, cIniEntry:', cIniEntry);
+		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!cIniEntry ? cPath : (cIniEntry.notesObj.status ? 'active' : 'inactive'))}, // , 'data-loading': cIniEntry ? undefined : '1'
+			React.createElement('div', {className: 'profilist-tbb-primary'},
+				React.createElement('div', {className: 'profilist-tbb-hover'}),
+				React.createElement('div', {className: 'profilist-tbb-icon'},
+					React.createElement('img', {className: 'profilist-tbb-badge', src: (!cIniEntry ? '' : getBadgeImgPathOf(cPath))}),
+					React.createElement('img', {className: 'profilist-tbb-status'})
+				),
+				React.createElement('div', {className: 'profilist-tbb-textbox', disabled:'disabled'},
+					cIniEntry ? cIniEntry.Name : myServices.sb.GetStringFromName(cPath)
+				)
+			),
+			React.createElement('div', {className: 'profilist-tbb-submenu'},
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
+				React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
+			)
+        );
+    }
+});
+
+/*
+var Label = React.createClass({
+    displayName: 'ProfilistLabel',
+
+    render: function render() {
+        return React.createElement(
+            'div', {
+                contentEditable: 'true'
+            },
+            this.props.name
+        );
+    }
+});
+
+var Subicon = React.createClass({
+    displayName: 'Subicon',
+    render: function() {
+
+    }
+});
+
+*/
+
+var myMenu = React.createElement(Menu);
+
+document.addEventListener('DOMContentLoaded', function() {
+	ReactDOM.render(
+		myMenu,
+		document.getElementById('profilist_menu_container')
+	);
+	
+	setTimeout(function() {
+		MyStore.updateStatedIniObj();
+	}, 2000);
+	
+	setTimeout(function() {
+		iniObj[0].notesObj.status = true
+		MyStore.updateStatedIniObj();
+	}, 4000);
+}, false);
+
+/*
 
 function doOnBeforeUnload() {
 
@@ -326,27 +524,12 @@ function contentMMFromContentWindow_Method2(aContentWindow) {
 }
 function Deferred() {
 	try {
-		/* A method to resolve the associated Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} value : This value is used to resolve the promise
-		 * If the value is a Promise then the associated promise assumes the state
-		 * of Promise passed as value.
-		 */
 		this.resolve = null;
 
-		/* A method to reject the assocaited Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} reason: The reason for the rejection of the Promise.
-		 * Generally its an Error object. If however a Promise is passed, then the Promise
-		 * itself will be the reason for rejection no matter the state of the Promise.
-		 */
+
 		this.reject = null;
 
-		/* A newly created Pomise object.
-		 * Initially in pending state.
-		 */
+
 		this.promise = new Promise(function(resolve, reject) {
 			this.resolve = resolve;
 			this.reject = reject;
@@ -358,3 +541,4 @@ function Deferred() {
 	}
 }
 // end - common helper functions
+*/

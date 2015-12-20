@@ -8,8 +8,8 @@
 
 		<link rel="stylesheet" type="text/css" media="screen" href="chrome://profilist/content/resources/styles/html.css" />
 		
-		<script src="chrome://profilist/content/resources/scripts/react.min.js"></script>
-		<script src="chrome://profilist/content/resources/scripts/react-dom.min.js"></script>
+		<script src="chrome://profilist/content/resources/scripts/react.dev.js"></script>
+		<script src="chrome://profilist/content/resources/scripts/react-dom.dev.js"></script>
 		<script src="chrome://profilist/content/resources/scripts/html.js"></script>
 		
 		<style>
@@ -17,28 +17,6 @@
 		</style>
 	</head>
 	<body>
-		<div id="profilist_menu">
-			<div class="profilist-tbb">
-				<div class="profilist-tbb-hover" />
-				<div class="profilist-tbb-primary">
-					<div class="profilist-icon">
-						<img src="chrome://mozapps/skin/places/defaultFavicon.png" class="profilist-icon-badge" />
-						<img src="chrome://profilist/content/resources/images/icon16.png" class="profilist-icon-status" />
-					</div>
-					<!--imgs should be 16px x 16px-->
-					<input type="text" value="Loading" class="profilist-textbox" disabled="" />
-				</div>
-				<div class="profilist-tbb-submenu">
-					<div class="profilist-subicon profilist-si-isdefault" />
-					<div class="profilist-subicon profilist-si-clone" />
-					<div class="profilist-subicon profilist-si-dots" />
-					<div class="profilist-subicon profilist-si-build profilist-devmode" />
-					<div class="profilist-subicon profilist-si-safe profilist-devmode" />
-					<div class="profilist-subicon profilist-si-setdefault" />
-					<div class="profilist-subicon profilist-si-rename" />
-					<div class="profilist-subicon profilist-si-del" />
-				</div>
-			</div>
-		</div>
+		<div id="profilist_menu_container" />
 	</body>
 </html>
