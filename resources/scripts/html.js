@@ -129,6 +129,8 @@ var gIniObj = [ // noWriteObj are not written to file
 		groupName: 'Profile1',
 		noWriteObj: { // noWriteObj is not written to ini
 			currentProfile: true // indicates that the running profile is this one
+			exePath: '', // should be path to exe it is currently running in. this key is only available when it is running, meaning noWriteObj.status == true // THIS MAY NOT BE NEEDED - i was thinking i needed, to tell that its tied to something else but running in something else, but maybe not needed
+			exeIcon: '' // should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status == true // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 		},
 		Name: 'Developer',
 		IsRelative: '1',
@@ -560,8 +562,9 @@ var ToolbarButton = React.createClass({
 			this.props.nonProfileType != 'createnewprofile' && !this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
 				!this.props.iniEntry || !this.props.iniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
+				!this.props.iniEntry || !this.props.iniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
+				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
 				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
