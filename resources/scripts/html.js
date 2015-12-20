@@ -66,11 +66,11 @@ var gKeyInfoStore = { //info on the Profilist keys i write into ini // all value
 		specificOnly: false,
 		defaultSpecific: false,
 		defaultValue: '2',
-		possibleValues: [
-			'0',				// by created date ASC
-			'1',				// by created date DESC
-			'2',				// by alpha-numeric ASC
-			'3'					// by alpha-numeric DESC
+		possibleValues: [		// link83737383
+			'0',				// by create order ASC
+			'1',				// by create order DESC
+			'2',				// by alpha-numeric-insensitive ASC
+			'3'					// by alpha-numeric-insensitive DESC
 		]
 	},
 	ProfilistNotif: {			// whether or not to show notifications
@@ -118,9 +118,7 @@ var gKeyInfoStore = { //info on the Profilist keys i write into ini // all value
 var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile0',
-		noWriteObj: { // noWriteObj is not written to ini
-			currentProfile: true // indicates that the running profile is this one
-		},
+		noWriteObj: {},
 		Name: 'defaulted',
 		IsRelative: '1',
 		Path: 'Profiles/4hraqsqx.default',
@@ -129,7 +127,9 @@ var gIniObj = [ // noWriteObj are not written to file
 	},
 	{
 		groupName: 'Profile1',
-		noWriteObj: {},
+		noWriteObj: { // noWriteObj is not written to ini
+			currentProfile: true // indicates that the running profile is this one
+		},
 		Name: 'Developer',
 		IsRelative: '1',
 		Path: 'Profiles/m2b8zkct.Unnamed Profile 1'
@@ -141,23 +141,48 @@ var gIniObj = [ // noWriteObj are not written to file
 		StartWithLastProfile: '1'
 	},
 	{
-		groupName: 'TempProfile1',
+		groupName: 'TempProfile2',
 		noWriteObj: {},
 		Name: 'Temp1',
 		IsRelative: '1',
-		Path: 'blah/temp1'
+		Path: 'C:\\temp1'
 		// NOWRITE: true // because profilist is not installed into here (no ProfilistStatus) // actually i decided to discontinue NOWRITE on these. i will write it to file. because so user can name the profiels while they are running and the name will show consistent across all profiles
 	},
 	{
-		groupName: 'TempProfile2',
+		groupName: 'Profile3',
+		noWriteObj: {},
+		Name: 'Yass',
+		IsRelative: '1',
+		Path: 'C:\\yass'
+	},
+	{
+		groupName: 'TempProfile4',
 		noWriteObj: {},
 		Name: 'Temp2',
 		IsRelative: '1',
-		Path: 'blah/temp2',
+		Path: 'C:\\temp2',
 		ProfilistStatus: '1' // because profilist is installed in it, it must be written to ini
 	}
 ];
 var MyStore = {};
+
+// start - xIniObj sort functions - for use on a clone of xIniObj
+var reProfCreateOrder = /Profile(\d+)/;
+var gSortIniFunc = { // link83737383 // these sort functions must only run on an array of ini entires that are for profiles - meaning a and b should both have .Path
+	'0': undefined, 		// by create order ASC
+	'1': function(a, b) {	// by create order DESC
+		
+		return b.noWriteObj.createOrder - a.noWriteObj.createOrder;
+	},
+	'2': function(a, b) {	// by alpha-numeric-insensitive profile name ASC		
+		return compareAlphaNumeric(a.noWriteObj.lowerCaseName, b.noWriteObj.lowerCaseName);
+		
+	},
+	'3': function(a, b) {	// by alpha-numeric-insensitive profile name DESC
+		return compareAlphaNumeric(a.noWriteObj.lowerCaseName, b.noWriteObj.lowerCaseName) * -1;
+	}
+};
+// end - xIniObj sort functions
 
 var Menu = React.createClass({
     displayName: 'Menu',
@@ -172,23 +197,24 @@ var Menu = React.createClass({
 	componentDidMount: function() {
 		MyStore.updateStatedIniObj = this.updateStatedIniObj;
 		MyStore.setState = this.setState;
-		MyStore.forceUpdate = this.forceUpdate.bind(this);
 		
 		document.addEventListener('keypress', this.onKeyPress, false);
 	},
 	updateStatedIniObj: function() {
 		this.setState({
-			sIniObj: gIniObj
+			sIniObj: JSON.parse(JSON.stringify(gIniObj))
 		});
 	},
 	executeSearch: function(newSearchPhrase) {
+		
+		// only searches on all non-currentProfile's
 		
 		console.log('newSearchPhrase:', newSearchPhrase);
 		
 		var cResultsCount = 0;
 		if (newSearchPhrase == '') {
 			for (var i=0; i<this.state.sIniObj.length; i++) {
-				if (this.state.sIniObj[i].Path) {
+				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile) {
 					// its a profile
 					cResultsCount++;
 				}
@@ -196,7 +222,7 @@ var Menu = React.createClass({
 		} else {
 			var searchPatt = new RegExp(escapeRegExp(newSearchPhrase), 'i');
 			for (var i=0; i<this.state.sIniObj.length; i++) {
-				if (this.state.sIniObj[i].Path && searchPatt.test(this.state.sIniObj[i].Name)) {
+				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile && searchPatt.test(this.state.sIniObj[i].Name)) {
 					// its a profile
 					cResultsCount++;
 				}
@@ -296,14 +322,65 @@ var Menu = React.createClass({
 				nonProfileType: 'loading'
 			});
 		} else {
-			for (var i=0; i<this.state.sIniObj.length; i++) {
-				if (this.state.sIniObj[i].Path) { // so we dont make one for "General"
+			var cGenIniEntry = getIniEntryByKeyValue(this.state.sIniObj, 'groupName', 'General');
+			
+			var keyValSort = getKeyValForIniEntry('ProfilistSort', cGenIniEntry /*not used by getKeyValForIniEntry but I have to put in something*/, {
+				aGenIniEntry: cGenIniEntry,
+				aIniObj: this.state.sIniObj
+			});
+			
+			// start - sort it properly and put currentProfile at top
+			// copy sIniObj and remove all but the profile entries, and place currentProfile entry on top, and create case insensitive name field
+			var onlyProfilesIniObj = JSON.parse(JSON.stringify(this.state.sIniObj));
+			
+			var curProfIniEntry; // the ini entry with currentProfile set to true
+			for (var i=0; i<onlyProfilesIniObj.length; i++) {
+				if (!onlyProfilesIniObj[i].Path) {
+					onlyProfilesIniObj.splice(i, 1);
+					i--;
+				} else {
+					// if its the currentProfile remove it and save it for later, we dont need this during sorting, as we will insert this back in as first element
+					
+					// create the sortBy field
+					// link83737383
+					if (keyValSort == 1) {
+						onlyProfilesIniObj[i].noWriteObj.createOrder = onlyProfilesIniObj[i].groupName.match(reProfCreateOrder)[1];
+					} else if (keyValSort == 2 || keyValSort == 3) {
+						onlyProfilesIniObj[i].noWriteObj.lowerCaseName = onlyProfilesIniObj[i].Name.toLowerCase();
+					}
+					
+					if (onlyProfilesIniObj[i].noWriteObj.currentProfile) {
+						curProfIniEntry = onlyProfilesIniObj.splice(i, 1)[0];
+						i--;
+					}
+				}
+			};
+			if (gSortIniFunc[keyValSort]) { // because default sort order is create order asc it can be undefined so no need for sorting
+				onlyProfilesIniObj.sort(gSortIniFunc[keyValSort]);
+			}
+			// after sorting put curProfIniEntry as first element
+			onlyProfilesIniObj.splice(0, 0, curProfIniEntry);
+			
+			// end - sort it properly and put currentProfile at top
+			
+			// add in the profiles in order
+			for (var i=0; i<onlyProfilesIniObj.length; i++) {
+				if (i == 0) {
+					// add button without searchPhrase
+					addToolbarButton({
+						iniEntry: onlyProfilesIniObj[i],
+						genIniEntry: cGenIniEntry
+					});
+				} else {
 					addToolbarButton({
 						searchPhrase: this.state.searchPhrase,
-						iniEntry: this.state.sIniObj[i]
+						iniEntry: onlyProfilesIniObj[i],
+						genIniEntry: cGenIniEntry
 					});
 				}
 			}
+
+			// add in the ending toolbar buttons
 			addToolbarButton({
 				nonProfileType: 'noresultsfor',
 				searchPhrase: this.state.searchPhrase,
@@ -323,29 +400,29 @@ var Menu = React.createClass({
 function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 	//*******************************************
 	// DESC
-	// 	Iterates through the ini object provided, once it finds an entry that has aKey that equals aValue it returns it
+	// 	Iterates through the ini object provided, once it finds an entry that has aKeyName that equals aKeyVal it returns it
 	//	If nothing is found then it returns NULL
 	// RETURNS
 	//	null
 	//	an element in the aIniObj
 	// ARGS
 	//	aIniObj - the ini object you want to get value from
-	// 	aKey - the name of the field
+	// 	aKeyName - the name of the field
 	//	aVal - the value the field should be
 	//*******************************************
 
 	for (var i=0; i<aIniObj.length; i++) {
-		if (aKey in aIniObj[i] && aIniObj[i][aKey] == aValue) {
+		if (aKeyName in aIniObj[i] && aIniObj[i][aKeyName] == aKeyVal) {
 			return aIniObj[i];
 		}
 	}
 	
 	return null;
 }
-function getKeyValForIniEntry(aKeyName, aProfIniEntryOrProfPath) {
+function getKeyValForIniEntry(aKeyName, aProfIniEntryOrProfPath, aOptions={}) {
 	//*******************************************
 	// DESC
-	// 	Gets value from provied iniEntr or gets it from gIniObj. and if value is not found it returns default if has one. if no default then returns NULL.
+	// 	Gets value from provied iniEntry or gets it from gIniObj. and if value is not found it returns default if has one. if no default then returns NULL.
 	// 	This function is read only on which xIniObj is provided
 	// RETURNS
 	//	string value if aKeyName found OR not found but has defaultValue
@@ -441,7 +518,7 @@ var ToolbarButton = React.createClass({
 		var hideDueToSearch = false;
 		
 		var searchMatchedAtIndex = []; // holds index at which searchPhrase was found in name. the end is obviously known, its the index PLUS searchPhrase length
-		if (this.props.searchPhrase != '') {
+		if (this.props.searchPhrase && this.props.searchPhrase != '') {
 			// searchInProccess = true;
 			if (this.props.nonProfileType == 'noresultsfor') {
 				if (this.props.searchResultsCount > 0) {
@@ -462,7 +539,7 @@ var ToolbarButton = React.createClass({
 				hideDueToSearch = true;
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
-		
+			
 		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!this.props.iniEntry ? this.props.nonProfileType : (this.props.iniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
@@ -517,29 +594,6 @@ var LabelHighlighted = React.createClass({
 		);
 	}
 });
-/*
-var Label = React.createClass({
-    displayName: 'ProfilistLabel',
-
-    render: function render() {
-        return React.createElement(
-            'div', {
-                contentEditable: 'true'
-            },
-            this.props.name
-        );
-    }
-});
-
-var Subicon = React.createClass({
-    displayName: 'Subicon',
-    render: function() {
-
-    }
-});
-
-*/
-
 var myMenu = React.createElement(Menu);
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -553,9 +607,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	}, 2000);
 	
 	setTimeout(function() {
-		gIniObj[0].noWriteObj.status = true;
-		gIniObj[0].Name = 'RAWR';
-		MyStore.forceUpdate();
+		// gIniObj[0].noWriteObj.status = true;
+		// gIniObj[0].Name = 'RAWR';
+		// MyStore.updateStatedIniObj();
 	}, 4000);
 }, false);
 
@@ -736,5 +790,22 @@ function escapeRegExp(text) {
 		arguments.callee.sRE = new RegExp('(\\' + specials.join('|\\') + ')', 'g');
 	}
 	return text.replace(arguments.callee.sRE, '\\$1');
+}
+var reA = /[^a-zA-Z]/g; // for compareAlphaNumeric
+var reN = /[^0-9]/g; // for compareAlphaNumeric
+function compareAlphaNumeric(a, b) {
+	// useful for sorting algo, originally inteded for alpha-numeric asc sort. taken from - http://stackoverflow.com/a/4340339/1828637
+	// returns -1 if a < b
+	// returns -1 if a == b
+	// returns -1 if a > b
+    var aA = a.replace(reA, '');
+    var bA = b.replace(reA, '');
+    if(aA === bA) {
+        var aN = parseInt(a.replace(reN, ''), 10);
+        var bN = parseInt(b.replace(reN, ''), 10);
+        return aN === bN ? 0 : aN > bN ? 1 : -1;
+    } else {
+        return aA > bA ? 1 : -1;
+    }
 }
 // end - common helper functions
