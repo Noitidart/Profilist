@@ -48,7 +48,8 @@ const OSPath_config = OS.Path.join(OSPath_simpleStorage, 'config.json');
 const myPrefBranch = 'extensions.' + core.addon.id + '.';
 
 var bootstrap = this;
-var R = {}; // holds my built react stuff
+var RC = {}; // holds my react components
+var RE = {}; // holds my react elements
 
 var ADDON_MANAGER_ENTRY;
 
@@ -104,7 +105,7 @@ function AboutFactory(component) {
 // end - about module
 
 function testReact() {
-	R.Timer = React.createClass({
+	RC.Timer = React.createClass({
 		displayName: 'Timer',
 		getInitialState: function getInitialState() {
 			return { secondsElapsed: 0 };
@@ -116,12 +117,12 @@ function testReact() {
 			console.log('comp mounted');
 			this.timer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
 			var THAT = this;
-			this.timer.initWithCallback({
-				notify: function() {
-					console.log('timer triggered', 'this.tick:', this.tick, 'THAT.tick:', THAT.tick);
-					THAT.tick();
-				}
-			}, 1000, Ci.nsITimer.TYPE_REPEATING_PRECISE);
+			// this.timer.initWithCallback({
+				// notify: function() {
+					// console.log('timer triggered', 'this.tick:', this.tick, 'THAT.tick:', THAT.tick);
+					// THAT.tick();
+				// }
+			// }, 1000, Ci.nsITimer.TYPE_REPEATING_PRECISE);
 		},
 		componentWillUnmount: function componentWillUnmount() {
 			console.log('comp unmounting');
@@ -137,7 +138,13 @@ function testReact() {
 		}
 	});
 
-	ReactDOM.render(React.createElement(R.Timer, null), Services.wm.getMostRecentWindow('navigator:browser').document.getElementById('myhbo'));
+	RE.timerA = React.createElement(RC.Timer, null);
+	var pareEl = Services.wm.getMostRecentWindow('navigator:browser').document.getElementById('PlacesToolbarItems');
+	var myhbo = pareEl.ownerDocument.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'hbox')
+	myhbo.setAttribute('id', 'myhbo');
+	myhbo.setAttribute('style', 'background-color:red;');
+	pareEl.appendChild(myhbo);
+	ReactDOM.render(RE.timerA, myhbo);
 };
 
 function install() {}
@@ -160,8 +167,8 @@ function startup(aData, aReason) {
 		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
 		
 		// bring in react
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-xul.js', bootstrap);
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-xul-dom.js', bootstrap);
+		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
+		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
 		
 		testReact();
 	};
@@ -203,6 +210,13 @@ function shutdown(aData, aReason) {
 	
 	// unregister about pages listener
 	Services.mm.removeMessageListener(core.addon.id, fsMsgListener);
+	
+	// unmount react elements
+	for (var re in RE) {
+		console.info(RE[re]);
+		//ReactDOM.unmountComponentAtNode()
+		console.log('RE[re]:', RE[re]);
+	}
 }
 // END - Addon Functionalities
 // start - server/framescript comm layer
