@@ -466,7 +466,7 @@ var Menu = React.createClass({
 			// start - common props, everything should get these
 			aProps.key = aProps.nonProfileType ? aProps.nonProfileType : aProps.tbbIniEntry.Path; // note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813 // i set key to avoid react-reconciliation
 			aProps.sKey = aProps.key; // because this.props.key is not accessible to the child i pass it to, i have to create sKey. its a react thing.
-			aProps.sMsgObj = THAT.state.sMsgObj.aKey == aProps.key ? THAT.state.sMsgObj : undefined;
+			aProps.sMsgObj = THAT.state.sMsgObj.aKey == aProps.key || aProps.key == 'createnewprofile' ? THAT.state.sMsgObj : undefined;
 			// end - common props, everything should get these
 			
 			list.push(
@@ -607,7 +607,7 @@ var ToolbarButton = React.createClass({
 		
 		
 		var cClassList = ['profilist-tbb'];
-		if (this.props.sMsgObj) {
+		if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
 			cClassList.push('profilist-tbb-show-msg');
 		}
 		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
@@ -617,15 +617,15 @@ var ToolbarButton = React.createClass({
 					!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.tbbIniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.tbbIniEntry.ProfilistBadge) : core.addon.path.images + 'missing.png' }),
 					React.createElement('img', {className: 'profilist-tbb-status'})
 				),
-				!this.props.sMsgObj /*sMsgObj is only set if .sKey == .sMsgObj.aKey*/ ? undefined : React.createElement(TBBMsg, {sKey: this.props.sKey, sMsgObj: this.props.sMsgObj}),
+				!this.props.sMsgObj || this.props.sMsgObj.aKey != this.props.sKey ? undefined : React.createElement(TBBMsg, {sKey: this.props.sKey, sMsgObj: this.props.sMsgObj}),
 				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.tbbIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, sSearchPhrase: this.props.sSearchPhrase}),
-				React.createElement('input', {className: 'profilist-tbb-textbox', disabled:'disabled', /*defaultValue: (!this.props.tbbIniEntry ? undefined : this.props.tbbIniEntry.Name),*/ value: (this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
+				React.createElement('input', {className: 'profilist-tbb-textbox', type:'text', disabled:'disabled', /*defaultValue: (!this.props.tbbIniEntry ? undefined : this.props.tbbIniEntry.Name),*/ value: (this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
 				// React.createElement('div', {className: 'profilist-tbb-textbox', contentEditable:true, disabled:'disabled'},
 				// 	(this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType)))
 				// )
 			),
 			this.props.nonProfileType != 'createnewprofile' && !this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
-				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
+				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMsgObj: this.props.sMsgObj}),
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev || (!this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.tbbIniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.tbbIniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never render this element)*/ getImgPathOfSlug(getTieValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i'))) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
@@ -669,27 +669,20 @@ var LabelHighlighted = React.createClass({
 });
 var TBBMsg = React.createClass({
     displayName: 'TBBMsg',
+	componentDidMount: function(e) {
+		if (this.props.sMsgObj.text) {
+			var field = ReactDOM.findDOMNode(this.refs.msgTextbox);
+			field.setSelectionRange(0, field.value.length, 'backward');
+			field.focus()
+		}
+	},
 	render: function render() {
 		// props
 		//	sKey
 		//	sMsgObj
-		//	
 		
-		var cElType;
-		var cDefaultVal;
-		var cLabel;
-		if (this.props.sMsgObj.text) {
-			cElType = 'input';
-			cDefaultVal = this.props.sMsgObj.text;
-			cLabel = undefined;
-		} else {
-			cElType = 'div';
-			cDefaultVal = undefined;
-			cLabel = this.props.sMsgObj.label;
-		}
-		
-		var aRender = React.createElement(cElType, {className: 'profilist-tbb-msg', defaultValue: cDefaultVal},
-			cLabel
+		var aRender = React.createElement('div', {className: 'profilist-tbb-msg'},
+			!this.props.sMsgObj.text ? this.props.sMsgObj.label : React.createElement('input', {ref:'msgTextbox', type:'text', defaultValue: this.props.sMsgObj.text})
 		);
 		
 		return aRender;
@@ -732,6 +725,53 @@ var SubiconDel = React.createClass({
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-del',
 			onClick: this.click
+		};
+		
+		var aRendered = React.createElement('div', aProps);
+		return aRendered;
+	}
+});
+var SubiconClone = React.createClass({
+    displayName: 'SubiconClone',
+	click: function() {
+		
+		MyStore.setState({
+			sMsgObj: {
+				aKey: 'createnewprofile',
+				label: myServices.sb.GetStringFromName('pick-to-clone'),
+				onAccept: function(){}
+			}
+		});
+		
+	},
+	mouseEnter: function() {
+		if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
+			MyStore.setState({
+				sMsgObj: {
+					aKey: 'createnewprofile',
+					label: myServices.sb.GetStringFromName('clone-profile'),
+					onAccept: function(){},
+					onCancel: function(){}
+				}
+			});
+		}
+	},
+	mouseLeave: function() {
+		if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
+			MyStore.setState({
+				sMsgObj: {}
+			});
+		}
+	},
+	render: function render() {
+		// props
+		//	tbbIniEntry
+
+		var aProps = {
+			className: 'profilist-tbb-submenu-subicon profilist-si-clone',
+			onClick: this.click,
+			onMouseEnter: this.mouseEnter,
+			onMouseLeave: this.mouseLeave
 		};
 		
 		var aRendered = React.createElement('div', aProps);

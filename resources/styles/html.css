@@ -77,7 +77,6 @@
 #profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary .profilist-tbb-textbox {
 	text-align: center;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox,
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight {
 	flex: 1 0 auto;
 	display: inline-block;
@@ -172,7 +171,6 @@
 }
 #profilist_menu .profilist-tbb-show-msg .profilist-tbb-msg {
 	opacity: 1;
-	pointer-events: none;
 	transition: opacity 200ms;
 }
 /* inate */
@@ -239,3 +237,15 @@
 	background-image: url("chrome://profilist/content/resources/images/subicon-delete.png");
 }
 /* end - subicon menu */
+/* start - input[text] */
+#profilist_menu input[type=text] {
+	flex: 1 0 auto;
+	display: inline-block;
+	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
+	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
+	z-index: 3;
+	border: 1px solid #A6A6A6;
+	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
+	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
+}
+/* end - input[text] */
