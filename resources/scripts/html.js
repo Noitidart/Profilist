@@ -324,7 +324,7 @@ var Menu = React.createClass({
 		} else {
 			var cGenIniEntry = getIniEntryByKeyValue(this.state.sIniObj, 'groupName', 'General');
 			
-			var keyValSort = getKeyValForIniEntry('ProfilistSort', cGenIniEntry /*not used by getKeyValForIniEntry but I have to put in something*/, {
+			var keyValSort = getKeyValForIniEntry('ProfilistSort', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
 				aGenIniEntry: cGenIniEntry,
 				aIniObj: this.state.sIniObj
 			});
@@ -539,7 +539,11 @@ var ToolbarButton = React.createClass({
 				hideDueToSearch = true;
 			} // else { hideDueToSearch = false; } // no need as it inits at false
 		}
-			
+		
+		var keyValDevMode = getKeyValForIniEntry('ProfilistDev', {} /*not used by getKeyValForIniEntry but I have to put in something*/, {
+			aGenIniEntry: this.props.genIniEntry
+		});
+		
 		return React.createElement('div', {className: 'profilist-tbb', 'data-tbb-type': (!this.props.iniEntry ? this.props.nonProfileType : (this.props.iniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
@@ -555,13 +559,13 @@ var ToolbarButton = React.createClass({
 			),
 			this.props.nonProfileType != 'createnewprofile' && !this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-clone'}),
-				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				!this.props.iniEntry || !this.props.iniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-build profilist-devmode'}),
-				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
+				!this.props.iniEntry || !keyValDevMode || keyValDevMode == '0' ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-setdefault'}),
 				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-rename'}),
-				!this.props.iniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
+				!this.props.iniEntry || this.props.iniEntry.noWriteObj.status == true || this.props.iniEntry.noWriteObj.currentProfile ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-del'})
 			)
         );
     }
