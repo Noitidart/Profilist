@@ -637,9 +637,10 @@ var LabelHighlighted = React.createClass({
 		if (leaveOffIndex < this.props.value.length) {
 			inner.push(this.props.value.substr(leaveOffIndex));
 		}
-		return React.createElement('div', {className: 'profilist-tbb-highlight'},
+		return React.createElement('div', {className: 'profilist-tbb-highlight'}, // link1958939383
 			inner
 		);
+		// return React.createElement.apply(this, ['div', {className: 'profilist-tbb-highlight'}].concat(inner)); // this method throws no warning of ```"Warning: Each child in an array or iterator should have a unique "key" prop. Check the render method of `ToolbarButton`. See https://fb.me/react-warning-keys for more information." react.dev.js:18780:9``` // but the above doesnt need apply or concat, so its two less functions so ill go with that // see link1958939383
 	}
 });
 var SubiconTie = React.createClass({
@@ -812,22 +813,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		cIniEntry.noWriteObj.status = true;
 		// cIniEntry.noWriteObj.exePath = 'c:\\aurora.exe'; // :note: only needed for iniEntry marked currentProfile ```getIniEntryByNoWriteObjKeyValue(xIniObj, 'currentProfile', true)```
 		// check if devmode is on for this profile, if it is, then supply exeIconSlug -- REQUIRED when noWriteObj.status is true
-		var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-		var keyValDevMode = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistDev');
-		if (keyValDevMode == '1') {
+		// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+		// var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		// var keyValDevMode = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistDev');
+		// if (keyValDevMode == '1') {
 			cIniEntry.noWriteObj.exeIconSlug = 'aurora'; // :note: IF devmode is on, then must set this because is set status true i have to set this
-		}
+		// }
+		// commented out checks because thats checks for bootstrap side before sending ini over. in our test case for dev, we should set it everytime because i go back and forth between dev and not.
 		
 		// 2) rename it to RAWR
 		cIniEntry.Name = 'RAWR';
 		MyStore.updateStatedIniObj();
-	}, 8000);
+	}, 4000);
 	
 	setTimeout(function() {
 		getIniEntryByKeyValue(gIniObj, 'groupName', 'General').ProfilistDev = '1';
 		MyStore.updateStatedIniObj();
-	}, 4000);
+	}, 8000);
 }, false);
 
 /*
