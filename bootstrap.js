@@ -47,6 +47,9 @@ const OSPath_simpleStorage = OS.Path.join(OS.Constants.Path.profileDir, JETPACK_
 const OSPath_config = OS.Path.join(OSPath_simpleStorage, 'config.json');
 const myPrefBranch = 'extensions.' + core.addon.id + '.';
 
+var bootstrap = this;
+var R = {}; // holds my built react stuff
+
 var ADDON_MANAGER_ENTRY;
 
 // Lazy Imports
@@ -100,6 +103,43 @@ function AboutFactory(component) {
 }
 // end - about module
 
+function testReact() {
+	R.Timer = React.createClass({
+		displayName: 'Timer',
+		getInitialState: function getInitialState() {
+			return { secondsElapsed: 0 };
+		},
+		tick: function tick() {
+			this.setState({ secondsElapsed: this.state.secondsElapsed + 1 });
+		},
+		componentDidMount: function componentDidMount() {
+			console.log('comp mounted');
+			this.timer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+			var THAT = this;
+			this.timer.initWithCallback({
+				notify: function() {
+					console.log('timer triggered', 'this.tick:', this.tick, 'THAT.tick:', THAT.tick);
+					THAT.tick();
+				}
+			}, 1000, Ci.nsITimer.TYPE_REPEATING_PRECISE);
+		},
+		componentWillUnmount: function componentWillUnmount() {
+			console.log('comp unmounting');
+			this.timer.cancel();
+		},
+		render: function render() {
+			return React.createElement(
+				'label',
+				{
+					value: 'Seconds Elapsed: ' + this.state.secondsElapsed
+				}
+			);
+		}
+	});
+
+	ReactDOM.render(React.createElement(R.Timer, null), Services.wm.getMostRecentWindow('navigator:browser').document.getElementById('myhbo'));
+};
+
 function install() {}
 
 function uninstall(aData, aReason) {
@@ -118,6 +158,12 @@ function startup(aData, aReason) {
 		
 		// register about pages listener
 		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
+		
+		// bring in react
+		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-xul.js', bootstrap);
+		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-xul-dom.js', bootstrap);
+		
+		testReact();
 	};
 	
 	// startup worker
@@ -250,7 +296,7 @@ function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3
 	}
 }
 
-var bootstrap = this; // needed for SIPWorker and SICWorker - rev8
+// var bootstrap = this; // needed for SIPWorker and SICWorker - rev8 // i put this in the top in globals section
 const SIC_CB_PREFIX = '_a_gen_cb_';
 const SIC_TRANS_WORD = '_a_gen_trans_';
 var sic_last_cb_id = -1;
