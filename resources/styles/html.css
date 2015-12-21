@@ -1,5 +1,5 @@
-/* start - initial state */
-/* level - max parent */
+/* start - main_wrap */
+/* state:innate */
 #profilist_menu {
 	background-color: #EFEFEF;
 	display: flex;
@@ -10,7 +10,11 @@
 	font-size: 12px;/* link93849848*/
 	-moz-user-select: none;
 }
-/* level - children depth 1 */
+/* end - main_wrap */
+
+
+/* start - toolbarbutton_wrap */
+/* state:innate */
 #profilist_menu .profilist-tbb {
 	top: 0;
 	bottom: 0;
@@ -27,7 +31,11 @@
 	overflow: hidden;
 	position:relative;
 }
-/* level - children depth 2 */
+/* end - toolbarbutton_wrap */
+
+
+/* start - toolbarbutton_mouseover_element */
+/* state:innate */
 #profilist_menu .profilist-tbb .profilist-tbb-hover {
 	background-color: transparent;
 	width: 100%;
@@ -37,6 +45,19 @@
 	left: 0;
 	z-index: 1;
 }
+/* state:mouseover */
+#profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
+	background-color: #E0E0E0;
+}
+/* state:mousedowned */
+#profilist_menu .profilist-tbb .profilist-tbb-hover:active {
+	background-color: #D5D5D5;
+}
+/* end - toolbarbutton_mouseover_element*/
+
+
+/* start - primary_wrap */
+/* state:innate */
 #profilist_menu .profilist-tbb .profilist-tbb-primary {
 	flex: 1 0 auto;
 	display: flex;
@@ -46,8 +67,28 @@
 	padding: 0 5px 0 15px;
 	height: 100%;
 }
+/* note: any containted input=text */
+#profilist_menu .profilist-tbb-primary input[type=text] {
+	flex: 1 0 auto;
+	display: inline-block;
+	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
+	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
+	z-index: 3;
+	border: 1px solid #A6A6A6;
+	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
+	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
+}
+/* state:filter_matched */
+#profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary {
+	text-align: center;
+	padding: 0;
+}
+/* end - primary_wrap */
 
-#profilist_menu .profilist-tbb .profilist-tbb-submenu {
+
+/* start - submenu_main */
+/* state:innate */
+#profilist_menu .profilist-tbb-submenu {
 	flex: 0 1 auto;
 	display: flex;
 	flex-direction: row;
@@ -55,25 +96,15 @@
 	align-items: center;
 	height: 100%;
 }
-/* level - children depth 3 */
-#profilist_menu .profilist-tbb:not([data-tbb-type*=active]) .profilist-tbb-primary .profilist-tbb-icon {
-	pointer-events: none;
+/* state:picking_clone */
+#profilist_menu.profilist-clone-pick .profilist-tbb-submenu {
+	display: none;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon {
-	flex: 0 1 auto;
-	z-index: 3;
-	padding: 2px;
-	margin-right: 4px;
-	cursor: pointer;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	height: 60%; /* to increase the mouseover target */
-}
-#profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary {
-	text-align: center;
-	padding: 0;
-}
+/* end - submenu_main */
+
+
+/* start - primary_label_field */
+/* state:innate */
 #profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary .profilist-tbb-textbox {
 	text-align: center;
 }
@@ -102,9 +133,6 @@
 	margin: -1px 0px 0px 1px; /* this is to get the text to overlap the textbox perfectly */
 	opacity: 0.5;
 }
-#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight .profilist-tbb-highlight-this {
-	text-shadow: 0 0 1px red;
-}
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-textbox:not([disabled]) {
 	-moz-user-select: text;
 }
@@ -114,7 +142,49 @@
 	color: #000;
 	pointer-events: none; /* so the poitner goes through to the -hover element */
 }
-/* level - children depth 4 */
+/* state:filter_matched */
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-highlight .profilist-tbb-highlight-this {
+	text-shadow: 0 0 1px red;
+}
+/* state:picking_clone */
+#profilist_menu.profilist-clone-pick .profilist-tbb-textbox {
+	animation: profilist-vshake 300ms infinite;
+}
+/* state:message_showing */
+#profilist_menu .profilist-tbb-show-msg .profilist-tbb-textbox {
+	opacity: 0;
+	transition: opacity 200ms ease 200ms;
+	transition: opacity 200ms;
+}
+/* end - primary_label_field */
+
+
+/* start - primary_icon */
+/* state:innate */
+#profilist_menu .profilist-tbb:not([data-tbb-type$=active]) .profilist-tbb-primary .profilist-tbb-icon {
+	pointer-events: none;
+}
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon {
+	flex: 0 1 auto;
+	z-index: 3;
+	padding: 2px;
+	margin-right: 4px;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	height: 60%; /* to increase the mouseover target */
+}
+/* state:picking_clone */
+#profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon {
+	animation: profilist-vshake 300ms infinite;
+	pointer-events: none;
+}
+/* end - primary_icon */
+
+
+/* start - primary_icon_badge */
+/* state:innate */
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
 	pointer-events: none;
 	position: absolute;
@@ -122,6 +192,18 @@
 	transform: translate(50%, 50%) scale(.5);
 	transition: transform 500ms; /* link104911 should be same time */
 }
+#profilist_menu .profilist-tbb:not([data-tbb-type$=active]) .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
+	display: none;
+}
+/* state:mouseover */
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge {
+	transform: none;
+}
+/* end - primary_icon_badge */
+
+
+/* start - primary_icon_status */
+/* state:innate */
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status {
 	display: inline-block;
 	width: 16px;
@@ -129,15 +211,11 @@
 	opacity: 1;
 	transition: opacity 500ms; /* link104911 should be same time */
 }
-
-#profilist_menu .profilist-tbb:not([data-tbb-type*=active]) .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
-	display: none;
+#profilist_menu .profilist-tbb[data-tbb-type=active] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* link123123 position important*/
+	background: transparent url("chrome://profilist/content/resources/images/status-active.png") no-repeat scroll center center;
 }
 #profilist_menu .profilist-tbb[data-tbb-type=inactive] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* link123123 position important*/
 	background: transparent url("chrome://profilist/content/resources/images/status-inactive.png") no-repeat scroll center center;
-}
-#profilist_menu .profilist-tbb[data-tbb-type=active] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status {
-	background: transparent url("chrome://profilist/content/resources/images/status-active.png") no-repeat scroll center center;
 }
 #profilist_menu .profilist-tbb[data-tbb-type=loading] .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-status { /* this needs to come after link123123 otherwise it will take inactive state */
 	background: transparent url("chrome://profilist/content/resources/images/icon16.png") no-repeat scroll center center;
@@ -147,33 +225,15 @@
 	background: transparent url("chrome://profilist/content/resources/images/plus.png") no-repeat scroll center center;
 	/*opacity: 0.3;*/
 }
-/* end - initial state */
-/* start - hover state */
-#profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
-	background-color: #E0E0E0;
-}
-#profilist_menu .profilist-tbb .profilist-tbb-hover:active {
-	background-color: #D5D5D5;
-}
-#profilist_menu .profilist-tbb[data-tbb-type*=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge {
-	transform: none;
-}
-#profilist_menu .profilist-tbb[data-tbb-type*=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-status {
+/* state:mouseover */
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-status {
 	opacity: 0;
 }
-/* end - hover state */
-/* start - message*/
-/* when message is shown */
-#profilist_menu .profilist-tbb-show-msg .profilist-tbb-textbox {
-	opacity: 0;
-	transition: opacity 200ms ease 200ms;
-	transition: opacity 200ms;
-}
-#profilist_menu .profilist-tbb-show-msg .profilist-tbb-msg {
-	opacity: 1;
-	transition: opacity 200ms;
-}
-/* inate */
+/* end - primary_icon_status */
+
+
+/* start - message_in_primary */
+/* state:innate */
 #profilist_menu .profilist-tbb-msg {
 	z-index: 3;
 	position: absolute;
@@ -185,9 +245,16 @@
 	opacity: 0;
 	transition: opacity 200ms ease 200ms;
 }
-/* end - message */
-/* start - submenu */
-/* subicon */
+/* state:message_showing */
+#profilist_menu .profilist-tbb-show-msg .profilist-tbb-msg {
+	opacity: 1;
+	transition: opacity 200ms;
+}
+/* end - message_in_primary */
+
+
+/* start - submenu_icons */
+/* state:innate */
 #profilist_menu .profilist-tbb-submenu-subicon {
 	flex: 1 0 auto;
 	display: inline-block;
@@ -204,23 +271,21 @@
 #profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) {
 	cursor: pointer;
 }
-/* subicon hover */
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint):hover { /* link3920284 - match the not specificity or the hover doesnt work */
-	filter: grayscale(0%);
-}
-/* specific images */
+/* note: specific bg images */
 #profilist_menu .profilist-si-clone {
 	background-image: url("chrome://profilist/content/resources/images/subicon-clone.png");
 }
 #profilist_menu .profilist-si-isdefault {
 	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
 }
+/* not needed because these elements get specific dom mutation on style.backgroundImage
 #profilist_menu .profilist-si-buildhint {
 	background-image: url("chrome://profilist/content/defaultFavicon.png");
 }
 #profilist_menu .profilist-si-tie {
 	background-image: url("chrome://profilist/content/defaultFavicon.png");
 }
+*/
 #profilist_menu .profilist-si-dots {
 	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
 }
@@ -236,34 +301,15 @@
 #profilist_menu .profilist-si-del {
 	background-image: url("chrome://profilist/content/resources/images/subicon-delete.png");
 }
-/* end - subicon menu */
-/* start - input[text] */
-#profilist_menu input[type=text] {
-	flex: 1 0 auto;
-	display: inline-block;
-	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
-	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
-	z-index: 3;
-	border: 1px solid #A6A6A6;
-	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
-	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
+/* state:mouseover */
+#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint):hover { /* link3920284 - match the not specificity or the hover doesnt work */
+	filter: grayscale(0%);
 }
-/* end - input[text] */
-/* start - clone stuff */
-@keyframes profilist-wiggle {
-	0% {
-		transform: rotate(0deg);
-	}
-	25% {
-		transform: rotate(1deg);
-	}
-	50% {
-		transform: rotate(0deg);
-	}
-	75% {
-		transform: rotate(-1deg);
-	}
-}
+/* end - submenu_icons */
+
+
+/* start - other_stuff */
+/* clone animation */
 @keyframes profilist-vshake {
 	0% {
 		transform: translate(0, 0);
@@ -278,8 +324,4 @@
 		transform: translate(0, -1px);
 	}
 }
-#profilist_menu.profilist-clone-pick .profilist-tbb-textbox {
-	animation: profilist-vshake 300ms infinite;
-	transform-origin: 50% 50%;
-}
-/* end - clone stuff */
+/* end - other_stuff */
