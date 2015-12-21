@@ -1,0 +1,85 @@
+/* start - the_body */
+html {
+	height: 100%;
+}
+/* end - the_body */
+
+
+/* start - the_body */
+body {
+	font-size: 13px;
+    background: none repeat scroll 0% 0% #FFF;
+	font-family: arial, helvetica, sans-serif;
+	color: #000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	flex-direction: column;
+	height: 100%;
+}
+/* end - the_body */
+
+/* start - wrapper_main */
+#wrapMain {
+	display: flex;
+	flex-direction: column;
+	flex: 1 0 auto;
+	justify-content: flex-start;
+	width: 486px;
+	padding-top: 40px;
+}
+/* end - wrapper_main */
+
+
+/* start - wrapper_header */
+#wrapHead {
+	display: flex;
+	align-items: center;
+	margin-bottom: -10px;
+}
+/* end - wrapper_header */
+
+/* start - wrapper_content */
+#wrapContent {
+	background: transparent linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top;
+	height: 200px; /*:debug:*/
+	/* box-shadow: rgba(50,50,50,0.5) 1px 2px 1px 1px; */
+	width: 477px;
+	position: relative;
+	left: 4px;
+	border-radius: 0px 0px 5px 3px;
+}
+/* end - wrapper_content */
+
+/* start - border_imgs */
+#borderImgTop {
+	background: transparent url("chrome://profilist/content/resources/images/cp/eum_box_top.png") no-repeat scroll left top;
+	height: 10px;
+}
+#borderImgBottom {
+	background: transparent url("chrome://profilist/content/resources/images/cp/eum_box_btm.png") no-repeat scroll left top;
+	height: 10px;
+}
+#borderImgSides {
+	background: transparent url("chrome://profilist/content/resources/images/cp/eum_box_slice.png") repeat-y scroll left top;
+}
+/* end - border_imgs */
+
+/* start - h1 */
+#wrapHead h1 {
+	flex: 1 0 auto;
+	background: transparent url("chrome://profilist/content/icon.png") no-repeat scroll left center;
+	text-indent: 55px;
+	line-height: 48px; /* so the icon bottom part doesnt get cut off */
+	font-size: 2em;
+}
+/* end - h1 */
+
+
+/* start - h2 */
+#wrapHead h2 {
+	font-size: 1.5em;
+	margin-right: 5px;
+}
+/* end - h2 */

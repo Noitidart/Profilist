@@ -637,7 +637,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
-				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault),
+				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey})
 			)
@@ -728,14 +728,31 @@ var SubiconSetDefault = React.createClass({
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('SETDEFAULT CLICKED');
 		
+		var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Default', '1'); // gIniEntry is alias for liveIniEntry
+		delete gIniEntry_toUndefault.Default;
+		
+		var gIniEntry_toSetDefault = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path); // gIniEntry is alias for liveIniEntry
+		gIniEntry_toSetDefault.Default = '1';
+		
+		MyStore.setState({
+			sIniObj: gIniObj
+		});
+		
 	},
 	render: function render() {
-		// props - none
-
+		// this.props
+		//	tbbIniEntry
+		
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-setdefault',
 			onClick: this.click
 		};
+		
+		if (this.props.tbbIniEntry.Default) {
+			aProps.style = {
+				filter: 'grayscale(0%)'
+			}
+		}
 		
 		return React.createElement('div', aProps);
 	}
