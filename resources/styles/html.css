@@ -249,3 +249,37 @@
 	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
 }
 /* end - input[text] */
+/* start - clone stuff */
+@keyframes profilist-wiggle {
+	0% {
+		transform: rotate(0deg);
+	}
+	25% {
+		transform: rotate(1deg);
+	}
+	50% {
+		transform: rotate(0deg);
+	}
+	75% {
+		transform: rotate(-1deg);
+	}
+}
+@keyframes profilist-vshake {
+	0% {
+		transform: translate(0, 0);
+	}
+	25% {
+		transform: translate(0, 2px);
+	}
+	50% {
+		transform: translate(0, 0);
+	}
+	75% {
+		transform: translate(0, -1px);
+	}
+}
+#profilist_menu.profilist-clone-pick .profilist-tbb-textbox {
+	animation: profilist-vshake 300ms infinite;
+	transform-origin: 50% 50%;
+}
+/* end - clone stuff */

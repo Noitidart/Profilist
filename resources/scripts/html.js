@@ -565,15 +565,24 @@ var Menu = React.createClass({
 			});
 		}
 		
+		var cClassList = [];
+		if (this.state.sMsgObj.aKey == 'createnewprofile' && this.state.sMsgObj.label == myServices.sb.GetStringFromName('pick-to-clone')) {
+			cClassList.push('profilist-clone-pick');
+		}
+		if (cClassList.length) {
+			cClassList = cClassList.join(' ');
+		}
         return React.createElement(
-            'div', {id: 'profilist_menu'},
+            'div', {id: 'profilist_menu', className:cClassList},
 				list
         );
     }
 });
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
-
+	click: function() {
+		console.error('TBB CLICKED, props:', this.props);
+	},
     render: function render() {
 		// this.props.tbbIniEntry is not set, so undefined, for non-porilfes, so for "loading", "createnewprofile"
 			// instead, the nonProfileType key will be set, so this.props.nonProfileType // so if nonProfileType not set, then assume its "profile" (so "inactive" or "active") toolbarbutton
@@ -610,7 +619,7 @@ var ToolbarButton = React.createClass({
 		if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
 			cClassList.push('profilist-tbb-show-msg');
 		}
-		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined)},
+		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined), onClick: this.click},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.nonProfileType == 'noresultsfor' ? undefined : React.createElement('div', {className: 'profilist-tbb-icon'},
@@ -672,7 +681,7 @@ var TBBMsg = React.createClass({
 	componentDidMount: function(e) {
 		if (this.props.sMsgObj.text) {
 			var field = ReactDOM.findDOMNode(this.refs.msgTextbox);
-			field.setSelectionRange(0, field.value.length, 'backward');
+			field.setSelectionRange(0, field.value.length, 'backward'); //backwards so if the value.length is longer then field width, on select all it will not end at end, it will be at start
 			field.focus()
 		}
 	},
@@ -690,8 +699,10 @@ var TBBMsg = React.createClass({
 });
 var SubiconDel = React.createClass({
     displayName: 'SubiconDel',
-	click: function() {
+	click: function(e) {
 		
+		e.stopPropagation(); // stops it from trigger ToolbarButton click event
+		console.error('DEL CLICKED');
 		if (this.props.tbbIniEntry.noWriteObj.status) {
 			alert('error! cannot delete this profile because it is currently running!');
 		} else {
@@ -733,8 +744,9 @@ var SubiconDel = React.createClass({
 });
 var SubiconClone = React.createClass({
     displayName: 'SubiconClone',
-	click: function() {
-		
+	click: function(e) {
+		e.stopPropagation(); // stops it from trigger ToolbarButton click event
+		console.error('CLONE CLICKED');
 		MyStore.setState({
 			sMsgObj: {
 				aKey: 'createnewprofile',
@@ -787,7 +799,9 @@ var SubiconTie = React.createClass({
 			onent: -2 // means tie on onMouseEnter
 		}
 	},
-	click: function() {
+	click: function(e) {
+		e.stopPropagation(); // stops it from trigger ToolbarButton click event
+		console.error('TIE CLICKED');
 		var newBi;
 		if (this.state.bi == -2) { // its untied
 			newBi = -1; // tie to current
