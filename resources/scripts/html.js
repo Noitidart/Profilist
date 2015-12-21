@@ -7,115 +7,25 @@ Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 // Globals
 var core = {
 	addon: {
-		name: 'Profilist',
 		id: 'Profilist@jetpack',
 		path: {
-			name: 'profilist',
-			//
-			content: 'chrome://profilist/content/',
-			locale: 'chrome://profilist/locale/',
-			//
-			modules: 'chrome://profilist/content/modules/',
-			workers: 'chrome://profilist/content/modules/workers/',
-			//
-			resources: 'chrome://profilist/content/resources/',
-			images: 'chrome://profilist/content/resources/images/',
-			scripts: 'chrome://profilist/content/resources/scripts/',
-			styles: 'chrome://profilist/content/resources/styles/',
-			fonts: 'chrome://profilist/content/resources/styles/fonts/',
-			pages: 'chrome://profilist/content/resources/pages/'
+			locale: 'chrome://profilist/locale/'
 		},
 		cache_key: Math.random() // set to version on release
-	},
-	profilist: {
-		path: {
-			icons: OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons')
-		}
 	}
 };
 
+var gIniObj;
+var gKeyInfoStore;
+
+var gCFMM; // needed for contentMMFromContentWindow_Method2
 
 // Lazy imports
 var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'html.properties?' + core.addon.cache_key); });
 
 
-/* notes on noWriteObj
-status: bool. tells whethere its running or not. if not set, undefined is equivlanet of false
-*/
-var gKeyInfoStore = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
-	ProfilistStatus: {
-		// pref: false		// i dont need this key. i can just test for lack of any of the keys only for prefs. but anyways fallse/missing means not a preference. means its programtically set
-		possibleValues: [	// if not provided, then the value can be set to anything
-			'0',			// installed BUT disabled
-			'1'				// installed AND enabled
-		]
-	},
-	ProfilistDev: {				// developer mode on/off
-		pref: true,				// i dont really need this key, i can detect if its pref by testing if it has any of the "this key only for prefs"
-		specificOnly: false,	// means, it cannot be set across all profiles // this key only for prefs
-		defaultSpecific: false,	// means by default it affects all profiles (its unspecific) // this key only for prefs // this key only for prefs with specificOnly:false
-		defaultValue: '0',		// this key only for prefs // if value not found in profile group, or general group. then this value is used. // if value found in general, but specific is set to true by user, then use the value from general. // if value found in profile, and specific is set to false by user, then set general value, and delete the one from profile group
-		possibleValues: [
-			'0',				// devmode off
-			'1'					// devmode on
-		]
-	},
-	ProfilistSort: {			// the order in which to show the other-profiles in the profilist menu.
-		pref: true,
-		specificOnly: false,
-		defaultSpecific: false,
-		defaultValue: '2',
-		possibleValues: [		// link83737383
-			'0',				// by create order ASC
-			'1',				// by create order DESC
-			'2',				// by alpha-numeric-insensitive ASC
-			'3'					// by alpha-numeric-insensitive DESC
-		]
-	},
-	ProfilistNotif: {			// whether or not to show notifications
-		pref: true,
-		specificOnly: false,
-		defaultSpecific: false,
-		defaultValue: '1',
-		possibleValues: [
-			'0',				// dont show
-			'1'					// show
-		]
-	},
-	ProfilistLaunch: {			// whether on user click "create new profile" if should launch right away using default naming scheme for Path and Name
-		pref: true,
-		specificOnly: false,
-		defaultSpecific: false,
-		defaultValue: '1',
-		possibleValues: [
-			'0',				// dont launch right away, allow user to type a path, then hit enter (just create dont launch), alt+enter (create with this name then launch) // if user types a system path, then it is created as IsRelative=0
-			'1'					// launch right away, as IsRelative=1, with default naming scheme for Path and Name
-		]
-	},
-	ProfilistBadge: {			// slug_of_icon_in_icons_folder
-		specificOnly: true
-	},
-	ProfilistTie: {			// slug_of_icon_in_icons_folder
-		specificOnly: true
-		// value should be id of something in the ProfilistBuilds.
-	},
-	ProfilistTemp: {			// tells whether (temporary profiles found && that did NOT have profilist installed) into them (so no ProfilistStatus), should remain in ini after it is found to be not running. only way to remove is to delete from menu. // if profilist is installed into that profile, it will be a temporary profile still so group will be [TempProfile#] but it will stay regardless of this key setting
-		unspecificOnly: true,
-		defaultValue: '0',
-		possibleValues: [
-			'0',				// do not keep them in ini, after it is found to be not running
-			'1'					// keep them in ini even after it is found to be not running
-		]
-	},
-	ProfilistBuilds: {			// whether or not to show notifications
-		pref: true,
-		defaultValue: '[]',
-		unspecificOnly: true	// this pref affects all profiles, cannot be set to currently running (specific)
-		// value should be a json array of objects. ie: [{id:date_get_time_on_create, i:slug_of_icon_in_icons_folder, p:path_to_exe},{i:slug_of_icon_in_icons_folder, p:path_to_exe}] // id should be date in ms on create, so no chance of ever getting reused
-	}
-};
-
+/*
 var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile0',
@@ -169,8 +79,86 @@ var gIniObj = [ // noWriteObj are not written to file
 		ProfilistStatus: '1' // because profilist is installed in it, it must be written to ini
 	}
 ];
-var MyStore = {};
+*/
 
+function doOnBeforeUnload() {
+
+	contentMMFromContentWindow_Method2(window).removeMessageListener(core.addon.id, bootstrapMsgListener);
+
+}
+
+function doOnContentLoad() {
+	initPage();
+}
+
+document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
+window.addEventListener('beforeunload', doOnBeforeUnload, false);
+
+// End - DOM Event Attachments
+// Start - Page Functionalities
+function initPage(isReInit) {
+	// if isReInit then it will skip some stuff
+	
+	initReactComponent()
+	
+	setTimeout(function() {
+		// get core and config objs
+		console.time('fetchReq');
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCoreAndConfigs'], bootstrapMsgListener.funcScope, function(aObjs) {
+			console.timeEnd('fetchReq');
+			console.log('got core and configs:', aObjs);
+			core = aObjs.aCore;
+			gIniObj = aObjs.aIniObj;
+			gKeyInfoStore = aObjs.aKeyInfoStore;
+			
+			MyStore.updateStatedIniObj();
+		});
+	}, 2000);
+
+}
+
+function myFakeTests() {
+	
+	setTimeout(function() {
+		console.error('OK ON defaulted DOING RENAME AND SETTING TO ONLINE NOW');
+		// 0) get the ini entry to modify
+		var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Name', 'defaulted');
+		
+		// 1) set it to running
+		cIniEntry.noWriteObj.status = true;
+		// cIniEntry.noWriteObj.exePath = 'c:\\aurora.exe'; // :note: only needed for iniEntry marked currentProfile ```getIniEntryByNoWriteObjKeyValue(xIniObj, 'currentProfile', true)```
+		// check if devmode is on for this profile, if it is, then supply exeIconSlug -- REQUIRED when noWriteObj.status is true
+		// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+		// var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		// var keyValDevMode = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistDev');
+		// if (keyValDevMode == '1') {
+			cIniEntry.noWriteObj.exeIconSlug = 'aurora'; // :note: IF devmode is on, then must set this because is set status true i have to set this
+		// }
+		// commented out checks because thats checks for bootstrap side before sending ini over. in our test case for dev, we should set it everytime because i go back and forth between dev and not.
+		
+		// 2) rename it to RAWR
+		cIniEntry.Name = 'RAWR';
+		MyStore.updateStatedIniObj();
+	}, 4000);
+	
+	setTimeout(function() {
+		getIniEntryByKeyValue(gIniObj, 'groupName', 'General').ProfilistDev = '1';
+		MyStore.updateStatedIniObj();
+	}, 8000);
+}
+
+function initReactComponent() {
+	var myMenu = React.createElement(Menu);
+	
+	ReactDOM.render(
+		myMenu,
+		document.getElementById('profilist_menu_container')
+	);
+	
+
+}
+
+var MyStore = {};
 // start - xIniObj sort functions - for use on a clone of xIniObj
 var reProfCreateOrder = /Profile(\d+)/;
 var gSortIniFunc = { // link83737383 // these sort functions must only run on an array of ini entires that are for profiles - meaning a and b should both have .Path
@@ -189,6 +177,7 @@ var gSortIniFunc = { // link83737383 // these sort functions must only run on an
 };
 // end - xIniObj sort functions
 
+// START - COMMON PROFILIST HELPER FUNCTIONS
 // start - xIniObj helper functions
 
 function getIniEntryByNoWriteObjKeyValue(aIniObj, aKeyName, aKeyVal) {
@@ -229,7 +218,7 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 }
 
 // start - xIniObj functions with no options
-function getTieValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
+function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
 	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
 	for (var i=0; i<aJProfilistBuilds.length; i++) {
 		if (aJProfilistBuilds[i].id == aTieId) {
@@ -326,6 +315,7 @@ function getImgPathOfSlug(aSlug) {
 	}
 }
 // end - xIniObj functions with no options
+// END - COMMON PROFILIST HELPER FUNCTIONS
 
 // start - react components
 var Menu = React.createClass({
@@ -633,7 +623,7 @@ var ToolbarButton = React.createClass({
 			this.props.nonProfileType != 'createnewprofile' && !this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMsgObj: this.props.sMsgObj}),
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev || (!this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.tbbIniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.tbbIniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never render this element)*/ getImgPathOfSlug(getTieValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i'))) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
+				!this.props.tbbIniEntry || !this.props.jProfilistDev || (!this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.tbbIniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.tbbIniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never render this element)*/ getImgPathOfSlug(getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i'))) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
@@ -1041,122 +1031,10 @@ var SubiconTie = React.createClass({
 		return aRendered;
 	}
 });
-var myMenu = React.createElement(Menu);
 
-document.addEventListener('DOMContentLoaded', function() {
-	ReactDOM.render(
-		myMenu,
-		document.getElementById('profilist_menu_container')
-	);
-	
-	setTimeout(function() {
-		MyStore.updateStatedIniObj();
-	}, 2000);
-	
-	setTimeout(function() {
-		console.error('OK ON defaulted DOING RENAME AND SETTING TO ONLINE NOW');
-		// 0) get the ini entry to modify
-		var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Name', 'defaulted');
-		
-		// 1) set it to running
-		cIniEntry.noWriteObj.status = true;
-		// cIniEntry.noWriteObj.exePath = 'c:\\aurora.exe'; // :note: only needed for iniEntry marked currentProfile ```getIniEntryByNoWriteObjKeyValue(xIniObj, 'currentProfile', true)```
-		// check if devmode is on for this profile, if it is, then supply exeIconSlug -- REQUIRED when noWriteObj.status is true
-		// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-		// var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-		// var keyValDevMode = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistDev');
-		// if (keyValDevMode == '1') {
-			cIniEntry.noWriteObj.exeIconSlug = 'aurora'; // :note: IF devmode is on, then must set this because is set status true i have to set this
-		// }
-		// commented out checks because thats checks for bootstrap side before sending ini over. in our test case for dev, we should set it everytime because i go back and forth between dev and not.
-		
-		// 2) rename it to RAWR
-		cIniEntry.Name = 'RAWR';
-		MyStore.updateStatedIniObj();
-	}, 4000);
-	
-	setTimeout(function() {
-		getIniEntryByKeyValue(gIniObj, 'groupName', 'General').ProfilistDev = '1';
-		MyStore.updateStatedIniObj();
-	}, 8000);
-}, false);
-
-/*
-
-function doOnBeforeUnload() {
-
-	contentMMFromContentWindow_Method2(window).removeMessageListener(core.addon.id, bootstrapMsgListener);
-
-}
-
-function doOnLoad() {
-	initPage
-}
-
-document.addEventListener('DOMContentLoaded', doOnLoad, false);
-window.addEventListener('beforeunload', doOnBeforeUnload, false);
-
-// End - DOM Event Attachments
-// Start - Page Functionalities
-function initPage(isReInit) {
-	// if isReInit then it will skip some stuff
-	
-	console.log('in init');
-	
-	var promiseAllArr_digest = [];
-	
-	if (!isReInit) {
-		// get core obj
-		var deferred_getCore = new Deferred();
-		promiseAllArr_digest.push(deferred_getCore.promise);
-		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCore'], bootstrapMsgListener.funcScope, function(aCore) {
-			console.log('got aCore:', aCore);
-			core = aCore;
-			$scope.BC.core = core;
-			deferred_getCore.resolve();
-		});
-	}
-	
-	// update prefs object
-	var promise_updatePrefs = BC.updatePrefsFromServer(false, isReInit ? false : true);
-	promiseAllArr_digest.push(promise_updatePrefs);
-	
-	// get json config from bootstrap
-	var deferred_getUserConfig = new Deferred();
-	promiseAllArr_digest.push(deferred_getUserConfig.promise);
-	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchConfig'], bootstrapMsgListener.funcScope, function(aConfigJson) {
-		console.log('got aConfigJson into ng:', aConfigJson);
-		$scope.BC.configs = aConfigJson;
-		deferred_getUserConfig.resolve();
-	});
-	
-	// wait for all to finish then digest
-	var promiseAll_digest = Promise.all(promiseAllArr_digest);
-	promiseAll_digest.then(
-		function(aVal) {
-			console.log('Fullfilled - promiseAll_digest - ', aVal);
-			// start - do stuff here - promiseAll_digest
-			$scope.$digest();
-			console.log('ok digested');
-			suppressPrefSetterWatcher = false;
-			// end - do stuff here - promiseAll_digest
-		},
-		function(aReason) {
-			var rejObj = {name:'promiseAll_digest', aReason:aReason};
-			console.warn('Rejected - promiseAll_digest - ', rejObj);
-			// deferred_createProfile.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promiseAll_digest', aCaught:aCaught};
-			console.error('Caught - promiseAll_digest - ', rejObj);
-			// deferred_createProfile.reject(rejObj);
-		}
-	);
-}
+// end - react components
 
 // End - Page Functionalities
-
 // start - server/framescript comm layer
 // sendAsyncMessageWithCallback - rev3
 var bootstrapCallbacks = { // can use whatever, but by default it uses this
@@ -1222,7 +1100,8 @@ var bootstrapMsgListener = {
 };
 contentMMFromContentWindow_Method2(content).addMessageListener(core.addon.id, bootstrapMsgListener);
 // end - server/framescript comm layer
-*/
+
+
 // start - common helper functions
 function contentMMFromContentWindow_Method2(aContentWindow) {
 	if (!gCFMM) {

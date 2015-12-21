@@ -166,6 +166,16 @@ function startup(aData, aReason) {
 	// core.addon.aData = aData;
 	extendCore();
 	
+	// custom core extending
+	core.profilist = {};
+	core.profilist.path = {
+		defProfRt: Services.dirsvc.get('DefProfRt', Ci.nsIFile).path,
+		defProfLRt: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path,
+		XREExeF: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
+	};
+	core.firefox.channel = Services.prefs.getCharPref('app.update.channel'); // esr|release|beta|aurora|dev|nightly|default
+	
+	
 	var afterWorker = function() { // because i init worker, then continue init
 		// register about page
 		initAndRegisterAboutProfilist();
