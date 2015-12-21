@@ -1,6 +1,8 @@
 /* start - the_body */
 html {
 	height: 100%;
+	-moz-user-select: none;
+	cursor: default;
 }
 /* end - the_body */
 

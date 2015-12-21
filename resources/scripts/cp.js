@@ -28,6 +28,10 @@ var core = {
 	}
 };
 
+var gIniObj;
+var gKeyInfoStore;
+
+var gCFMM; // needed for contentMMFromContentWindow_Method2
 
 // Lazy imports
 var myServices = {};
@@ -39,11 +43,12 @@ function doOnBeforeUnload() {
 
 }
 
-function doOnLoad() {
-	initPage
+function doOnContentLoad() {
+	console.log('in doOnContentLoad');
+	initPage();
 }
 
-document.addEventListener('DOMContentLoaded', doOnLoad, false);
+document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
 window.addEventListener('beforeunload', doOnBeforeUnload, false);
 
 // End - DOM Event Attachments
@@ -53,60 +58,19 @@ function initPage(isReInit) {
 	
 	console.log('in init');
 	
-	var promiseAllArr_digest = [];
-	
-	if (!isReInit) {
-		// get core obj
-		var deferred_getCore = new Deferred();
-		promiseAllArr_digest.push(deferred_getCore.promise);
-		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCore'], bootstrapMsgListener.funcScope, function(aCore) {
-			console.log('got aCore:', aCore);
-			core = aCore;
-			$scope.BC.core = core;
-			deferred_getCore.resolve();
-		});
-	}
-	
-	// update prefs object
-	var promise_updatePrefs = BC.updatePrefsFromServer(false, isReInit ? false : true);
-	promiseAllArr_digest.push(promise_updatePrefs);
-	
-	// get json config from bootstrap
-	var deferred_getUserConfig = new Deferred();
-	promiseAllArr_digest.push(deferred_getUserConfig.promise);
-	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchConfig'], bootstrapMsgListener.funcScope, function(aConfigJson) {
-		console.log('got aConfigJson into ng:', aConfigJson);
-		$scope.BC.configs = aConfigJson;
-		deferred_getUserConfig.resolve();
+	// get core and config objs
+	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCoreAndConfigs'], bootstrapMsgListener.funcScope, function(aObjs) {
+		console.log('got core and configs:', aObjs);
+		core = aObjs.aCore;
+		gIniObj = aObjs.aIniObj;
+		gKeyInfoStore = aObjs.aKeyInfoStore;
 	});
-	
-	// wait for all to finish then digest
-	var promiseAll_digest = Promise.all(promiseAllArr_digest);
-	promiseAll_digest.then(
-		function(aVal) {
-			console.log('Fullfilled - promiseAll_digest - ', aVal);
-			// start - do stuff here - promiseAll_digest
-			$scope.$digest();
-			console.log('ok digested');
-			suppressPrefSetterWatcher = false;
-			// end - do stuff here - promiseAll_digest
-		},
-		function(aReason) {
-			var rejObj = {name:'promiseAll_digest', aReason:aReason};
-			console.warn('Rejected - promiseAll_digest - ', rejObj);
-			// deferred_createProfile.reject(rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {name:'promiseAll_digest', aCaught:aCaught};
-			console.error('Caught - promiseAll_digest - ', rejObj);
-			// deferred_createProfile.reject(rejObj);
-		}
-	);
+
 }
 
-// create dom of options
-BC.options = [ // order here is the order it is displayed in, in the dom
+// create dom instructions
+var gDOMInfo = [];
+var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 	{
 		group_name: myServices.sb.GetStringFromName('profilist.cp.general'),
 		label: myServices.sb.GetStringFromName('profilist.cp.auto-up'),
@@ -122,127 +86,6 @@ BC.options = [ // order here is the order it is displayed in, in the dom
 		// default_profile_specificness: true, // sent over from bootstrap
 		// value: ? // sent over from bootstrap
 		// profile_specificness: ? // sent over from bootstrap
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.general'),
-		label: myServices.sb.GetStringFromName('profilist.cp.restore-defaults'),
-		type: 'button',
-		values: [ // for type button. values is an arr holding objects
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.restore'),
-				action: function() { alert('ok restoring defaults :debug:') }
-			}
-		],
-		desc: myServices.sb.GetStringFromName('profilist.cp.restore-defaults-desc')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-gen'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-port'),
-		type: 'button',
-		values: [
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.export'),
-				action: BC.export
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.import'),
-				action: BC.import
-			}
-		],
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-multispeed'),
-		type: 'text',
-		pref_name: 'multi-speed',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-multispeed')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-holdduration'),
-		type: 'text',
-		pref_name: 'hold-duration',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-holdduration')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-clickspeed'),
-		type: 'text',
-		pref_name: 'click-speed',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-clickspeed')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-time'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-ignoreautorepeatduration'),
-		type: 'text',
-		pref_name: 'ignore-autorepeat-duration',
-		pref_type: 'int',
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-ignoreautorepeatduration')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-tabs'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-newtabpos'),
-		type: 'select',
-		pref_name: 'new-tab-pos',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.endofbar'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.nexttocur')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-tabs'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-duptabpos'),
-		type: 'select',
-		pref_name: 'dup-tab-pos',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.endofbar'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.nexttocur')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomlabel'),
-		type: 'select',
-		pref_name: 'zoom-indicator',
-		pref_type: 'bool',
-		values: {
-			'false': myServices.sb.GetStringFromName('profilist.cp.hide'),
-			'true': myServices.sb.GetStringFromName('profilist.cp.show')
-		},
-		desc: myServices.sb.GetStringFromName('profilist.cp.item_desc-zoomlabel')
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomcontext'),
-		type: 'select',
-		pref_name: 'zoom-context',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.allcont'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.txtonly')
-		},
-		desc: ''
-	},
-	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.group-zoom'),
-		label: myServices.sb.GetStringFromName('profilist.cp.item_name-zoomstyle'),
-		type: 'select',
-		pref_name: 'zoom-style',
-		pref_type: 'int',
-		values: {
-			'0': myServices.sb.GetStringFromName('profilist.cp.global'),
-			'1': myServices.sb.GetStringFromName('profilist.cp.sitespec'),
-			'2': myServices.sb.GetStringFromName('profilist.cp.temp')
-		},
-		desc: ''
 	}
 ];
 

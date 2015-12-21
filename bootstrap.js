@@ -62,29 +62,36 @@ XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.stri
 // start - about module
 var aboutFactory_profilist;
 function AboutProfilist() {}
-AboutProfilist.prototype = Object.freeze({
-	classDescription: 'Profilist Control Panel',
-	contractID: '@mozilla.org/network/protocol/about;1?what=profilist',
-	classID: Components.ID('{f7b6f390-a0c2-11e5-a837-0800200c9a66}'),
-	QueryInterface: XPCOMUtils.generateQI([Ci.nsIAboutModule]),
 
-	getURIFlags: function(aURI) {
-		return Ci.nsIAboutModule.ALLOW_SCRIPT | Ci.nsIAboutModule.URI_MUST_LOAD_IN_CHILD;
-	},
+function initAndRegisterAboutProfilist() {
+	// init it
+	AboutProfilist.prototype = Object.freeze({
+		classDescription: myServices.sb.GetStringFromName('about-page-class-description'),
+		contractID: '@mozilla.org/network/protocol/about;1?what=profilist',
+		classID: Components.ID('{f7b6f390-a0c2-11e5-a837-0800200c9a66}'),
+		QueryInterface: XPCOMUtils.generateQI([Ci.nsIAboutModule]),
 
-	newChannel: function(aURI, aSecurity) {
+		getURIFlags: function(aURI) {
+			return Ci.nsIAboutModule.ALLOW_SCRIPT | Ci.nsIAboutModule.URI_MUST_LOAD_IN_CHILD;
+		},
 
-		// var channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
-		var channel;
-		if (aURI.path.toLowerCase().indexOf('?html') > -1) {
-			channel = Services.io.newChannel(core.addon.path.pages + 'html.xhtml', null, null);
-		} else {
-			channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
+		newChannel: function(aURI, aSecurity) {
+
+			// var channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
+			var channel;
+			if (aURI.path.toLowerCase().indexOf('?html') > -1) {
+				channel = Services.io.newChannel(core.addon.path.pages + 'html.xhtml', null, null);
+			} else {
+				channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
+			}
+			channel.originalURI = aURI;
+			return channel;
 		}
-		channel.originalURI = aURI;
-		return channel;
-	}
-});
+	});
+	
+	// register it
+	aboutFactory_profilist = new AboutFactory(AboutProfilist);
+}
 
 function AboutFactory(component) {
 	this.createInstance = function(outer, iid) {
@@ -161,16 +168,16 @@ function startup(aData, aReason) {
 	
 	var afterWorker = function() { // because i init worker, then continue init
 		// register about page
-		aboutFactory_profilist = new AboutFactory(AboutProfilist);
+		initAndRegisterAboutProfilist();
 		
 		// register about pages listener
 		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
 		
-		// bring in react
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
-		
-		testReact();
+		// // bring in react
+		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
+		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
+		// 
+		// testReact();
 	};
 	
 	// startup worker
@@ -222,7 +229,23 @@ function shutdown(aData, aReason) {
 // start - server/framescript comm layer
 // functions for framescripts to call in main thread
 var fsFuncs = { // can use whatever, but by default its setup to use this
-	
+	fetchCoreAndConfigs: function() {
+		var deferredMain_fetchConfigObjs = new Deferred();
+		
+		console.log('sending over fetchCoreAndConfigs');
+		
+		var promise_fetch = MainWorker.post('fetchAll');
+		promise_fetch.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_fetch - ', aVal);
+				// start - do stuff here - promise_fetch
+				deferredMain_fetchConfigObjs.resolve([aVal]);
+				// end - do stuff here - promise_fetch
+			}
+		);
+		
+		return deferredMain_fetchConfigObjs.promise;
+	}
 };
 var fsMsgListener = {
 	funcScope: fsFuncs,
@@ -427,6 +450,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 }
 
 function SIPWorker(workerScopeName, aPath, aCore=core) {
+	// update 122115 - init resolves the deferred with the value returned from Worker, rather then forcing it to resolve at true
 	// "Start and Initialize PromiseWorker"
 	// returns promise
 		// resolve value: jsBool true
@@ -449,7 +473,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core) {
 			function(aVal) {
 				console.log('Fullfilled - promise_initWorker - ', aVal);
 				// start - do stuff here - promise_initWorker
-				deferredMain_SIPWorker.resolve(true);
+				deferredMain_SIPWorker.resolve(aVal);
 				// end - do stuff here - promise_initWorker
 			},
 			function(aReason) {
