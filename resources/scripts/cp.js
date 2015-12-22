@@ -64,24 +64,30 @@ function initPage(isReInit) {
 		core = aObjs.aCore;
 		gIniObj = aObjs.aIniObj;
 		gKeyInfoStore = aObjs.aKeyInfoStore;
+		
+		initReactComponent();
 	});
 
 }
 
-var gMyStore = {};
+var MyStore = {};
 function initReactComponent() {
 	
+	var myControlPanel = React.createElement(ControlPanel);
+	
+	ReactDOM.render(
+		myControlPanel,
+		document.getElementById('wrapContent')
+	);
 }
 
 // create dom instructions
-var gDOMInfo = [];
 var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 	{
 		section: myServices.sb.GetStringFromName('profilist.cp.general'),
 		rows: [
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.updates'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.updates-desc'),
 				id: 'updates',
 				type: 'select',
 				values: {
@@ -162,52 +168,168 @@ var ControlPanel = React.createClass({
 	getInitialState: function() {
 		return {
 			sIniObj: []
-		}
+		};
+	},
+	componentDidMount: function() {
+		MyStore.updateStatedIniObj = this.updateStatedIniObj; // no need for bind here else React warns "Warning: bind(): You are binding a component method to the component. React does this for you automatically in a high-performance way, so you can safely remove this call. See Menu"
+		MyStore.setState = this.setState.bind(this); // need bind here otherwise it doesnt work
+		
+		document.addEventListener('keypress', this.onKeyPress, false);
+	},
+	updateStatedIniObj: function() {
+		this.setState({
+			sIniObj: JSON.parse(JSON.stringify(gIniObj))
+		});
 	},
 	render: function render() {
 		// props - none
 
 		var aProps = {
-			className: 'wrapReact'
+			className: 'wrap-react'
 		};
 		
-		return React.createElement('div', aProps);
-	}
-});
-var Help = React.createClass({
-    displayName: 'Help',
-	render: function render() {
-		// props - none
-
-		var aProps = {
-			className: 'helpRow'
-		};
+		var children = [];
 		
-		return React.createElement('div', aProps);
+		children.push(React.createElement(Row, {gRowInfo:{id:'help'}}));
+		
+		// console.log('gDOMInfo.length:', gDOMInfo.length);
+		
+		for (var i=0; i<gDOMInfo.length; i++) {
+			console.log('gDOMInfo[i]:', gDOMInfo[i]);
+			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i]}));
+		}
+		
+		return React.createElement('div', aProps,
+			children
+		);
 	}
 });
 var Section = React.createClass({
-    displayName: 'Row',
+    displayName: 'Section',
 	render: function render() {
-		// props - none
+		// props
+		//	gSectionInfo
 
 		var aProps = {
-			className: 'wrapSection'
+			className: 'section'
 		};
 		
-		return React.createElement('div', aProps);
+		var children = [];
+		
+		// console.log('this.props.gSectionInfo.length:', this.props.gSectionInfo.length);
+		children.push(React.createElement('h3', {className:'section-head'},
+			this.props.gSectionInfo.section
+		));
+		
+		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
+			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i]}));
+		}
+		
+		return React.createElement('div', aProps,
+			children
+		);
 	}
 });
 var Row = React.createClass({
     displayName: 'Row',
 	render: function render() {
 		// props - none
-
+		//	gRowInfo
 		var aProps = {
-			className: 'wrapRow'
+			className: 'row'
 		};
 		
-		return React.createElement('div', aProps);
+		var children = [];
+		
+		if (this.props.gRowInfo.id && this.props.gRowInfo.key) {
+			console.error('gRowInfo must have one or the other! key OR id! never both!');
+			throw new Error('gRowInfo must have one or the other! key OR id! never both!');
+		}
+		
+		if (this.props.gRowInfo.id) {
+			switch (this.props.gRowInfo.id) {
+				case 'help':
+					
+						aProps.className += ' row-help';
+						children.push(
+							React.createElement('span', {className:'fontello-icon icon-help'})
+						);
+					
+					break;
+				default:
+					
+						////
+					
+			}
+		} else if (this.props.gRowInfo.key) {
+			switch (this.props.gRowInfo.key) {
+				default:
+				
+						////
+					
+			}
+		} else {
+			console.error('gRowInfo does not have an id or key!!! it must have one of them!');
+			throw new Error('gRowInfo does not have an id or key!!! it must have one of them!');
+		}
+		
+		if (this.props.gRowInfo.label) {
+			children.push(React.createElement('label', {},
+				this.props.gRowInfo.label
+			));
+		}
+		
+		// can specificty be toggled? if so then add in toggler ELSE explain specificness in desc
+		var specificnessDesc;
+		if (this.props.gRowInfo.key) { //only things with key are in ini. and only things in ini can have specificity
+			console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
+			if (!gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly && !gKeyInfoStore[this.props.gRowInfo.key].specificOnly) {
+				// alert('this one can be toggled:' + this.props.gRowInfo.key);
+				children.push(
+					React.createElement('span', {className:'fontello-icon icon-specificness-toggler'})
+				);
+			} else {
+				// add in modded desc
+				specificnessDesc = '\n\n';
+				if (gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly) {
+					specificnessDesc = myServices.sb.GetStringFromName('profilist.cp.unspecfic-only');
+				} else {
+					specificnessDesc = myServices.sb.GetStringFromName('profilist.cp.specfic-only');
+				}
+			}
+		}
+		
+		// add in desc
+		if (this.props.gRowInfo.desc || specificnessDesc) {
+			children.push(
+				React.createElement('span', {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc})
+			);
+		}
+		
+		switch (this.props.gRowInfo.type) {
+			case 'select':
+				
+					var options = []
+					for (var o in this.props.gRowInfo.values) {
+						options.push(
+							React.createElement('option', {value:o},
+								this.props.gRowInfo.values[o]
+							)
+						);
+					}
+					children.push(React.createElement('select', {},
+						options
+					));
+				
+				break;
+			default:
+			
+					////
+		}
+		
+		return React.createElement('div', aProps,
+			children
+		);
 	}
 });
 // End - Page Functionalities

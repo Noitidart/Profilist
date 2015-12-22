@@ -45,12 +45,13 @@ body {
 /* start - wrapper_content */
 #wrapContent {
 	background: transparent linear-gradient(to bottom, #FFF 0%, #D9D9D9 200%) repeat-x scroll left top;
-	height: 200px; /*:debug:*/
+	min-height: 200px; /*:debug:*/
 	/* box-shadow: rgba(50,50,50,0.5) 1px 2px 1px 1px; */
 	width: 477px;
 	position: relative;
 	left: 4px;
 	border-radius: 0px 0px 5px 3px;
+	display: flex;
 }
 /* end - wrapper_content */
 
@@ -85,3 +86,98 @@ body {
 	margin-right: 5px;
 }
 /* end - h2 */
+
+
+/* start - wrapper_react */
+.wrap-react {
+	display: flex;
+	flex-direction: column;
+	flex: 1 0 auto;
+	color: #666;
+	padding: 10px 40px;
+}
+/* end - wrapper_react */
+
+/* start - sections */
+.section {
+	margin-bottom: 20px;
+}
+/* end - sections */
+
+/* start - rows */
+.row {
+	display: flex;
+	align-items: center;
+	flex: 1 0 auto;
+}
+.row-help {
+	justify-content: flex-end;
+	margin: 0 -27px -7px 0;
+}
+/* end - rows */
+
+
+/* start - h3 */
+.wrap-react h3 {
+	font-size: 1.3em;
+	
+	line-height: 130%;
+	color: #333;
+	font-weight: bold;
+	padding: 0 0px 10px;
+	margin: 0px 0px 15px;
+	border-bottom: 1px solid #CCC;
+}
+/* end - h3 */
+
+
+/* start - row_label */
+.row label {
+	flex: 1 0 auto;
+}
+/* end - row_label */
+
+
+/* start - fontello_icons */
+.fontello-icon::before {
+	font-size: 16px;
+	color: #000;
+	cursor: pointer;
+
+	font-family: "fontello";
+	font-style: normal;
+	font-weight: normal;
+	speak: none;
+
+	/*
+	display: inline-block;
+	text-decoration: inherit;
+
+	opacity: 0.1;
+	margin: 0 1px 0 0;
+	padding: 0;
+	*/
+	
+	/* For safety - reset parent styles, that can break glyph codes*/
+	font-variant: normal;
+	text-transform: none;
+}
+.fontello-icon.icon-help::before {
+	content: "\e800";
+}
+.fontello-icon.icon-info::before {
+	content: "\e805";
+}
+.fontello-icon.icon-specificness-toggler::before {
+	content: "\e808";
+}
+/* end - fontello_icons */
+
+/* start - other_stuff */
+@font-face {
+	font-family: 'fontello';
+	src: url('chrome://profilist/content/resources/styles/fonts/fontello.woff') format('woff');
+	font-weight: normal;
+	font-style: normal;
+}
+/* end - other_stuff */
