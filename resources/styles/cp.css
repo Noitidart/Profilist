@@ -155,6 +155,8 @@ select {
 	min-width: 80px;
 	font-size: inherit;
 	font-family: inherit;
+	max-width: 240px;
+	text-overflow: ellipsis;
 }
 /* end - selects */
 

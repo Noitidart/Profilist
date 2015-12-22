@@ -96,6 +96,26 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				}
 			},
 			{
+				label: myServices.sb.GetStringFromName('profilist.cp.notif'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.notif-desc'),
+				type: 'select',
+				key: 'ProfilistNotif',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.launch'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.launch-desc'),
+				type: 'select',
+				key: 'ProfilistLaunch',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
+				}
+			},
+			{
 				label: myServices.sb.GetStringFromName('profilist.cp.sort'),
 				desc: myServices.sb.GetStringFromName('profilist.cp.sort-desc'),
 				type: 'select',
@@ -118,26 +138,16 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
 					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
 				}
-			},
+			}
+		]
+	},
+	{
+		section: myServices.sb.GetStringFromName('profilist.cp.system'),
+		rows: [
 			{
-				label: myServices.sb.GetStringFromName('profilist.cp.notif'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.notif-desc'),
+				label: myServices.sb.GetStringFromName('profilist.cp.desktop-shortcut'),
 				type: 'select',
-				key: 'ProfilistNotif',
-				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
-				}
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.launch'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.launch-desc'),
-				type: 'select',
-				key: 'ProfilistLaunch',
-				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
-				}
+				id: 'desktop-shortcut'
 			}
 		]
 	},
@@ -308,13 +318,54 @@ var Row = React.createClass({
 		switch (this.props.gRowInfo.type) {
 			case 'select':
 				
-					var options = []
-					for (var o in this.props.gRowInfo.values) {
-						options.push(
-							React.createElement('option', {value:o},
-								this.props.gRowInfo.values[o]
-							)
-						);
+					var options = [];
+					if (this.props.gRowInfo.id == 'desktop-shortcut') {
+						// :todo: clean this up, im using globals and recalculating stuff here, not good
+						options.push(React.createElement('option', {value:'', selected:''},
+									myServices.sb.GetStringFromName('profilist.cp.select-profile')
+						));
+						var sortedIniObj = JSON.parse(JSON.stringify(gIniObj));
+						var gGenIniEntry = getIniEntryByKeyValue(sortedIniObj, 'groupName', 'General');
+						var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(sortedIniObj, 'currentProfile', true);
+						var keyValSort = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistSort');
+						
+						for (var i=0; i<sortedIniObj.length; i++) {
+							if (sortedIniObj[i].Path) {
+								sortedIniObj[i].noWriteObj.lowerCaseName = sortedIniObj[i].Name.toLowerCase();
+							} else {
+								sortedIniObj.splice(i, 1); // link2319938
+								i--;
+							}
+						}
+						
+						if (keyValSort == '2') {
+							// sort it alphanum
+							sortedIniObj.sort(function(a, b) {	// by alpha-numeric-insensitive profile name ASC		
+								return compareAlphaNumeric(a.noWriteObj.lowerCaseName, b.noWriteObj.lowerCaseName);
+							})
+						}
+						
+						for (var i=0; i<sortedIniObj.length; i++) {
+							// if (sortedIniObj[i].Path) { // no need for this check i already filtered it out above link2319938
+								var aOptEl = React.createElement('option', {value:sortedIniObj[i].Path},
+									sortedIniObj[i].Name,
+									!sortedIniObj[i].isTemp ? undefined : ' ' + myServices.sb.GetStringFromName('profilist.cp.temporary-profile')
+								);
+								if (sortedIniObj[i].noWriteObj.currentProfile) {
+									options.splice(1, 0, [aOptEl]);
+								} else {
+									options.push(aOptEl);
+								}
+							// }
+						}
+					} else {
+						for (var o in this.props.gRowInfo.values) {
+							options.push(
+								React.createElement('option', {value:o},
+									this.props.gRowInfo.values[o]
+								)
+							);
+						}
 					}
 					children.push(React.createElement('div', {},
 						!specificnessEl ? undefined : specificnessEl,
@@ -334,6 +385,145 @@ var Row = React.createClass({
 		);
 	}
 });
+// START - COMMON PROFILIST HELPER FUNCTIONS
+// start - xIniObj helper functions
+
+function getIniEntryByNoWriteObjKeyValue(aIniObj, aKeyName, aKeyVal) {
+	//*******************************************
+	// RETURNS
+	//	null
+	//	an element in the aIniObj
+	//*******************************************
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aKeyName in aIniObj[i].noWriteObj && aIniObj[i].noWriteObj[aKeyName] == aKeyVal) {
+			return aIniObj[i];
+		}
+	}
+	
+	return null;
+}
+function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
+	//*******************************************
+	// DESC
+	// 	Iterates through the ini object provided, once it finds an entry that has aKeyName that equals aKeyVal it returns it
+	//	If nothing is found then it returns NULL
+	// RETURNS
+	//	null
+	//	an element in the aIniObj
+	// ARGS
+	//	aIniObj - the ini object you want to get value from
+	// 	aKeyName - the name of the field
+	//	aVal - the value the field should be
+	//*******************************************
+
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aKeyName in aIniObj[i] && aIniObj[i][aKeyName] == aKeyVal) {
+			return aIniObj[i];
+		}
+	}
+	
+	return null;
+}
+
+// start - xIniObj functions with no options
+function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
+	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
+	for (var i=0; i<aJProfilistBuilds.length; i++) {
+		if (aJProfilistBuilds[i].id == aTieId) {
+			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
+		}
+	}
+	
+	return null;
+}
+
+function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
+	// RETURNS
+	//	string value if aKeyName found OR not found but has defaultValue
+	//	null if no entry found for aKeyName AND no defaultValue
+	
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	if (gKeyInfoStore[aKeyName].unspecificOnly) {
+		// get profile-unspecific value else null
+		if (aKeyName in aGenIniEntry) {
+			return aGenIniEntry[aKeyName];
+		} else {
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				return null;
+			}
+		}
+	} else {
+		// check if profile-unspecific value exists return else continue on
+		if (!gKeyInfoStore[aKeyName].specificOnly) {
+			if (aKeyName in aGenIniEntry) {
+				return aGenIniEntry[aKeyName];
+			}
+		}
+		// return profile-specific value else null
+		if (aKeyName in aIniEntry) {
+			return aIniEntry[aKeyName];
+		} else {
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				return null;
+			}
+		}
+	}
+	
+	
+	if (aKeyName in aGenIniEntry) {
+		// user set it to profile-unspecific
+		return aGenIniEntry[aKeyName];
+	} else {
+		// user set it to profile-specific
+		if (aKeyName in aIniEntry) {
+			return aIniEntry[aKeyName];
+		} else {
+			// not found so return default value if it has one
+			if ('defaultValue' in gKeyInfoStore[aKeyName]) { // no need to test `'defaultValue' in gKeyInfoStore[aKeyName]` because i expect all values in xIniObj to be strings // :note: :important: all values in xIniObj must be strings!!!
+				return gKeyInfoStore[aKeyName].defaultValue;
+			} else {
+				// no default value
+				return null;
+			}
+		}
+	}
+}
+function getImgPathOfSlug(aSlug) {
+	//*******************************************
+	// DESC
+	// 	Provided aSlug, such as "esr", "release", "beta", "dev", "nightly", or any user defined one, this will return the full path to that image
+	// RETURNS
+	//	null
+	//	string
+	// ARGS
+	//	aSlug - icon short name
+	//*******************************************
+
+	console.info('getImgPathOfSlug, aSlug:', aSlug);
+	
+	switch (aSlug) {
+		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
+		case 'release':
+		case 'beta':
+		case 'dev':
+		case 'aurora':
+		case 'nightly':
+				
+				return core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_16.png';
+				
+			break;
+		default:
+			
+				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
+	}
+}
+// end - xIniObj functions with no options
+// END - COMMON PROFILIST HELPER FUNCTIONS
 // End - Page Functionalities
 
 // start - server/framescript comm layer
@@ -444,5 +634,23 @@ function Deferred() {
 		console.log('Promise not available!', ex);
 		throw new Error('Promise not available!');
 	}
+}
+
+var reA = /[^a-zA-Z]/g; // for compareAlphaNumeric
+var reN = /[^0-9]/g; // for compareAlphaNumeric
+function compareAlphaNumeric(a, b) {
+	// useful for sorting algo, originally inteded for alpha-numeric asc sort. taken from - http://stackoverflow.com/a/4340339/1828637
+	// returns -1 if a < b
+	// returns -1 if a == b
+	// returns -1 if a > b
+    var aA = a.replace(reA, '');
+    var bA = b.replace(reA, '');
+    if(aA === bA) {
+        var aN = parseInt(a.replace(reN, ''), 10);
+        var bN = parseInt(b.replace(reN, ''), 10);
+        return aN === bN ? 0 : aN > bN ? 1 : -1;
+    } else {
+        return aA > bA ? 1 : -1;
+    }
 }
 // end - common helper functions
