@@ -101,10 +101,12 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistSort',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.created-asc'),
-					1: myServices.sb.GetStringFromName('profilist.cp.created-desc'),
-					2: myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
-					3: myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
+					0: myServices.sb.GetStringFromName('profilist.cp.created'),
+					2: myServices.sb.GetStringFromName('profilist.cp.alphanum'),
+					// 0: myServices.sb.GetStringFromName('profilist.cp.created-asc'),
+					// 1: myServices.sb.GetStringFromName('profilist.cp.created-desc'),
+					// 2: myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
+					// 3: myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
 				}
 			},
 			{
@@ -281,13 +283,12 @@ var Row = React.createClass({
 		
 		// can specificty be toggled? if so then add in toggler ELSE explain specificness in desc
 		var specificnessDesc;
+		var specificnessEl;
 		if (this.props.gRowInfo.key) { //only things with key are in ini. and only things in ini can have specificity
 			console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
 			if (!gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly && !gKeyInfoStore[this.props.gRowInfo.key].specificOnly) {
 				// alert('this one can be toggled:' + this.props.gRowInfo.key);
-				children.push(
-					React.createElement('span', {className:'fontello-icon icon-specificness-toggler'})
-				);
+				specificnessEl = React.createElement('span', {className:'fontello-icon icon-specificness-toggler'});
 			} else {
 				// add in modded desc
 				specificnessDesc = '\n\n';
@@ -301,9 +302,7 @@ var Row = React.createClass({
 		
 		// add in desc
 		if (this.props.gRowInfo.desc || specificnessDesc) {
-			children.push(
-				React.createElement('span', {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc})
-			);
+			children.push(React.createElement('span', {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc}));
 		}
 		
 		switch (this.props.gRowInfo.type) {
@@ -317,8 +316,11 @@ var Row = React.createClass({
 							)
 						);
 					}
-					children.push(React.createElement('select', {},
-						options
+					children.push(React.createElement('div', {},
+						!specificnessEl ? undefined : specificnessEl,
+						React.createElement('select', {},
+							options
+						)
 					));
 				
 				break;
