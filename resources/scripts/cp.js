@@ -68,27 +68,148 @@ function initPage(isReInit) {
 
 }
 
+var gMyStore = {};
+function initReactComponent() {
+	
+}
+
 // create dom instructions
 var gDOMInfo = [];
 var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 	{
-		group_name: myServices.sb.GetStringFromName('profilist.cp.general'),
-		label: myServices.sb.GetStringFromName('profilist.cp.auto-up'),
-		type: 'select',
-		pref_name: 'Profilist.automatic_updates',
-		pref_type: 'bool', // pref_type is custom, so the setter handles
-		values: {
-			0: myServices.sb.GetStringFromName('profilist.cp.off'),
-			1: myServices.sb.GetStringFromName('profilist.cp.on')
-		},
-		desc: myServices.sb.GetStringFromName('profilist.cp.auto-up-desc'),
-		// default_value: 1, // sent over from bootstrap
-		// default_profile_specificness: true, // sent over from bootstrap
-		// value: ? // sent over from bootstrap
-		// profile_specificness: ? // sent over from bootstrap
+		section: myServices.sb.GetStringFromName('profilist.cp.general'),
+		rows: [
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.updates'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.updates-desc'),
+				id: 'updates',
+				type: 'select',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.off'),
+					1: myServices.sb.GetStringFromName('profilist.cp.on')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.sort'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.sort-desc'),
+				type: 'select',
+				key: 'ProfilistSort',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.created-asc'),
+					1: myServices.sb.GetStringFromName('profilist.cp.created-desc'),
+					2: myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
+					3: myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.dev'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.dev-desc'),
+				type: 'select',
+				key: 'ProfilistDev',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.notif'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.notif-desc'),
+				type: 'select',
+				key: 'ProfilistNotif',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.launch'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.launch-desc'),
+				type: 'select',
+				key: 'ProfilistLaunch',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
+				}
+			}
+		]
+	},
+	{
+		section: myServices.sb.GetStringFromName('profilist.cp.developer'),
+		rows: [
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.temp'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.temp-desc'),
+				type: 'select',
+				key: 'ProfilistTemp',
+				values: {
+					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
+					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
+				}
+			},
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.builds'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.builds-desc'),
+				key: 'ProfilistBuilds',
+				type: 'custom'
+			}
+		]
 	}
 ];
 
+// react components
+var ControlPanel = React.createClass({
+    displayName: 'ControlPanel',
+	getInitialState: function() {
+		return {
+			sIniObj: []
+		}
+	},
+	render: function render() {
+		// props - none
+
+		var aProps = {
+			className: 'wrapReact'
+		};
+		
+		return React.createElement('div', aProps);
+	}
+});
+var Help = React.createClass({
+    displayName: 'Help',
+	render: function render() {
+		// props - none
+
+		var aProps = {
+			className: 'helpRow'
+		};
+		
+		return React.createElement('div', aProps);
+	}
+});
+var Section = React.createClass({
+    displayName: 'Row',
+	render: function render() {
+		// props - none
+
+		var aProps = {
+			className: 'wrapSection'
+		};
+		
+		return React.createElement('div', aProps);
+	}
+});
+var Row = React.createClass({
+    displayName: 'Row',
+	render: function render() {
+		// props - none
+
+		var aProps = {
+			className: 'wrapRow'
+		};
+		
+		return React.createElement('div', aProps);
+	}
+});
 // End - Page Functionalities
 
 // start - server/framescript comm layer
