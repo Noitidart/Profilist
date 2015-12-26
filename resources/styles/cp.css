@@ -119,11 +119,14 @@ body {
 	justify-content: flex-end;
 	margin: 0 -27px -7px 0;
 }
+.row-builds-widget {
+	display: block;
+}
 /* end - rows */
 
 
 /* start - rows_right_portion */
-.row div:last-of-type {
+.row:not(.row-builds-widget) div:last-of-type {
 	flex: 1 0 auto;
 	display: inline;
 	text-align: right;
@@ -202,6 +205,19 @@ select {
 	opacity: 0.3;
 	transition: opacity 200ms, color 200ms;
 }
+.fontello-icon.icon-tools::before {
+	content: "\e801";
+	cursor: default;
+}
+.fontello-icon.icon-drag::before {
+	content: "\e802";
+}
+.fontello-icon.icon-del::before {
+	content: "\e803";
+}
+.fontello-icon.icon-curprofpath::before {
+	content: "\e807";
+}
 /* state:mouseover */
 .fontello-icon.icon-help:hover::before {
 	color: #0874E0;
@@ -221,6 +237,53 @@ select {
 	color: #333;
 }
 /* end - fontello_icons */
+
+
+/* start - builds_widget_container */
+div.builds-widget {
+	display: flex;
+	flex-direction: column;
+	margin-top: 7px;
+	margin-left: 10px;
+	margin-right: 10px;
+}
+/* end - builds_widget_container */
+
+/* start - builds_widget_row */
+div.builds-widget-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+/* end - builds_widget_row */
+
+/* start - toplevel_spans_in_builds_widget_row */
+div.builds-widget-row > span {
+	text-align: center;
+	margin-top: 3px;
+}
+div.builds-widget-row > span:nth-child(1) {
+	width: 50px;
+}
+div.builds-widget-row >	 span:nth-child(2) {
+	flex: 1 0 auto;
+}
+div.builds-widget-row > span:nth-child(3) {
+	width: 50px;
+}
+/* end - builds_widget_row */
+
+/* end - builds_widget_textbox */
+div.builds-widget-row input[type=text] {
+	width: 90%;
+}
+/* end - builds_widget_textbox */
+
+/* end - fontellos */
+div.builds-widget-row .fontello-icon {
+	margin: 0 2px;
+}
+/* end - builds_widget_textbox */
 
 /* start - other_stuff */
 @font-face {

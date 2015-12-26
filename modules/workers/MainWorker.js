@@ -138,7 +138,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		pref: true,				// i dont really need this key, i can detect if its pref by testing if it has any of the "this key only for prefs"
 		specificOnly: false,	// means, it cannot be set across all profiles // this key only for prefs
 		defaultSpecific: false,	// means by default it affects all profiles (its unspecific) // this key only for prefs // this key only for prefs with specificOnly:false
-		defaultValue: '1',		// this key only for prefs // if value not found in profile group, or general group. then this value is used. // if value found in general, but specific is set to true by user, then use the value from general. // if value found in profile, and specific is set to false by user, then set general value, and delete the one from profile group
+		defaultValue: '0',		// this key only for prefs // if value not found in profile group, or general group. then this value is used. // if value found in general, but specific is set to true by user, then use the value from general. // if value found in profile, and specific is set to false by user, then set general value, and delete the one from profile group
 		possibleValues: [
 			'0',				// devmode off
 			'1'					// devmode on

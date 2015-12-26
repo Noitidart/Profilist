@@ -196,6 +196,10 @@ var ControlPanel = React.createClass({
 	render: function render() {
 		// props - none
 
+		if (this.state.sIniObj.length == 0) {
+			this.state.sIniObj = JSON.parse(JSON.stringify(gIniObj));
+		}
+		
 		var aProps = {
 			className: 'wrap-react'
 		};
@@ -206,9 +210,13 @@ var ControlPanel = React.createClass({
 		
 		// console.log('gDOMInfo.length:', gDOMInfo.length);
 		
+		var sGenIniEntry = getIniEntryByKeyValue(this.state.sIniObj, 'groupName', 'General');
+		var sCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(this.state.sIniObj, 'currentProfile', true);
+		console.info('sGenIniEntry:', sGenIniEntry);
+		
 		for (var i=0; i<gDOMInfo.length; i++) {
 			console.log('gDOMInfo[i]:', gDOMInfo[i]);
-			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i]}));
+			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry}));
 		}
 		
 		return React.createElement('div', aProps,
@@ -221,7 +229,10 @@ var Section = React.createClass({
 	render: function render() {
 		// props
 		//	gSectionInfo
-
+		//	sIniObj
+		//	sCurProfIniEntry
+		//	sGenIniEntry
+		
 		var aProps = {
 			className: 'section'
 		};
@@ -234,7 +245,7 @@ var Section = React.createClass({
 		));
 		
 		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
-			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i]}));
+			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry}));
 		}
 		
 		return React.createElement('div', aProps,
@@ -247,6 +258,10 @@ var Row = React.createClass({
 	render: function render() {
 		// props - none
 		//	gRowInfo
+		//	sIniObj
+		//	sCurProfIniEntry
+		//	sGenIniEntry
+		
 		var aProps = {
 			className: 'row'
 		};
@@ -325,9 +340,7 @@ var Row = React.createClass({
 									myServices.sb.GetStringFromName('profilist.cp.select-profile')
 						));
 						var sortedIniObj = JSON.parse(JSON.stringify(gIniObj));
-						var gGenIniEntry = getIniEntryByKeyValue(sortedIniObj, 'groupName', 'General');
-						var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(sortedIniObj, 'currentProfile', true);
-						var keyValSort = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistSort');
+						var keyValSort = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistSort');
 						
 						for (var i=0; i<sortedIniObj.length; i++) {
 							if (sortedIniObj[i].Path) {
@@ -375,6 +388,20 @@ var Row = React.createClass({
 					));
 				
 				break;
+			case 'custom':
+				
+					switch (this.props.gRowInfo.key ? this.props.gRowInfo.key : this.props.gRowInfo.id) {
+						case 'ProfilistBuilds':
+						
+								aProps.className += ' row-builds-widget'
+								children.push(React.createElement(BuildsWidget, {gRowInfo: this.props.gRowInfo, sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry}));
+						
+							break;
+						default:
+							console.error('should never get here ever!');
+					}
+				
+				break;
 			default:
 			
 					////
@@ -383,6 +410,84 @@ var Row = React.createClass({
 		return React.createElement('div', aProps,
 			children
 		);
+	}
+});
+var BuildsWidget = React.createClass({
+    displayName: 'BuildsWidget',
+	render: function render() {
+		// props
+		//	sIniObj
+		//	gRowInfo
+		//	sCurProfIniEntry
+		//	sGenIniEntry
+		
+		var children = [];
+
+		children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:'head', sCurProfIniEntry: this.props.sCurProfIniEntry}));
+
+		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
+		var jProfilistBuilds = JSON.parse(keyValBuilds);
+		for (var i=0; i<jProfilistBuilds.length; i++) {
+			
+		}
+		
+		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry}));
+		
+		return React.createElement('div', {className:'builds-widget'},
+			children
+		);
+	}
+});
+var BuildsWidgetRow = React.createClass({ // this is the non header row
+    displayName: 'BuildsWidgetRow',
+	clickIcon: function() {
+		alert('clicked icon');
+	},
+	clickPath: function() {
+		alert('clicked path');
+	},
+	clickDel: function() {
+		alert('clicked del');
+	},
+	clickDrag: function() {
+		alert('clicked drag');
+	},
+	clickCurProfPath: function() {
+		alert('clicked user current profile path');
+	},
+	render: function render() {
+		// props
+		//	jProfilistBuildsEntry
+		//	sCurProfIniEntry
+		
+		if (this.props.jProfilistBuildsEntry == 'head') {
+			return React.createElement('div', {className:'builds-widget-row'},
+				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.icon')),
+				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.path-to-exe')),
+				React.createElement('span', {},
+					React.createElement('span', {className:'fontello-icon icon-tools'})
+				)
+			);
+		} else {
+			return React.createElement('div', {className:'builds-widget-row'},
+				React.createElement('span', {},
+					React.createElement('img', {onClick:this.clickIcon, src: core.addon.path.images + 'channel-iconsets/' + (this.props.sCurProfIniEntry.noWriteObj.exeIconSlug ? this.props.sCurProfIniEntry.noWriteObj.exeIconSlug : 'nightly') + '/' + (this.props.sCurProfIniEntry.noWriteObj.exeIconSlug ? this.props.sCurProfIniEntry.noWriteObj.exeIconSlug : 'nightly') + '_16.png'})
+				),
+				React.createElement('span', {},
+					React.createElement('input', {type:'text'})
+				),
+				React.createElement('span', {},
+					React.createElement('span', {className:'fontello-icon icon-del', onClick:this.clickDel}),
+					React.createElement('span', {className:'fontello-icon icon-drag', onClick:this.clickDrag}),
+					React.createElement('span', {className:'fontello-icon icon-curprofpath', onClick:this.clickCurProfPath})
+				)
+			);
+			if (!this.props.jProfilistBuildsEntry) {
+				// its last one
+			} else {
+				// its content
+			}
+		}
 	}
 });
 // START - COMMON PROFILIST HELPER FUNCTIONS
