@@ -416,45 +416,136 @@ var BuildsWidget = React.createClass({
     displayName: 'BuildsWidget',
 	click: function(e) {
 		console.log('this.refs:', this.refs);
-		console.log('this.rowBoundaries:', this.rowBoundaries);
+		console.log('this.rowOffsets:', this.rowOffsets);
+		for (var ref in this.refs) {
+			console.log(ref, 'rowStepSlots:', this.refs[ref].rowStepSlots);
+		}
 	},
 	dragMove: function(e) {
 		// console.log('drag moved', e);
+		
+		var rowStepSlots = this.refs[this.draggingRef].rowStepSlots;
+		
+		// calc newStyleTop
 		var yNow = e.clientY;
 		var yDiff = yNow - this.yInit;
-		var newOffsetTop = this.offsetInit + yDiff;
-		if (newOffsetTop >= this.rowBoundaries[0] && newOffsetTop <= this.rowBoundaries[this.rowBoundaries.length-1]) {
-			this.draggingRowEl.style.top = (this.topInit + yDiff) + 'px';
-			console.log('ok new styleTop:', (this.topInit + yDiff), 'new offsetTop:', newOffsetTop);
+		var newStyleTop = this.topInit + yDiff;
+		
+		// check if should set, and if so, then set it
+		var didSet = false;
+		
+		if (newStyleTop >= rowStepSlots[0] && newStyleTop <= rowStepSlots[rowStepSlots.length-1]) {
+			this.lastDidSet = newStyleTop; // last top that a set happend on
+			this.draggingRowEl.style.top = newStyleTop + 'px';
+			didSet = true;
+			console.log('ok new styleTop:', newStyleTop);
+			
+		} else {
+			if (newStyleTop < rowStepSlots[0]) {
+				// need to max to bottom
+				
+				if (this.lastDidSet != rowStepSlots[0]) {
+					this.lastDidSet = rowStepSlots[0];
+					newStyleTop = rowStepSlots[0];
+					this.draggingRowEl.style.top = newStyleTop + 'px';
+					didSet = true;
+					console.log('ok new styleTop:', newStyleTop);
+				}
+				
+			} else {
+				// need to max to top
+				if (this.lastDidSet != rowStepSlots[rowStepSlots.length-1]) {
+					this.lastDidSet = rowStepSlots[rowStepSlots.length-1];
+					newStyleTop = rowStepSlots[rowStepSlots.length-1];
+					this.draggingRowEl.style.top = newStyleTop + 'px';
+					didSet = true;
+					console.log('ok new styleTop:', newStyleTop);
+				}
+			}
+		}
+		
+		// if didSet, do the post didSet checks
+		if (didSet) {
+			// find position this row should be in, based on newStyleTop, check if we need to swap anything in the dom, and do it if needed
+			console.log('these are the slot positions for this row:', rowStepSlots);
+			for (var i=this.rowSlotsCnt-1; i>=0; i--) { // i is slot number
+				if (newStyleTop >= rowStepSlots[i]) {
+					// find what ref currently resides in this spot, and swap
+					console.log('found that this row, should be in slot:', i);
+					if (this.jsRefToSlot[this.draggingRef] == i) {
+						// already in this position so break
+						console.log('already in position, so no need for swap');
+						break;
+					}
+					// not in position, so swap is needed
+					for (var aRef in this.jsRefToSlot) {
+						if (this.jsRefToSlot[aRef] == i) {
+							this.jsRefToSlot[aRef] = this.jsRefToSlot[this.draggingRef];
+							break;
+						}
+					}
+					this.jsRefToSlot[this.draggingRef] = i;
+					this.matchDomTo_jsRefToSlot();
+					break;
+				}
+			}
 		}
 	},
 	dragDrop: function(e) {
 		document.removeEventListener('mouseup', this.dragDrop, false);
 		document.removeEventListener('mousemove', this.dragMove, false);
 		this.draggingRowEl.classList.remove('builds-row-indrag');
+		this.lastDidSet = undefined;
+		// set the dragging ref to be exactly in position
+		this.refs[this.draggingRef].getDOMNode().style.top = this.refs[this.draggingRef].rowStepSlots[this.jsRefToSlot[this.draggingRef]] + 'px'; // instead of setting this.draggingRef to null, then calling this.matchDomTo_jsRefToSlot()
 	},
 	dragStart: function(aRowRef, e) {
-		if (this.rowStepSize) { // rowStepSize is not set when there is not more then 1 row. meaning this.rowBoundaries.length > 1
+		if (!this.rowStepSize) { // rowStepSize is not set when there is not more then 1 row. meaning this.rowOffsets.length > 1
 			return false; // no drag
 		}
+		this.draggingRef = aRowRef;
 		this.draggingRowEl = this.refs[aRowRef].getDOMNode();
 		console.log('drag started', e);
 		this.yInit = e.clientY;
 		this.topInit = this.draggingRowEl.style.top;
 		this.topInit = this.topInit ? parseInt(this.topInit) : 0;
-		this.offsetInit = this.draggingRowEl.offsetTop;
 		console.log('this.topInit:', this.topInit);
 		this.draggingRowEl.classList.add('builds-row-indrag');
 		document.addEventListener('mouseup', this.dragDrop, false);
 		document.addEventListener('mousemove', this.dragMove, false);
 	},
-	componentDidMount: function() {
-		this.rowBoundaries = [];
-		for (var ref in this.refs) {
-			this.rowBoundaries.push(this.refs[ref].getDOMNode().offsetTop);
+	matchDomTo_jsRefToSlot: function() {
+		// this function is only called during dragging
+		for (var ref in this.refs) { // each ref is a row element
+			if (ref == this.draggingRef) { // we dont set top on this as user is dragging it
+				continue;
+			}
+			this.refs[ref].getDOMNode().style.top = this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]] + 'px';
+			console.warn('set:', ref, 'to :', this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]]);
 		}
-		if (this.rowBoundaries.length > 1) {
-			this.rowStepSize = this.rowBoundaries[1] - this.rowBoundaries[0];
+	},
+	componentDidMount: function() {
+		this.jsRefToSlot = {}; // key is ref, and value is the slot position
+		this.rowOffsets = []; // holds the offset tops
+		for (var ref in this.refs) { // each ref is a row element
+			this.rowOffsets.push(this.refs[ref].getDOMNode().offsetTop);
+		}
+		this.rowSlotsCnt = this.rowOffsets.length;
+		if (this.rowSlotsCnt > 1) {
+			// calculate relative position, for each row, when in slot X
+			this.rowStepSize = this.rowOffsets[1] - this.rowOffsets[0]; // height of one row basically. stepping by this will put you in next slot.
+			for (var h=0; h<this.rowSlotsCnt; h++) { // h is row number
+				var cRef = 'row' + h;
+				this.jsRefToSlot[cRef] = h;
+				this.refs[cRef].rowStepSlots = []; // holds the top (position relative) postitions it should be at based on position. position is element in the array. so if should be FIRST, then [0] holds the top it that element should have
+				for (var i=0; i<this.rowSlotsCnt; i++) { // i is predicted row number
+					if (i == h) {
+						this.refs[cRef].rowStepSlots.push(0);
+					} else {
+						this.refs[cRef].rowStepSlots.push((i - h) * this.rowStepSize);
+					}
+				}
+			}
 		} // else no drag
 	},
 	render: function render() {
@@ -471,7 +562,7 @@ var BuildsWidget = React.createClass({
 		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
 		var jProfilistBuilds = JSON.parse(keyValBuilds);
 		for (var i=0; i<jProfilistBuilds.length; i++) {
-			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + (i + 1), dragStart:this.dragStart.bind(this, 'row' + (i + 1))}));
+			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + i, dragStart:this.dragStart.bind(this, 'row' + i)}));
 		}
 		
 		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry}));

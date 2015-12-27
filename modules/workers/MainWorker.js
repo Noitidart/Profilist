@@ -367,7 +367,7 @@ function readIni() {
 	
 	// set gJProfilistBuilds
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-	gGenIniEntry.ProfilistBuilds = '[{"id":9,"p":"c:\\\\aurora.exe","i":"aurora"},{"id":8,"p":"c:\\\\program files (x86)\\\\mozilla firefox\\\\nightly.exe","i":"nightly"}]'; // :debug:
+	gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"c:\\\\dev.exe","i":"dev"},{"id":9,"p":"c:\\\\aurora.exe","i":"aurora"},{"id":8,"p":"c:\\\\program files (x86)\\\\mozilla firefox\\\\nightly.exe","i":"nightly"}]'; // :debug:
 	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff
