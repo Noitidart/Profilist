@@ -243,7 +243,7 @@ select {
 div.builds-widget {
 	display: flex;
 	flex-direction: column;
-	margin-top: 7px;
+	margin-top: 3px;
 	margin-left: 10px;
 	margin-right: 10px;
 }
@@ -254,6 +254,10 @@ div.builds-widget-row {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
+	position: relative;
+}
+div.builds-widget-row:not(.builds-row-indrag) {
+	transition: top 100ms linear;
 }
 /* end - builds_widget_row */
 
@@ -273,9 +277,17 @@ div.builds-widget-row > span:nth-child(3) {
 }
 /* end - builds_widget_row */
 
+/* start - builds_widget_icon_image */
+div.builds-widget-row > span:nth-child(1) > img {
+	cursor: pointer;
+}
+/* end - builds_widget_icon_image */
+
 /* end - builds_widget_textbox */
 div.builds-widget-row input[type=text] {
 	width: 90%;
+	font-size: inherit;
+	font-family: inherit;
 }
 /* end - builds_widget_textbox */
 

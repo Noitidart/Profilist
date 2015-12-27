@@ -185,7 +185,8 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	},
 	ProfilistTemp: {			// tells whether (temporary profiles found && that did NOT have profilist installed) into them (so no ProfilistStatus), should remain in ini after it is found to be not running. only way to remove is to delete from menu. // if profilist is installed into that profile, it will be a temporary profile still so group will be [TempProfile#] but it will stay regardless of this key setting
 		unspecificOnly: true,
-		defaultValue: '0',
+		// defaultValue: '0',
+		defaultValue: '1',
 		possibleValues: [
 			'0',				// do not keep them in ini, after it is found to be not running
 			'1'					// keep them in ini even after it is found to be not running
@@ -366,6 +367,7 @@ function readIni() {
 	
 	// set gJProfilistBuilds
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	gGenIniEntry.ProfilistBuilds = '[{"id":9,"p":"c:\\\\aurora.exe","i":"aurora"},{"id":8,"p":"c:\\\\program files (x86)\\\\mozilla firefox\\\\nightly.exe","i":"nightly"}]'; // :debug:
 	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff

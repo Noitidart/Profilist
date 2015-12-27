@@ -414,6 +414,49 @@ var Row = React.createClass({
 });
 var BuildsWidget = React.createClass({
     displayName: 'BuildsWidget',
+	click: function(e) {
+		console.log('this.refs:', this.refs);
+		console.log('this.rowBoundaries:', this.rowBoundaries);
+	},
+	dragMove: function(e) {
+		// console.log('drag moved', e);
+		var yNow = e.clientY;
+		var yDiff = yNow - this.yInit;
+		var newOffsetTop = this.offsetInit + yDiff;
+		if (newOffsetTop >= this.rowBoundaries[0] && newOffsetTop <= this.rowBoundaries[this.rowBoundaries.length-1]) {
+			this.draggingRowEl.style.top = (this.topInit + yDiff) + 'px';
+			console.log('ok new styleTop:', (this.topInit + yDiff), 'new offsetTop:', newOffsetTop);
+		}
+	},
+	dragDrop: function(e) {
+		document.removeEventListener('mouseup', this.dragDrop, false);
+		document.removeEventListener('mousemove', this.dragMove, false);
+		this.draggingRowEl.classList.remove('builds-row-indrag');
+	},
+	dragStart: function(aRowRef, e) {
+		if (this.rowStepSize) { // rowStepSize is not set when there is not more then 1 row. meaning this.rowBoundaries.length > 1
+			return false; // no drag
+		}
+		this.draggingRowEl = this.refs[aRowRef].getDOMNode();
+		console.log('drag started', e);
+		this.yInit = e.clientY;
+		this.topInit = this.draggingRowEl.style.top;
+		this.topInit = this.topInit ? parseInt(this.topInit) : 0;
+		this.offsetInit = this.draggingRowEl.offsetTop;
+		console.log('this.topInit:', this.topInit);
+		this.draggingRowEl.classList.add('builds-row-indrag');
+		document.addEventListener('mouseup', this.dragDrop, false);
+		document.addEventListener('mousemove', this.dragMove, false);
+	},
+	componentDidMount: function() {
+		this.rowBoundaries = [];
+		for (var ref in this.refs) {
+			this.rowBoundaries.push(this.refs[ref].getDOMNode().offsetTop);
+		}
+		if (this.rowBoundaries.length > 1) {
+			this.rowStepSize = this.rowBoundaries[1] - this.rowBoundaries[0];
+		} // else no drag
+	},
 	render: function render() {
 		// props
 		//	sIniObj
@@ -428,12 +471,12 @@ var BuildsWidget = React.createClass({
 		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
 		var jProfilistBuilds = JSON.parse(keyValBuilds);
 		for (var i=0; i<jProfilistBuilds.length; i++) {
-			
+			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + (i + 1), dragStart:this.dragStart.bind(this, 'row' + (i + 1))}));
 		}
 		
 		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry}));
 		
-		return React.createElement('div', {className:'builds-widget'},
+		return React.createElement('div', {className:'builds-widget', onClick:this.click},
 			children
 		);
 	}
@@ -449,9 +492,6 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 	clickDel: function() {
 		alert('clicked del');
 	},
-	clickDrag: function() {
-		alert('clicked drag');
-	},
 	clickCurProfPath: function() {
 		alert('clicked user current profile path');
 	},
@@ -459,7 +499,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		// props
 		//	jProfilistBuildsEntry
 		//	sCurProfIniEntry
-		
+		//	dragStart
 		if (this.props.jProfilistBuildsEntry == 'head') {
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.icon')),
@@ -469,24 +509,30 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				)
 			);
 		} else {
+			
+			if (!this.props.jProfilistBuildsEntry) {
+				// its last one
+				var imgSrc = core.addon.path.images + 'search.png';
+				var textVal = '';
+			} else {
+				// its content
+				var imgSrc = core.addon.path.images + 'channel-iconsets/' + this.props.jProfilistBuildsEntry.i + '/' + this.props.jProfilistBuildsEntry.i + '_16.png';
+				var textVal = this.props.jProfilistBuildsEntry.p;
+			}
+			
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {},
-					React.createElement('img', {onClick:this.clickIcon, src: core.addon.path.images + 'channel-iconsets/' + (this.props.sCurProfIniEntry.noWriteObj.exeIconSlug ? this.props.sCurProfIniEntry.noWriteObj.exeIconSlug : 'nightly') + '/' + (this.props.sCurProfIniEntry.noWriteObj.exeIconSlug ? this.props.sCurProfIniEntry.noWriteObj.exeIconSlug : 'nightly') + '_16.png'})
+					React.createElement('img', {onClick:this.clickIcon, src: imgSrc})
 				),
 				React.createElement('span', {},
-					React.createElement('input', {type:'text'})
+					React.createElement('input', {type:'text', value:textVal})
 				),
 				React.createElement('span', {},
 					React.createElement('span', {className:'fontello-icon icon-del', onClick:this.clickDel}),
-					React.createElement('span', {className:'fontello-icon icon-drag', onClick:this.clickDrag}),
+					React.createElement('span', {className:'fontello-icon icon-drag', onMouseDown:this.props.dragStart}),
 					React.createElement('span', {className:'fontello-icon icon-curprofpath', onClick:this.clickCurProfPath})
 				)
 			);
-			if (!this.props.jProfilistBuildsEntry) {
-				// its last one
-			} else {
-				// its content
-			}
 		}
 	}
 });
