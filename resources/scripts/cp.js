@@ -469,7 +469,7 @@ var BuildsWidget = React.createClass({
 			// find position this row should be in, based on newStyleTop, check if we need to swap anything in the dom, and do it if needed
 			console.log('these are the slot positions for this row:', rowStepSlots);
 			for (var i=this.rowSlotsCnt-1; i>=0; i--) { // i is slot number
-				if (newStyleTop >= rowStepSlots[i]) {
+				if (newStyleTop >= rowStepSlots[i] - this.rowStepTolerance) {
 					// find what ref currently resides in this spot, and swap
 					console.log('found that this row, should be in slot:', i);
 					if (this.jsRefToSlot[this.draggingRef] == i) {
@@ -534,6 +534,7 @@ var BuildsWidget = React.createClass({
 		if (this.rowSlotsCnt > 1) {
 			// calculate relative position, for each row, when in slot X
 			this.rowStepSize = this.rowOffsets[1] - this.rowOffsets[0]; // height of one row basically. stepping by this will put you in next slot.
+			this.rowStepTolerance = Math.ceil(this.rowStepSize / 2);
 			for (var h=0; h<this.rowSlotsCnt; h++) { // h is row number
 				var cRef = 'row' + h;
 				this.jsRefToSlot[cRef] = h;

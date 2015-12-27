@@ -255,6 +255,7 @@ div.builds-widget-row {
 	flex-direction: row;
 	align-items: center;
 	position: relative;
+	top: 0;
 }
 div.builds-widget-row:not(.builds-row-indrag) {
 	transition: top 100ms linear;
