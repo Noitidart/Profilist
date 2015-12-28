@@ -520,13 +520,15 @@ var BuildsWidget = React.createClass({
 			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 			gGenIniEntry.ProfilistBuilds = JSON.stringify(newJProfilistBuilds);
 			
-			setTimeout(function() {
+			this.dragDropTimout = setTimeout(function() {
+				delete this.dragDropTimout;
 				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
 				MyStore.updateStatedIniObj();
 			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		} else {
 			console.log('no need for update');
-			setTimeout(function() {
+			this.dragDropTimout = setTimeout(function() {
+				delete this.dragDropTimout;
 				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
 			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		}
@@ -542,6 +544,10 @@ var BuildsWidget = React.createClass({
 		delete this.jsRefToSlot;
 	},
 	dragStart: function(aRowRef, e) {
+		if (this.dragDropTimout) {
+			clearTimeout(this.dragDropTimout);
+			delete this.dragDropTimout;
+		}
 		if (!this.jsRefToSlot) {
 			this.jsRefToSlot = {}; // key is ref, and value is the slot position
 			this.rowOffsets = []; // holds the offset tops
