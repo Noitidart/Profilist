@@ -415,11 +415,11 @@ var Row = React.createClass({
 var BuildsWidget = React.createClass({
     displayName: 'BuildsWidget',
 	click: function(e) {
-		console.log('this.refs:', this.refs);
-		console.log('this.rowOffsets:', this.rowOffsets);
-		for (var ref in this.refs) {
-			console.log(ref, 'rowStepSlots:', this.refs[ref].rowStepSlots);
-		}
+		// console.log('this.refs:', this.refs);
+		// console.log('this.rowOffsets:', this.rowOffsets);
+		// for (var ref in this.refs) {
+		// 	console.log(ref, 'rowStepSlots:', this.refs[ref].rowStepSlots);
+		// }
 	},
 	dragMove: function(e) {
 		// console.log('drag moved', e);
@@ -438,7 +438,7 @@ var BuildsWidget = React.createClass({
 			this.lastDidSet = newStyleTop; // last top that a set happend on
 			this.draggingRowEl.style.top = newStyleTop + 'px';
 			didSet = true;
-			console.log('ok new styleTop:', newStyleTop);
+			// console.log('ok new styleTop:', newStyleTop);
 			
 		} else {
 			if (newStyleTop < rowStepSlots[0]) {
@@ -449,7 +449,7 @@ var BuildsWidget = React.createClass({
 					newStyleTop = rowStepSlots[0];
 					this.draggingRowEl.style.top = newStyleTop + 'px';
 					didSet = true;
-					console.log('ok new styleTop:', newStyleTop);
+					// console.log('ok new styleTop:', newStyleTop);
 				}
 				
 			} else {
@@ -459,7 +459,7 @@ var BuildsWidget = React.createClass({
 					newStyleTop = rowStepSlots[rowStepSlots.length-1];
 					this.draggingRowEl.style.top = newStyleTop + 'px';
 					didSet = true;
-					console.log('ok new styleTop:', newStyleTop);
+					// console.log('ok new styleTop:', newStyleTop);
 				}
 			}
 		}
@@ -467,14 +467,14 @@ var BuildsWidget = React.createClass({
 		// if didSet, do the post didSet checks
 		if (didSet) {
 			// find position this row should be in, based on newStyleTop, check if we need to swap anything in the dom, and do it if needed
-			console.log('these are the slot positions for this row:', rowStepSlots);
+			// console.log('these are the slot positions for this row:', rowStepSlots);
 			for (var i=this.rowSlotsCnt-1; i>=0; i--) { // i is slot number
 				if (newStyleTop >= rowStepSlots[i] - this.rowStepTolerance) {
 					// find what ref currently resides in this spot, and swap
-					console.log('found that this row, should be in slot:', i);
+					// console.log('found that this row, should be in slot:', i);
 					if (this.jsRefToSlot[this.draggingRef] == i) {
 						// already in this position so break
-						console.log('already in position, so no need for swap');
+						// console.log('already in position, so no need for swap');
 						break;
 					}
 					// not in position, so swap is needed
@@ -498,8 +498,78 @@ var BuildsWidget = React.createClass({
 		this.lastDidSet = undefined;
 		// set the dragging ref to be exactly in position
 		this.refs[this.draggingRef].getDOMNode().style.top = this.refs[this.draggingRef].rowStepSlots[this.jsRefToSlot[this.draggingRef]] + 'px'; // instead of setting this.draggingRef to null, then calling this.matchDomTo_jsRefToSlot()
+		
+		// if needs update do this stuff
+		if (this.jsRefToSlot[this.draggingRef] != this.draggingRef.substr(3)) { // testing if row# is a different # - which indicates it needs update
+			var newJProfilistBuilds = [];
+			for (var ref in this.jsRefToSlot) {
+				var indexInJProfilistBuilds = parseInt(ref.substr(3));
+				newJProfilistBuilds.push(this.jProfilistBuilds[indexInJProfilistBuilds]);
+				this.jProfilistBuilds[indexInJProfilistBuilds].tempOrder = this.jsRefToSlot[ref];
+			}
+			
+			newJProfilistBuilds.sort(function(a, b) {
+				return a.tempOrder - b.tempOrder;
+			});
+			
+			for (var i=0; i<newJProfilistBuilds.length; i++) {
+				delete newJProfilistBuilds[i].tempOrder;
+			}
+			console.log('newJProfilistBuilds:', newJProfilistBuilds, 'this.jsRefToSlot:', this.jsRefToSlot);
+			
+			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+			gGenIniEntry.ProfilistBuilds = JSON.stringify(newJProfilistBuilds);
+			
+			setTimeout(MyStore.updateStatedIniObj, 100); //100 is the transition time - cross file link381739311
+		} else {
+			console.log('no need for update');
+		}
+	},
+	componentWillUpdate: function() {
+		console.log('will update');
+		this.refs.widget.getDOMNode().classList.add('builds-row-suppress'); // to avoid the transition when style.top is set back to 0
+	},
+	componentDidUpdate: function() {
+		// set all tops back to 0
+		console.log('did update');
+		for (var ref in this.refs) {
+			if (ref == 'widget') { continue; }
+			this.refs[ref].getDOMNode().style.top = '';
+		}
+		this.refs.widget.getDOMNode().lastChild.style.top = '';
+		delete this.jsRefToSlot;
+		setTimeout(function() {
+			this.refs.widget.getDOMNode().classList.remove('builds-row-suppress');
+		}.bind(this), 0); // for some reason if i dont put this in a setTimeout, then the transitions happen. its like the class doesnt get added. im sure this is due to dom logic happening on same js "thread" run/iteration
 	},
 	dragStart: function(aRowRef, e) {
+		if (!this.jsRefToSlot) {
+			this.jsRefToSlot = {}; // key is ref, and value is the slot position
+			this.rowOffsets = []; // holds the offset tops
+			for (var ref in this.refs) { // each ref is a row element
+				if (ref == 'widget') { continue; }
+				this.rowOffsets.push(this.refs[ref].getDOMNode().offsetTop);
+			}
+			console.error('this.rowOffsets:', this.rowOffsets);
+			this.rowSlotsCnt = this.rowOffsets.length;
+			if (this.rowSlotsCnt > 1) {
+				// calculate relative position, for each row, when in slot X
+				this.rowStepSize = this.rowOffsets[1] - this.rowOffsets[0]; // height of one row basically. stepping by this will put you in next slot.
+				this.rowStepTolerance = Math.ceil(this.rowStepSize / 2);
+				for (var h=0; h<this.rowSlotsCnt; h++) { // h is row number
+					var cRef = 'row' + h;
+					this.jsRefToSlot[cRef] = h;
+					this.refs[cRef].rowStepSlots = []; // holds the top (position relative) postitions it should be at based on position. position is element in the array. so if should be FIRST, then [0] holds the top it that element should have
+					for (var i=0; i<this.rowSlotsCnt; i++) { // i is predicted row number
+						if (i == h) {
+							this.refs[cRef].rowStepSlots.push(0);
+						} else {
+							this.refs[cRef].rowStepSlots.push((i - h) * this.rowStepSize);
+						}
+					}
+				}
+			} // else no drag
+		}
 		if (!this.rowStepSize) { // rowStepSize is not set when there is not more then 1 row. meaning this.rowOffsets.length > 1
 			return false; // no drag
 		}
@@ -516,38 +586,25 @@ var BuildsWidget = React.createClass({
 	},
 	matchDomTo_jsRefToSlot: function() {
 		// this function is only called during dragging
-		for (var ref in this.refs) { // each ref is a row element
+		for (var ref in this.jsRefToSlot) { // each ref is a row element
 			if (ref == this.draggingRef) { // we dont set top on this as user is dragging it
 				continue;
 			}
 			this.refs[ref].getDOMNode().style.top = this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]] + 'px';
-			console.warn('set:', ref, 'to :', this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]]);
+			// console.warn('set:', ref, 'to :', this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]]);
 		}
 	},
 	componentDidMount: function() {
-		this.jsRefToSlot = {}; // key is ref, and value is the slot position
-		this.rowOffsets = []; // holds the offset tops
-		for (var ref in this.refs) { // each ref is a row element
-			this.rowOffsets.push(this.refs[ref].getDOMNode().offsetTop);
-		}
-		this.rowSlotsCnt = this.rowOffsets.length;
-		if (this.rowSlotsCnt > 1) {
-			// calculate relative position, for each row, when in slot X
-			this.rowStepSize = this.rowOffsets[1] - this.rowOffsets[0]; // height of one row basically. stepping by this will put you in next slot.
-			this.rowStepTolerance = Math.ceil(this.rowStepSize / 2);
-			for (var h=0; h<this.rowSlotsCnt; h++) { // h is row number
-				var cRef = 'row' + h;
-				this.jsRefToSlot[cRef] = h;
-				this.refs[cRef].rowStepSlots = []; // holds the top (position relative) postitions it should be at based on position. position is element in the array. so if should be FIRST, then [0] holds the top it that element should have
-				for (var i=0; i<this.rowSlotsCnt; i++) { // i is predicted row number
-					if (i == h) {
-						this.refs[cRef].rowStepSlots.push(0);
-					} else {
-						this.refs[cRef].rowStepSlots.push((i - h) * this.rowStepSize);
-					}
-				}
-			}
-		} // else no drag
+		console.error('mount triggered, document.readyState:', document.readyState);
+		// window.addEventListener('load', function(e) {
+		// 	alert('loaded, e.target: ' + e.target);
+		// }, true);
+		// window.addEventListener('load', function(e) {
+		setTimeout(function() {
+
+		}.bind(this), 50); // it needs some time for a fresh dom (browser restart to load otherwise the offsetTop's are a bit weird)
+		// }.bind(this), true); // must be true, didnt test false, but on document.add to load it needed to be true // i think this is because i need to wait for the stylesheet to load or something, otherwise the offsets are too spaced apart
+		// using settimeout method instead, because sometimes page loads so fast, it doesnt get to this mount function before load
 	},
 	render: function render() {
 		// props
@@ -562,13 +619,15 @@ var BuildsWidget = React.createClass({
 
 		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
 		var jProfilistBuilds = JSON.parse(keyValBuilds);
+		this.jProfilistBuilds = jProfilistBuilds;
+		console.error('jProfilistBuilds:', jProfilistBuilds);
 		for (var i=0; i<jProfilistBuilds.length; i++) {
 			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + i, dragStart:this.dragStart.bind(this, 'row' + i)}));
 		}
 		
 		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry}));
 		
-		return React.createElement('div', {className:'builds-widget', onClick:this.click},
+		return React.createElement('div', {className:'builds-widget', onClick:this.click, ref:'widget'},
 			children
 		);
 	}
