@@ -257,7 +257,7 @@ div.builds-widget-row {
 	position: relative;
 	top: 0;
 }
-.builds-widget:not(.builds-row-suppress) .builds-widget-row:not(.builds-row-indrag) {
+.builds-widget.builds-widget-indrag .builds-widget-row:not(.builds-row-indrag) {
 	transition: top 100ms linear; /* cross file link381739311*/
 }
 /* end - builds_widget_row */

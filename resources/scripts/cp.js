@@ -498,7 +498,7 @@ var BuildsWidget = React.createClass({
 		this.lastDidSet = undefined;
 		// set the dragging ref to be exactly in position
 		this.refs[this.draggingRef].getDOMNode().style.top = this.refs[this.draggingRef].rowStepSlots[this.jsRefToSlot[this.draggingRef]] + 'px'; // instead of setting this.draggingRef to null, then calling this.matchDomTo_jsRefToSlot()
-		
+
 		// if needs update do this stuff
 		if (this.jsRefToSlot[this.draggingRef] != this.draggingRef.substr(3)) { // testing if row# is a different # - which indicates it needs update
 			var newJProfilistBuilds = [];
@@ -520,14 +520,16 @@ var BuildsWidget = React.createClass({
 			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 			gGenIniEntry.ProfilistBuilds = JSON.stringify(newJProfilistBuilds);
 			
-			setTimeout(MyStore.updateStatedIniObj, 100); //100 is the transition time - cross file link381739311
+			setTimeout(function() {
+				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
+				MyStore.updateStatedIniObj();
+			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		} else {
 			console.log('no need for update');
+			setTimeout(function() {
+				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
+			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		}
-	},
-	componentWillUpdate: function() {
-		console.log('will update');
-		this.refs.widget.getDOMNode().classList.add('builds-row-suppress'); // to avoid the transition when style.top is set back to 0
 	},
 	componentDidUpdate: function() {
 		// set all tops back to 0
@@ -538,9 +540,6 @@ var BuildsWidget = React.createClass({
 		}
 		this.refs.widget.getDOMNode().lastChild.style.top = '';
 		delete this.jsRefToSlot;
-		setTimeout(function() {
-			this.refs.widget.getDOMNode().classList.remove('builds-row-suppress');
-		}.bind(this), 0); // for some reason if i dont put this in a setTimeout, then the transitions happen. its like the class doesnt get added. im sure this is due to dom logic happening on same js "thread" run/iteration
 	},
 	dragStart: function(aRowRef, e) {
 		if (!this.jsRefToSlot) {
@@ -573,6 +572,7 @@ var BuildsWidget = React.createClass({
 		if (!this.rowStepSize) { // rowStepSize is not set when there is not more then 1 row. meaning this.rowOffsets.length > 1
 			return false; // no drag
 		}
+		this.refs.widget.classList.add('builds-widget-indrag');
 		this.draggingRef = aRowRef;
 		this.draggingRowEl = this.refs[aRowRef].getDOMNode();
 		console.log('drag started', e);
