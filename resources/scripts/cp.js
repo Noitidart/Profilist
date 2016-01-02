@@ -312,14 +312,23 @@ var Row = React.createClass({
     displayName: 'Row',
 	onChange: function(e) {
 		// only attached if the element has a key in gRowInfo
-		gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
-		gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
+		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 		
 		// alert(e.target.value);
 		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, e.target.value);
 		
 		console.log('ok gIniObj updated');
 		
+		MyStore.onComponentChange(gIniObj);
+	},
+	toggleSpecificness: function() {
+		var curSpecificness = getSpecificnessForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
+		var curKeyVal = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
+		
+		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
+		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, curKeyVal, curSpecificness == 2 ? 1 : 2, gIniObj);
 		MyStore.onComponentChange(gIniObj);
 	},
 	render: function render() {
@@ -380,7 +389,12 @@ var Row = React.createClass({
 			console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
 			if (!gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly && !gKeyInfoStore[this.props.gRowInfo.key].specificOnly) {
 				// alert('this one can be toggled:' + this.props.gRowInfo.key);
-				specificnessEl = React.createElement('span', {className:'fontello-icon icon-specificness-toggler'});
+				var togglerClassName = 'fontello-icon icon-specificness-toggler';
+				if (getSpecificnessForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key) === 1) {
+					// is specific
+					togglerClassName += ' is-specific';
+				} // else { // == 2 so its unspecific }
+				specificnessEl = React.createElement('span', {className:togglerClassName, onClick:this.toggleSpecificness});
 			} else {
 				// add in modded desc
 				specificnessDesc = '\n\n';
@@ -821,16 +835,50 @@ function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
 	return null;
 }
 
-function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewVal, aNewSpecifincess_optional) {
-	// aNewSpecifincess_optional is optional arg, if not supplied specificness is unchanged
-	// aIniEntry and aGenIniEntry must be PASSED BY REFERENCE to the ini obj you want to set in
+function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
+	// only for use on non-ONLY values. meaning if key is specificOnly or unspecificOnly it fails, no need to use this function to determine that
+	// RETURNS
+		// 1 for specific
+		// 2 for unspecific
+		
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	if (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly) { console.error('DEV_ERROR - aKeyName is ONLY-like, aKeyName:', aKeyName, 'see gKeyInfoStore entry it is either unspecificOnly or specificOnly, dont use this function to determine that:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR'); }
+	
+	// :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific. because of this its important to clear out genearl when going to specific. link757483833
+	if (!(aKeyName in aGenIniEntry) && !(aKeyName in aIniEntry)) {
+		// use defaultSpecificness
+		if (!gKeyInfoStore[aKeyName].defaultSpecificness) {
+			// its unspecific
+			return 2;
+		} else {
+			// its specific
+			return 1;
+		}
+	} else {
+		if (aKeyName in aGenIniEntry) {
+			// it is unspecific
+			return 2;
+		} else if (aKeyName in aIniEntry) {
+			// it is specific
+			return 1;
+		}
+		console.error('DEV_ERROR - should never ever get here');
+		throw new Error('DEV_ERROR - should never ever get here');
+	}
+	
+}
+
+function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewVal, aNewSpecifincess_optional, aIniObj_neededWhenTogglignSpecificness) {
+	// aNewSpecifincess_optional is optional arg, if not supplied specificness is unchanged. it must be 2 for unspecific or 1 for specific
+	// aIniEntry and aGenIniEntry must be PASSED BY REFERENCE to the ini obj you want to set in // im thinking it HAS to be gIniObj, so far thats all im doing and it makes sense as i then setState to JSON.parse(JSON.stringify(gIniObj)
 	
 	// RETURNS
 	//	undefined
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
 	
-	if (aNewSpecifincess_optional !== undefined && (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly)) { console.error('DEV_ERROR - aKeyName is unspecific ONLY or specific ONLY, therefore you cannot pass a aNewSpecifincess_optional, aNewSpecifincess_optional:', aNewSpecifincess_optional, 'gKeyInfoStore[aKeyName]:', gKeyInfoStore[aKeyName]); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	if (aNewSpecifincess_optional !== undefined && (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly)) { console.error('DEV_ERROR - aKeyName is unspecific ONLY or specific ONLY, therefore you cannot pass a aNewSpecifincess_optional, aNewSpecifincess_optional:', aNewSpecifincess_optional, 'gKeyInfoStore[aKeyName]:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
 	
 	// LOGIC
 	// if gKeyInfoStore[aKeyName].unspecificOnly
@@ -852,15 +900,37 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 		console.log('set specificOnly', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
 	} else {
 		// figure out specificness
-		// :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific
-		if (aKeyName in aGenIniEntry) {
+		var specificness;
+		if (aNewSpecifincess_optional !== undefined) {
+			if (aNewSpecifincess_optional !== 1 && aNewSpecifincess_optional !== 2) { console.error('DEV_ERROR - aNewSpecifincess_optional must be 1 or 2! you set it to:', aNewSpecifincess_optional); throw new Error('DEV_ERROR'); }
+			// assume that its changing, SO 1)if going to specific, then clear out the general 2)if going to general, then clear out specific, but clearing out specific is not so important per link757483833
+			specificness = aNewSpecifincess_optional;
+		} else {
+			specificness = getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName);
+		}
+		if (specificness == 2) {
 			// it is unspecific
+			if (aNewSpecifincess_optional !== undefined) {
+				// because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
+				// if going to unspecific, then clearing out the specific values is not important, but its good practice per link757483833
+				if (!aIniObj_neededWhenTogglignSpecificness) { console.error('DEV_ERROR, as toggling away from specific, meaning going to unspecific, i need the aIniObj so i can clear out the specific values for good practice, you as a dev did not provide this aIniObj!'); throw new Error('DEV_ERROR'); }
+				for (var p in aIniObj_neededWhenTogglignSpecificness) {
+					if (aIniObj_neededWhenTogglignSpecificness[p].Path) {
+						delete aIniObj_neededWhenTogglignSpecificness[p][aKeyName]
+					}
+				}
+			}
 			aGenIniEntry[aKeyName] = aNewVal;
-		console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+			console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
 		} else {
 			// it is specific
+			if (aNewSpecifincess_optional !== undefined) {
+				// because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
+				// if going to specific, then clear out the general this is :note: :important: link757483833
+				delete aGenIniEntry[aKeyName];
+			}
 			aIniEntry[aKeyName] = aNewVal;
-		console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+			console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
 		}
 	}
 }	
@@ -870,7 +940,7 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	//	string value if aKeyName found OR not found but has defaultValue
 	//	null if no entry found for aKeyName AND no defaultValue
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
 	
 	if (gKeyInfoStore[aKeyName].unspecificOnly) {
 		// get profile-unspecific value else null

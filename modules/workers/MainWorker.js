@@ -137,7 +137,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	ProfilistDev: {				// developer mode on/off
 		pref: true,				// i dont really need this key, i can detect if its pref by testing if it has any of the "this key only for prefs"
 		specificOnly: false,	// means, it cannot be set across all profiles // this key only for prefs
-		defaultSpecific: false,	// means by default it affects all profiles (its unspecific) // this key only for prefs // this key only for prefs with specificOnly:false
+		defaultSpecificness: false,	// means by default it affects all profiles (its unspecific) // this key only for prefs // this key only for prefs with specificOnly:false
 		defaultValue: '0',		// this key only for prefs // if value not found in profile group, or general group. then this value is used. // if value found in general, but specific is set to true by user, then use the value from general. // if value found in profile, and specific is set to false by user, then set general value, and delete the one from profile group
 		possibleValues: [
 			'0',				// devmode off
@@ -147,7 +147,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	ProfilistSort: {			// the order in which to show the other-profiles in the profilist menu.
 		pref: true,
 		specificOnly: false,
-		defaultSpecific: false,
+		defaultSpecificness: false,
 		defaultValue: '0',
 		possibleValues: [		// link83737383
 			'0',				// by create order ASC
@@ -159,7 +159,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	ProfilistNotif: {			// whether or not to show notifications
 		pref: true,
 		specificOnly: false,
-		defaultSpecific: false,
+		defaultSpecificness: false,
 		defaultValue: '1',
 		possibleValues: [
 			'0',				// dont show
@@ -169,7 +169,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	ProfilistLaunch: {			// whether on user click "create new profile" if should launch right away using default naming scheme for Path and Name
 		pref: true,
 		specificOnly: false,
-		defaultSpecific: false,
+		defaultSpecificness: false,
 		defaultValue: '1',
 		possibleValues: [
 			'0',				// dont launch right away, allow user to type a path, then hit enter (just create dont launch), alt+enter (create with this name then launch) // if user types a system path, then it is created as IsRelative=0
