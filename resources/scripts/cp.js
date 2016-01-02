@@ -37,6 +37,7 @@ var gCFMM; // needed for contentMMFromContentWindow_Method2
 var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'cp.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 
+// Start - DOM Event Attachments
 function doOnBeforeUnload() {
 
 	contentMMFromContentWindow_Method2(window).removeMessageListener(core.addon.id, bootstrapMsgListener);
@@ -51,9 +52,39 @@ function doOnContentLoad() {
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
 window.addEventListener('beforeunload', doOnBeforeUnload, false);
 
+// :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
+function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
+	if (!isFocused(window)) {
+		attachFocusListener();
+	}
+}
+
+function attachFocusListener() {
+	// :note: i dont know why im removing focus on blur, but thats how i did it in nativeshot, it must avoid some redundancy
+	window.addEventListener('focus', doOnFocus, false);
+}
+
+function detachFocusListener() {
+	window.removeEventListener('focus', doOnFocus, false);
+}
+
+function doOnFocus() {
+	detachFocusListener();
+	// fetch prefs from bootstrap, and update dom
+	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchJustIniObj'], bootstrapMsgListener.funcScope, function(aIniObj) {
+		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
+		// alert('ok got new ini obj, will now set global nad update react component');
+		gIniObj = aIniObj;
+		
+		MyStore.setState({
+			sIniObj: gIniObj
+		})
+	});
+}
+
 // End - DOM Event Attachments
 // Start - Page Functionalities
-function initPage(isReInit) {
+function initPage() {
 	// if isReInit then it will skip some stuff
 	
 	console.log('in init');
@@ -66,6 +97,9 @@ function initPage(isReInit) {
 		gKeyInfoStore = aObjs.aKeyInfoStore;
 		
 		initReactComponent();
+		
+		window.addEventListener('blur', attachFocusListener, false); // link147928272
+		ifNotFocusedDoOnBlur();
 	});
 
 }
@@ -86,23 +120,23 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 	{
 		section: myServices.sb.GetStringFromName('profilist.cp.general'),
 		rows: [
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.updates'),
-				id: 'updates',
-				type: 'select',
-				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.off'),
-					1: myServices.sb.GetStringFromName('profilist.cp.on')
-				}
-			},
+			// {
+			// 	label: myServices.sb.GetStringFromName('profilist.cp.updates'),
+			// 	id: 'updates',
+			// 	type: 'select',
+			// 	values: {
+			// 		0: myServices.sb.GetStringFromName('profilist.cp.off'),
+			// 		1: myServices.sb.GetStringFromName('profilist.cp.on')
+			// 	}
+			// },
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.notif'),
 				desc: myServices.sb.GetStringFromName('profilist.cp.notif-desc'),
 				type: 'select',
 				key: 'ProfilistNotif',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'), // :note: '0' because i match it to getPrefLikeValForKeyInIniEntry which returns strings only as i store strings only, as this reads from the stuff in inientry that is not in noWriteObj
+					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
 				}
 			},
 			{
@@ -111,8 +145,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistLaunch',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.enabled'),
+					'1': myServices.sb.GetStringFromName('profilist.cp.disabled')
 				}
 			},
 			{
@@ -121,12 +155,12 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistSort',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.created'),
-					2: myServices.sb.GetStringFromName('profilist.cp.alphanum'),
-					// 0: myServices.sb.GetStringFromName('profilist.cp.created-asc'),
-					// 1: myServices.sb.GetStringFromName('profilist.cp.created-desc'),
-					// 2: myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
-					// 3: myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
+					'0': myServices.sb.GetStringFromName('profilist.cp.created'),
+					'2': myServices.sb.GetStringFromName('profilist.cp.alphanum'),
+					// '0': myServices.sb.GetStringFromName('profilist.cp.created-asc'),
+					// '1': myServices.sb.GetStringFromName('profilist.cp.created-desc'),
+					// '2': myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
+					// '3': myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
 				}
 			},
 			{
@@ -135,8 +169,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistDev',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.enabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
 				}
 			}
 		]
@@ -160,8 +194,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistTemp',
 				values: {
-					0: myServices.sb.GetStringFromName('profilist.cp.enabled'),
-					1: myServices.sb.GetStringFromName('profilist.cp.disabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.enabled'),
+					'1': myServices.sb.GetStringFromName('profilist.cp.disabled')
 				}
 			},
 			{
@@ -182,11 +216,32 @@ var ControlPanel = React.createClass({
 			sIniObj: []
 		};
 	},
+	onComponentChange: function(aNewIniObj, aDelaySetState) {
+		// aNewIniObj should always be reference to gIniObj. meaning on change i should always update gIniObj. i want to keep gIniObj synced with sIniObj
+		// send update to MainWorker.js to write sIniObj to file
+		// onChange of each row, should call this
+		
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['userManipulatedIniObj_updateIniFile', JSON.stringify(aNewIniObj)], bootstrapMsgListener.funcScope, function() {
+			console.log('userManipulatedIniObj_updateIniFile completed');
+		});
+		
+		if (aDelaySetState) {
+			setTimeout(function() {
+				this.setState({
+					sIniObj: aNewIniObj // this should always be gIniObj
+				});
+			}.bind(this), aDelaySetState);
+		} else {
+			this.setState({
+				sIniObj: aNewIniObj // this should always be gIniObj
+			});
+		}
+		
+	},
 	componentDidMount: function() {
 		MyStore.updateStatedIniObj = this.updateStatedIniObj; // no need for bind here else React warns "Warning: bind(): You are binding a component method to the component. React does this for you automatically in a high-performance way, so you can safely remove this call. See Menu"
 		MyStore.setState = this.setState.bind(this); // need bind here otherwise it doesnt work
-		
-		document.addEventListener('keypress', this.onKeyPress, false);
+		MyStore.onComponentChange = this.onComponentChange;
 	},
 	updateStatedIniObj: function() {
 		this.setState({
@@ -255,6 +310,18 @@ var Section = React.createClass({
 });
 var Row = React.createClass({
     displayName: 'Row',
+	onChange: function(e) {
+		// only attached if the element has a key in gRowInfo
+		gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
+		gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		
+		// alert(e.target.value);
+		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, e.target.value);
+		
+		console.log('ok gIniObj updated');
+		
+		MyStore.onComponentChange(gIniObj);
+	},
 	render: function render() {
 		// props - none
 		//	gRowInfo
@@ -380,9 +447,16 @@ var Row = React.createClass({
 							);
 						}
 					}
+					var aSelectProps = {};
+					if (this.props.gRowInfo.key) {
+						console.log('fetching pref val for key:', this.props.gRowInfo.key);
+						aSelectProps.value = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
+					
+						aSelectProps.onChange = this.onChange;
+					}
 					children.push(React.createElement('div', {},
 						!specificnessEl ? undefined : specificnessEl,
-						React.createElement('select', {},
+						React.createElement('select', aSelectProps,
 							options
 						)
 					));
@@ -520,10 +594,12 @@ var BuildsWidget = React.createClass({
 			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 			gGenIniEntry.ProfilistBuilds = JSON.stringify(newJProfilistBuilds);
 			
+			MyStore.onComponentChange(gIniObj, 100); // tell it before the 100ms is up but use 100ms delay before setState // cross file link381739311
+			
 			this.dragDropTimout = setTimeout(function() {
 				delete this.dragDropTimout;
 				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
-				MyStore.updateStatedIniObj();
+				// MyStore.updateStatedIniObj();
 			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		} else {
 			console.log('no need for update');
@@ -600,18 +676,18 @@ var BuildsWidget = React.createClass({
 			// console.warn('set:', ref, 'to :', this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]]);
 		}
 	},
-	componentDidMount: function() {
-		console.error('mount triggered, document.readyState:', document.readyState);
-		// window.addEventListener('load', function(e) {
-		// 	alert('loaded, e.target: ' + e.target);
-		// }, true);
-		// window.addEventListener('load', function(e) {
-		setTimeout(function() {
-
-		}.bind(this), 50); // it needs some time for a fresh dom (browser restart to load otherwise the offsetTop's are a bit weird)
-		// }.bind(this), true); // must be true, didnt test false, but on document.add to load it needed to be true // i think this is because i need to wait for the stylesheet to load or something, otherwise the offsets are too spaced apart
-		// using settimeout method instead, because sometimes page loads so fast, it doesnt get to this mount function before load
-	},
+	// componentDidMount: function() {
+	// 	console.error('mount triggered, document.readyState:', document.readyState);
+	// 	// window.addEventListener('load', function(e) {
+	// 	// 	alert('loaded, e.target: ' + e.target);
+	// 	// }, true);
+	// 	// window.addEventListener('load', function(e) {
+	// 	setTimeout(function() {
+    // 
+	// 	}.bind(this), 50); // it needs some time for a fresh dom (browser restart to load otherwise the offsetTop's are a bit weird)
+	// 	// }.bind(this), true); // must be true, didnt test false, but on document.add to load it needed to be true // i think this is because i need to wait for the stylesheet to load or something, otherwise the offsets are too spaced apart
+	// 	// using settimeout method instead, because sometimes page loads so fast, it doesnt get to this mount function before load
+	// },
 	render: function render() {
 		// props
 		//	sIniObj
@@ -744,6 +820,50 @@ function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
 	
 	return null;
 }
+
+function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewVal, aNewSpecifincess_optional) {
+	// aNewSpecifincess_optional is optional arg, if not supplied specificness is unchanged
+	// aIniEntry and aGenIniEntry must be PASSED BY REFERENCE to the ini obj you want to set in
+	
+	// RETURNS
+	//	undefined
+	
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	if (aNewSpecifincess_optional !== undefined && (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly)) { console.error('DEV_ERROR - aKeyName is unspecific ONLY or specific ONLY, therefore you cannot pass a aNewSpecifincess_optional, aNewSpecifincess_optional:', aNewSpecifincess_optional, 'gKeyInfoStore[aKeyName]:', gKeyInfoStore[aKeyName]); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	// LOGIC
+	// if gKeyInfoStore[aKeyName].unspecificOnly
+		// set in aGenIniEntry
+	// else if gKeyInfoStore[aKeyName].specificOnly
+		// set in aIniEntry
+	// else
+		// macro: figure out specificness from aIniEntry and aGenIniEntry - if key exists in aGenIniEntry then it is unspecific
+		// if macroIsSpecific
+			// set in aIniEntry
+		// else
+			// set in aGenIniEntry
+		
+	if (gKeyInfoStore[aKeyName].unspecificOnly) {
+		aGenIniEntry[aKeyName] = aNewVal;
+		console.log('set unspecificOnly', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+	} else if (gKeyInfoStore[aKeyName].specificOnly) {
+		aIniEntry[aKeyName] = aNewVal;
+		console.log('set specificOnly', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+	} else {
+		// figure out specificness
+		// :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific
+		if (aKeyName in aGenIniEntry) {
+			// it is unspecific
+			aGenIniEntry[aKeyName] = aNewVal;
+		console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+		} else {
+			// it is specific
+			aIniEntry[aKeyName] = aNewVal;
+		console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+		}
+	}
+}	
 
 function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	// RETURNS
@@ -960,5 +1080,18 @@ function compareAlphaNumeric(a, b) {
     } else {
         return aA > bA ? 1 : -1;
     }
+}
+function isFocused(window) {
+    let childTargetWindow = {};
+    Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
+    childTargetWindow = childTargetWindow.value;
+
+    let focusedChildWindow = {};
+    if (Services.focus.activeWindow) {
+        Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
+        focusedChildWindow = focusedChildWindow.value;
+    }
+
+    return (focusedChildWindow === childTargetWindow);
 }
 // end - common helper functions

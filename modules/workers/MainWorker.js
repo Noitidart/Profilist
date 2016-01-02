@@ -148,12 +148,12 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		pref: true,
 		specificOnly: false,
 		defaultSpecific: false,
-		defaultValue: '2',
+		defaultValue: '0',
 		possibleValues: [		// link83737383
 			'0',				// by create order ASC
-			'1',				// by create order DESC
+			// '1',				// by create order DESC
 			'2',				// by alpha-numeric-insensitive ASC
-			'3'					// by alpha-numeric-insensitive DESC
+			// '3'					// by alpha-numeric-insensitive DESC
 		]
 	},
 	ProfilistNotif: {			// whether or not to show notifications
@@ -427,6 +427,18 @@ function fetchAll() {
 		aKeyInfoStore: gKeyInfoStore,
 		aCore: core
 	};
+}
+
+function fetchJustIniObj() {
+	// returns gIniObj
+	
+	return gIniObj;
+}
+
+function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
+	gIniObj = JSON.parse(aNewIniObjStr);
+	console.log('ok written');
+	return 'ok written';
 }
 
 // start - profilist helper functions FOR WORKER ONLY

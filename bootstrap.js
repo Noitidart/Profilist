@@ -255,6 +255,38 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_fetchConfigObjs.promise;
+	},
+	fetchJustIniObj: function() {
+		// just gets gIniObj
+		var deferredMain_fetchJustIniObj = new Deferred();
+		
+		var promise_fetch = MainWorker.post('fetchJustIniObj');
+		promise_fetch.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_fetch - ', aVal);
+				// start - do stuff here - promise_fetch
+				deferredMain_fetchJustIniObj.resolve([aVal]);
+				// end - do stuff here - promise_fetch
+			}
+		);
+		
+		return deferredMain_fetchJustIniObj.promise;
+	},
+	userManipulatedIniObj_updateIniFile: function(aNewIniObjStr) {
+		var deferredMain_userManipulatedIniObj_updateIniFile = new Deferred();
+		console.log('telling mainworker userManipulatedIniObj_updateIniFile');
+		
+		var promise_updateini = MainWorker.post('userManipulatedIniObj_updateIniFile', [aNewIniObjStr]);
+		promise_updateini.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_updateini - ', aVal);
+				// start - do stuff here - promise_updateini
+				deferredMain_userManipulatedIniObj_updateIniFile.resolve([aVal]);
+				// end - do stuff here - promise_updateini
+			}
+		);
+		
+		return deferredMain_userManipulatedIniObj_updateIniFile.promise;
 	}
 };
 var fsMsgListener = {
