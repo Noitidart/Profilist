@@ -192,7 +192,6 @@ select {
 	content: "\e800";
 	font-size: 16px;
 	transition: color 200ms;
-	color: #000;
 }
 .fontello-icon.icon-info::before {
 	content: "\e805";
@@ -202,7 +201,7 @@ select {
 .fontello-icon.icon-specificness-toggler::before {
 	content: "\e808";
 	margin: 0 5px;
-	opacity: 0.3;
+	opacity: 0.25;
 	transition: opacity 200ms, color 200ms;
 }
 .fontello-icon.icon-tools::before {
@@ -226,15 +225,14 @@ select {
 	color: #0874E0;
 }
 .fontello-icon.icon-specificness-toggler:hover::before {
-	opacity: .5;
+	opacity: .45;
 }
 /* state:isspecific */
 .fontello-icon.icon-specificness-toggler.is-specific:hover::before {
-	opacity: .6;
+	opacity: .65;
 }
 .fontello-icon.icon-specificness-toggler.is-specific::before {
 	opacity: 1;
-	color: #333;
 }
 /* end - fontello_icons */
 

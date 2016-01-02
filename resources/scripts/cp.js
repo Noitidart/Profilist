@@ -221,21 +221,27 @@ var ControlPanel = React.createClass({
 		// send update to MainWorker.js to write sIniObj to file
 		// onChange of each row, should call this
 		
-		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['userManipulatedIniObj_updateIniFile', JSON.stringify(aNewIniObj)], bootstrapMsgListener.funcScope, function() {
+		// var fetchTimeSt = Date.now();
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['userManipulatedIniObj_updateIniFile', JSON.stringify(aNewIniObj)], bootstrapMsgListener.funcScope, function(aNewlyFormattedIniObj) {
 			console.log('userManipulatedIniObj_updateIniFile completed');
-		});
-		
-		if (aDelaySetState) {
-			setTimeout(function() {
+			
+			gIniObj = JSON.parse(aNewlyFormattedIniObj);
+			
+			if (aDelaySetState) {
+				// :todo: from aDelaySetState remove the time it took to get back here
+				// var fetchTimeTotal = Date.now() - fetchTimeSt;
+				// console.info('will wait a modified time of:', aDelaySetState - fetchTimeTotal, 'as it took fetchTimeTotal of:', fetchTimeTotal);
+				setTimeout(function() {
+					this.setState({
+						sIniObj: JSON.parse(aNewlyFormattedIniObj) // this should always be gIniObj
+					});
+				}.bind(this), aDelaySetState);
+			} else {
 				this.setState({
-					sIniObj: aNewIniObj // this should always be gIniObj
+					sIniObj: JSON.parse(aNewlyFormattedIniObj) // this should always be gIniObj
 				});
-			}.bind(this), aDelaySetState);
-		} else {
-			this.setState({
-				sIniObj: aNewIniObj // this should always be gIniObj
-			});
-		}
+			}
+		}.bind(this));
 		
 	},
 	componentDidMount: function() {
@@ -386,7 +392,7 @@ var Row = React.createClass({
 		var specificnessDesc;
 		var specificnessEl;
 		if (this.props.gRowInfo.key) { //only things with key are in ini. and only things in ini can have specificity
-			console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
+			// console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
 			if (!gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly && !gKeyInfoStore[this.props.gRowInfo.key].specificOnly) {
 				// alert('this one can be toggled:' + this.props.gRowInfo.key);
 				var togglerClassName = 'fontello-icon icon-specificness-toggler';
@@ -463,7 +469,7 @@ var Row = React.createClass({
 					}
 					var aSelectProps = {};
 					if (this.props.gRowInfo.key) {
-						console.log('fetching pref val for key:', this.props.gRowInfo.key);
+						// console.log('fetching pref val for key:', this.props.gRowInfo.key);
 						aSelectProps.value = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
 					
 						aSelectProps.onChange = this.onChange;

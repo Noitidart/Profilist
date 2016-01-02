@@ -278,10 +278,10 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		
 		var promise_updateini = MainWorker.post('userManipulatedIniObj_updateIniFile', [aNewIniObjStr]);
 		promise_updateini.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_updateini - ', aVal);
+			function(aNewlyFormattedIniObj) {
+				console.log('Fullfilled - promise_updateini - ', aNewlyFormattedIniObj);
 				// start - do stuff here - promise_updateini
-				deferredMain_userManipulatedIniObj_updateIniFile.resolve([aVal]);
+				deferredMain_userManipulatedIniObj_updateIniFile.resolve([aNewlyFormattedIniObj]);
 				// end - do stuff here - promise_updateini
 			}
 		);

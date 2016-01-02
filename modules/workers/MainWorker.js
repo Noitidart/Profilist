@@ -286,7 +286,19 @@ function readIni() {
 	console.timeEnd('parse_gIniObj');
 	console.log('gIniObj:', gIniObj);
 	
+	formatNoWriteObjs();
+}
+
+function formatNoWriteObjs() {
+	// delets the noWriteObj in each entry, then populates it
+	// works on gIniObj
+	
+	// also triggers writeIni in cases where it is needed, does so in these instances:
+	//	* if the curProf_iniEntry is not touched
+	//	* 
+	
 	// format gIniObj - :note: :important: all values must be strings, UNLESS in noWriteObj
+	// format means to go through and set noWriteObj in the gIniObj appropariately. appropariately means based on the prefs it will set stuff
 	// for testing if currentProfile
 	var curProf_iniEntry;
 	var osFilePathSeperator = OS.Path.join(' ', ' ').replace(/ /g, '');
@@ -367,8 +379,12 @@ function readIni() {
 	
 	// set gJProfilistBuilds
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-	gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
+	if (!this.debuggedProfilistBuilds) { // :debug:
+		gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
+		this.debuggedProfilistBuilds = true; // :debug:
+	} // :debug:
 	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
+	console.error('gJProfilistDev:', gJProfilistDev);
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff
 	if (gJProfilistDev) {
@@ -437,8 +453,9 @@ function fetchJustIniObj() {
 
 function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 	gIniObj = JSON.parse(aNewIniObjStr);
-	console.log('ok written');
-	return 'ok written';
+	formatNoWriteObjs();
+	
+	return JSON.stringify(gIniObj);
 }
 
 // start - profilist helper functions FOR WORKER ONLY
@@ -634,7 +651,7 @@ function getRelativeDescriptor(ofOsPath, fromOsPath) {
 		// so now is: ```getRelativeDescriptor(OS.Constants.Path.profileDir, OS.Constants.Path.userApplicationDataDir)```
 	
 	var osFilePathSeperator = OS.Path.join(' ', ' ').replace(/ /g, '');
-	console.error('osFilePathSeperator:', osFilePathSeperator);
+	// console.error('osFilePathSeperator:', osFilePathSeperator);
 	
 	var pattGlobalFileSperator = new RegExp(escapeRegExp(osFilePathSeperator), 'g');
 	
