@@ -562,8 +562,14 @@ var Menu = React.createClass({
 		if (cClassList.length) {
 			cClassList = cClassList.join(' ');
 		}
+		if (this.state.sIniObj.length > 0) {
+			// give the container the data-state open attribute
+			document.getElementById('profilist_menu_container').setAttribute('data-state', 'open');
+		} else {
+			document.getElementById('profilist_menu_container').removeAttribute('data-state');
+		}
         return React.createElement(
-            'div', {id: 'profilist_menu', className:cClassList},
+            'div', {id: 'profilist_menu', className:cClassList, 'data-state': (this.state.sIniObj.length == 0 ? undefined : 'open') },
 				list
         );
     }
