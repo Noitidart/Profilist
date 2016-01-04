@@ -111,6 +111,14 @@ function AboutFactory(component) {
 }
 // end - about module
 
+// Start - Launching profile and other profile functionality
+function createIcon(aCallback) {
+	if (aCallback) {
+		aCallback();
+	}
+}
+// End - Launching profile and other profile functionality
+
 function testReact() {
 	RC.Timer = React.createClass({
 		displayName: 'Timer',
@@ -154,6 +162,20 @@ function testReact() {
 	ReactDOM.render(RE.timerA, myhbo);
 };
 
+function setupMainWorkerCustomErrors() {
+	// Define a custom error prototype.
+	function MainWorkerError(name, msg) {
+		this.msg = msg;
+		this.name = name;
+	}
+	MainWorkerError.fromMsg = function(aErrParams) {
+		return new MainWorkerError(aErrParams.name, aErrParams.msg);
+	};
+
+	// Register a constructor.
+	MainWorker.ExceptionHandlers['MainWorkerError'] = MainWorkerError.fromMsg;
+}
+
 function install() {}
 
 function uninstall(aData, aReason) {
@@ -196,6 +218,7 @@ function startup(aData, aReason) {
 		function(aVal) {
 			console.log('Fullfilled - promise_initMainWorker - ', aVal);
 			// start - do stuff here - promise_initMainWorker
+			setupMainWorkerCustomErrors();
 			afterWorker();
 			// end - do stuff here - promise_initMainWorker
 		},
@@ -287,6 +310,35 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_userManipulatedIniObj_updateIniFile.promise;
+	},
+	launchProfStep1: function(aProfPath) {
+		// check if need to make icon, if so then makes it
+		var promise_shouldCreateIcon = MainWorker.post('shouldCreateIcon', [aProfPath]);
+		promise_shouldCreateIcon.then(
+			function(aBoolNeedToCreateIcon) {
+				console.log('Fullfilled - promise_shouldCreateIcon - ', aBoolNeedToCreateIcon);
+				if (aBoolNeedToCreateIcon) {
+					// call createIcon, with callback of ```fsFuncs.launchProfStep2(aProfPath)```
+					createIcon(function() {
+						fsFuncs.launchProfStep2(aProfPath);
+					});
+				} else {
+					fsFuncs.launchProfStep2(aProfPath);
+				}
+			},
+			genericReject.bind(null, 'promise_shouldCreateIcon', 0)
+		).catch(genericReject.bind(null, 'promise_shouldCreateIcon', 0));
+	},
+	launchProfStep2: function(aProfPath) {
+		// launch profile - this will create launcher if it doesnt exist already
+		var promise_launch = MainWorker.post('launchProfile', [aProfPath]);
+		promise_launch.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_launch - ', aVal);
+				
+			},
+			genericReject.bind(null, 'promise_launch', 0)
+		).catch(genericReject.bind(null, 'promise_launch', 0));
 	}
 };
 var fsMsgListener = {
@@ -618,5 +670,25 @@ function extendCore() {
 	}
 	
 
+}
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
 }
 // end - common helper functions

@@ -53,16 +53,16 @@ worker.log = function(...args) {
 self.addEventListener('message', msg => worker.handleMessage(msg));
 
 // Define a custom error prototype.
-function MainWorkerError(msgObj) {
-  this.message = msgObj.message;
-  this.name = msgObj.name;
+function MainWorkerError(name, msg) {
+  this.msg = msg;
+  this.name = name;
 }
 MainWorkerError.prototype.toMsg = function() {
-  return {
-    exn: 'MainWorkerError',
-    message: this.message,
-	name: this.name
-  };
+	return {
+		exn: 'MainWorkerError',
+		msg: this.msg,
+		name: this.name
+	};
 };
 
 ////// end of imports and definitions
@@ -77,7 +77,7 @@ function init(objCore) { // function name init required for SIPWorker
 
 	core.profilist.path.root = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data');
 	core.profilist.path.icons = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons');
-	core.profilist.path.images = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons');
+	core.profilist.path.images = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons'); // :note: this directory should hold all the original sizes provided by the user
 	core.profilist.path.exes = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'exes');
 	core.profilist.path.ini = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 	core.profilist.path.inibkp = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'profiles.ini.bkp');
@@ -391,7 +391,7 @@ function formatNoWriteObjs() {
 		// set gJProfilistBuilds
 		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistBuilds'));
 		
-		// start - for all that are running set exePath
+		// start - for all that are running set exePath :todo:
 		curProf_iniEntry.noWriteObj.exePath = core.profilist.path.XREExeF;
 		// end - for all that are running set exePath
 		
@@ -459,6 +459,19 @@ function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 }
 
 // start - profilist helper functions FOR WORKER ONLY
+function isSlugInChromeChannelIconsets(aPossibleSlug) {
+	// if returns true, it means aPossibleSlug images dir is in ```core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_##.png'```
+	switch (aPossibleSlug) {
+		case 'release':
+		case 'beta':
+		case 'dev':
+		case 'aurora'
+		case 'nightly'
+			return true;
+		default:
+			return false;
+	}
+}
 function getSlugForChannel(aChannel) {
 	switch (aChannel) {
 		case 'esr':
@@ -640,6 +653,188 @@ function getImgPathOfSlug(aSlug) {
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
+// Start - Launching profile and other profile functionality
+function getExePathRunningIn(aProfPath) {
+	// synonomous with getIsProfRunning
+	// this does heavy ctypes stuff to check system
+	// tests if profile is running, if it is, it returns to you the exepath it is running in, if not running it returns false
+	// RETURNS
+		// if RUNNING - path to build its running
+		// if NOT running - returns false
+}
+// start - get profile spec functions based on gIniObj
+function getExePathForIniEntry(aProfPath) {
+	// test gIniObj for if it is running, if it is tied
+	// :note: this does not do running check, it just returns the exe path based on what is in in gIniObj and tie
+	// RETURNS
+		// if, based on gIniObj, it is RUNNING, then it returns that path
+		// if, based on gIniObj, it is NOT running, then it returns the tied path if it has one ELSE the currentProfile path
+		
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (cIniEntry.noWriteObj.status) {
+		// its running
+		return cIniEntry.exePath;
+	} else {
+		if (gJProfilistDev && cIniEntry.ProfilistTie) {
+			// :note: if the current profile is in dev mode, then we check for tie. else we dont consider tie - :todo: tell this to users in description somewhere
+			var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'id', cIniEntry.ProfilistTie);
+			if (!cBuildEntry) {
+				console.error('no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied'); // :todo: ensure this comment, code up the untie on tie deletion
+				throw new MainWorkerError('should_never_happen!', 'no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied');
+			}
+			return cBuildEntry.p;
+		}
+		// gets to this point if gJProfilistDev is false, OR it was true but no tie in the ini
+		var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+		return curProfIniEntry.exePath;
+	}
+}
+function getBadgeSlugForIniEntry(aProfPath) {
+	// RETURNS
+		// slug - string of the slug for icon used for the badge
+		// null - no badge for this profile in gIniObj
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (cIniEntry.ProfilistBadge) {
+		return cIniEntry.ProfilistBadge;
+	}
+	return null;
+}
+// end - get profile spec functions based on gIniObj
+// start - get profile spec based on function arguments
+function getLauncherNameForParams(aProfName, aExePath, aExeChannel) {
+	// :note: this does not do running check, nor does it do any of the get***ForIniEntry calls it just returns based on the arguments provided
+	// RETURNS
+		// "Firefox CHANNEL_NAME_OF_THAT_PATH - PROFILE_NAME" path
+}
+function getExeChannelForParams(aExePath) {
+	// :note: this does not do running check, it just returns the exe path based on what parameters passed
+}
+function getIconPathInfosForParams(aExePath, aExeChannel, aBadgeIconSlug) {
+	// :note: this does not do running check, it just returns the icon path based on what is in in gIniObj
+	// returns object
+	//	{
+	//		base: {
+	//			slug: '' // same thing as dirName
+	//			dirPath: ''
+	//			imagesPathPrefix: ''
+	//			isChromePath: true/false // only if isSlugInChromeChannelIconsets
+	//		},
+	//		badge: {
+	//			slug: '' // same thing as dirName
+	//			dirPath: ''
+	//			imagesPathPrefix: ''
+	//			isChromePath: true/false // only if isSlugInChromeChannelIconsets
+	//		},
+	//		iconPath: 'string to file system path'
+	//	}
+	
+	var iconInfoObj = {};
+	var baseImagesDir;
+	var badgeImagesDir;
+	var baseImagesPrefix; // holds the path to images prefix. this means so like `chrome://profilist/blah/blah/aurora_` or `core.profilist.path.images/user-picked-img_` so I have to just append the size number and .png so like 16.png or 48.png etc to it
+	var badgeImagesPrefix;
+	var baseImagesSlug;
+	var badgeImagesSlug;
+	
+	iconInfoObj.base = {};
+	if (gJProfilistDev) {
+		// note: if dev mode is on in this current profile, then check if there is a custom icon for aExePath. else dont check custom just check channel
+		var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'p', aExePath);
+		if (cBuildEntry) {
+			baseImagesSlug = cBuildEntry.i;
+			baseImagesDir = OS.Path.join(core.profilist.path.images, baseImagesSlug);
+			baseImagesPrefix = OS.Path.join(baseImagesDir, baseImagesSlug + '_');
+		} // else it is totally possible for cBuildEntry to be null, because i searched by `p` it just means that path does not have a custom icon
+	}
+	if (!baseImagesDir) {
+		// means no custom icon set or dev mode is off... so use aExeChannel to determine base
+		baseImagesSlug = getSlugForChannel(aExeChannel);
+		baseImagesDir = core.addon.path.images + 'channel-iconsets/' + baseImagesSlug;
+		baseImagesPrefix = baseImagesDir + '/' baseImagesSlug + '_';
+	}
+	
+	var iconDirName = baseImagesSlug;
+	
+	if (aBadgeIconSlug) {
+		iconInfoObj.badge = {};
+		if (isSlugInChromeChannelIconsets(aBadgeIconSlug)) {
+			badgeImagesSlug = aBadgeIconSlug;
+			badgeImagesDir = core.addon.path.images + 'channel-iconsets/' + badgeImagesSlug;
+			badgeImagesPrefix = baseImagesDir + '/' badgeImagesSlug + '_';
+		} else {
+			badgeImagesSlug = aBadgeIconSlug;
+			badgeImagesDir = OS.Path.join(core.profilist.path.images, badgeImagesSlug);
+			badgeImagesPrefix = OS.Path.join(baseImagesDir, badgeImagesSlug + '_');
+		}
+		iconDirName += '__' + badgeImagesSlug;
+	}
+	
+	iconInfoObj.iconPath = OS.Path.join(core.profilist.path.icons, iconDirName)
+	return iconInfoObj;
+}
+// end - get profile spec based on function arguments
+function shouldCreateIcon(aProfPath) {
+	// checks filesystem with getIconPathForParams() based on getExePathForIniEntry() (so this tests for tie and running from gIniObj)
+	return false;
+}
+
+function createLauncher(aProfPath) {
+	// RETURNS
+		// path to launcher
+	// if launcher already exists, then do nothing, else create it
+	// :note::important: icon MUST exist before calling this function. this function assumes icon already exists for it.
+	// :note: launchers name should "Firefox CHANNEL_NAME - PROFILE_NAME" and should be in ```OS.Path.join(core.profilist.path.exes, HashString(aProfPath))```. It should be the ONLY file in there.
+	
+	var launcherDirName = HashString(aProfPath);
+	// console.info('launcherDirName:', launcherDirName, '');
+	// console.info('core.profilist.path.exes:', core.profilist.path.exes, '');
+	var launcherDirPath = OS.Path.join(core.profilist.path.exes, launcherDirName + ''); // need to make launcherDirName a string otherwise OS.Path.join causes this error ```path.startsWith is not a function```
+	console.info('launcherDirPath:', launcherDirPath, '');
+	
+	// get launcherExePath
+	var launcherExeEntry;
+	var launcherDirIterator = new OS.File.DirectoryIterator(launcherDirPath);
+	try {
+		launcherExeEntry = launcherDirIterator.next(); // :todo: :note: this assumes that the exe is the ONLY file in there, maybe in future shoudl ensure, but we'll see how it works out with this assumption for now
+	} catch(OSFileError) {
+		if (!OSFileError.becauseNoSuchFile) {
+			console.error('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+			throw new MainWorkerError('createLauncher', OSFileError);
+		}
+	} finally {
+		launcherDirIterator.close();
+	}
+	
+	// assume if launcherExeEntry is undefined then assume launcher does not exist, so need to make it
+	var launcherExePath;
+	// get cacluated values for the verify/set part
+	var shouldBeExePath = getExePathForIniEntry(aProfPath);
+	var shouldBeExeChannel = getExeChannelForParams(shouldBeExePath);
+	var shouldBeBadge = getBadgeForIniEntry(aProfPath);
+	var shouldBeIconPath = getIconPathForParams(shouldBeExePath, );
+	var shouldBeName = getLauncherNameForProf(aProfPath);
+	if (launcherExeEntry) {
+		// assume launcher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
+		launcherExePath = launcherExeEntry.path;
+		// :todo: verify/update icon
+		// :todo: verify/update exe path (cannot verify this by name even if i include channel_name in it, because mutiple builds can have same build see link3347348473)
+		// :todo: verify/update name - the name should be Firefox CHANNEL_NAME - PROFILE_NAME // just because CHANNEL_NAME is correct, does not mean the exe path is correct. as multiple builds can be "default" channel name instance - link3347348473
+	} else {
+		// assume launcher does not exist - so need to make it
+	}
+	
+	return launcherExePath;
+}
+function launchProfile(aProfPath) {
+	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
+	var launcherExePath = createLauncher(aProfPath);
+	
+	
+	
+	return 'ok launched aProfPath: ' + aProfPath;
+}
+// End - Launching profile and other profile functionality
+
 // End - Addon Functionality
 
 // start - common helper functions
@@ -664,5 +859,102 @@ function escapeRegExp(text) {
 		arguments.callee.sRE = new RegExp('(\\' + specials.join('|\\') + ')', 'g'); // doesnt work in strict mode ```'use strict';```
 	}
 	return text.replace(arguments.callee.sRE, '\\$1');
+}
+
+// rev1 - https://gist.github.com/Noitidart/8684e8f9488bd0bdc3f8 - https://gist.github.com/Noitidart/8684e8f9488bd0bdc3f8
+var gTxtDecodr; // holds TextDecoder if created
+function getTxtDecodr() {
+	if (!gTxtDecodr) {
+		gTxtDecodr = new TextDecoder();
+	}
+	return gTxtDecodr;
+}
+var gTxtEncodr; // holds TextDecoder if created
+function getTxtEncodr() {
+	if (!gTxtEncodr) {
+		gTxtEncodr = new TextEncoder();
+	}
+	return gTxtEncodr;
+}
+
+// rev3 - _ff-addon-snippet-mfbtHashString - https://gist.github.com/Noitidart/d4bbbf56250a9c3f88ce
+var HashString = (function (){
+	/**
+	 * Javascript implementation of
+	 * https://hg.mozilla.org/mozilla-central/file/0cefb584fd1a/mfbt/HashFunctions.h
+	 * aka. the mfbt hash function.
+	 */ 
+	// Note: >>>0 is basically a cast-to-unsigned for our purposes.
+	const encoder = getTxtEncodr();
+	const kGoldenRatio = 0x9E3779B9;
+
+	// Multiply two uint32_t like C++ would ;)
+	const mul32 = (a, b) => {
+	// Split into 16-bit integers (hi and lo words)
+		var ahi = (a >> 16) & 0xffff;
+		var alo = a & 0xffff;
+		var bhi = (b >> 16) & 0xffff
+		var blo = b & 0xffff;
+		// Compute new hi and lo seperately and recombine.
+		return (
+			(((((ahi * blo) + (alo * bhi)) & 0xffff) << 16) >>> 0) +
+			(alo * blo)
+		) >>> 0;
+	};
+
+	// kGoldenRatioU32 * (RotateBitsLeft32(aHash, 5) ^ aValue);
+	const add = (hash, val) => {
+		// Note, cannot >> 27 here, but / (1<<27) works as well.
+		var rotl5 = (
+			((hash << 5) >>> 0) |
+			(hash / (1<<27)) >>> 0
+		) >>> 0;
+		return mul32(kGoldenRatio, (rotl5 ^ val) >>> 0);
+	}
+
+	return function(text) {
+		// Convert to utf-8.
+		// Also decomposes the string into uint8_t values already.
+		var data = encoder.encode(text);
+
+		// Compute the actual hash
+		var rv = 0;
+		for (var c of data) {
+			rv = add(rv, c | 0);
+		}
+		return rv;
+	};
+})();
+
+// rev1 - _ff-addon-snippet-safedForPlatFS.js - https://gist.github.com/Noitidart/e6dbbe47fbacc06eb4ca
+var _safedForPlatFS_pattWIN = /([\\*:?<>|\/\"])/g;
+var _safedForPlatFS_pattNIXMAC = /\//g;
+function safedForPlatFS(aStr, aOptions={}) {
+	// short for getSafedForPlatformFilesystem - meaning after running this on it, you can safely use the return in a filename on this current platform
+	// aOptions
+	//	repStr - use this string, in place of the default repCharForSafePath in place of non-platform safe characters
+	//	allPlatSafe - by default it will return a path safed for the current OS. Set this to true if you want to to get a string that can be used on ALL platforms filesystems. A Windows path is safe on all other platforms
+	
+	// set defaults on aOptions
+	if (!('allPlatSafe' in aOptions)) {
+		aOptions.allPlatSafe = false;
+	}
+	if (!('repStr' in aOptions)) {
+		aOptions.repStr = '-';
+	}
+	
+	var usePlat = aOptions.allPlatSafe ? 'winnt' : core.os.name; // a windows path is safe in all platforms so force that. IF they dont want all platforms then use the current platform
+	switch (usePlat) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				return aStr.replace(_safedForPlatFS_pattWIN, aOptions.repStr);
+				
+			break;
+		default:
+		
+				return aStr.replace(_safedForPlatFS_pattNIXMAC, aOptions.repStr);
+	}
 }
 // end - common helper functions

@@ -42,7 +42,7 @@
 	width: 16px;
 	height: 16px;
 	display: inline-block;
-	background: transparent url("chrome://browser/skin/menuPanel-customize.png") no-repeat scroll 0px 0px;
+	background: transparent url("chrome://profilist/content/resources/images/menuPanel-customize.png") no-repeat scroll 0px 0px;
 }
 .dummy-tbb-foot > div:hover img {
 	background-position: -16px;
@@ -72,14 +72,14 @@
 	padding-left: 15px;
 }
 .dummy-tbb-foot > div:nth-child(1) > img {
-	background-image: url("chrome://browser/skin/menuPanel-customize.png");
+	background-image: url("chrome://profilist/content/resources/images/menuPanel-customize.png");
 	margin-right: 7px;
 }
 .dummy-tbb-foot > div:nth-child(2) > img {
-	background-image: url("chrome://browser/skin/menuPanel-help.png");
+	background-image: url("chrome://profilist/content/resources/images/menuPanel-help.png");
 }
 .dummy-tbb-foot > div:nth-child(3) > img {
-	background-image: url("chrome://browser/skin/menuPanel-exit.png");
+	background-image: url("chrome://profilist/content/resources/images/menuPanel-exit.png");
 }
 /* end - dummy_tbb_sync */
 /* start - main_wrap */
@@ -263,7 +263,7 @@
 	text-shadow: 0 0 1px red;
 }
 /* state:picking_clone */
-#profilist_menu.profilist-clone-pick .profilist-tbb-textbox {
+#profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-textbox {
 	animation: profilist-vshake 300ms infinite;
 }
 /* state:message_showing */
@@ -393,6 +393,10 @@
 }
 #profilist_menu .profilist-si-isdefault {
 	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
+	pointer-events: none;
+}
+#profilist_menu .profilist-si-buildhint {
+	pointer-events: none;
 }
 /* not needed because these elements get specific dom mutation on style.backgroundImage
 #profilist_menu .profilist-si-buildhint {

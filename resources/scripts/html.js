@@ -578,6 +578,18 @@ var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 	click: function() {
 		console.error('TBB CLICKED, props:', this.props);
+		if (this.props.sKey == 'createnewprofile') {
+			alert('create new profile');
+		} else if (this.props.tbbIniEntry) {
+			if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
+				alert('clicked on current profile tbb, do any acction? nothing planned as of now');
+			} else {
+				// launch this profile
+				alert('launch profile');
+				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchProfStep1', this.props.tbbIniEntry.Path]);
+			}
+		}
+		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
 	},
     render: function render() {
 		// this.props.tbbIniEntry is not set, so undefined, for non-porilfes, so for "loading", "createnewprofile"
