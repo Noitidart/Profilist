@@ -1158,11 +1158,11 @@ function compareAlphaNumeric(a, b) {
     }
 }
 function isFocused(window) {
-    let childTargetWindow = {};
+    var childTargetWindow = {};
     Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
     childTargetWindow = childTargetWindow.value;
 
-    let focusedChildWindow = {};
+    var focusedChildWindow = {};
     if (Services.focus.activeWindow) {
         Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
         focusedChildWindow = focusedChildWindow.value;

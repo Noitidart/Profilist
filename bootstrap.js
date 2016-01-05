@@ -257,6 +257,19 @@ function shutdown(aData, aReason) {
 		//ReactDOM.unmountComponentAtNode()
 		console.log('RE[re]:', RE[re]);
 	}
+	
+	// terminate worker
+	if (MainWorker) {
+		var promise_prepForTerm = MainWorker.post('prepForTerminate');
+		promise_prepForTerm.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_prepForTerm - ', aVal);
+				MainWorker._worker.terminate();
+				console.warn('mainworker terminated');
+			},
+			genericReject.bind(null, 'promise_prepForTerm', 0)
+		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));
+	}
 }
 // END - Addon Functionalities
 // start - server/framescript comm layer

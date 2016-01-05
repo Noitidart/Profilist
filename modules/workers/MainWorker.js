@@ -85,6 +85,7 @@ function init(objCore) { // function name init required for SIPWorker
 	core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // mname stands for modified-name	
 	
 	// I import ostypes_*.jsm in init as they may use things like core.os.isWinXp etc
+	console.log('bringing in ostypes');
 	switch (core.os.mname) {
 		case 'winnt':
 		case 'winmo':
@@ -92,7 +93,7 @@ function init(objCore) { // function name init required for SIPWorker
 			importScripts(core.addon.path.modules + 'ostypes_win.jsm');
 			break
 		case 'gtk':
-			importScripts(core.addon.path.modules + 'ostypes_gtk.jsm');
+			importScripts(core.addon.path.modules + 'ostypes_x11.jsm');
 			break;
 		case 'darwin':
 			importScripts(core.addon.path.modules + 'ostypes_mac.jsm');
@@ -103,6 +104,7 @@ function init(objCore) { // function name init required for SIPWorker
 				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 			});
 	}
+	console.log('brought in ostypes');
 	
 	// OS Specific Init
 	switch (core.os.name) {
@@ -118,6 +120,7 @@ function init(objCore) { // function name init required for SIPWorker
 	}
 	
 	// Profilist Specific Init
+	console.log('starting profilist specifc init');
 	readIni();
 	
 	console.log('MainWorker init success');
@@ -125,6 +128,10 @@ function init(objCore) { // function name init required for SIPWorker
 }
 
 // Start - Addon Functionality
+
+function prepForTerminate() {
+	return 'ok ready to terminate';
+}
 
 gKeyInfoStore = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
 	ProfilistStatus: {
@@ -465,8 +472,8 @@ function isSlugInChromeChannelIconsets(aPossibleSlug) {
 		case 'release':
 		case 'beta':
 		case 'dev':
-		case 'aurora'
-		case 'nightly'
+		case 'aurora':
+		case 'nightly':
 			return true;
 		default:
 			return false;
@@ -654,16 +661,17 @@ function getImgPathOfSlug(aSlug) {
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
 // Start - Launching profile and other profile functionality
-function getExePathRunningIn(aProfPath) {
+function getRunningExePathForProfFromPlat(aProfPath) {
+	// get the firefox path a profile is running in, else null
 	// synonomous with getIsProfRunning
 	// this does heavy ctypes stuff to check system
 	// tests if profile is running, if it is, it returns to you the exepath it is running in, if not running it returns false
 	// RETURNS
 		// if RUNNING - path to build its running
-		// if NOT running - returns false
+		// if NOT running - returns null
 }
 // start - get profile spec functions based on gIniObj
-function getExePathForIniEntry(aProfPath) {
+function getExePathForProfFromIni(aProfPath) {
 	// test gIniObj for if it is running, if it is tied
 	// :note: this does not do running check, it just returns the exe path based on what is in in gIniObj and tie
 	// RETURNS
@@ -689,7 +697,7 @@ function getExePathForIniEntry(aProfPath) {
 		return curProfIniEntry.exePath;
 	}
 }
-function getBadgeSlugForIniEntry(aProfPath) {
+function getBadgeSlugForProfFromIni(aProfPath) {
 	// RETURNS
 		// slug - string of the slug for icon used for the badge
 		// null - no badge for this profile in gIniObj
@@ -701,15 +709,59 @@ function getBadgeSlugForIniEntry(aProfPath) {
 }
 // end - get profile spec functions based on gIniObj
 // start - get profile spec based on function arguments
-function getLauncherNameForParams(aProfName, aExePath, aExeChannel) {
+function getLauncherNameForParamsFromIni(aProfName, aExePath, aExeChannel) {
 	// :note: this does not do running check, nor does it do any of the get***ForIniEntry calls it just returns based on the arguments provided
 	// RETURNS
 		// "Firefox CHANNEL_NAME_OF_THAT_PATH - PROFILE_NAME" path
 }
-function getExeChannelForParams(aExePath) {
+_cache_getExeChanForParamsFromFS = {};
+function getExeChanForParamsFromFS(aExePath) {
 	// :note: this does not do running check, it just returns the exe path based on what parameters passed
+	// RETURNS
+		// string - beta etc
+		// if any error then null
+	// if (!(aExePath in _cache_getExeChanForParamsFromFS)) {
+	if (!_cache_getExeChanForParamsFromFS[aExePath]) { // changed from in to do this, because if it was null for some reason i want to keep checking it
+		if (aExePath == core.profilist.path.XREExeF) {
+			_cache_getExeChanForParamsFromFS[aExePath] = core.firefox.channel;
+		} else {
+			console.time('getExeChanFromFS');
+			var channelPrefsJsPath;
+			if (core.os.name == 'darwin') {
+				channelPrefsJsPath = OS.Path.join(aExePath.substr(0, aExePath.indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js'); // :note::assume:i assume that aExePath is properly cased meaning the .app is always lower, so its never .APP // :note::important::todo: therefore when allow browse to .app from cp.js i should display only till the .app in the gui, but i should save it up till the .app/Contents/MacOS/firefox
+			} else {
+				channelPrefsJsPath = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
+			}
+			console.log('channelPrefsJsPath:', channelPrefsJsPath);
+			
+			var rez_read;
+			try {
+			   rez_read = OS.File.read(channelPrefsJsPath, {encoding:'utf-8'});
+			} catch (ex) {
+				console.error('can get here if the build doesnt exist anymore, ex:', ex);
+				if (ex instanceof OS.File.Error) {
+					// ex.becauseNoSuchFile // The file does not exist
+					throw ex;
+				} else {
+					throw ex; // Other error
+				}
+			}
+			
+			console.log('rez_read:', rez_read);
+
+			var channel_name = rez_read.match(/app\.update\.channel", "([^"]+)/);
+			console.log('channel_name:', channel_name);
+			if (!channel_name) {
+				_cache_getExeChanForParamsFromFS[aExePath] = null;
+			} else {
+				_cache_getExeChanForParamsFromFS[aExePath] = channel_name[0];
+			}
+			console.timeEnd('getExeChanFromFS');
+		}
+	}
+	return _cache_getExeChanForParamsFromFS[aExePath];
 }
-function getIconPathInfosForParams(aExePath, aExeChannel, aBadgeIconSlug) {
+function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug) {
 	// :note: this does not do running check, it just returns the icon path based on what is in in gIniObj
 	// returns object
 	//	{
@@ -750,7 +802,7 @@ function getIconPathInfosForParams(aExePath, aExeChannel, aBadgeIconSlug) {
 		// means no custom icon set or dev mode is off... so use aExeChannel to determine base
 		baseImagesSlug = getSlugForChannel(aExeChannel);
 		baseImagesDir = core.addon.path.images + 'channel-iconsets/' + baseImagesSlug;
-		baseImagesPrefix = baseImagesDir + '/' baseImagesSlug + '_';
+		baseImagesPrefix = baseImagesDir + '/' + baseImagesSlug + '_';
 	}
 	
 	var iconDirName = baseImagesSlug;
@@ -760,7 +812,7 @@ function getIconPathInfosForParams(aExePath, aExeChannel, aBadgeIconSlug) {
 		if (isSlugInChromeChannelIconsets(aBadgeIconSlug)) {
 			badgeImagesSlug = aBadgeIconSlug;
 			badgeImagesDir = core.addon.path.images + 'channel-iconsets/' + badgeImagesSlug;
-			badgeImagesPrefix = baseImagesDir + '/' badgeImagesSlug + '_';
+			badgeImagesPrefix = baseImagesDir + '/' + badgeImagesSlug + '_';
 		} else {
 			badgeImagesSlug = aBadgeIconSlug;
 			badgeImagesDir = OS.Path.join(core.profilist.path.images, badgeImagesSlug);
@@ -781,6 +833,9 @@ function shouldCreateIcon(aProfPath) {
 function createLauncher(aProfPath) {
 	// RETURNS
 		// path to launcher
+	// APIs ACCESSED
+		// filesystem for channel - but cached so maybe not everytime
+		// gIniObj for profile details on what it should be
 	// if launcher already exists, then do nothing, else create it
 	// :note::important: icon MUST exist before calling this function. this function assumes icon already exists for it.
 	// :note: launchers name should "Firefox CHANNEL_NAME - PROFILE_NAME" and should be in ```OS.Path.join(core.profilist.path.exes, HashString(aProfPath))```. It should be the ONLY file in there.
@@ -811,7 +866,7 @@ function createLauncher(aProfPath) {
 	var shouldBeExePath = getExePathForIniEntry(aProfPath);
 	var shouldBeExeChannel = getExeChannelForParams(shouldBeExePath);
 	var shouldBeBadge = getBadgeForIniEntry(aProfPath);
-	var shouldBeIconPath = getIconPathForParams(shouldBeExePath, );
+	var shouldBeIconPath = getIconPathForParams(shouldBeExePath);
 	var shouldBeName = getLauncherNameForProf(aProfPath);
 	if (launcherExeEntry) {
 		// assume launcher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
@@ -827,7 +882,9 @@ function createLauncher(aProfPath) {
 }
 function launchProfile(aProfPath) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
-	var launcherExePath = createLauncher(aProfPath);
+	console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
+	getExeChanForParamsFromFS(core.profilist.path.XREExeF);
+	// var launcherExePath = createLauncher(aProfPath);
 	
 	
 	

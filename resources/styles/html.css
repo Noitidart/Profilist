@@ -2,7 +2,7 @@
 .dummy-tbb-sync,
 .dummy-tbb-foot {
 	font-size: 12px;
-	font-family: Segoe UI;
+	font-family: Segoe UI, Ubuntu, -apple-system;
 	-moz-user-select: none;
 	background-color: rgb(239, 239, 239);
 	border-style: solid;
@@ -90,7 +90,7 @@
 	overflow: hidden;
 	flex-direction: column;
 	position: relative;
-	font-family: Segoe UI;/* link123213*/
+	font-family: Segoe UI, Ubuntu, -apple-system;/* link123213*/
 	font-size: 12px;/* link93849848*/
 	-moz-user-select: none;
 }
