@@ -112,11 +112,18 @@ function AboutFactory(component) {
 // end - about module
 
 // Start - Launching profile and other profile functionality
-function createIcon(aCallback) {
-	if (aCallback) {
-		aCallback();
+var MainWorkerMainThreadFuncs = {
+	createIcon: function(aPathsObj) {
+		console.log('in createIcon in MainWorkerMainThreadFuncs, aPathsObj:', aPathsObj);
+		// return ['hi arr 1']; // :note: this is how to return no promise
+		// :note: this is how to return with promise
+		var deferredMain_createIcon = new Deferred();
+		
+		deferredMain_createIcon.resolve(['hi arr 1 from promise']);
+		
+		return deferredMain_createIcon.promise;
 	}
-}
+};
 // End - Launching profile and other profile functionality
 
 function testReact() {
@@ -213,7 +220,7 @@ function startup(aData, aReason) {
 	};
 	
 	// startup worker
-	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js');
+	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js', core, MainWorkerMainThreadFuncs);
 	promise_initMainWorker.then(
 		function(aVal) {
 			console.log('Fullfilled - promise_initMainWorker - ', aVal);
@@ -324,34 +331,16 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		
 		return deferredMain_userManipulatedIniObj_updateIniFile.promise;
 	},
-	launchProfStep1: function(aProfPath) {
-		// check if need to make icon, if so then makes it
-		var promise_shouldCreateIcon = MainWorker.post('shouldCreateIcon', [aProfPath]);
-		promise_shouldCreateIcon.then(
-			function(aBoolNeedToCreateIcon) {
-				console.log('Fullfilled - promise_shouldCreateIcon - ', aBoolNeedToCreateIcon);
-				if (aBoolNeedToCreateIcon) {
-					// call createIcon, with callback of ```fsFuncs.launchProfStep2(aProfPath)```
-					createIcon(function() {
-						fsFuncs.launchProfStep2(aProfPath);
-					});
-				} else {
-					fsFuncs.launchProfStep2(aProfPath);
-				}
-			},
-			genericReject.bind(null, 'promise_shouldCreateIcon', 0)
-		).catch(genericReject.bind(null, 'promise_shouldCreateIcon', 0));
-	},
-	launchProfStep2: function(aProfPath) {
+	launchOrFocusProfile: function(aProfPath) {
 		// launch profile - this will create launcher if it doesnt exist already
-		var promise_launch = MainWorker.post('launchProfile', [aProfPath]);
-		promise_launch.then(
+		var promise_launchfocus = MainWorker.post('launchOrFocusProfile', [aProfPath]);
+		promise_launchfocus.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_launch - ', aVal);
+				console.log('Fullfilled - promise_launchfocus - ', aVal);
 				
 			},
-			genericReject.bind(null, 'promise_launch', 0)
-		).catch(genericReject.bind(null, 'promise_launch', 0));
+			genericReject.bind(null, 'promise_launchfocus', 0)
+		).catch(genericReject.bind(null, 'promise_launchfocus', 0));
 	}
 };
 var fsMsgListener = {
@@ -556,7 +545,12 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 	
 }
 
-function SIPWorker(workerScopeName, aPath, aCore=core) {
+// SIPWorker - rev3 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
+const SIP_CB_PREFIX = '_a_gen_cb_';
+const SIP_TRANS_WORD = '_a_gen_trans_';
+var sip_last_cb_id = -1;
+function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope) {
+	// update 010516 - allowing pomiseworker to execute functions in this scope, supply aFuncExecScope, else leave it undefined and it will not set this part up
 	// update 122115 - init resolves the deferred with the value returned from Worker, rather then forcing it to resolve at true
 	// "Start and Initialize PromiseWorker"
 	// returns promise
@@ -570,6 +564,71 @@ function SIPWorker(workerScopeName, aPath, aCore=core) {
 
 	if (!(workerScopeName in bootstrap)) {
 		bootstrap[workerScopeName] = new PromiseWorker(aPath);
+		
+		// start 010516 - allow worker to execute functions in bootstrap scope and get value
+		if (aFuncExecScope) {
+			// this triggers instantiation of the worker immediately
+			var origOnmessage = bootstrap[workerScopeName]._worker.onmessage;
+			bootstrap[workerScopeName]._worker.onmessage = function(aMsgEvent) {
+				////// start - my custom stuff
+				var aMsgEventData = aMsgEvent.data;
+				console.log('promiseworker receiving msg:', aMsgEventData);
+				if (Array.isArray(aMsgEventData)) {
+					// my custom stuff, PromiseWorker did self.postMessage to call a function from here
+					console.log('promsieworker is trying to execute function in mainthread');
+					
+					var callbackPendingId;
+					if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SIC_CB_PREFIX) == 0) {
+						callbackPendingId = aMsgEventData.pop();
+					}
+					
+					var funcName = aMsgEventData.shift();
+					if (funcName in aFuncExecScope) {
+						var rez_mainthread_call = aFuncExecScope[funcName].apply(null, aMsgEventData);
+						
+						if (callbackPendingId) {
+							if (rez_mainthread_call.constructor.name == 'Promise') {
+								rez_mainthread_call.then(
+									function(aVal) {
+										if (aVal.length >= 2 && aVal[aVal.length-1] == SIC_TRANS_WORD && Array.isArray(aVal[aVal.length-2])) {
+											// to transfer in callback, set last element in arr to SIC_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
+											console.error('doing transferrrrr');
+											aVal.pop();
+											bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, aVal], aVal.pop());
+										} else {
+											bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, aVal]);
+										}
+									},
+									function(aReason) {
+										console.error('aReject:', aReason);
+										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aReason]]);
+									}
+								).catch(
+									function(aCatch) {
+										console.error('aCatch:', aCatch);
+										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aCatch]]);
+									}
+								);
+							} else {
+								// assume array
+								if (rez_mainthread_call.length > 2 && rez_mainthread_call[rez_mainthread_call.length-1] == SIC_TRANS_WORD && Array.isArray(rez_mainthread_call[rez_mainthread_call.length-2])) {
+									// to transfer in callback, set last element in arr to SIC_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
+									rez_mainthread_call.pop();
+									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call], rez_mainthread_call.pop());
+								} else {
+									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call]);
+								}
+							}
+						}
+					}
+					else { console.error('funcName', funcName, 'not in scope of aFuncExecScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+					////// end - my custom stuff
+				} else {
+					origOnmessage(aMsgEvent);
+				}
+			}
+		}
+		// end 010516 - allow worker to execute functions in bootstrap scope and get value
 		
 		if ('addon' in aCore && 'aData' in aCore.addon) {
 			delete aCore.addon.aData; // we delete this because it has nsIFile and other crap it, but maybe in future if I need this I can try JSON.stringify'ing it

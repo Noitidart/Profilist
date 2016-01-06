@@ -27,6 +27,7 @@ importScripts(core.addon.path.modules + 'cutils.jsm');
 // importScripts(core.addon.path.modules + 'ctypes_math.jsm');
 
 // Setup PromiseWorker
+// SIPWorker - rev2 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
 var PromiseWorker = require('resource://gre/modules/workers/PromiseWorker.js');
 
 // Instantiate AbstractWorker (see below).
@@ -50,7 +51,41 @@ worker.log = function(...args) {
 };
 
 // Connect it to message port.
-self.addEventListener('message', msg => worker.handleMessage(msg));
+// self.addEventListener('message', msg => worker.handleMessage(msg)); // this is what you do if you want PromiseWorker without mainthread calling ability
+// start - setup SIPWorker
+var WORKER = this;
+self.addEventListener('message', function(aMsgEvent) { // this is what you do if you want SIPWorker mainthread calling ability
+	var aMsgEventData = aMsgEvent.data;
+	if (Array.isArray(aMsgEventData)) {
+		console.error('worker got response for main thread calling SIPWorker functionality:', aMsgEventData)
+		var funcName = aMsgEventData.shift();
+		if (funcName in WORKER) {
+			var rez_worker_call = WORKER[funcName].apply(null, aMsgEventData);
+		}
+		else { console.error('funcName', funcName, 'not in scope of WORKER') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+	} else {
+		console.error('no this is just regular promise worker message');
+		worker.handleMessage(aMsgEvent)
+	}
+});
+
+const SIP_CB_PREFIX = '_a_gen_cb_';
+const SIP_TRANS_WORD = '_a_gen_trans_';
+var sic_last_cb_id = -1;
+self.postMessageWithCallback = function(aPostMessageArr, aCB, aPostMessageTransferList) {
+	var aFuncExecScope = WORKER;
+	
+	sic_last_cb_id++;
+	var thisCallbackId = SIP_CB_PREFIX + sic_last_cb_id;
+	aFuncExecScope[thisCallbackId] = function() {
+		delete aFuncExecScope[thisCallbackId];
+		console.log('in worker callback trigger wrap, will apply aCB with these arguments:', arguments);
+		aCB.apply(null, arguments[0]);
+	};
+	aPostMessageArr.push(thisCallbackId);
+	self.postMessage(aPostMessageArr, aPostMessageTransferList);
+};
+// end - setup SIPWorker
 
 // Define a custom error prototype.
 function MainWorkerError(name, msg) {
@@ -64,7 +99,6 @@ MainWorkerError.prototype.toMsg = function() {
 		name: this.name
 	};
 };
-
 ////// end of imports and definitions
 
 function init(objCore) { // function name init required for SIPWorker
@@ -747,7 +781,7 @@ function getExeChanForParamsFromFS(aExePath) {
 				}
 			}
 			
-			console.log('rez_read:', rez_read);
+			// console.log('rez_read:', rez_read);
 
 			var channel_name = rez_read.match(/app\.update\.channel", "([^"]+)/);
 			console.log('channel_name:', channel_name);
@@ -880,9 +914,38 @@ function createLauncher(aProfPath) {
 	
 	return launcherExePath;
 }
-function launchProfile(aProfPath) {
+function launchOrFocusProfile(aProfPath, aOptions={}) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
-	console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
+	
+	// aOptions
+	var cOptionsDefaults = {
+		usePlat: false // by default will use ini
+	}
+	
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
+	// console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
+	var cProfIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (!cProfIniEntry) { console.error('should-nver-happen!', 'cProfIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cProfIniEntry could not be found'); }
+	
+	if (aOptions.usePlat) {
+		var cRunningExePath = getRunningExePathForProfFromPlat(aProfPath);
+		// :todo: check if gIniObj matches, if not as i modify it, then update it and send updates to gui's
+		if (cRunningExePath) {
+			cProfIniEntry.noWriteObj.status = true;
+			cProfIniEntry.noWriteObj.exePath = cRunningExePath;
+		} else {
+			delete cProfIniEntry.noWriteObj.status;
+			delete cProfIniEntry.noWriteObj.exepath;
+		}
+	}
+	
+	// check if need to create icon
+	// self.postMessage(['createIcon', 'aPathsObj']); // :note: this is how to call with no callback
+	self.postMessageWithCallback(['createIcon', 'aPathsObj'], function(aCreateIconRez) { // :note: this is how to call WITH callback
+		console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
+	});
+	
 	getExeChanForParamsFromFS(core.profilist.path.XREExeF);
 	// var launcherExePath = createLauncher(aProfPath);
 	
@@ -1012,6 +1075,22 @@ function safedForPlatFS(aStr, aOptions={}) {
 		default:
 		
 				return aStr.replace(_safedForPlatFS_pattNIXMAC, aOptions.repStr);
+	}
+}
+function validateOptionsObj(aOptions, aOptionsDefaults) {
+	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
+	for (var aOptKey in aOptions) {
+		if (!(aOptKey in aOptionsDefaults)) {
+			console.error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value, aOptionsDefaults:', aOptionsDefaults, 'aOptions:', aOptions);
+			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
+		}
+	}
+	
+	// if a key is not found in aOptions, but is found in aOptionsDefaults, it sets the key in aOptions to the default value
+	for (var aOptKey in aOptionsDefaults) {
+		if (!(aOptKey in aOptions)) {
+			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
+		}
 	}
 }
 // end - common helper functions

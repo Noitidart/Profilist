@@ -586,7 +586,7 @@ var ToolbarButton = React.createClass({
 			} else {
 				// launch this profile
 				alert('launch profile');
-				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchProfStep1', this.props.tbbIniEntry.Path]);
+				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
 			}
 		}
 		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
