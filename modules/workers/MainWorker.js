@@ -414,7 +414,8 @@ function formatNoWriteObjs() {
 	}
 	
 	// set running statuses
-	curProf_iniEntry.noWriteObj.status = true;
+	curProf_iniEntry.noWriteObj.status = true; // :note: if anything is running it needs exePath, this is not a GUI requirement, but a business-layer requirement link135246970
+	curProf_iniEntry.noWriteObj.exePath = core.profilist.path.XREExeF;
 	// :todo: do for rest in gIniObj
 	
 	
@@ -715,7 +716,7 @@ function getExePathForProfFromIni(aProfPath) {
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (cIniEntry.noWriteObj.status) {
 		// its running
-		return cIniEntry.exePath;
+		return cIniEntry.noWriteObj.exePath; // link135246970
 	} else {
 		if (gJProfilistDev && cIniEntry.ProfilistTie) {
 			// :note: if the current profile is in dev mode, then we check for tie. else we dont consider tie - :todo: tell this to users in description somewhere
@@ -727,8 +728,10 @@ function getExePathForProfFromIni(aProfPath) {
 			return cBuildEntry.p;
 		}
 		// gets to this point if gJProfilistDev is false, OR it was true but no tie in the ini
-		var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-		return curProfIniEntry.exePath;
+		// var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // link135246970
+		// return curProfIniEntry.noWriteObj.exePath;
+		// well obviously the currentProfile is running in core.profilist.path.XREExeF so lets just return this, save some looping
+		return core.profilist.path.XREExeF; // the link135246970 for the immediately 3 lines above comment is valid though
 	}
 }
 function getBadgeSlugForProfFromIni(aProfPath) {
@@ -743,11 +746,6 @@ function getBadgeSlugForProfFromIni(aProfPath) {
 }
 // end - get profile spec functions based on gIniObj
 // start - get profile spec based on function arguments
-function getLauncherNameForParamsFromIni(aProfName, aExePath, aExeChannel) {
-	// :note: this does not do running check, nor does it do any of the get***ForIniEntry calls it just returns based on the arguments provided
-	// RETURNS
-		// "Firefox CHANNEL_NAME_OF_THAT_PATH - PROFILE_NAME" path
-}
 _cache_getExeChanForParamsFromFS = {};
 function getExeChanForParamsFromFS(aExePath) {
 	// :note: this does not do running check, it just returns the exe path based on what parameters passed
@@ -801,72 +799,311 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug)
 	//	{
 	//		base: {
 	//			slug: '' // same thing as dirName
-	//			dirPath: ''
-	//			imagesPathPrefix: ''
-	//			isChromePath: true/false // only if isSlugInChromeChannelIconsets
+	//			dir: '' path to directory holding images of different sizes. no ending slash
+	//			prefix: '' full path to the image without the ##.png
+	//			chrome: isSlugInChromeChannelIconsets
 	//		},
-	//		badge: {
-	//			slug: '' // same thing as dirName
-	//			dirPath: ''
-	//			imagesPathPrefix: ''
-	//			isChromePath: true/false // only if isSlugInChromeChannelIconsets
+	//		badge: { // is not set if no aBadgeIconSlug
+	//			same keys as base
 	//		},
-	//		iconPath: 'string to file system path'
+	//		path: 'string to file system path.png', on linux this is same as name
+	//		name: the stuff before the .png safedForPlatFS
+	//		slug: the stuff before the .png NOT safedForPlatFS
 	//	}
 	
-	var iconInfoObj = {};
-	var baseImagesDir;
-	var badgeImagesDir;
-	var baseImagesPrefix; // holds the path to images prefix. this means so like `chrome://profilist/blah/blah/aurora_` or `core.profilist.path.images/user-picked-img_` so I have to just append the size number and .png so like 16.png or 48.png etc to it
-	var badgeImagesPrefix;
-	var baseImagesSlug;
-	var badgeImagesSlug;
+	var iconInfosObj = {}; // short for iconInfoObj	
 	
-	iconInfoObj.base = {};
+	iconInfosObj.base = {};
 	if (gJProfilistDev) {
 		// note: if dev mode is on in this current profile, then check if there is a custom icon for aExePath. else dont check custom just check channel
 		var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'p', aExePath);
 		if (cBuildEntry) {
-			baseImagesSlug = cBuildEntry.i;
-			baseImagesDir = OS.Path.join(core.profilist.path.images, baseImagesSlug);
-			baseImagesPrefix = OS.Path.join(baseImagesDir, baseImagesSlug + '_');
+			iconInfosObj.base.slug = cBuildEntry.i;
 		} // else it is totally possible for cBuildEntry to be null, because i searched by `p` it just means that path does not have a custom icon
 	}
-	if (!baseImagesDir) {
+	if (!iconInfosObj.base.slug) {
 		// means no custom icon set or dev mode is off... so use aExeChannel to determine base
-		baseImagesSlug = getSlugForChannel(aExeChannel);
-		baseImagesDir = core.addon.path.images + 'channel-iconsets/' + baseImagesSlug;
-		baseImagesPrefix = baseImagesDir + '/' + baseImagesSlug + '_';
+		iconInfosObj.base.slug = getSlugForChannel(aExeChannel);
 	}
 	
-	var iconDirName = baseImagesSlug;
+	if (isSlugInChromeChannelIconsets(iconInfosObj.base.slug)) {
+		iconInfosObj.base.chrome = true;
+		iconInfosObj.base.dir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.base.slug;
+		iconInfosObj.base.prefix = iconInfosObj.base.dir + '/' + iconInfosObj.base.slug + '_';
+	} else {
+		iconInfosObj.base.dir = OS.Path.join(core.profilist.path.images, iconInfosObj.base.slug);
+		iconInfosObj.base.prefix = OS.Path.join(iconInfosObj.base.baseImagesDir, iconInfosObj.base.slug + '_');
+	}
+		
+	
+	iconInfosObj.slug = iconInfosObj.base.slug;
 	
 	if (aBadgeIconSlug) {
-		iconInfoObj.badge = {};
+		iconInfosObj.badge = {};
 		if (isSlugInChromeChannelIconsets(aBadgeIconSlug)) {
-			badgeImagesSlug = aBadgeIconSlug;
-			badgeImagesDir = core.addon.path.images + 'channel-iconsets/' + badgeImagesSlug;
-			badgeImagesPrefix = baseImagesDir + '/' + badgeImagesSlug + '_';
+			iconInfosObj.badge.chrome = true;
+			iconInfosObj.badge.badgeImagesSlug = aBadgeIconSlug;
+			iconInfosObj.badge.badgeImagesDir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.badge.badgeImagesSlug;
+			iconInfosObj.badge.badgeImagesPrefix = iconInfosObj.badge.badgeImagesDir + '/' + iconInfosObj.badge.badgeImagesSlug + '_';
 		} else {
-			badgeImagesSlug = aBadgeIconSlug;
-			badgeImagesDir = OS.Path.join(core.profilist.path.images, badgeImagesSlug);
-			badgeImagesPrefix = OS.Path.join(baseImagesDir, badgeImagesSlug + '_');
+			iconInfosObj.badge.badgeImagesSlug = aBadgeIconSlug;
+			iconInfosObj.badge.badgeImagesDir = OS.Path.join(core.profilist.path.images, iconInfosObj.badge.badgeImagesSlug);
+			iconInfosObj.badge.badgeImagesPrefix = OS.Path.join(iconInfosObj.badge.badgeImagesDir, iconInfosObj.badge.badgeImagesSlug + '_');
 		}
-		iconDirName += '__' + badgeImagesSlug;
+		iconInfosObj.slug += '__' + iconInfosObj.badge.badgeImagesSlug;
 	}
 	
-	iconInfoObj.iconPath = OS.Path.join(core.profilist.path.icons, iconDirName)
-	return iconInfoObj;
+	iconInfosObj.name = safedForPlatFS(iconInfosObj.slug);
+	// set iconInfosObj.path
+	if (core.os.mname == 'gtk') {
+		iconInfosObj.path = iconInfosObj.name;
+	} else {
+		iconInfosObj.path = OS.Path.join(core.profilist.path.icons, iconInfosObj.name);
+		if (core.os.mname == 'darwin') {
+			// icns
+			iconInfosObj.path += '.icns';
+		} else {
+			// its windows, so ico
+			iconInfosObj.path += '.ico';
+		}
+	}
+	
+	return iconInfosObj;
 }
 // end - get profile spec based on function arguments
-function shouldCreateIcon(aProfPath) {
-	// checks filesystem with getIconPathForParams() based on getExePathForIniEntry() (so this tests for tie and running from gIniObj)
-	return false;
+
+function getLinuxIsIconInstalledFromFS(aIconName) {
+	// NOT aIconSlug, but aIconName, which is the safedForPlatFS
+	// function is for linux only
+	// because linux output sizes are [16, 24, 48, 96];, i will just check in folder of 16 for existence
+	var linuxIconOutputSizes = [16, 24, 48, 96];
+	switch (core.os.mname) {
+		case 'qt':
+			
+				console.error('unsupported-platform', 'QT platform not yet supported, only GTK as of right now.');
+				throw new MainWorkerError('unsupported-platform', 'QT platform not yet supported');
+			
+			break;
+		case 'gtk':
+			
+				var dirpathHicolor = OS.Path.join(
+					OS.Constants.Path.homeDir,
+					'.local',
+					'share',
+					'icons',
+					'hicolor'
+				);
+				
+				var cSize = linuxIconOutputSizes[0];
+				var cSizeIconPath = OS.Path.join(dirpathHicolor, cSizeName, 'apps', aIconName + '_' + cSize + '.profilist.png'); // link787575758 :note: because on linux i am installing to a global folder, instead of just .png i make it .profilist.png so its easy to identify what all profilist did on the system, when it comes time to uninstall
+				
+			break;
+		default:
+			throw new MainWorkerError('unsupported-platform', 'This function is only for Linux platforms, GTK only right now.');
+	}
 }
 
-function createLauncher(aProfPath) {
+function uninstallLinuxIconForParamsFromFS(aIconName) {
+	// NOT aIconSlug, but aIconName, which is the safedForPlatFS
+	// because linux output sizes are [16, 24, 48, 96];, i will just check in folder of 16 for existence
+	if (core.os.mname != 'gtk') {
+		throw new MainWorkerError('unsupported-platform', 'This function is only for Linux platforms, GTK or QT.');
+	}
+	
+	var linuxIconOutputSizes = [16, 24, 48, 96];
+	
+	
+	var dirpathHicolor = OS.Path.join(
+		OS.Constants.Path.homeDir,
+		'.local',
+		'share',
+		'icons',
+		'hicolor'
+	);
+	
+	for (var i=0; i<linuxIconOutputSizes.length; i++) {
+		var cSize = linuxIconOutputSizes[i];
+		var cSizeName;
+		if (cSize == 'svg') {
+			cSizeName = 'scalable';
+		} else {
+			cSizeName = cSize + 'x' + cSize;
+		}
+		var cSizeIconPath = OS.Path.join(dirpathHicolor, cSizeName, 'apps', aIconName + '_' + cSize + '.profilist.png'); // :note: link787575758 because on linux i am installing to a global folder, instead of just .png i make it .profilist.png so its easy to identify what all profilist did on the system, when it comes time to uninstall
+		OS.File.remove(cSizeIconPath, {ignoreAbsent:true});
+	}
+}
+
+function createIconForParamsFromFS(aIconInfosObj) {
 	// RETURNS
-		// path to launcher
+		// promise
+			// resolve -
+				// true - if created
+				// false - if it already existed
+			// reject -
+				// i do not reject it as of now
+			// caught -
+				// i do not reject it as of now
+	
+	
+	// aIconInfosObj is what is returned from getIconPathInfosForParamsFromIni
+	
+	
+	var deferredMain_createIconForParamsFromFS = new Deferred();
+	
+	// check if it is installed(linux)/exists(win/darwin)
+	if (core.os.mname == 'gtk') {
+		rez_exists = getLinuxIsIconInstalledFromFS(aIconInfosObj.name); // i can use aIconInfosObj.path as when linux aIconInfosObj.path === aIconInfosObj.name in the getIconPathInfosForParamsFromIni function, but it makes more sense to use .name, in case i need to review the code in the future
+	} else {
+		rez_exists = OS.File.exists(aIconInfosObj.path);
+	}
+	if (rez_exists) {
+		deferredMain_createIconForParamsFromFS.resolve(false);
+	} else {
+		var cCreateName = aIconInfosObj.name; // plat specific only for linux link787575758
+		var cCreatePathDir = core.profilist.path.icons;
+		var cOptions = {
+			aBadge: aIconInfosObj.badge ? 4 : 0, // bottom right
+			aScalingAlgo: 0 // jagged first
+		};
+		var cCreateType;
+		var cOutputSizesArr;
+		switch (core.os.mname) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+					
+					cCreateType = 'ICO';
+					cOutputSizesArr = [16, 24, 32, 48, 256];
+					if (aIconInfosObj.badge) {
+						cOptions.aBadgeSizePerOutputSize = [10, 12, 16, 24, 128];
+					}
+					
+				break
+			case 'gtk':
+					
+					cCreateName += '.profilist'; // link787575758
+					cCreateType = 'Linux';
+					cOutputSizesArr = [16, 24, 48, 96];
+					if (aIconInfosObj.badge) {
+						cOptions.aBadgeSizePerOutputSize = [10, 12, 16, 24, 128];
+					}
+					
+				break
+			case 'darwin':
+					
+					cCreateType = 'ICNS';
+					cOutputSizesArr = [16, 32, 64, 128, 256, 512, 1024];
+					
+				break
+			default:
+				throw new MainWorkerError({
+					name: 'addon-error',
+					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+				});
+		}
+		
+		// populate cBaseSrcImgPathArr
+		cBaseSrcImgPathArr = [];
+		for (var i=0; i<cOutputSizesArr.length; i++) {
+			cBaseSrcImgPathArr.push(aIconInfosObj.base.prefix + cOutputSizesArr[i] + '.png');
+		}
+	
+		// if badge stuff
+		if (aIconInfosObj.badge) {
+			cOptions.aBadgeSizePerOutputSize = cOutputSizesArr.map(function(aOutputSize) {
+				if (aOutputSize == 16) {
+					return 10;
+				} else {
+					return aOutputSize / 2;
+				}
+			});
+			// populate cOptions.aBadgeSrcImgPathArr
+			cOptions.aBadgeSrcImgPathArr = [];
+			for (var i=0; i<cOutputSizesArr.length; i++) {
+				cOptions.aBadgeSrcImgPathArr.push(aIconInfosObj.badge.prefix + '_' + cOutputSizesArr[i] + '.png');
+			}
+		}
+		
+		console.time('promiseWorker-createIcon');
+		self.postMessageWithCallback(['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions], function(aCreateIconRez) { // :note: this is how to call WITH callback
+			console.timeEnd('promiseWorker-createIcon');
+			console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
+			deferredMain_createIconForParamsFromFS.resolve(true);
+		});
+	}
+	return deferredMain_createIconForParamsFromFS.promise;
+}
+
+function getLauncherDirPathFromParams(aProfPath) {
+	// RETURNS
+		// string - platform path to the launcher
+		
+	var launcherDirName = HashString(aProfPath);
+	// console.info('launcherDirName:', launcherDirName, '');
+	// console.info('core.profilist.path.exes:', core.profilist.path.exes, '');
+	var launcherDirPath = OS.Path.join(core.profilist.path.exes, launcherDirName + ''); // need to make launcherDirName a string otherwise OS.Path.join causes this error ```path.startsWith is not a function```
+	console.info('launcherDirPath:', launcherDirPath, '');
+	
+
+	
+	return launcherDirName;
+}
+
+function getLauncherNameFromParams(aExeChannel, aProfName) {
+	// RETURNS
+		// string - current platform safed, the name in format Firefox CHANNEL_NAME - PROFILE_NAME
+	
+	var exeChannelDisplayName;
+	switch (aExeChannel) {
+		case 'esr':
+				
+				return 'ESR'; // :todo::l10n: localize?
+			
+			break;
+		case 'release':
+				
+				return '';
+			
+			break;
+		case 'beta':
+				
+				return 'BETA'; // :todo::l10n: localize?
+			
+			break;
+		case 'aurora':
+				
+				return 'Developer Edition'; // :todo::l10n: localize?
+			
+			break;
+		case 'nightly':
+				
+				return 'Nightly'; // :todo::l10n: localize?
+			
+			break;
+		case 'default':
+				
+				return 'Custom Build'; // :todo::l10n: localize
+			
+			break;
+		default:
+			console.error('A programtic channel value of "' + aExeChannel + '" does not have a recognized display name, so returning same thing');
+			return aExeChannel.substr(0, 1).toUpperCase() + aExeChannel.substr(1);
+	}
+	
+	if (exeChannelDisplayName != '') {
+		exeChannelDisplayName = ' ' + exeChannelDisplayName; // link22323432345
+	}
+	
+	return safedForPlatFS('Firefox' + exeChannelDisplayName + ' - ' + aProfName); // link22323432345 need prefixed space for exeChannelDisplayName
+}
+
+function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconSlug, aLauncherExePath) {
+	// the arguments are what the launch should be created with, except aLuncherDirPath as that will be same for all
+	// aLauncherExePath is the build the launcher should launch the profile into. such as exePath to beta or release or etc
+	// RETURNS
+		// true - if created
+		// false - if it already existed
 	// APIs ACCESSED
 		// filesystem for channel - but cached so maybe not everytime
 		// gIniObj for profile details on what it should be
@@ -874,45 +1111,74 @@ function createLauncher(aProfPath) {
 	// :note::important: icon MUST exist before calling this function. this function assumes icon already exists for it.
 	// :note: launchers name should "Firefox CHANNEL_NAME - PROFILE_NAME" and should be in ```OS.Path.join(core.profilist.path.exes, HashString(aProfPath))```. It should be the ONLY file in there.
 	
-	var launcherDirName = HashString(aProfPath);
-	// console.info('launcherDirName:', launcherDirName, '');
-	// console.info('core.profilist.path.exes:', core.profilist.path.exes, '');
-	var launcherDirPath = OS.Path.join(core.profilist.path.exes, launcherDirName + ''); // need to make launcherDirName a string otherwise OS.Path.join causes this error ```path.startsWith is not a function```
-	console.info('launcherDirPath:', launcherDirPath, '');
-	
-	// get launcherExePath
-	var launcherExeEntry;
-	var launcherDirIterator = new OS.File.DirectoryIterator(launcherDirPath);
+	// get EXISTING launcherExeEntry - so this is different from getLauncherDirPathFromParams - the dir will be the same, but the existing name may be different
+	var eLauncherEntry;
+	var eLauncherDirIterator = new OS.File.DirectoryIterator(aLauncherDirPath);
 	try {
-		launcherExeEntry = launcherDirIterator.next(); // :todo: :note: this assumes that the exe is the ONLY file in there, maybe in future shoudl ensure, but we'll see how it works out with this assumption for now
+		eLauncherEntry = eLauncherDirIterator.next(); // :todo: :note: this assumes that the exe is the ONLY file in there, maybe in future shoudl ensure, but we'll see how it works out with this assumption for now
 	} catch(OSFileError) {
+		console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
 		if (!OSFileError.becauseNoSuchFile) {
-			console.error('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
-			throw new MainWorkerError('createLauncher', OSFileError);
-		}
+			throw new MainWorkerError('createeLauncher', OSFileError);
+		} // if it does not exist, thats ok, this func will carry on to create the launcher :todo: should make the dir though at this point, when we get error that dir doesnt exist
 	} finally {
-		launcherDirIterator.close();
+		eLauncherDirIterator.close();
 	}
-	
-	// assume if launcherExeEntry is undefined then assume launcher does not exist, so need to make it
-	var launcherExePath;
-	// get cacluated values for the verify/set part
-	var shouldBeExePath = getExePathForIniEntry(aProfPath);
-	var shouldBeExeChannel = getExeChannelForParams(shouldBeExePath);
-	var shouldBeBadge = getBadgeForIniEntry(aProfPath);
-	var shouldBeIconPath = getIconPathForParams(shouldBeExePath);
-	var shouldBeName = getLauncherNameForProf(aProfPath);
-	if (launcherExeEntry) {
-		// assume launcher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
-		launcherExePath = launcherExeEntry.path;
+
+	// get EXISTING eLauncherPath
+	// assume if eLauncherEntry is undefined then assume eLauncher does not exist, so need to make it
+	if (eLauncherEntry) {
+		// assume eLauncher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
+			var eLauncherPath = eLauncherEntry.path; // this does not need test/verification, but it is used for the rename process if needed
+			var eLauncherName = eLauncherEntry.name;
+			
+			var eLauncherIconSlug; // platform specific get method
+			var eLauncherExePath; // platform specific get method // this is the exe/build it launches the profile in
+			
+			// get eLauncherIconSlug and eLauncherExePath
+			switch (core.os.mname) {
+				case 'winnt':
+				case 'winmo':
+				case 'wince':
+					importScripts(core.addon.path.modules + 'ostypes_win.jsm');
+					break
+				case 'gtk':
+					importScripts(core.addon.path.modules + 'ostypes_x11.jsm');
+					break;
+				case 'darwin':
+					importScripts(core.addon.path.modules + 'ostypes_mac.jsm');
+					break;
+				default:
+					throw new MainWorkerError({
+						name: 'addon-error',
+						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+					});
+			}
+			
+			// verify/update name
+			if (eLauncherName != aLauncherName) {
+				// rename file
+			}
+			
+			// verify/update icon
+			if (eLauncherIconSlug != aIconSlug){
+				// update icon
+			}
+			
+			if (eLauncherExePath != aLauncherExePath) {
+				// update exe path within launcher
+			}
+			
+			
 		// :todo: verify/update icon
 		// :todo: verify/update exe path (cannot verify this by name even if i include channel_name in it, because mutiple builds can have same build see link3347348473)
 		// :todo: verify/update name - the name should be Firefox CHANNEL_NAME - PROFILE_NAME // just because CHANNEL_NAME is correct, does not mean the exe path is correct. as multiple builds can be "default" channel name instance - link3347348473
 	} else {
-		// assume launcher does not exist - so need to make it
+		// assume eLauncher does not exist - so need to make it
 	}
+
 	
-	return launcherExePath;
+	
 }
 function launchOrFocusProfile(aProfPath, aOptions={}) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
@@ -929,6 +1195,8 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	if (!cProfIniEntry) { console.error('should-nver-happen!', 'cProfIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cProfIniEntry could not be found'); }
 	
 	if (aOptions.usePlat) {
+		// get from platform, if the profile is running, and if it is then get the exePath it is in
+		// :consider: right now i am updating gIniObj with the newly fetch details, but have :todo: deliver it to everywehre.
 		var cRunningExePath = getRunningExePathForProfFromPlat(aProfPath);
 		// :todo: check if gIniObj matches, if not as i modify it, then update it and send updates to gui's
 		if (cRunningExePath) {
@@ -940,16 +1208,42 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 		}
 	}
 	
-	// check if need to create icon
-	// self.postMessage(['createIcon', 'aPathsObj']); // :note: this is how to call with no callback
-	self.postMessageWithCallback(['createIcon', 'aPathsObj'], function(aCreateIconRez) { // :note: this is how to call WITH callback
-		console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
-	});
+	if (cProfIniEntry.noWriteObj.status) { // link6847494493
+		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams
+	}
 	
-	getExeChanForParamsFromFS(core.profilist.path.XREExeF);
-	// var launcherExePath = createLauncher(aProfPath);
+	// these vars, are all the things it should SET-TO/NOW be - on launching
+	var cExePath = getExePathForProfFromIni(aProfPath);
+	console.info('cExePath:', cExePath);
+	var cExeChannel = getExeChanForParamsFromFS(cExePath);
+	console.info('cExeChannel:', cExeChannel);
+	var cBadgeIconSlug = getBadgeSlugForProfFromIni(aProfPath);
+	console.info('cBadgeIconSlug:', cBadgeIconSlug);
+	var cIconInfosObj = getIconPathInfosForParamsFromIni(cExePath, cExeChannel, cBadgeIconSlug);
+	console.info('cIconInfosObj:', cIconInfosObj);
+	var cLauncherDirPath = getLauncherDirPathFromParams(aProfPath);
+	console.info('cLauncherDirPath:', cLauncherDirPath);
+	var cLauncherName = getLauncherNameFromParams(cExeChannel, cProfIniEntry.Name)
+	console.info('cLauncherName:', cLauncherName);
 	
+	// this is done after promise_createIcon
+	var postCreateIcon = function() {
+		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.name, cExePath);
+		
+		if (!cProfIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
+		
+		}
+	};
 	
+	var promise_createIcon = createIconForParamsFromFS(cIconInfosObj);
+	promise_createIcon.then(
+		function(aVal) {
+			console.log('Fullfilled - promise_createIcon - ', aVal);
+			postCreateIcon();
+		},
+		genericReject.bind(null, 'promise_createIcon', 0)
+	).catch(genericReject.bind(null, 'promise_createIcon', 0));
+
 	
 	return 'ok launched aProfPath: ' + aProfPath;
 }
@@ -1091,6 +1385,63 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 		if (!(aOptKey in aOptions)) {
 			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
 		}
+	}
+}
+function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3cb7390
+	// update 062115 for typeof
+	if (typeof(Promise) != 'undefined' && Promise.defer) {
+		//need import of Promise.jsm for example: Cu.import('resource:/gree/modules/Promise.jsm');
+		return Promise.defer();
+	} else if (typeof(PromiseUtils) != 'undefined'  && PromiseUtils.defer) {
+		//need import of PromiseUtils.jsm for example: Cu.import('resource:/gree/modules/PromiseUtils.jsm');
+		return PromiseUtils.defer();
+	} else {
+		/* A method to resolve the associated Promise with the value passed.
+		 * If the promise is already settled it does nothing.
+		 *
+		 * @param {anything} value : This value is used to resolve the promise
+		 * If the value is a Promise then the associated promise assumes the state
+		 * of Promise passed as value.
+		 */
+		this.resolve = null;
+
+		/* A method to reject the assocaited Promise with the value passed.
+		 * If the promise is already settled it does nothing.
+		 *
+		 * @param {anything} reason: The reason for the rejection of the Promise.
+		 * Generally its an Error object. If however a Promise is passed, then the Promise
+		 * itself will be the reason for rejection no matter the state of the Promise.
+		 */
+		this.reject = null;
+
+		/* A newly created Pomise object.
+		 * Initially in pending state.
+		 */
+		this.promise = new Promise(function(resolve, reject) {
+			this.resolve = resolve;
+			this.reject = reject;
+		}.bind(this));
+		Object.freeze(this);
+	}
+}
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
 	}
 }
 // end - common helper functions

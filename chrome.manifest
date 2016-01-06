@@ -1,2 +1,3 @@
 content profilist ./
 locale profilist en-US locale/en-US/
+content profilist/content_remote ./ remoteenabled=yes

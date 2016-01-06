@@ -18,6 +18,7 @@ const core = {
 			//
 			content: 'chrome://profilist/content/',
 			locale: 'chrome://profilist/locale/',
+			content_remote: 'chrome://profilist/content/content_remote/',
 			//
 			modules: 'chrome://profilist/content/modules/',
 			workers: 'chrome://profilist/content/modules/workers/',
@@ -113,13 +114,35 @@ function AboutFactory(component) {
 
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
-	createIcon: function(aPathsObj) {
-		console.log('in createIcon in MainWorkerMainThreadFuncs, aPathsObj:', aPathsObj);
+	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
+		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
 		// return ['hi arr 1']; // :note: this is how to return no promise
 		// :note: this is how to return with promise
 		var deferredMain_createIcon = new Deferred();
 		
-		deferredMain_createIcon.resolve(['hi arr 1 from promise']);
+		// deferredMain_createIcon.resolve(['hi arr 1 from promise']);
+		var triggerCreation = function() {
+			console.log('in triggerCreation');
+			ICGenWorker.postMessageWithCallback(['returnIconset', aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions], function(aStatusObj) {
+				console.log('returnIconset completed, aStatusObj:', aStatusObj);
+				deferredMain_createIcon.resolve([aStatusObj]);
+			});
+		};
+		
+		if (typeof(ICGenWorker) == 'undefined') {
+			console.log('sicing icgenworker');
+			var promise_getICGenWorker = SICWorker('ICGenWorker', core.addon.path.modules + 'ICGenWorker/worker.js?' + core.addon.cache_key, ICGenWorkerFuncs);
+			promise_getICGenWorker.then(
+				function(aVal) {
+					console.log('Fullfilled - promise_getICGenWorker - ', aVal);
+					triggerCreation();
+				},
+				genericReject.bind(null, 'promise_getICGenWorker', deferredMain_createIcon)
+			).catch(genericReject.bind(null, 'promise_getICGenWorker', deferredMain_createIcon));
+		} else {
+			triggerCreation();
+		}
+		
 		
 		return deferredMain_createIcon.promise;
 	}
@@ -182,6 +205,131 @@ function setupMainWorkerCustomErrors() {
 	// Register a constructor.
 	MainWorker.ExceptionHandlers['MainWorkerError'] = MainWorkerError.fromMsg;
 }
+
+// start - icon generator stuff
+var ICGenWorkerFuncs = { // functions for worker to call in main thread
+	loadImagePathsAndSendBackBytedata: function(aImagePathArr, aWorkerCallbackFulfill, aWorkerCallbackReject) {
+		// aImagePathArr is an arrya of os paths to the images to load
+		// this will load the images, then draw to canvas, then get get image data, then get array buffer/Bytedata for each image, and transfer object back it to the worker
+	},
+	fwInstances: {}, // frameworker instances, obj with id is aId which is arg of setupFrameworker
+	setupFrameworker: function(aId) {
+		// aId is the id to create frameworker with
+		console.log('mainthread: setupFrameworker, aId:', aId);
+
+		var deferredMain_setupFrameworker = new Deferred();
+		
+		var aWindow = Services.wm.getMostRecentWindow('navigator:browser');
+		var aDocument = aWindow.document;
+		
+		var doAfterAppShellDomWinReady = function() {
+			var aBrowser = aDocument.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'browser');
+			aBrowser.setAttribute('data-icon-container-generator-fwinstance-id', aId);
+			aBrowser.setAttribute('remote', 'true');
+			// aBrowser.setAttribute('disablesecurity', true);
+			// aBrowser.setAttribute('disablehistory', 'true');
+			aBrowser.setAttribute('type', 'content');
+			// aBrowser.setAttribute('style', 'height:100px;border:10px solid steelblue;');
+			aBrowser.setAttribute('style', 'display:none;');
+			// aBrowser.setAttribute('src', 'data:text/html,back to content');
+			aBrowser.setAttribute('src', core.addon.path.content_remote + 'frameworker.htm');
+			
+			ICGenWorkerFuncs.fwInstances[aId] = {
+				browser: aBrowser,
+				deferredMain_setupFrameworker: deferredMain_setupFrameworker
+			};
+			
+			aDocument.documentElement.appendChild(aBrowser);
+			console.log('aBrowser.messageManager:', aBrowser.messageManager);
+			aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);			
+			
+			// ICGenWorkerFuncs.fwInstances[aId].browser.messageManager.IconContainerGenerator_id = aId; // doesnt work
+			// console.log('ICGenWorkerFuncs.fwInstances[aId].browser.messageManager:', ICGenWorkerFuncs.fwInstances[aId].browser.messageManager);
+			
+		};
+		
+		
+		if (aDocument.readyState == 'complete') {
+			doAfterAppShellDomWinReady();
+		} else {
+			aWindow.addEventListener('load', function() {
+				aWindow.removeEventListener('load', arguments.callee, false);
+				doAfterAppShellDomWinReady();
+			}, false);
+		}
+		
+		return deferredMain_setupFrameworker.promise;
+	},
+	destroyFrameworker: function(aId) {
+		
+		// var aTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+		// aTimer.initWithCallback({
+			// notify: function() {
+					console.log('will now destory remote browser, i hope this will trigger the framescript unload event, because that removes the listener, otherwise i think that the attached message listener from that framescript stays alive somehow');
+					ICGenWorkerFuncs.fwInstances[aId].browser.parentNode.removeChild(ICGenWorkerFuncs.fwInstances[aId].browser); // im hoping this triggers the unload event on framescript
+					delete ICGenWorkerFuncs.fwInstances[aId];
+			// }
+		// }, 10000, Ci.nsITimer.TYPE_ONE_SHOT);
+		
+
+	},
+	tellFrameworkerLoadImg: function(aProvidedPath, aLoadPath, aId) {
+		var deferredMain_tellFrameworkerLoadImg = new Deferred();
+		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['loadImg', aProvidedPath, aLoadPath], fsMsgListener.funcScope, function(aImgDataObj) {
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
+			deferredMain_tellFrameworkerLoadImg.resolve([aImgDataObj]);
+		});
+		return deferredMain_tellFrameworkerLoadImg.promise;
+	},
+	tellFrameworkerDrawScaled: function(aImgPath, aDrawAtSize, aId) {
+		var deferredMain_tellFrameworkerDrawScaled = new Deferred();
+		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled', aImgPath, aDrawAtSize], fsMsgListener.funcScope, function(aImgDataObj) {
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
+			var resolveWithArr = [aImgDataObj];
+			if (aImgDataObj.arrbuf) {
+				resolveWithArr.push([aImgDataObj.arrbuf]);
+				resolveWithArr.push(SIC_TRANS_WORD);
+			}
+			deferredMain_tellFrameworkerDrawScaled.resolve(resolveWithArr);		
+		});
+		return deferredMain_tellFrameworkerDrawScaled.promise;
+	},
+	tellFrameworker_dSoBoOOSb: function(aImgPath, aDrawAtSize, optBuf, optOverlapObj, aId) {
+		var deferredMain_tellFrameworker_dSoBoOOSb = new Deferred();
+		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled_optBuf_optOverlapOptScaled_buf', aImgPath, aDrawAtSize, optBuf, optOverlapObj], fsMsgListener.funcScope, function(aImgDataObj) {
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
+			var resolveWithArr = [aImgDataObj];
+			var bufTrans = [];
+			if (aImgDataObj.optBuf) {
+				bufTrans.push(aImgDataObj.optBuf);
+			}
+			if (aImgDataObj.finalBuf) {
+				bufTrans.push(aImgDataObj.finalBuf);
+			}
+			if (aImgDataObj.optBuf || aImgDataObj.finalBuf) {
+				resolveWithArr.push(bufTrans);
+				resolveWithArr.push(SIC_TRANS_WORD);
+			}
+			deferredMain_tellFrameworker_dSoBoOOSb.resolve(resolveWithArr);	
+		});
+		return deferredMain_tellFrameworker_dSoBoOOSb.promise;
+	},
+	tellFrameworkerGetImgDatasOfFinals: function(reqObj, aId) {
+		var deferredMain_tellFrameworker_gIDOF = new Deferred();
+		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['getImgDatasOfFinals', reqObj], fsMsgListener.funcScope, function(aObjOfBufs) {
+			
+			var resolveWithArr = [aObjOfBufs, [], SIC_TRANS_WORD];
+			for (var p in aObjOfBufs) {
+				resolveWithArr[1].push(aObjOfBufs[p]);
+			}
+			console.log('in bootstrap callback of tellFrameworkerGetImgDatasOfFinals, resolving with:', resolveWithArr);
+
+			deferredMain_tellFrameworker_gIDOF.resolve(resolveWithArr);	
+		});
+		return deferredMain_tellFrameworker_gIDOF.promise;
+	}
+};
+// end - icon generator stuff
 
 function install() {}
 
@@ -266,7 +414,7 @@ function shutdown(aData, aReason) {
 	}
 	
 	// terminate worker
-	if (MainWorker) {
+	if (typeof(MainWorker) != 'undefined') {
 		var promise_prepForTerm = MainWorker.post('prepForTerminate');
 		promise_prepForTerm.then(
 			function(aVal) {
@@ -277,11 +425,25 @@ function shutdown(aData, aReason) {
 			genericReject.bind(null, 'promise_prepForTerm', 0)
 		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));
 	}
+	
+	if (typeof(ICGenWorker) != 'undefined') {
+		ICGenWorker.terminate();
+	}
 }
 // END - Addon Functionalities
 // start - server/framescript comm layer
 // functions for framescripts to call in main thread
 var fsFuncs = { // can use whatever, but by default its setup to use this
+	// fsReturnIconset.js functions
+	frameworkerReady: function(aMsgEvent) {
+		var aBrowser = aMsgEvent.target;
+		console.info('fwInstancesId:', aBrowser);
+		var fwInstancesId = aBrowser.getAttribute('data-icon-container-generator-fwinstance-id');
+		console.info('fwInstancesId:', fwInstancesId);
+		
+		ICGenWorkerFuncs.fwInstances[fwInstancesId].deferredMain_setupFrameworker.resolve(['ok send me imgs now baby']);
+	},
+	// end - fsReturnIconset.js functions
 	fetchCoreAndConfigs: function() {
 		var deferredMain_fetchConfigObjs = new Deferred();
 		
