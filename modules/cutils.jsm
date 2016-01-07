@@ -14,28 +14,32 @@ if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 
 function utilsInit() {
 	// start - comparison stuff
+	// https://gist.github.com/Noitidart/1ae3ff204dbe5c46befa - rev1
 	this.jscGetDeepest = function(obj) {
 		/*
 		if (obj !== null && obj !== undefined) {
 			console.log('trying on:', obj.toString())
 		}
 		*/
-		while (obj && Object.prototype.toString.call(obj) == '[object Object]' && ('contents' in obj || 'value' in obj)) {
+		var lastTypeof = typeof(obj);
+		while ((lastTypeof == 'function' || lastTypeof == 'object') && ('contents' in obj || 'value' in obj)) { // the first part tests if i can use `in obj`
 			if ('contents' in obj) {
 				if (obj.constructor.targetType && obj.constructor.targetType.size === undefined) {
-					//console.error('breaking as no targetType.size on obj level:', obj.toString());
+					// this avoids the error of like ctypes.voidptr_t(ctypes.UInt64("0x204")).contents as this will throw "Error: cannot get contents of undefined size"
 					break;
 				} else {
 					obj = obj.contents;
 				}
 			} else if ('value' in obj) {
-				if (obj.constructor.targetType && obj.constructor.targetType.size === undefined) {
-					//console.error('breaking as no targetType.size on obj level:', obj.toString());
-					break;
-				} else {
+				try {
+					// this avoids the error of like ctypes.voidptr_t(ctypes.UInt64("0x204")).value as this will throw "TypeError: .value only works on character and numeric types, not `ctypes.voidptr_t`"
 					obj = obj.value;
+				} catch(ignore) {
+					break;
 				}
 			}
+			// this style assumes that if it has .contents (either undefined or not) it is impoosible that it has a .value
+			lastTypeof = typeof(obj)
 		}
 		if (obj && obj.toString) {
 			obj = obj.toString();

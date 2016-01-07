@@ -1252,6 +1252,10 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 // platform helpers
 function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 	// returns true/false
+	
+	console.error('entered createHardLink - aCreatePlatformPath:', aCreatePlatformPath, 'aTargetPlatformPath:', aTargetPlatformPath);
+	
+	
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
@@ -1304,26 +1308,35 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 					var NSError = ostypes.HELPER.class('NSError');
 					var error = ostypes.API('objc_msgSend')(NSError, ostypes.HELPER.sel('errorWithDomain:code:userInfo:'), chlNSStrings.get('profilist'), ostypes.TYPE.NSInteger(0), ostypes.CONST.NIL);
 					
-					console.log('my attempt to read my own nsstring:', ostypes.HELPER.readNSString(chlNSStrings.get('hi there my name is noida')));
-					console.log('my attempt to read my own nsstring, should be "/Users/noida/Desktop/Profilist.xpi":', ostypes.HELPER.readNSString(chlNSStrings.get('/Users/noida/Desktop/Profilist.xpi')));
-					
 					var rez_linkItemAtPath = ostypes.API('objc_msgSend')(fm, ostypes.HELPER.sel('linkItemAtPath:toPath:error:'), chlNSStrings.get(aTargetPlatformPath), chlNSStrings.get(aCreatePlatformPath), error.address());
 					console.log('rez_linkItemAtPath:', rez_linkItemAtPath, cutils.jscGetDeepest(rez_linkItemAtPath));
 					
-					if (cutils.jscEqual(rez_linkItemAtPath, ostypes.CONST.YES)) {
+					// have to cast it, because it returns a voidptr_t which is a "ctypes.voidptr_t(ctypes.UInt64("0x1"))" for YES, intersting
+					
+					if (cutils.jscEqual(ctypes.cast(rez_linkItemAtPath, ostypes.TYPE.BOOL), ostypes.CONST.YES)) {
 						return true;
 					} else {
-						// actually, if it already exists, it will also be ostypes.CONST.NO
+						// if it already exists, it will also be ostypes.CONST.NO, check error object to verify
 						var errCode = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('code'));
 						console.log('errCode:', errCode);
 						
-						var errDesc = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('localizedDescription'));
-						console.log('errDesc:', errDesc, ostypes.HELPER.readNSString(errDesc));		
+						// var errDesc = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('localizedDescription'));
+						// console.log('errDesc:', errDesc, ostypes.HELPER.readNSString(errDesc));		
 						
-						var errDomain = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('domain'));
-						console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
+						// var errDomain = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('domain'));
+						// console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
 
-						console.warn('false');
+						
+						var jsErrCode = ctypes.cast(errCode, ostypes.TYPE.NSInteger);
+						console.log('jsErrCode:', jsErrCode);
+						console.log('jscGetDeepest:', cutils.jscGetDeepest(jsErrCode));
+						if (cutils.jscEqual(jsErrCode, ostypes.CONST.NSFileWriteFileExistsError)) {
+							// it already exists
+							console.warn('already exists');
+							return true;
+						}
+						
+						console.error('failed to create hard link with NSCocoaErrorDomain code of: ', jsErrCode);
 						
 						return false;
 					}
