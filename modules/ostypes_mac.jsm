@@ -1074,6 +1074,11 @@ var macInit = function() {
 				this.coll = null;
 			};
 		},
+		readNSString: function(aNSStringPtr) {
+			var cUTF8Ptr = self.API('objc_msgSend')(aNSStringPtr, self.HELPER.sel('UTF8String'));
+			var cCharPtr = ctypes.cast(cUTF8Ptr, ctypes.char.ptr);
+			return cCharPtr.readStringReplaceMalformed();
+		},
 		createBlock: function(aFuncTypePtr) {
 			// based on work from here: https://github.com/trueinteractions/tint2/blob/f6ce18b16ada165b98b07869314dad1d7bee0252/modules/Bridge/core.js#L370-L394
 			var bl = self.TYPE.Block_literal_1();

@@ -1249,6 +1249,119 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 }
 // End - Launching profile and other profile functionality
 
+// platform helpers
+function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
+	// returns true/false
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				// returns true/false
+				// creates a hard link
+				// directory must be different otherwise hard link fails to make, it makes a blank file, clicking it, pops open the windows "use what program to open this" thing
+				// names can be different. // update of icon name or target path updates to the other. // update of file name does not propogate to the other
+					// when make hardlink, the name can be different however the extension must be the same otherwise the hardlink doesnt connect and when you try to open windows asks you "open it with what?"
+				// path_create and path_target must include extenions
+				
+				// cannot make hard link of a directory, files only
+				
+				var rez_CreateHardLink = ostypes.API('CreateHardLink')(path_create, path_target, null);
+				console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
+				if (ctypes.winLastError != 0) {
+					if (ctypes.winLastError == OS.Constants.Win.ERROR_ALREADY_EXISTS) {
+						// it already exists so it was already made so just return true
+						console.log('CreateHardLink got winLastError for already existing, its rez was:', rez_CreateHardLink, 'but lets return true as if hard link was already made then no need to make again, all hardlinks update right away to match all from what it is hard linekd to');
+						return true;
+					}
+					console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
+					throw new Error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
+				}
+				return rez_CreateHardLink;
+				
+			break;
+		case 'darwin':
+
+				// http://stackoverflow.com/a/20467353/1828637
+				// https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Classes/NSFileManager_Class/index.html#//apple_ref/occ/instm/NSFileManager/linkItemAtPath:toPath:error:
+				/*
+				 [[NSFileManager defaultManager] linkItemAtPath:<application path>
+                                                toPath:shortCutDestPath
+                                                 error:&error];
+													 
+					To update icon
+
+					BOOL result = [[NSWorkspace sharedWorkspace] setIcon:imageIcon
+                                       forFile: shortCutDestPath
+                                       options:NSExclude10_4ElementsIconCreationOption];
+				*/
+				var NSFileManager = ostypes.HELPER.class('NSFileManager');
+				var defaultManager = ostypes.HELPER.sel('defaultManager');
+				var fm = ostypes.API('objc_msgSend')(NSFileManager, defaultManager);
+				
+				var chlNSStrings = new ostypes.HELPER.nsstringColl();
+				try {
+					
+					var NSError = ostypes.HELPER.class('NSError');
+					var error = ostypes.API('objc_msgSend')(NSError, ostypes.HELPER.sel('errorWithDomain:code:userInfo:'), chlNSStrings.get('profilist'), ostypes.TYPE.NSInteger(0), ostypes.CONST.NIL);
+					
+					console.log('my attempt to read my own nsstring:', ostypes.HELPER.readNSString(chlNSStrings.get('hi there my name is noida')));
+					console.log('my attempt to read my own nsstring, should be "/Users/noida/Desktop/Profilist.xpi":', ostypes.HELPER.readNSString(chlNSStrings.get('/Users/noida/Desktop/Profilist.xpi')));
+					
+					var rez_linkItemAtPath = ostypes.API('objc_msgSend')(fm, ostypes.HELPER.sel('linkItemAtPath:toPath:error:'), chlNSStrings.get(aTargetPlatformPath), chlNSStrings.get(aCreatePlatformPath), error.address());
+					console.log('rez_linkItemAtPath:', rez_linkItemAtPath, cutils.jscGetDeepest(rez_linkItemAtPath));
+					
+					if (cutils.jscEqual(rez_linkItemAtPath, ostypes.CONST.YES)) {
+						return true;
+					} else {
+						// actually, if it already exists, it will also be ostypes.CONST.NO
+						var errCode = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('code'));
+						console.log('errCode:', errCode);
+						
+						var errDesc = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('localizedDescription'));
+						console.log('errDesc:', errDesc, ostypes.HELPER.readNSString(errDesc));		
+						
+						var errDomain = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('domain'));
+						console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
+
+						console.warn('false');
+						
+						return false;
+					}
+				} finally {
+					chlNSStrings.releaseAll()
+				}
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function createAlias(aCreatePlatformPath, aTargetPlatformPath) {
+	switch (core.os.name) {
+		case 'darwin':
+
+				// http://stackoverflow.com/a/17923494/1828637
+				/*
+				http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/Foundation/Classes/NSURL_Class/Reference/Reference.html#//apple_ref/occ/clm/NSURL/writeBookmarkData%3atoURL%3aoptions%3aerror%3a
+				
+				NSURL *originalUrl = [NSURL fileURLWithPath:@"/this/is/your/path"];
+				NSURL *aliasUrl = [NSURL fileURLWithPath:@"/your/alias/path"];
+				NSData *bookmarkData = [url bookmarkDataWithOptions: NSURLBookmarkCreationSuitableForBookmarkFile includingResourceValuesForKeys:nil relativeToURL:nil error:NULL];
+
+				if(bookmarkData != nil) {
+					BOOL success = [NSURL writeBookmarkData:bookmarkData toURL:aliasUrl options:NSURLBookmarkCreationSuitableForBookmarkFile error:NULL];
+					if(NO == success) {
+						//error
+					}
+				}
+				*/
+				
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
 // End - Addon Functionality
 
 // start - common helper functions
