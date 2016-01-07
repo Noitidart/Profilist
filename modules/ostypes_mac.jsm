@@ -226,6 +226,7 @@ var macTypes = function() {
 	this.NSBitmapFormat = this.NSUInteger;
 	this.NSEventType = this.NSUInteger;
 	this.NSEventMask = this.NSUInteger;
+	this.NSURLBookmarkCreationOptions = this.NSUInteger;
 	
 	// GUESS TYPES OBJC - they work though
 	this.id = ctypes.voidptr_t;
@@ -392,11 +393,15 @@ var macInit = function() {
 		NSPNGFileType: self.TYPE.NSUInteger(4),
 		YES: self.TYPE.BOOL(1), // i do this instead of 1 becuase for varidic types we need to expclicitly define it
 		NIL: self.TYPE.void.ptr(ctypes.UInt64('0x0')), // needed for varidic args, as i cant pass null there
-		
 		NSFileWriteFileExistsError: 516, // i dont use this a variadic, just for compare so i dont wrap this in a type, but the type is  NSInteger. I figured this because NSError says its code value is NSInteger. The types for NSFileWriteFileExistsError says its enum - but by looking up code i can see that enum is type NSInteger - sources: https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Classes/NSError_Class/index.html#//apple_ref/occ/instp/NSError/code && https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_Constants/index.html#//apple_ref/doc/constant_group/NSError_Codes
+		NSURLBookmarkCreationSuitableForBookmarkFile: self.TYPE.NSURLBookmarkCreationOptions(1 << 10)
 	};
 	
+	
 	// ADVANCED CONST
+	this.CONST.NULL = this.CONST.NIL.address();
+	
+	
 	this.CONST.NSLeftMouseDownMask = 1 << this.CONST.NSLeftMouseDown;
 	this.CONST.NSLeftMouseUpMask = 1 << this.CONST.NSLeftMouseUp;
 	this.CONST.NSRightMouseDownMask = 1 << this.CONST.NSRightMouseDown;
@@ -1031,7 +1036,7 @@ var macInit = function() {
 		sel: function(jsStrSEL) {
 			if (!(jsStrSEL in self.HELPER._selLC)) {
 				self.HELPER._selLC[jsStrSEL] = self.API('sel_registerName')(jsStrSEL);
-				console.info('sel c got', jsStrSEL, self.HELPER._selLC[jsStrSEL].toString());
+				// console.info('sel c got', jsStrSEL, self.HELPER._selLC[jsStrSEL].toString());
 			}
 			return self.HELPER._selLC[jsStrSEL];
 		},
@@ -1039,7 +1044,7 @@ var macInit = function() {
 		class: function(jsStrCLASS) {
 			if (!(jsStrCLASS in self.HELPER._classLC)) {
 				self.HELPER._classLC[jsStrCLASS] = self.API('objc_getClass')(jsStrCLASS);
-				console.info('class c got', jsStrCLASS, self.HELPER._classLC[jsStrCLASS].toString());
+				// console.info('class c got', jsStrCLASS, self.HELPER._classLC[jsStrCLASS].toString());
 			}
 			return self.HELPER._classLC[jsStrCLASS];
 		},
@@ -1048,22 +1053,21 @@ var macInit = function() {
 			// if get and it doesnt exist then it makes and stores it
 			// if get and already exists then it returns that lazy
 			// can releaseAll on it
-			console.error('nssstringColll');
+			// console.error('nssstringColll');
 			this.coll = {};
 			this.class = {};
 			this.get = function(jsStr) {
-				console.error('enter get');
+				// console.error('enter get');
 				if (!(jsStr in this.coll)) {
-					console.error('here');
+					// console.error('here');
 					this.class[jsStr] = self.API('objc_msgSend')(self.HELPER.class('NSString'), self.HELPER.sel('alloc'));;
-					console.info('pre init this.class[jsStr]:', jsStr, this.class[jsStr].toString());
+					// console.info('pre init this.class[jsStr]:', jsStr, this.class[jsStr].toString());
 					
 					var rez_initWithUTF8String = self.API('objc_msgSend')(this.class[jsStr], self.HELPER.sel('initWithUTF8String:'), self.TYPE.char.array()(jsStr));
 					this.coll[jsStr] = rez_initWithUTF8String;
-					console.info('post init this.class:', jsStr, this.class[jsStr].toString(), 'this.coll[jsStr]:', this.coll[jsStr].toString());
-				} else {
-					console.error('jsStr already in coll', jsStr);
+					// console.info('post init this.class:', jsStr, this.class[jsStr].toString(), 'this.coll[jsStr]:', this.coll[jsStr].toString());
 				}
+				// else { console.error('jsStr already in coll', jsStr); }
 				return this.coll[jsStr];
 			};
 			
@@ -1071,7 +1075,7 @@ var macInit = function() {
 				for (var nsstring in this.coll) {
 					var rez_relNSS = self.API('objc_msgSend')(this.coll[nsstring], self.HELPER.sel('release'));
 					var rez_relCLASS = self.API('objc_msgSend')(this.class[nsstring], self.HELPER.sel('release'));
-					console.info(nsstring, 'rez_relNSS:', rez_relNSS.toString(), 'rez_relCLASS:', rez_relCLASS.toString());
+					// console.info(nsstring, 'rez_relNSS:', rez_relNSS.toString(), 'rez_relCLASS:', rez_relCLASS.toString());
 				}
 				this.coll = null;
 			};

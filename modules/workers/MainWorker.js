@@ -1328,7 +1328,7 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 						// console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
 
 						
-						var jsErrCode = cutils.jscGetDeepest(ctypes.cast(errCode, ostypes.TYPE.NSInteger));
+						var jsErrCode = ctypes.cast(errCode, ostypes.TYPE.NSInteger);
 						console.log('jsErrCode:', jsErrCode);
 						if (cutils.jscEqual(jsErrCode, ostypes.CONST.NSFileWriteFileExistsError)) {
 							// it already exists
@@ -1353,7 +1353,8 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 function createAlias(aCreatePlatformPath, aTargetPlatformPath) {
 	switch (core.os.name) {
 		case 'darwin':
-
+				
+				// this method is for OS X 10.6 +
 				// http://stackoverflow.com/a/17923494/1828637
 				/*
 				http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/Foundation/Classes/NSURL_Class/Reference/Reference.html#//apple_ref/occ/clm/NSURL/writeBookmarkData%3atoURL%3aoptions%3aerror%3a
@@ -1369,6 +1370,43 @@ function createAlias(aCreatePlatformPath, aTargetPlatformPath) {
 					}
 				}
 				*/
+				
+				var caNSStrings = new ostypes.HELPER.nsstringColl();
+				
+				try {
+					var NSURL = ostypes.HELPER.class('NSURL');
+					var originalUrl = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('fileURLWithPath:'), caNSStrings.get(aTargetPlatformPath));
+					var aliasUrl = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('fileURLWithPath:'), caNSStrings.get(aCreatePlatformPath));
+					
+					console.log('originalUrl:', originalUrl);
+					console.log('aliasUrl:', aliasUrl);
+					
+					var NULL = ctypes.voidptr_t(ctypes.UInt64('0x0')).address(); // because this is getting set to a pointer to error by this API call, i have to use a new NULL, not ostypes.CONST.NULL
+					var bookmarkData = ostypes.API('objc_msgSend')(originalUrl, ostypes.HELPER.sel('bookmarkDataWithOptions:includingResourceValuesForKeys:relativeToURL:error:'), ostypes.CONST.NSURLBookmarkCreationSuitableForBookmarkFile, ostypes.CONST.NIL, ostypes.CONST.NIL, NULL);
+					console.log('bookmarkData:', bookmarkData);
+
+					if (cutils.jscEqual(bookmarkData, ostypes.CONST.NIL)) {
+						console.error('failed to create bookmarkData');
+						return false;
+					} else {
+						var NULL = ctypes.voidptr_t(ctypes.UInt64('0x0')).address();
+						var rez_writeAlias = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('writeBookmarkData:toURL:options:error:'), bookmarkData, aliasUrl, ostypes.CONST.NSURLBookmarkCreationSuitableForBookmarkFile, NULL);
+						console.log('rez_writeAlias:', rez_writeAlias);
+						rez_writeAlias = ctypes.cast(rez_writeAlias, ostypes.TYPE.BOOL);
+						console.log('casted:', rez_writeAlias);
+						
+						if (cutils.jscEqual(rez_writeAlias, ostypes.CONST.NO)) {
+							console.error('failed to create alias for some reason');
+							return false;
+						} else {
+							return true;
+						}
+					}
+				}
+				catch (ex) { console.error('ex happend:', ex); }
+				finally {
+					caNSStrings.releaseAll();
+				}
 				
 			break;
 		default:
