@@ -1305,8 +1305,8 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 				var chlNSStrings = new ostypes.HELPER.nsstringColl();
 				try {
 					
-					var NSError = ostypes.HELPER.class('NSError');
-					var error = ostypes.API('objc_msgSend')(NSError, ostypes.HELPER.sel('errorWithDomain:code:userInfo:'), chlNSStrings.get('profilist'), ostypes.TYPE.NSInteger(0), ostypes.CONST.NIL);
+					// var NSError = ostypes.HELPER.class('NSError');
+					var error = ctypes.voidptr_t(); //ostypes.API('objc_msgSend')(NSError, ostypes.HELPER.sel('errorWithDomain:code:userInfo:'), chlNSStrings.get('profilist'), ostypes.TYPE.NSInteger(0), ostypes.CONST.NIL);
 					
 					var rez_linkItemAtPath = ostypes.API('objc_msgSend')(fm, ostypes.HELPER.sel('linkItemAtPath:toPath:error:'), chlNSStrings.get(aTargetPlatformPath), chlNSStrings.get(aCreatePlatformPath), error.address());
 					console.log('rez_linkItemAtPath:', rez_linkItemAtPath, cutils.jscGetDeepest(rez_linkItemAtPath));
@@ -1316,6 +1316,7 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 					if (cutils.jscEqual(ctypes.cast(rez_linkItemAtPath, ostypes.TYPE.BOOL), ostypes.CONST.YES)) {
 						return true;
 					} else {
+						console.log('error was voidptr_t');
 						// if it already exists, it will also be ostypes.CONST.NO, check error object to verify
 						var errCode = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('code'));
 						console.log('errCode:', errCode);
@@ -1327,16 +1328,15 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 						// console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
 
 						
-						var jsErrCode = ctypes.cast(errCode, ostypes.TYPE.NSInteger);
+						var jsErrCode = cutils.jscGetDeepest(ctypes.cast(errCode, ostypes.TYPE.NSInteger));
 						console.log('jsErrCode:', jsErrCode);
-						console.log('jscGetDeepest:', cutils.jscGetDeepest(jsErrCode));
 						if (cutils.jscEqual(jsErrCode, ostypes.CONST.NSFileWriteFileExistsError)) {
 							// it already exists
 							console.warn('already exists');
 							return true;
 						}
 						
-						console.error('failed to create hard link with NSCocoaErrorDomain code of: ', jsErrCode);
+						console.error('failed to create hard link with NSCocoaErrorDomain code of:', jsErrCode);
 						
 						return false;
 					}
