@@ -3,6 +3,7 @@ const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constru
 Cm.QueryInterface(Ci.nsIComponentRegistrar);
 Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
+Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 const PromiseWorker = Cu.import('resource://gre/modules/PromiseWorker.jsm').BasePromiseWorker;
 Cu.import('resource://gre/modules/Services.jsm');
@@ -349,6 +350,9 @@ function startup(aData, aReason) {
 		defProfRt: Services.dirsvc.get('DefProfRt', Ci.nsIFile).path,
 		defProfLRt: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path,
 		XREExeF: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
+	};
+	core.FileUtils = {
+		PERMS_DIRECTORY: FileUtils.PERMS_DIRECTORY
 	};
 	core.firefox.channel = Services.prefs.getCharPref('app.update.channel'); // esr|release|beta|aurora|dev|nightly|default
 	

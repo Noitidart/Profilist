@@ -760,7 +760,7 @@ function getExeChanForParamsFromFS(aExePath) {
 			console.time('getExeChanFromFS');
 			var channelPrefsJsPath;
 			if (core.os.name == 'darwin') {
-				channelPrefsJsPath = OS.Path.join(aExePath.substr(0, aExePath.indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js'); // :note::assume:i assume that aExePath is properly cased meaning the .app is always lower, so its never .APP // :note::important::todo: therefore when allow browse to .app from cp.js i should display only till the .app in the gui, but i should save it up till the .app/Contents/MacOS/firefox
+				channelPrefsJsPath = OS.Path.join(aExePath.substr(0, aExePath.indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js'); // :note::assume:i assume that aExePath is properly cased meaning the .app is always lower, so its never .APP // :note::important::todo: therefore when allow browse to .app from cp.js i should display only till the .app in the gui, but i should save it up till the .app/Contents/MacOS/firefox // link009838393
 			} else {
 				channelPrefsJsPath = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
 			}
@@ -1350,6 +1350,65 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 
 					// create .app
 					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.app');
+					
+					var cLauncherAppPath = cLauncherPath;
+					console.info('cLauncherAppPath:', cLauncherAppPath);
+					var rez_makeLauncherApp = OS.File.makeDir(cLauncherAppPath);
+					
+					var cLauncherContentsPath = OS.Path.join(cLauncherAppPath, 'Contents');
+					console.info('cLauncherContentsPath:', cLauncherContentsPath);
+					var rez_makeLauncherContents = OS.File.makeDir(cLauncherContentsPath);
+					
+					
+					// C:\Users\Mercurius\Pictures\osx firefox.app contents dir entries.png
+					var cTargetAppPath = core.profilist.path.XREExeF.substr(0, core.profilist.path.XREExeF.indexOf('.app') + 4); // link009838393
+					console.info('cTargetAppPath:', cTargetAppPath);
+					var cTargetContentsPath = OS.Path.join(cTargetAppPath, 'Contents');
+					// var rez_hardLinkCodeSig = createAlias(OS.Path.join(cLauncherContentsPath, '_CodeSignature'), OS.Path.join(cTargetContentsPath, '_CodeSignature'));
+					// var rez_hardLinkMacOs = createAlias(OS.Path.join(cLauncherContentsPath, 'MacOS'), OS.Path.join(cTargetContentsPath, 'MacOS'));
+					// var rez_hardLinkPkgInfo = createAlias(OS.Path.join(cLauncherContentsPath, 'PkgInfo'), OS.Path.join(cTargetContentsPath, 'PkgInfo'));
+					// var rez_hardResources = createAlias(OS.Path.join(cLauncherContentsPath, 'Resources'), OS.Path.join(cTargetContentsPath, 'Resources'));
+					var rez_hardLinkCodeSig = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, '_CodeSignature'), OS.Path.join(cLauncherContentsPath, '_CodeSignature'));
+					var rez_hardLinkMacOs = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'MacOS'), OS.Path.join(cLauncherContentsPath, 'MacOS'));
+					var rez_hardLinkPkgInfo = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'PkgInfo'), OS.Path.join(cLauncherContentsPath, 'PkgInfo'));
+					var rez_hardResources = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'Resources'), OS.Path.join(cLauncherContentsPath, 'Resources'));
+
+					var rez_copyIcon = OS.File.copy(aLauncherIconPath, OS.Path.join(cTargetContentsPath, 'Resources', 'profilist-' + cLauncherDirName + '.icns'), {noOverwrite:false}); // i copy the icon into the main folder, because i alias the folders
+					
+					var execContents = [
+						'#!/bin/sh',
+						// '##' + JSON.stringify({XREExeF_APP:cTargetAppPath, LauncherIconPath:aLauncherIconPath}) + '##',
+						'exec "' + OS.Path.join(cLauncherAppPath, 'Contents', 'MacOS', 'firefox') + '" -profile "' + aFullPathToProfileDir + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
+					];
+					var cLauncherExecPath = OS.Path.join(cTargetContentsPath, 'MacOS', 'profilist-' + cLauncherDirName); // we place it into the target folder because i alias the folders
+					var rez_writeExec = OS.File.writeAtomic(cLauncherExecPath, execContents.join('\n'));// i write the exec into the main folder, because i alias the folders)
+					var rez_permExec = OS.File.setPermissions(cLauncherExecPath, {unixMode: core.FileUtils.PERMS_DIRECTORY});
+					
+					var rez_readPlistInfo = OS.File.read(OS.Path.join(cTargetContentsPath, 'Info.plist'), {encoding:'utf-8'});
+					var launcherPlistInfo = rez_readPlistInfo;
+					launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleExecutable<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b) {
+						// this function gets the original executable name (i cant assume its firefox, it might nightly etc)
+						// it also replaces it with profilist-exec
+						return a.replace(b, 'profilist-' + cLauncherDirName);
+					});
+					launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleIconFile<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
+						// this function replaces icon with profilist-badged.icns, so in future i can easily replace it without having to know name first, like i dont know if its firefox.icns for nightly etc
+						return a.replace(b, 'profilist-' + cLauncherDirName);
+					});
+					launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleIdentifier<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
+						// this function replaces the bundle identifier
+						// on macs the Profilist.launcher key holds the bundle identifier
+						return a.replace(b, cLauncherDirName/*.replace(/[^a-z\.0-9]/ig, '-')*/); //no need for the replace as its all numbers, but i left it here so i know whats allowed in a bundle-identifier
+						//The bundle identifier string identifies your application to the system. This string must be a uniform type identifier (UTI) that contains only alphanumeric (A-Z,a-z,0-9), hyphen (-), and period (.) characters. The string should also be in reverse-DNS format. For example, if your companyâ€™s domain is Ajax.com and you create an application named Hello, you could assign the string com.Ajax.Hello as your applicationâ€™s bundle identifier. The bundle identifier is used in validating the application signature. source (apple developer: https://developer.apple.com/library/ios/#documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html#//apple_ref/doc/uid/10000123i-CH101-SW1)
+						//An identifier used by iOS and Mac OS X to recognize any future updates to your app. Your Bundle ID must be registered with Apple and unique to your app. Bundle IDs are app-type specific (either iOS or Mac OS X). The same Bundle ID cannot be used for both iOS and Mac OS X apps. source https://itunesconnect.apple.com/docs/iTunesConnect_DeveloperGuide.pdf
+					});
+					var rez_writePlistInfo = OS.File.writeAtomic(OS.Path.join(cLauncherContentsPath, 'Info.plist'), launcherPlistInfo, {encoding:'utf-8'});
+					
+					// xattr it
+					console.log('xattr-ing the regular app - trying symlink');
+					var rez_xattrOpen = ostypes.API('popen')('/usr/bin/xattr -d com.apple.quarantine "' + cLauncherAppPath.replace(/ /g, '\ ') + '"', 'r')
+					var rez_xattrClose = ostypes.API('pclose')(rez_xattrOpen); // waits for process to exit
+					console.log('rez_xattrClose:', cutils.jscGetDeepest(rez_xattrClose));
 
 				break;
 			default:

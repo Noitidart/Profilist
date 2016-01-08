@@ -82,7 +82,8 @@ var macTypes = function() {
 	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
 
 	// inaccrurate types - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
-
+	this.FILE = ctypes.void_t; // libc type // not really a guess, i just dont have a need to fill it
+	
 	// STRUCTURES
 	// consts for structures
 	var struct_const = {
@@ -495,7 +496,7 @@ var macInit = function() {
 							preferred = possibles[1];
 						}
 						
-						libAttempter(_lib[path], preferred, possibles);
+						libAttempter(path, preferred, possibles);
 					
 					break;
 				case 'libc':
@@ -529,7 +530,7 @@ var macInit = function() {
 								// do nothing
 						}
 						
-						libAttempter(_lib[path], preferred, possibles);
+						libAttempter(path, preferred, possibles);
 
 					break;
 				case 'objc':
@@ -1016,6 +1017,30 @@ var macInit = function() {
 				self.TYPE.void.ptr,	// *dst
 				self.TYPE.void.ptr,	// *src
 				self.TYPE.size_t	// n
+			);
+		},
+		popen: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/popen.3.html
+			 * FILE *popen(
+			 *   const char *command,
+			 *   const char *mode
+			 * );
+			 */
+			return lib('libc').declare('popen', self.TYPE.ABI,
+				self.TYPE.FILE.ptr,		// return
+				self.TYPE.char.ptr,		// *command
+				self.TYPE.char.ptr		// *mode
+			);
+		},
+		pclose: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/popen.3.html
+			 * int pclose(
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('pclose', self.TYPE.ABI,
+				self.TYPE.int,			// return
+				self.TYPE.FILE.ptr		// *stream
 			);
 		}
 	};

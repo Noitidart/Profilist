@@ -157,7 +157,7 @@ var libcInit = function() {
 				self.TYPE.int,			// return
 				self.TYPE.FILE.ptr		// *stream
 			);
-		},
+		}
 	};
 	// end - predefine your declares here
 	// end - function declares
