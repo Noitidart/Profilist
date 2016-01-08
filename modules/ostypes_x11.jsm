@@ -233,12 +233,16 @@ var xlibTypes = function() {
 	// SIMPLE TYPES
 	this.CARD32 = /^(Alpha|hppa|ia64|ppc64|s390|x86_64)-/.test(core.os.xpcomabi) ? ctypes.unsigned_int : ctypes.unsigned_long;
 	this.gchar = ctypes.char;
+	this.GAppInfo = ctypes.StructType('GAppInfo');
+	this.GAppLaunchContext = ctypes.StructType('GAppLaunchContext');
 	this.GBytes = ctypes.StructType('_GBytes');
 	this.GCancellable = ctypes.StructType('_GCancellable');
 	this.GdkColormap = ctypes.StructType('GdkColormap');
+	this.GDesktopAppInfo = ctypes.StructType('GDesktopAppInfo');
 	this.GdkDisplay = ctypes.StructType('GdkDisplay');
 	this.GdkDisplayManager = ctypes.StructType('GdkDisplayManager');
 	this.GdkDrawable = ctypes.StructType('GdkDrawable');
+	this.GdkFilterReturn = ctypes.int; // enum, guessing enum is int
 	this.GdkFullscreenMode = ctypes.int;
 	this.GdkGravity = ctypes.int;
 	this.GdkPixbuf = ctypes.StructType('GdkPixbuf');
@@ -251,6 +255,7 @@ var xlibTypes = function() {
 	this.GFileMonitor = ctypes.StructType('_GFileMonitor');
 	this.gint = ctypes.int;
 	this.gpointer = ctypes.void_t.ptr;
+	this.GQuark = ctypes.uint32_t;
 	this.GtkWidget = ctypes.StructType('GtkWidget');
 	this.GtkWindow = ctypes.StructType('GtkWindow');
 	this.GtkWindowPosition = ctypes.int;
@@ -258,12 +263,10 @@ var xlibTypes = function() {
 	this.guint = ctypes.unsigned_int;
 	this.guint32 = ctypes.unsigned_int;
 	this.gulong = ctypes.unsigned_long;
-	this.GdkFilterReturn = ctypes.int; // enum, guessing enum is int
 	
 	// ADVANCED TYPES // defined by "simple types"
 	this.gboolean = this.gint;
 	this.GQuark = this.guint32;
-	
 	
 	/// 
 	this.GdkXEvent = this.XEvent;
@@ -272,6 +275,17 @@ var xlibTypes = function() {
 	//]);
 	this.GdkEvent = ctypes.void_t;
 	
+	// SIMPLE STRUCTS
+	this.GError = new ctypes.StructType('GError', [
+		{'domain': this.GQuark},
+		{'code': ctypes.int},
+		{'message': ctypes.char.ptr}
+	]);
+	this.GList = new ctypes.StructType('GList', [
+		{'data': ctypes.voidptr_t},
+		{'next': ctypes.voidptr_t},
+		{'prev': ctypes.voidptr_t}
+	]);
 	
 	// FUNCTION TYPES
 	this.GdkFilterFunc = ctypes.FunctionType(this.CALLBACK_ABI, this.GdkFilterReturn, [this.GdkXEvent.ptr, this.GdkEvent.ptr, this.gpointer]).ptr; // https://developer.gnome.org/gdk3/stable/gdk3-Windows.html#GdkFilterFunc
@@ -461,6 +475,11 @@ var x11Init = function() {
 				case 'gdk2':
 				
 						_lib[path] = ctypes.open('libgdk-x11-2.0.so.0');
+				
+					break;
+				case 'gio':
+				
+						_lib[path] = ctypes.open('libgio-2.0.so.0');
 				
 					break;
 				case 'gdk3':
@@ -1480,6 +1499,34 @@ var x11Init = function() {
 		},
 		// end - xcb
 		// start - gtk
+		g_app_info_launch_uris: function() {
+			/* https://developer.gnome.org/gio/unstable/GAppInfo.html#g-app-info-launch-uris
+			 * gboolean g_app_info_launch_uris (
+			 *   GAppInfo *appinfo,
+			 *   GList *uris,
+			 *   GAppLaunchContext *launch_context,
+			 *   GError **error
+			 * );
+			 */
+			return lib('gio').declare('g_app_info_launch_uris', self.TYPE.ABI,
+				self.TYPE.gboolean,					// return
+				self.TYPE.GAppInfo.ptr,				// *appinfo
+				self.TYPE.GList.ptr,				// *uris
+				self.TYPE.GAppLaunchContext.ptr,	// *launch_context
+				self.TYPE.GError.ptr.ptr			// **error
+			);
+		},
+		g_desktop_app_info_new_from_filename: function() {
+			/* https://developer.gnome.org/gio/unstable/gio-Desktop-file-based-GAppInfo.html#g-desktop-app-info-new-from-filename
+			 * GDesktopAppInfo * g_desktop_app_info_new_from_filename(
+			 *   const char *filename
+			 * );
+			 */
+			return lib('gio').declare('g_desktop_app_info_new_from_filename', self.TYPE.ABI,
+				self.TYPE.GDesktopAppInfo.ptr,	// return
+				self.TYPE.gchar.ptr				// *filename
+			);
+		},
 		gdk_window_add_filter: function() {
 			/* https://developer.gnome.org/gdk3/stable/gdk3-Windows.html#gdk-window-add-filter
 			 * void gdk_window_add_filter (

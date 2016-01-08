@@ -189,7 +189,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		pref: true,
 		specificOnly: false,
 		defaultSpecificness: false,
-		defaultValue: '0',
+		defaultValue: '2',
 		possibleValues: [		// link83737383
 			'0',				// by create order ASC
 			// '1',				// by create order DESC
@@ -1113,7 +1113,7 @@ function getLauncherNameFromParams(aExeChannel, aProfName) {
 		exeChannelDisplayName = ' ' + exeChannelDisplayName; // link22323432345
 	}
 
-	return safedForPlatFS('Firefox' + exeChannelDisplayName + ' - ' + aProfName); // link22323432345 need prefixed space for exeChannelDisplayName
+	return safedForPlatFS('Firefox' + exeChannelDisplayName + ' - ' + aProfName); // link22323432345 need prefixed space for exeChannelDisplayName // link18494940498498 all launcher names must start with "Firefox" as this is how i dentify the file in the folder, well the start and the end should be the extension
 }
 
 function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconPath, aLauncherExePath, aFullPathToProfileDir) {
@@ -1133,18 +1133,54 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	// local globals
 	var cLauncherDirName = OS.Path.basename(aLauncherDirPath);
 	
-	// get EXISTING launcherExeEntry - so this is different from getLauncherDirPathFromParams - the dir will be the same, but the existing name may be different
+	var cLauncherExtension;
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				cLauncherExtension = 'lnk';
+				
+			break;
+		case 'gtk':
+		
+				cLauncherExtension = 'desktop';
+				
+			break;
+		case 'darwin':
+		
+				cLauncherExtension = 'app';
+				
+			break;
+		default:
+			throw new MainWorkerError({
+				name: 'addon-error',
+				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+			});
+	}
+	
+	// get EXISTING launcher entry - so this is different from getLauncherDirPathFromParams - the dir will be the same, but the existing name may be different
 	var eLauncherEntry;
 	var eLauncherDirIterator = new OS.File.DirectoryIterator(aLauncherDirPath);
 	try {
-		eLauncherEntry = eLauncherDirIterator.next(); // :todo: :note: this assumes that the exe is the ONLY file in there, maybe in future shoudl ensure, but we'll see how it works out with this assumption for now
+		eLauncherDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+			console.log(aIndex, '------------', aEntry, aIterator);
+			if (aEntry.name.indexOf('Firefox') == 0) { // link18494940498498 all launchers must start with Firefox
+				if (aEntry.name.substr(aEntry.name.lastIndexOf('.') + 1) == cLauncherExtension) {
+					eLauncherEntry = aEntry;
+					aIterator.close(); // end the iteration // link3742848743
+				}
+			}
+		});
 	} catch(OSFileError) {
 		console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
 		if (!OSFileError.becauseNoSuchFile) {
 			throw new MainWorkerError('createeLauncher', OSFileError);
 		} // if it does not exist, thats ok, this func will carry on to create the launcher :todo: should make the dir though at this point, when we get error that dir doesnt exist
 	} finally {
-		eLauncherDirIterator.close();
+		if (!eLauncherEntry) {
+			eLauncherDirIterator.close();
+		} // else, if it was found i already closed it link3742848743
 	}
 
 	var cLauncherPath;
@@ -1154,6 +1190,9 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 		// get EXISTING eLauncherPath
 			var eLauncherPath = eLauncherEntry.path; // this does not need test/verification, but it is used for the rename process if needed
 			var eLauncherName = eLauncherEntry.name;
+			
+			console.info('eLauncherPath:', eLauncherPath);
+			console.info('eLauncherName:', eLauncherName);
 			
 			var eLauncherIconSlug; // platform specific get method
 			var eLauncherExePath; // platform specific get method // this is the exe/build it launches the profile in
@@ -1206,26 +1245,10 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 					});
 			}
-			
-			/*
-			// verify/update name
-			if (eLauncherName != aLauncherName) {
-				// rename file
-			}
-			
-			// verify/update icon
-			if (eLauncherIconSlug != aIconSlug){
-				// update icon
-			}
-			
-			if (eLauncherExePath != aLauncherExePath) {
-				// update exe path within launcher
-			}
-			*/
-			
-		// :todo: verify/update icon
-		// :todo: verify/update exe path (cannot verify this by name even if i include channel_name in it, because mutiple builds can have same build see link3347348473)
-		// :todo: verify/update name - the name should be Firefox CHANNEL_NAME - PROFILE_NAME // just because CHANNEL_NAME is correct, does not mean the exe path is correct. as multiple builds can be "default" channel name instance - link3347348473
+
+			cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
+			console.error('ok found lancher path is:', eLauncherPath);
+
 	} else {
 		// assume eLauncher does not exist - so need to make it
 		
@@ -1377,7 +1400,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					
 					var execContents = [
 						'#!/bin/sh',
-						// '##' + JSON.stringify({XREExeF_APP:cTargetAppPath, LauncherIconPath:aLauncherIconPath}) + '##',
+						'##' + JSON.stringify({XREExeF_APP:cTargetAppPath, LauncherIconPathName:aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5)}) + '##',
 						'exec "' + OS.Path.join(cLauncherAppPath, 'Contents', 'MacOS', 'firefox') + '" -profile "' + aFullPathToProfileDir + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
 					];
 					var cLauncherExecPath = OS.Path.join(cTargetContentsPath, 'MacOS', 'profilist-' + cLauncherDirName); // we place it into the target folder because i alias the folders
@@ -1418,7 +1441,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 				});
 		}
 	}
-	
+
 	return cLauncherPath;
 }
 
@@ -1473,10 +1496,15 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	
 	// this is done after promise_createIcon
 	var postCreateIcon = function() {
-		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir);
+		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir); // on success it is the launcher full path
 		
 		if (!cIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
-		
+			// i do this test, because even if just have to focus, i should create launcher in background
+			if (didCreateLauncher) {
+				launchFile(didCreateLauncher);
+			} else {
+				throw new Error('launcher did not create so cannot launch');
+			}
 		}
 	};
 	
@@ -1652,6 +1680,100 @@ function createAlias(aCreatePlatformPath, aTargetPlatformPath) {
 				finally {
 					caNSStrings.releaseAll();
 				}
+				
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+}
+
+function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to check if launcher exists first? not used yet
+	// on linux, this works with .desktop files and the like only
+	// on windows and osx it works with everything i tested
+	
+	var cOptionsDefaults = {
+		arguments: [] // i havent figured out how to get this to work on .desktop's yet, so this option is just windows and osx for now 010816
+	}
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+		
+				var sei = ostypes.TYPE.SHELLEXECUTEINFO();
+				//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
+				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
+				sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(aLaunchPlatPath);
+				if (aOptions.arguments.length > 0) {
+					sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()(arrOfArgs.join(' '));
+				}
+				//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
+				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
+				
+				var rez_ShellExecuteEx = ostypes.API('ShellExecuteEx')(sei.address());
+				console.log('rez_ShellExecuteEx:', rez_ShellExecuteEx.toString(), uneval(rez_ShellExecuteEx));
+				if (ctypes.winLastError != 0) { console.error('Failed rez_ShellExecuteEx, winLastError:', ctypes.winLastError); }
+				
+			break;
+		// case 'linux':
+		// case 'freebsd':
+		// case 'openbsd':
+		// case 'sunos':
+		// case 'webos':
+		// case 'android':
+		case 'gtk':
+
+				// gio
+				var launcher = ostypes.API('g_desktop_app_info_new_from_filename')(aLaunchPlatPath);
+				console.info('launcher:', launcher, launcher.toString(), uneval(launcher));
+				
+				if (launcher.isNull()) {
+					throw new Error('No file exists at path: "' + aLaunchPlatPath + '"');
+				}
+				
+				launcher = ctypes.cast(launcher, ostypes.TYPE.GAppInfo.ptr);
+				var uris = ostypes.TYPE.GList(); // can use `null`
+				var launch_context = null; // have to use null due o this explanation here: // cannot use `var launch_context = new ostypes.TYPE.GAppLaunchContext();` //throws `Error: cannot construct an opaque StructType` so i have to get launch_context from something like `gdk_display_get_app_launch_context` because i dont know he structure to it, and i obviously cannto create opaque structures
+				var error = ostypes.TYPE.GError.ptr(); // can use `null`
+
+				var rez_launch_uris = ostypes.API('g_app_info_launch_uris')(launcher, uris.address(), launch_context, error.address());
+				console.info('rez_launch_uris:', rez_launch_uris, rez_launch_uris.toString(), uneval(rez_launch_uris));
+				console.info('error:', error, error.toString(), uneval(error));
+
+			break;
+		case 'darwin':
+				
+				// open
+				var cmdStr = [
+					'open',
+					'-a',
+					'"' + aLaunchPlatPath.replace(/ /g, '\ ') + '"'
+				];
+				if (aOptions.arguments.length > 0) {
+					cmdStr.push('--args');
+					cmdStr = cmdStr.concat(aOptions.arguments);
+				}
+				var rez_popenOpen = ostypes.API('popen')(cmdStr.join(' '), 'r');
+				
+				// :debug:
+				/*
+				console.log('cmdStr:', cmdStr.join(' '));
+				var bufferSize = 1000;
+				var buffer = ctypes.char.array(bufferSize)('');
+				var size = bufferSize;
+				var outList = [];
+				while (size == bufferSize) {
+					size = ostypes.API('fread')(buffer, 1, bufferSize, rez_popenOpen);
+					outList.push(buffer.readString().substring(0, size));
+					console.log('did read');
+				}
+				console.log('pout:', outList.join(''));
+				*/
+				// :debug:
+				
+				var rez_plcoseOpen = ostypes.API('pclose')(rez_popenOpen); // waits for process to exit
+				console.log('rez_plcoseOpen:', cutils.jscGetDeepest(rez_plcoseOpen));
 				
 			break;
 		default:

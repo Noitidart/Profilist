@@ -1004,6 +1004,23 @@ var macInit = function() {
 				self.TYPE.dispatch_block_t		// block
 			);
 		},
+		fread: function() {
+			/* http://linux.die.net/man/3/fread
+			 * size_t fread (
+			 *   void *ptr,
+			 *   size_t size,
+			 *   size_t nmemb,
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('fread', self.TYPE.ABI, 
+				self.TYPE.size_t,		// return
+				self.TYPE.void.ptr,		// *ptr
+				self.TYPE.size_t, 		// size
+				self.TYPE.size_t, 		// count
+				self.TYPE.FILE.ptr		// *stream
+			);
+		},
 		memcpy: function() {
 			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/memcpy.3.html#//apple_ref/doc/man/3/memcpy
 			 * void *memcpy (

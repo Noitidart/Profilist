@@ -212,6 +212,23 @@ var winTypes = function() {
 		{ 'lpSecurityDescriptor': this.LPVOID },
 		{ 'bInheritHandle': this.BOOL }
 	]);
+	this.SHELLEXECUTEINFO = ctypes.StructType('_SHELLEXECUTEINFO', [
+		{ 'cbSize': this.DWORD },
+		{ 'fMask': this.ULONG },
+		{ 'hwnd': this.HWND },
+		{ 'lpVerb': this.LPCTSTR },
+		{ 'lpFile': this.LPCTSTR },
+		{ 'lpParameters': this.LPCTSTR },
+		{ 'lpDirectory': this.LPCTSTR },
+		{ 'nShow': this.INT },
+		{ 'hInstApp': this.HINSTANCE },
+		{ 'lpIDList': this.LPVOID },
+		{ 'lpClass': this.LPCTSTR },
+		{ 'hkeyClass': this.HKEY },
+		{ 'dwHotKey': this.DWORD },
+		{ 'hIcon': this.HANDLE }, // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
+		{ 'hProcess': this.HANDLE }
+	]);
 	
 	// ADVANCED STRUCTS // based on "simple structs" to be defined first
 	this.BITMAPINFO = ctypes.StructType('BITMAPINFO', [
@@ -740,7 +757,9 @@ var winInit = function() {
 		
 		VARIANT_FALSE: 0, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 		VARIANT_TRUE: -1, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
-		VT_LPWSTR: 0x001F // 31
+		VT_LPWSTR: 0x001F, // 31
+		
+		SW_SHOWNORMAL: 1
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1468,6 +1487,17 @@ var winInit = function() {
 				self.TYPE.INT,				// cx
 				self.TYPE.INT,				// cy
 				self.TYPE.UINT				// uFlags
+			);
+		},
+		ShellExecuteEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/bb762154%28v=vs.85%29.aspx
+			 * BOOL ShellExecuteEx(
+			 *   __inout_  SHELLEXECUTEINFO *pExecInfo
+			 * );
+			 */
+			return lib('shell32.dll').declare('ShellExecuteExW', self.TYPE.ABI,
+				self.TYPE.BOOL,					// return
+				self.TYPE.SHELLEXECUTEINFO.ptr	// *pExecInfo
 			);
 		},
 		SHStrDup: function() {
