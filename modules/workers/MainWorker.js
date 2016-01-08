@@ -895,8 +895,11 @@ function getLinuxIsIconInstalledFromFS(aIconName) {
 				);
 				
 				var cSize = linuxIconOutputSizes[0];
-				var cSizeIconPath = OS.Path.join(dirpathHicolor, cSizeName, 'apps', aIconName + '_' + cSize + '.profilist.png'); // link787575758 :note: because on linux i am installing to a global folder, instead of just .png i make it .profilist.png so its easy to identify what all profilist did on the system, when it comes time to uninstall
+				var cSizeName = cSize + 'x' + cSize;
+				var cSizeIconPath = OS.Path.join(dirpathHicolor, cSizeName, 'apps', aIconName + '.profilist.png'); // link787575758 :note: because on linux i am installing to a global folder, instead of just .png i make it .profilist.png so its easy to identify what all profilist did on the system, when it comes time to uninstall
 				
+				return OS.File.exists(cSizeIconPath);
+
 			break;
 		default:
 			throw new MainWorkerError('unsupported-platform', 'This function is only for Linux platforms, GTK only right now.');
@@ -981,6 +984,7 @@ function createIconForParamsFromFS(aIconInfosObj) {
 				break
 			case 'gtk':
 					
+					cCreatePathDir = null;
 					cCreateName += '.profilist'; // link787575758
 					cCreateType = 'Linux';
 					cOutputSizesArr = [16, 24, 48, 96];
@@ -1028,7 +1032,11 @@ function createIconForParamsFromFS(aIconInfosObj) {
 		self.postMessageWithCallback(['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions], function(aCreateIconRez) { // :note: this is how to call WITH callback
 			console.timeEnd('promiseWorker-createIcon');
 			console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
-			deferredMain_createIconForParamsFromFS.resolve(true);
+			if (aCreateIconRez.status == 'fail') {
+				deferredMain_createIconForParamsFromFS.reject(aCreateIconRez.reason);
+			} else {
+				deferredMain_createIconForParamsFromFS.resolve(true);
+			}
 		});
 	}
 	return deferredMain_createIconForParamsFromFS.promise;
@@ -1324,7 +1332,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						'[Desktop Entry]',
 						'Name=' + aLauncherName,
 						'Type=Application',
-						'Icon=' + aLauncherIconPath,
+						'Icon=' + aLauncherIconPath + '.profilist', // link787575758
 						'Exec=' + aLauncherExePath + ' -profile "' + aFullPathToProfileDir + '" -no-remote'
 					];
 					

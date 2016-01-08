@@ -156,7 +156,7 @@ function returnIconset(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPath
 	// aCreateName - same across all os, name to create icon container with
 	// aCreatePathDir
 		// win and mac - os path to directory you want icon written to, it will writeAtomic
-		// linux - array of theme names, if null, it will default to ['hicolor']. if themes provided, 'hicolor' is not pushed in, so include it if you want it.
+		// linux - as of now, this must be null/undefined otherwise it will throw :todo: array of theme names, if null, it will default to ['hicolor']. if themes provided, 'hicolor' is not pushed in, so include it if you want it.
 	// aBaseSrcImgPathArr
 		// same across all os - os paths of images to be used as sources for bases, the sizes will be auto determined, if any of them are not square it will throw
 	// aOutputSizesArr - sizes wanted in iconset
