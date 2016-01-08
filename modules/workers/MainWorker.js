@@ -948,7 +948,6 @@ function createIconForParamsFromFS(aIconInfosObj) {
 	
 	// aIconInfosObj is what is returned from getIconPathInfosForParamsFromIni
 	
-	
 	var deferredMain_createIconForParamsFromFS = new Deferred();
 	
 	// check if it is installed(linux)/exists(win/darwin)
@@ -1037,24 +1036,22 @@ function createIconForParamsFromFS(aIconInfosObj) {
 
 function getLauncherDirPathFromParams(aProfPath) {
 	// RETURNS
-		// string - platform path to the launcher
+		// string - platform path to the launcher directory
 		
 	var launcherDirName = HashString(aProfPath);
 	// console.info('launcherDirName:', launcherDirName, '');
 	// console.info('core.profilist.path.exes:', core.profilist.path.exes, '');
 	var launcherDirPath = OS.Path.join(core.profilist.path.exes, launcherDirName + ''); // need to make launcherDirName a string otherwise OS.Path.join causes this error ```path.startsWith is not a function```
-	console.info('launcherDirPath:', launcherDirPath, '');
+	// console.info('launcherDirPath:', launcherDirPath, '');
 	
-
-	
-	return launcherDirName;
+	return launcherDirPath;
 }
 
 function getFullPathToProfileDirFromIni(aProfPath) {
 	// gets the full platform path to the profile directory, used for argument of launcher with -profile
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (cIniEntry.IsRelative == '1') {
-		var cProfDirName = OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path));
+		var cProfDirName = OS.Path.basename(OS.Path.normalize(aProfPath));
 		return OS.Path.join(core.profilist.path.defProfRt, cProfDirName);
 	} else {
 		return aProfPath;
@@ -1065,47 +1062,49 @@ function getLauncherNameFromParams(aExeChannel, aProfName) {
 	// RETURNS
 		// string - current platform safed, the name in format Firefox CHANNEL_NAME - PROFILE_NAME
 	
+	console.info('aExeChannel:', aExeChannel, 'aProfName:', aProfName, '');
+	
 	var exeChannelDisplayName;
 	switch (aExeChannel) {
 		case 'esr':
 				
-				return 'ESR'; // :todo::l10n: localize?
+				exeChannelDisplayName = 'ESR'; // :todo::l10n: localize?
 			
 			break;
 		case 'release':
 				
-				return '';
+				exeChannelDisplayName = '';
 			
 			break;
 		case 'beta':
 				
-				return 'BETA'; // :todo::l10n: localize?
+				exeChannelDisplayName = 'Beta'; // :todo::l10n: localize?
 			
 			break;
 		case 'aurora':
 				
-				return 'Developer Edition'; // :todo::l10n: localize?
+				exeChannelDisplayName = 'Developer Edition'; // :todo::l10n: localize?
 			
 			break;
 		case 'nightly':
 				
-				return 'Nightly'; // :todo::l10n: localize?
+				exeChannelDisplayName = 'Nightly'; // :todo::l10n: localize?
 			
 			break;
 		case 'default':
 				
-				return 'Custom Build'; // :todo::l10n: localize
+				exeChannelDisplayName = 'Custom Build'; // :todo::l10n: localize
 			
 			break;
 		default:
 			console.error('A programtic channel value of "' + aExeChannel + '" does not have a recognized display name, so returning same thing');
-			return aExeChannel.substr(0, 1).toUpperCase() + aExeChannel.substr(1);
+			exeChannelDisplayName = aExeChannel.substr(0, 1).toUpperCase() + aExeChannel.substr(1);
 	}
 	
 	if (exeChannelDisplayName != '') {
 		exeChannelDisplayName = ' ' + exeChannelDisplayName; // link22323432345
 	}
-	
+
 	return safedForPlatFS('Firefox' + exeChannelDisplayName + ' - ' + aProfName); // link22323432345 need prefixed space for exeChannelDisplayName
 }
 
@@ -1122,6 +1121,9 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	// if launcher already exists, then do nothing, else create it
 	// :note::important: icon MUST exist before calling this function. this function assumes icon already exists for it.
 	// :note: launchers name should "Firefox CHANNEL_NAME - PROFILE_NAME" and should be in ```OS.Path.join(core.profilist.path.exes, HashString(aProfPath))```. It should be the ONLY file in there.
+	
+	// local globals
+	var cLauncherDirName = OS.Path.basename(aLauncherDirPath);
 	
 	// get EXISTING launcherExeEntry - so this is different from getLauncherDirPathFromParams - the dir will be the same, but the existing name may be different
 	var eLauncherEntry;
@@ -1219,6 +1221,9 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	} else {
 		// assume eLauncher does not exist - so need to make it
 		
+		// make the directory
+		var rez_makedir = OS.File.makeDir(aLauncherDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+		
 		// start plat dependent stuff - the switch below does these steps for each platform
 		// straight create the launcher
 		
@@ -1228,7 +1233,10 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			case 'wince':
 
 					// create .lnk
+					console.info('aLauncherDirPath:', aLauncherDirPath);
+					console.info('aLauncherName:', aLauncherName);
 					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.lnk');
+					console.info('cLauncherPath:', cLauncherPath);
 					
 					var shellLinkPtr;
 					var shellLink;
@@ -1250,19 +1258,19 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						}
 						
 						shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
-						var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_ShellLink.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_IShellLink.address(), shellLinkPtr.address());
+						var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_SHELLLINK.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_ISHELLLINK.address(), shellLinkPtr.address());
 						ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'createLauncher -> CoCreateInstance');
 						shellLink = shellLinkPtr.contents.lpVtbl.contents;
 
 						persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
-						var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPersistFile.address(), persistFilePtr.address());
+						var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPERSISTFILE.address(), persistFilePtr.address());
 						ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'createLauncher -> QueryInterface (IShellLink->IPersistFile)');
 						persistFile = persistFilePtr.contents.lpVtbl.contents;
 						
 						if (core.os.version >= 6.1) {
 							// win7 and up
 							propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
-							var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPropertyStore.address(), propertyStorePtr.address());
+							var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPROPERTYSTORE.address(), propertyStorePtr.address());
 							ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'createLauncher -> QueryInterface (IShellLink->IPropertyStore)');
 							propertyStore = propertyStorePtr.contents.lpVtbl.contents;
 						}
@@ -1278,51 +1286,32 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						if (core.os.version >= 6.1) {
 							// win7 and up
-							var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), cObj.appUserModelId);
-							ostypes.HELPER.checkHRESULT(OS.Path.basename(aLauncherDirPath), 'createLauncher -> hr_appUserModelId');
+							var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_APPUSERMODEL_ID.address(), cLauncherDirName);
+							ostypes.HELPER.checkHRESULT(hr_appUserModelId, 'createLauncher -> hr_appUserModelId');
 						}
 						
 						var hr_Save = persistFile.Save(persistFilePtr, cLauncherPath, false);
 						ostypes.HELPER.checkHRESULT(hr_Save, 'createLauncher -> Save');
 						
 					} finally {
-						console.log('doing winntShellFile_DoerAndFinalizer finalization');
-						var sumThrowMsg = [];
 						if (persistFile) {
-							try {
-								ostypes.HELPER.checkHRESULT(persistFile.Release(persistFilePtr), 'createLauncher -> persistFile.Release');
-							} catch(e) {
-								console.error("Failure releasing refs.persistFile: ", e.toString());
-								sumThrowMsg.push(e.message);
-							}
+							var rez_refCntPFile = persistFile.Release(persistFilePtr);
+							console.log('rez_refCntPFile:', rez_refCntPFile);
 						}
 						
 						if (propertyStore) {
-							try {
-								ostypes.HELPER.checkHRESULT(propertyStore.Release(propertyStorePtr), 'createLauncher -> propertyStore.Release');
-							} catch(e) {
-								console.error("Failure releasing refs.propertyStore: ", e.message.toString());
-								sumThrowMsg.push(e.message);
-							}
+							var rez_refCntPropStore = propertyStore.Release(propertyStorePtr);
+							console.log('rez_refCntPropStore:', rez_refCntPropStore);
 						}
 
 						if (shellLink) {
-							try {
-								ostypes.HELPER.checkHRESULT(shellLink.Release(shellLinkPtr), 'createLauncher -> shellLink.Release');
-							} catch(e) {
-								console.error("Failure releasing refs.shellLink: ", e.message.toString());
-								sumThrowMsg.push(e.message);
-							}
+							var rez_refCntShelLink = shellLink.Release(shellLinkPtr);
+							console.log('rez_refCntShelLink:', rez_refCntShelLink);
 						}
 						
 						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
 							ostypes.API('CoUninitialize')(); // return void
 						//}
-						
-						if (sumThrowMsg.length > 0) {
-							throw new Error(sumThrowMsg.join(' |||| '));
-						}
-						console.log('completed winntShellFile_DoerAndFinalizer finalization');
 					}
 
 				break;
@@ -1377,8 +1366,8 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	validateOptionsObj(aOptions, cOptionsDefaults);
 	
 	// console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
-	var cProfIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
-	if (!cProfIniEntry) { console.error('should-nver-happen!', 'cProfIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cProfIniEntry could not be found'); }
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cIniEntry could not be found'); }
 	
 	if (aOptions.usePlat) {
 		// get from platform, if the profile is running, and if it is then get the exePath it is in
@@ -1386,15 +1375,15 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 		var cRunningExePath = getRunningExePathForProfFromPlat(aProfPath);
 		// :todo: check if gIniObj matches, if not as i modify it, then update it and send updates to gui's
 		if (cRunningExePath) {
-			cProfIniEntry.noWriteObj.status = true;
-			cProfIniEntry.noWriteObj.exePath = cRunningExePath;
+			cIniEntry.noWriteObj.status = true;
+			cIniEntry.noWriteObj.exePath = cRunningExePath;
 		} else {
-			delete cProfIniEntry.noWriteObj.status;
-			delete cProfIniEntry.noWriteObj.exepath;
+			delete cIniEntry.noWriteObj.status;
+			delete cIniEntry.noWriteObj.exepath;
 		}
 	}
 	
-	if (cProfIniEntry.noWriteObj.status) { // link6847494493
+	if (cIniEntry.noWriteObj.status) { // link6847494493
 		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams
 	}
 	
@@ -1409,16 +1398,17 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	console.info('cIconInfosObj:', cIconInfosObj);
 	var cLauncherDirPath = getLauncherDirPathFromParams(aProfPath);
 	console.info('cLauncherDirPath:', cLauncherDirPath);
-	var cLauncherName = getLauncherNameFromParams(cExeChannel, cProfIniEntry.Name)
+	var cLauncherName = getLauncherNameFromParams(cExeChannel, cIniEntry.Name)
 	console.info('cLauncherName:', cLauncherName);
 	
 	var cFullPathToProfileDir = getFullPathToProfileDirFromIni(aProfPath);
+	console.info('cFullPathToProfileDir:', cFullPathToProfileDir);
 	
 	// this is done after promise_createIcon
 	var postCreateIcon = function() {
 		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir);
 		
-		if (!cProfIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
+		if (!cIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
 		
 		}
 	};
@@ -1430,7 +1420,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 			postCreateIcon();
 		},
 		genericReject.bind(null, 'promise_createIcon', 0)
-	).catch(genericReject.bind(null, 'promise_createIcon', 0));
+	).catch(genericCatch.bind(null, 'promise_createIcon', 0));
 
 	
 	return 'ok launched aProfPath: ' + aProfPath;

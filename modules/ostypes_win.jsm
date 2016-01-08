@@ -107,6 +107,7 @@ var winTypes = function() {
 	this.WNDENUMPROC = ctypes.FunctionType(this.CALLBACK_ABI, this.BOOL, [this.HWND, this.LPARAM]); // "super advanced type" because its highest type is `this.HWND` which is "advanced type"
 
 	// inaccrurate types - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
+	this.LPUNKNOWN = ctypes.voidptr_t; // ctypes.StructType('LPUNKNOWN'); // public typedef IUnknown* LPUNKNOWN; // i dont use the full struct so just leave it like this, actually lets just make it voidptr_t
 	this.MONITOR_DPI_TYPE = ctypes.unsigned_int;
 	this.PCIDLIST_ABSOLUTE = ctypes.voidptr_t; // https://github.com/west-mt/ssbrowser/blob/452e21d728706945ad00f696f84c2f52e8638d08/chrome/content/modules/WindowsShortcutService.jsm#L115
 	this.PIDLIST_ABSOLUTE = ctypes.voidptr_t;
@@ -734,6 +735,7 @@ var winInit = function() {
 		XBUTTON1: 0x0001,
 		XBUTTON2: 0x0002,
 		
+		CLSCTX_INPROC_SERVER: 0x1,
 		COINIT_APARTMENTTHREADED: 0x2,
 		
 		VARIANT_FALSE: 0, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
@@ -833,6 +835,46 @@ var winInit = function() {
 				self.TYPE.INT, // nXSrc
 				self.TYPE.INT, // nYSrc
 				self.TYPE.DWORD // dwRop
+			);
+		},
+		CoCreateInstance: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms686615%28v=vs.85%29.aspx
+			 * HRESULT CoCreateInstance(
+			 *   __in_   REFCLSID rclsid,
+			 *   __in_   LPUNKNOWN pUnkOuter,
+			 *   __in_   DWORD dwClsContext,
+			 *   __in_   REFIID riid,
+			 *   __out_  LPVOID *ppv
+			 * );
+			 */
+			return lib('ole32').declare('CoCreateInstance', self.TYPE.ABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.REFCLSID,		// rclsid
+				self.TYPE.LPUNKNOWN,	// pUnkOuter
+				self.TYPE.DWORD,		// dwClsContext
+				self.TYPE.REFIID,		// riid
+				self.TYPE.LPVOID		// *ppv
+			);
+		},
+		CoInitializeEx: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms695279%28v=vs.85%29.aspx
+			 * HRESULT CoInitializeEx(
+			 *   __in_opt_  LPVOID pvReserved,
+			 *   __in_      DWORD dwCoInit
+			 * );
+			 */
+			return lib('ole32').declare('CoInitializeEx', self.TYPE.ABI,
+				self.TYPE.HRESULT,	// result
+				self.TYPE.LPVOID,	// pvReserved
+				self.TYPE.DWORD		// dwCoInit
+			);
+		},
+		CoUninitialize: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms688715%28v=vs.85%29.aspx
+			 * void CoUninitialize(void);
+			 */
+			return lib('ole32').declare('CoUninitialize', self.TYPE.ABI,
+				self.TYPE.VOID	// return
 			);
 		},
 		CreateCompatibleBitmap: function() {
@@ -1346,7 +1388,7 @@ var winInit = function() {
 			 * __in_ PROPVARIANT *pvar
 			 * );
 			 */
-			return lib('Ole32.dll').declare('PropVariantClear', self.TYPE.ABI,
+			return lib('ole32').declare('PropVariantClear', self.TYPE.ABI,
 				self.TYPE.WINOLEAPI,			// return
 				self.TYPE.PROPVARIANT.ptr		// *pvar
 			);
@@ -1435,7 +1477,7 @@ var winInit = function() {
 			* __out_ LPTSTR *ppwsz
 			* );
 			*/
-			return lib('Shlwapi.dll').declare('SHStrDupW', self.TYPE.ABI,
+			return lib('shlwapi').declare('SHStrDupW', self.TYPE.ABI,
 				self.TYPE.HRESULT,		// return
 				self.TYPE.LPCTSTR,		// pszSource
 				self.TYPE.LPTSTR.ptr	// *ppwsz
