@@ -1050,6 +1050,17 @@ function getLauncherDirPathFromParams(aProfPath) {
 	return launcherDirName;
 }
 
+function getFullPathToProfileDirFromIni(aProfPath) {
+	// gets the full platform path to the profile directory, used for argument of launcher with -profile
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (cIniEntry.IsRelative == '1') {
+		var cProfDirName = OS.Path.basename(OS.Path.normalize(ini[for_ini_key].props.Path));
+		return OS.Path.join(core.profilist.path.defProfRt, cProfDirName);
+	} else {
+		return aProfPath;
+	}
+}
+
 function getLauncherNameFromParams(aExeChannel, aProfName) {
 	// RETURNS
 		// string - current platform safed, the name in format Firefox CHANNEL_NAME - PROFILE_NAME
@@ -1098,11 +1109,12 @@ function getLauncherNameFromParams(aExeChannel, aProfName) {
 	return safedForPlatFS('Firefox' + exeChannelDisplayName + ' - ' + aProfName); // link22323432345 need prefixed space for exeChannelDisplayName
 }
 
-function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconSlug, aLauncherExePath) {
+function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconPath, aLauncherExePath, aFullPathToProfileDir) {
 	// the arguments are what the launch should be created with, except aLuncherDirPath as that will be same for all
 	// aLauncherExePath is the build the launcher should launch the profile into. such as exePath to beta or release or etc
+	// aLauncherName is plat safed
 	// RETURNS
-		// true - if created
+		// string to launcher path (with .lnk, .app, .desktop, or whatever, i dont do it elsewhere as this createLauncherForParams is what decides what it should be) - if created
 		// false - if it already existed
 	// APIs ACCESSED
 		// filesystem for channel - but cached so maybe not everytime
@@ -1125,28 +1137,58 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconS
 		eLauncherDirIterator.close();
 	}
 
-	// get EXISTING eLauncherPath
+	var cLauncherPath;
 	// assume if eLauncherEntry is undefined then assume eLauncher does not exist, so need to make it
 	if (eLauncherEntry) {
 		// assume eLauncher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
+		// get EXISTING eLauncherPath
 			var eLauncherPath = eLauncherEntry.path; // this does not need test/verification, but it is used for the rename process if needed
 			var eLauncherName = eLauncherEntry.name;
 			
 			var eLauncherIconSlug; // platform specific get method
 			var eLauncherExePath; // platform specific get method // this is the exe/build it launches the profile in
 			
-			// get eLauncherIconSlug and eLauncherExePath
+			
+			// start plat dependent stuff - the switch below does these steps for each platform
+			// step1 - get eLauncherIconSlug
+			// step2 - get eLauncherExePath
+			// step3 - verify/update name
+			// step4 - verify/update icon
+			// step5 - verify/update exePath (the build it launches into)
+			// step6 - return full path (with extension)
+			
 			switch (core.os.mname) {
 				case 'winnt':
 				case 'winmo':
 				case 'wince':
-					importScripts(core.addon.path.modules + 'ostypes_win.jsm');
-					break
+				
+						// step1 - get eLauncherIconSlug
+						// step2 - get eLauncherExePath
+						// step3 - verify/update name
+						// step4 - verify/update icon
+						// step5 - verify/update exePath (the build it launches into)
+						// step6 - return full path (with extension)
+						
+					break;
 				case 'gtk':
-					importScripts(core.addon.path.modules + 'ostypes_x11.jsm');
+				
+						// step1 - get eLauncherIconSlug
+						// step2 - get eLauncherExePath
+						// step3 - verify/update name
+						// step4 - verify/update icon
+						// step5 - verify/update exePath (the build it launches into)
+						// step6 - return full path (with extension)
+						
 					break;
 				case 'darwin':
-					importScripts(core.addon.path.modules + 'ostypes_mac.jsm');
+				
+						// step1 - get eLauncherIconSlug
+						// step2 - get eLauncherExePath
+						// step3 - verify/update name
+						// step4 - verify/update icon
+						// step5 - verify/update exePath (the build it launches into)
+						// step6 - return full path (with extension)
+						
 					break;
 				default:
 					throw new MainWorkerError({
@@ -1155,6 +1197,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconS
 					});
 			}
 			
+			/*
 			// verify/update name
 			if (eLauncherName != aLauncherName) {
 				// rename file
@@ -1168,18 +1211,161 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconS
 			if (eLauncherExePath != aLauncherExePath) {
 				// update exe path within launcher
 			}
-			
+			*/
 			
 		// :todo: verify/update icon
 		// :todo: verify/update exe path (cannot verify this by name even if i include channel_name in it, because mutiple builds can have same build see link3347348473)
 		// :todo: verify/update name - the name should be Firefox CHANNEL_NAME - PROFILE_NAME // just because CHANNEL_NAME is correct, does not mean the exe path is correct. as multiple builds can be "default" channel name instance - link3347348473
 	} else {
 		// assume eLauncher does not exist - so need to make it
-	}
+		
+		// start plat dependent stuff - the switch below does these steps for each platform
+		// straight create the launcher
+		
+		switch (core.os.mname) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
 
+					// create .lnk
+					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.lnk');
+					
+					var shellLinkPtr;
+					var shellLink;
+					var persistFile;
+					var persistFilePtr;
+					var propertyStore;
+					var propertyStorePtr;
+					try {
+						var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
+						console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+						if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx)) {
+							console.log('CoInitializeEx says successfully initialized');
+							//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
+						} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
+							console.error('CoInitializeEx says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
+						} else {
+							console.error('Unexpected return value from CoInitializeEx: ' + hr);
+							throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
+						}
+						
+						shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
+						var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_ShellLink.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_IShellLink.address(), shellLinkPtr.address());
+						ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'createLauncher -> CoCreateInstance');
+						shellLink = shellLinkPtr.contents.lpVtbl.contents;
+
+						persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
+						var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPersistFile.address(), persistFilePtr.address());
+						ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'createLauncher -> QueryInterface (IShellLink->IPersistFile)');
+						persistFile = persistFilePtr.contents.lpVtbl.contents;
+						
+						if (core.os.version >= 6.1) {
+							// win7 and up
+							propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
+							var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPropertyStore.address(), propertyStorePtr.address());
+							ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'createLauncher -> QueryInterface (IShellLink->IPropertyStore)');
+							propertyStore = propertyStorePtr.contents.lpVtbl.contents;
+						}
+						
+						var hr_SetPath = shellLink.SetPath(shellLinkPtr, aLauncherExePath);
+						ostypes.HELPER.checkHRESULT(hr_SetPath, 'createLauncher -> SetPath');
+						
+						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, '-profile "' + aFullPathToProfileDir + '" -no-remote');
+						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'createLauncher -> SetArguments');
+						
+						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
+						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
+						
+						if (core.os.version >= 6.1) {
+							// win7 and up
+							var hr_appUserModelId = ostypes.HELPER.IPropertyStore_SetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_AppUserModel_ID.address(), cObj.appUserModelId);
+							ostypes.HELPER.checkHRESULT(OS.Path.basename(aLauncherDirPath), 'createLauncher -> hr_appUserModelId');
+						}
+						
+						var hr_Save = persistFile.Save(persistFilePtr, cLauncherPath, false);
+						ostypes.HELPER.checkHRESULT(hr_Save, 'createLauncher -> Save');
+						
+					} finally {
+						console.log('doing winntShellFile_DoerAndFinalizer finalization');
+						var sumThrowMsg = [];
+						if (persistFile) {
+							try {
+								ostypes.HELPER.checkHRESULT(persistFile.Release(persistFilePtr), 'createLauncher -> persistFile.Release');
+							} catch(e) {
+								console.error("Failure releasing refs.persistFile: ", e.toString());
+								sumThrowMsg.push(e.message);
+							}
+						}
+						
+						if (propertyStore) {
+							try {
+								ostypes.HELPER.checkHRESULT(propertyStore.Release(propertyStorePtr), 'createLauncher -> propertyStore.Release');
+							} catch(e) {
+								console.error("Failure releasing refs.propertyStore: ", e.message.toString());
+								sumThrowMsg.push(e.message);
+							}
+						}
+
+						if (shellLink) {
+							try {
+								ostypes.HELPER.checkHRESULT(shellLink.Release(shellLinkPtr), 'createLauncher -> shellLink.Release');
+							} catch(e) {
+								console.error("Failure releasing refs.shellLink: ", e.message.toString());
+								sumThrowMsg.push(e.message);
+							}
+						}
+						
+						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
+							ostypes.API('CoUninitialize')(); // return void
+						//}
+						
+						if (sumThrowMsg.length > 0) {
+							throw new Error(sumThrowMsg.join(' |||| '));
+						}
+						console.log('completed winntShellFile_DoerAndFinalizer finalization');
+					}
+
+				break;
+			case 'gtk':
+
+					// create .desktop
+					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.desktop');
+					
+					var cmdArr = [
+						'[Desktop Entry]',
+						'Name=' + aLauncherName,
+						'Type=Application',
+						'Icon=' + aLauncherIconPath,
+						'Exec=' + aLauncherExePath + ' -profile "' + aFullPathToProfileDir + '" -no-remote'
+					];
+					
+					try {
+						var promise_writeScript = OS.File.writeAtomic(cLauncherPath, cmdArr.join('\n'), {encoding:'utf-8', /*unixMode:0o4777,*/ noOverwrite:true}); // doing unixMode:0o4777 here doesn't work, i have to `OS.File.setPermissions(path_toFile, {unixMode:0o4777})` after the file is made
+					} catch(ex) {
+						console.error('createLauncher-platform-error', ex);
+						throw new MainWorkerError('createLauncher-platform-error', ex);
+					}
+					
+					var promise_setPermsScript = OS.File.setPermissions(cLauncherPath, {unixMode:0o4777});
+
+				break;
+			case 'darwin':
+
+					// create .app
+					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.app');
+
+				break;
+			default:
+				throw new MainWorkerError({
+					name: 'addon-error',
+					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+				});
+		}
+	}
 	
-	
+	return cLauncherPath;
 }
+
 function launchOrFocusProfile(aProfPath, aOptions={}) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
 	
@@ -1226,9 +1412,11 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	var cLauncherName = getLauncherNameFromParams(cExeChannel, cProfIniEntry.Name)
 	console.info('cLauncherName:', cLauncherName);
 	
+	var cFullPathToProfileDir = getFullPathToProfileDirFromIni(aProfPath);
+	
 	// this is done after promise_createIcon
 	var postCreateIcon = function() {
-		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.name, cExePath);
+		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir);
 		
 		if (!cProfIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
 		
