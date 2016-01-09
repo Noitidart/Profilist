@@ -711,6 +711,22 @@ var x11Init = function() {
 				self.TYPE.int	// fd
 			);
 		},
+		fcntl: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/fcntl.2.html
+			 * http://linux.die.net/man/2/fcntl
+			 * fcntl() can take an optional third argument. Whether or not this argument is required is determined by cmd.
+			 * F_GETLK, F_SETLK and F_SETLKW are used to acquire, release, and test for the existence of record locks (also known as file-segment or file-region locks). The third argument, lock, is a pointer to a structure that has at least the following fields (in unspecified order). 
+			 * int fcntl(int fd, int cmd);
+			 * int fcntl(int fd, int cmd, long arg);
+			 * int fcntl(int fd, int cmd, struct flock *lock);
+			 */
+			return lib('libc').declare('fcntl', self.TYPE.ABI,
+				self.TYPE.int,			// return
+				self.TYPE.int,			// fd
+				self.TYPE.int,			// cmd
+				self.TYPE.flock.ptr		// *lock
+			);
+		},
 		memcpy: function() {
 			/* http://linux.die.net/man/3/memcpy
 			 * void *memcpy (

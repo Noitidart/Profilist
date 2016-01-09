@@ -699,13 +699,23 @@ function getImgPathOfSlug(aSlug) {
 function getIsRunningFromIni(aProfPath) {
 	// does not update ini
 	// RETURNS
-		// 1 or pid - if running - on windows it just returns 1, on 
+		// 1 or pid - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
 		// false - if NOT running
+		
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	
+	var cIsRunning;
+	
+	// for non-windows, the fcntl method. will not return properly if testing for the current profile. so say im running profile A. and from profile A i tell it to test getting a lock on its lock file. it will not return valid result of a pid. i dont know why. but from profile A i can test if all other profiles are running. its obvious, if running code from profile A that you already know its running.
+	// so anyways thats why i added this test
+	var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // this is the currently running profiles ini entry
+	if (aProfPath == curProfIniEntry.Path) {
+		cIsRunning = core.firefox.pid;
+		return cIsRunning;
+	}
 	
 	var cProfRootDir = getFullPathToProfileDirFromIni(aProfPath);
 	
-	var cIsRunning;
 	switch (core.os.mname) {
 		case 'winnt':
 		case 'winmo':
@@ -744,7 +754,7 @@ function getIsRunningFromIni(aProfPath) {
 		case 'gtk':
 		case 'darwin':
 
-				var cParentLockPath = OS.Path.join(cProfRootDir, 'parent.lock');
+				var cParentLockPath = OS.Path.join(cProfRootDir, '.parentlock');
 				
 				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR | OS.Constants.libc.O_CREAT); //setting this to O_RDWR fixes errno of 9 on fcntl
 				console.log('rez_lockFd:', rez_lockFd);
@@ -764,7 +774,7 @@ function getIsRunningFromIni(aProfPath) {
 				
 				try {
 					var testlock = ostypes.TYPE.flock();
-					testlock.l_type = ostypes.F_WRLCK; //can use F_RDLCK but keep openFd at O_RDWR, it just works
+					testlock.l_type = OS.Constants.libc.F_WRLCK; //can use F_RDLCK but keep openFd at O_RDWR, it just works
 					testlock.l_start = 0;
 					testlock.l_whence = OS.Constants.libc.SEEK_SET;
 					testlock.l_len = 0;
@@ -820,6 +830,13 @@ function getLastExePathForProfFromFS(aProfPath) {
 	// RETURNS
 		// string - the last exePath its compatibility.ini was updated to. :note: :assume: i tested awhile back, that the compaitiblity.ini stores the last exePath-like path in there right away on startup :todo: verify this again // :todo: verify - if profile is running, the path in compaitiblity.ini should be the exePath it is running in right now
 
+		
+	var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // this is the currently running profiles ini entry
+	if (aProfPath == curProfIniEntry.Path) {
+		console.log('checking self prof, so returning XREExeF');
+		return core.profilist.path.XREExeF;
+	}
+	
 	var cProfCompatIniPath = OS.Path.join(getFullPathToProfileDirFromIni(aProfPath), 'compatibility.ini');
 	console.info('cProfCompatIniPath:', cProfCompatIniPath);
 
@@ -856,10 +873,11 @@ function getLastExePathForProfFromFS(aProfPath) {
 	var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'});
 	
 	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
-	if (!LastPlatformDir) {
-		console.error('getLastExePathForProfFromFS', 'regex failed on LastPlatformDir');
-		throw new MainWorkerError('getLastExePathForProfFromFS', 'regex failed on LastPlatformDir');
+	if (!cLastPlatformDir) {
+		console.error('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
+		throw new MainWorkerError('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
 	}
+	cLastPlatformDir = cLastPlatformDir[1];
 	
 	var cLastExePath; // calculate exePath based on cLastPlatformDir
 	switch (core.os.mname) {
