@@ -36,6 +36,13 @@ var macTypes = function() {
 	this.unsigned_long_long = ctypes.unsigned_long_long;
 	this.void = ctypes.void_t;
 	
+	// LIBC SIMPLE TYPES
+	this.pid_t = ctypes.int32_t;
+	this.off_t = ctypes.off_t;
+	
+	// LIBC GUESS TYPES
+	this.FILE = ctypes.void_t; // not really a guess, i just dont have a need to fill it
+	
 	// ADV C TYPES
 	this.time_t = this.long; // https://github.com/j4cbo/chiral/blob/3c66a8bb64e541c0f63b04b78ec2d0ffdf5b473c/chiral/os/kqueue.py#L34 AND also based on this github search https://github.com/search?utf8=%E2%9C%93&q=time_t+ctypes&type=Code&ref=searchresults AND based on this answer here: http://stackoverflow.com/a/471287/1828637
 	
@@ -81,8 +88,7 @@ var macTypes = function() {
 	
 	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
 
-	// inaccrurate types - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
-	this.FILE = ctypes.void_t; // libc type // not really a guess, i just dont have a need to fill it
+	// INACCRURATE TYPES - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
 	
 	// STRUCTURES
 	// consts for structures
@@ -90,6 +96,16 @@ var macTypes = function() {
 
 	};
 
+	// LIBC SIMPLE STRUCTS
+	
+	var flockHollowStruct = new cutils.HollowStructure('flock', OS.Constants.libc.OSFILE_SIZEOF_FLOCK);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_WHENCE, 'l_whence', this.short);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_TYPE, 'l_type', this.short);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_START, 'l_start', this.off_t);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_PID, 'l_pid', this.pid_t);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_LEN, 'l_len', this.off_t);
+	this.flock = flockHollowStruct.getType().implementation;
+	
 	// SIMPLE STRUCTS // based on any of the types above
 	this.__CFAllocator = ctypes.StructType('__CFAllocator');
 	this.__CFArray = ctypes.StructType('__CFArray');
@@ -978,6 +994,18 @@ var macInit = function() {
 			);
 		},
 		///////////// LIBC
+		close: function() {
+			/* http://linux.die.net/man/2/close
+			 * int close(int fd);
+			 *
+			 * https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/close.2.html#//apple_ref/doc/man/2/close
+			 * int close(int fildes);
+			 */
+			return lib('libc').declare('close', self.TYPE.ABI,
+				self.TYPE.int,	// return
+				self.TYPE.int	// fd
+			);
+		},
 		dispatch_get_main_queue: function() {
 			/* https://developer.apple.com/library/prerelease/mac/documentation/Performance/Reference/GCD_libdispatch_Ref/#//apple_ref/c/func/dispatch_get_main_queue
 			 *  dispatch_queue_t dispatch_get_main_queue (
@@ -1002,6 +1030,22 @@ var macInit = function() {
 				self.TYPE.void,					// return
 				self.TYPE.dispatch_queue_t,		// queue
 				self.TYPE.dispatch_block_t		// block
+			);
+		},
+		fcntl: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/fcntl.2.html
+			 * http://linux.die.net/man/2/fcntl
+			 * fcntl() can take an optional third argument. Whether or not this argument is required is determined by cmd.
+			 * F_GETLK, F_SETLK and F_SETLKW are used to acquire, release, and test for the existence of record locks (also known as file-segment or file-region locks). The third argument, lock, is a pointer to a structure that has at least the following fields (in unspecified order). 
+			 * int fcntl(int fd, int cmd);
+			 * int fcntl(int fd, int cmd, long arg);
+			 * int fcntl(int fd, int cmd, struct flock *lock);
+			 */
+			return lib('libc').declare('fcntl', self.TYPE.ABI,
+				self.TYPE.int,			// return
+				self.TYPE.int,			// fd
+				self.TYPE.int,			// cmd
+				self.TYPE.flock.ptr		// *lock
 			);
 		},
 		fread: function() {
@@ -1034,6 +1078,21 @@ var macInit = function() {
 				self.TYPE.void.ptr,	// *dst
 				self.TYPE.void.ptr,	// *src
 				self.TYPE.size_t	// n
+			);
+		},
+		open: function() {
+			/* http://linux.die.net/man/2/open
+			 * int open(const char *pathname, int flags);
+			 * int open(const char *pathname, int flags, mode_t mode);
+			 * int creat(const char *pathname, mode_t mode);
+			 *
+			 * https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/open.2.html#//apple_ref/doc/man/2/open
+			 * int open(const char *path, int oflag, ...);
+			 */
+			return lib('libc').declare('open', self.TYPE.ABI,
+				self.TYPE.int,		// return
+				self.TYPE.char.ptr,	// *path
+				self.TYPE.int		// flags
 			);
 		},
 		popen: function() {

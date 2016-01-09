@@ -696,7 +696,198 @@ function getImgPathOfSlug(aSlug) {
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
 // Start - Launching profile and other profile functionality
-function getRunningExePathForProfFromPlat(aProfPath) {
+function getIsRunningFromIni(aProfPath) {
+	// does not update ini
+	// RETURNS
+		// 1 or pid - if running - on windows it just returns 1, on 
+		// false - if NOT running
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	
+	var cProfRootDir = getFullPathToProfileDirFromIni(aProfPath);
+	
+	var cIsRunning;
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+
+				var cParentLockPath = OS.Path.join(cProfRootDir, 'parent.lock');
+				
+				try {
+					var rez_openLock = OS.File.open(cParentLockPath);
+					// didnt error as got to this line, so its NOT locked
+					cIsRunning = 0;
+					rez_openLock.close();
+				} catch (OSFileError) {
+					if (OSFileError.winLastError == OS.Constants.Win.ERROR_SHARING_VIOLATION) {
+						//its locked
+						cIsRunning = 1; // :todo: see if i can get pid some day, so i can match the behavior of fcntrl on nix/mac
+					} else if (OSFileError.winLastError == OS.Constants.Win.ERROR_FILE_NOT_FOUND) {
+						// if it doesnt exist, this is very likely due to it being an unlaunched profile so return that it is unlocked //this was my todo notes from profilistv2 im not sure what it means - :todo: do equivalent for fnctl for nix/mac
+						cIsRunning = 0;
+					} else if (OSFileError.winLastError == OS.Constants.Win.ERROR_PATH_NOT_FOUND) {
+						// path not even there, this is weird shouldnt happen, but if its not there obviously the profile doesnt exist so nothing in use so just return 0
+						cIsRunning = 0;
+					} else {
+						console.error('getIsRunningFromIni', {
+							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
+							OSFileError: OSFileError
+						});
+						throw new MainWorkerError('getIsRunningFromIni', {
+							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
+							OSFileError: OSFileError
+						});
+					}
+				}
+
+			break;
+		case 'gtk':
+		case 'darwin':
+
+				var cParentLockPath = OS.Path.join(cProfRootDir, 'parent.lock');
+				
+				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR | OS.Constants.libc.O_CREAT); //setting this to O_RDWR fixes errno of 9 on fcntl
+				console.log('rez_lockFd:', rez_lockFd);
+				if (cutils.jscEqual(rez_lockFd, -1)) {
+					// failed to open
+					// :todo: add test for errno, if it tells me it file doesnt exist then obviously return 0 meaning its not in use
+					console.error('getIsRunningFromIni -> ostypes.api.open', {
+						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
+						errno: ctypes.errno
+					});
+					throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.open', {
+						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
+						errno: ctypes.errno
+					});
+				}
+
+				
+				try {
+					var testlock = ostypes.TYPE.flock();
+					testlock.l_type = ostypes.F_WRLCK; //can use F_RDLCK but keep openFd at O_RDWR, it just works
+					testlock.l_start = 0;
+					testlock.l_whence = OS.Constants.libc.SEEK_SET;
+					testlock.l_len = 0;
+					
+					var rez_fcntl = ostypes.API('fcntl')(rez_lockFd, OS.Constants.libc.F_GETLK, testlock.address());
+					console.log('rez_fcntl:', rez_fcntl);
+					if (cutils.jscEqual(rez_fcntl, -1)) {
+						// failed to open
+						throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.fcntl', {
+							msg: 'failed to fcntl cParentLockPath: "' + cParentLockPath + '"',
+							errno: ctypes.errno
+						});
+					}
+					
+					// l_pid is unchanged if it wasnt locked, and since js-ctypes instatiates the struct at value of 0, i can just return that value, so 0 means its not running
+					cIsRunning = parseInt(cutils.jscGetDeepest(testlock.l_pid));
+					console.info('got cIsRunning:', cIsRunning);
+					
+				} finally {
+					var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
+					console.log('rez_closeLockFd:', rez_closeLockFd);
+					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
+						// failed to close
+						throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.close', {
+							msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
+							errno: ctypes.errno
+						});
+					}
+				}
+				
+				if (core.os.mname != 'darwin' && cIsRunning === undefined) {
+					// then its gtk, and cIsRunning was found so break
+					// meaning it still has not determined if the profile is running or not, and it is a (non-mac) unix system
+					var cSymLockPath = OS.Path.join(cProfRootDir, 'lock');
+					// i guess old versions of unix have this symlock path
+					// :todo: find a scenario, i could not find it as of yet, so i havent written this up yet. i just recall i saw this in the code from mxr
+						// so for now just guess its not running
+					cIsRunning = 0;
+				}
+
+			break;
+		default:
+			throw new MainWorkerError({
+				name: 'addon-error',
+				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+			});
+	}
+	// :note: maybe verify or something - there seems to be some platform called vms, but i cant find such an os for virtualmachine - http://mxr.mozilla.org/mozilla-release/source/profile/dirserviceprovider/src/nsProfileLock.cpp#581
+	
+	return cIsRunning;
+}
+function getLastExePathForProfFromFS(aProfPath) {
+	// RETURNS
+		// string - the last exePath its compatibility.ini was updated to. :note: :assume: i tested awhile back, that the compaitiblity.ini stores the last exePath-like path in there right away on startup :todo: verify this again // :todo: verify - if profile is running, the path in compaitiblity.ini should be the exePath it is running in right now
+
+	var cProfCompatIniPath = OS.Path.join(getFullPathToProfileDirFromIni(aProfPath), 'compatibility.ini');
+	console.info('cProfCompatIniPath:', cProfCompatIniPath);
+
+	// contents of compaitiblity.ini on diff plats
+		// on win10 - as of 010816
+			// [Compatibility]
+			// LastVersion=44.0_20160104162232/20160104162232
+			// LastOSABI=WINNT_x86-msvc
+			// LastPlatformDir=C:\Program Files (x86)\Mozilla Firefox
+			// LastAppDir=C:\Program Files (x86)\Mozilla Firefox\browser
+		// on osx10.1 - as of 010816
+			// [Compatibility]
+			// LastVersion=43.0.4_20160105164030/20160105164030
+			// LastOSABI=Darwin_x86_64-gcc3
+			// LastPlatformDir=/Applications/Firefox.app/Contents/Resources
+			// LastAppDir=/Applications/Firefox.app/Contents/Resources/browser
+
+			// InvalidateCaches=1
+		// on ubuntu15.01 - as of 010816
+			// [Compatibility]
+			// LastVersion=43.0_20151210084639/20151210084639
+			// LastOSABI=Linux_x86_64-gcc3
+			// LastPlatformDir=/usr/lib/firefox
+			// LastAppDir=/usr/lib/firefox/browser
+
+	// Services.dirsvc.get('XREExeF', Ci.nsIFile).path
+		// win
+			// "C:\Program Files (x86)\Mozilla Firefox\firefox.exe"
+		// osx
+			// "/Applications/Firefox.app/Contents/MacOS/firefox"
+		// ubuntu15.01
+			// "/usr/lib/firefox/firefox"
+
+	var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'});
+	
+	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
+	if (!LastPlatformDir) {
+		console.error('getLastExePathForProfFromFS', 'regex failed on LastPlatformDir');
+		throw new MainWorkerError('getLastExePathForProfFromFS', 'regex failed on LastPlatformDir');
+	}
+	
+	var cLastExePath; // calculate exePath based on cLastPlatformDir
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+
+				cLastExePath = OS.Path.join(cLastPlatformDir, 'firefox.exe');
+
+			break;
+		case 'gtk':
+
+				cLastExePath = OS.Path.join(cLastPlatformDir, 'firefox');
+
+			break;
+		case 'darwin':
+
+				cLastExePath = OS.Path.join(OS.Path.dirname(cLastPlatformDir), 'MacOS', 'firefox');
+
+			break;
+		default:
+			throw new MainWorkerError({
+				name: 'addon-error',
+				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+			});
+	}
+	
+	return cLastExePath;
 	// get the firefox path a profile is running in, else null
 	// synonomous with getIsProfRunning
 	// this does heavy ctypes stuff to check system
@@ -1056,7 +1247,7 @@ function getLauncherDirPathFromParams(aProfPath) {
 }
 
 function getFullPathToProfileDirFromIni(aProfPath) {
-	// gets the full platform path to the profile directory, used for argument of launcher with -profile
+	// gets the full platform path to the profile root directory, used for argument of launcher with -profile
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (cIniEntry.IsRelative == '1') {
 		var cProfDirName = OS.Path.basename(OS.Path.normalize(aProfPath));
@@ -1459,19 +1650,21 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cIniEntry could not be found'); }
 	
+	/* as of 010816 this is not used
 	if (aOptions.usePlat) {
 		// get from platform, if the profile is running, and if it is then get the exePath it is in
 		// :consider: right now i am updating gIniObj with the newly fetch details, but have :todo: deliver it to everywehre.
-		var cRunningExePath = getRunningExePathForProfFromPlat(aProfPath);
+		var cRunningExePath = getLastExePathForProfFromFS(aProfPath);
 		// :todo: check if gIniObj matches, if not as i modify it, then update it and send updates to gui's
 		if (cRunningExePath) {
 			cIniEntry.noWriteObj.status = true;
-			cIniEntry.noWriteObj.exePath = cRunningExePath;
+			cIniEntry.noWriteObj.exePath = cRunningExePath; // link135246970
 		} else {
 			delete cIniEntry.noWriteObj.status;
-			delete cIniEntry.noWriteObj.exepath;
+			delete cIniEntry.noWriteObj.exePath;
 		}
 	}
+	*/
 	
 	if (cIniEntry.noWriteObj.status) { // link6847494493
 		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams

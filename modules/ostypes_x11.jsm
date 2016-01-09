@@ -17,10 +17,10 @@ var xlibTypes = function() {
 	
 	// C TYPES
 	this.char = ctypes.char;
-	this.fd_set = ctypes.uint8_t; // This is supposed to be fd_set*, but on Linux at least fd_set is just an array of bitfields that we handle manually. this is for my fd_set_set helper functions link4765403
 	this.int = ctypes.int;
 	this.int16_t = ctypes.int16_t;
 	this.long = ctypes.long;
+	this.short = ctypes.short;
 	this.size_t = ctypes.size_t;
 	this.unsigned_char = ctypes.unsigned_char;
 	this.unsigned_int = ctypes.unsigned_int;
@@ -29,6 +29,13 @@ var xlibTypes = function() {
 	this.uint32_t = ctypes.uint32_t;
 	this.uint8_t = ctypes.uint8_t;
 	this.void = ctypes.void_t;
+	
+	// LIBC SIMPLE TYPES
+	this.pid_t = ctypes.int32_t;
+	this.off_t = ctypes.off_t;
+	
+	// LIBC GUESS TYPES
+	this.fd_set = ctypes.uint8_t; // This is supposed to be fd_set*, but on Linux at least fd_set is just an array of bitfields that we handle manually. this is for my fd_set_set helper functions link4765403
 	
 	// SIMPLE TYPES // http://refspecs.linuxfoundation.org/LSB_1.3.0/gLSB/gLSB/libx11-ddefs.html
 	this.Atom = ctypes.unsigned_long;
@@ -68,11 +75,22 @@ var xlibTypes = function() {
 	this.Visual = ctypes.StructType('Visual');
 	this.Depth = ctypes.StructType('Depth');
 	
-	// SIMPLE STRUCTS
+	// LIBC SIMPLE STRUCTS
+	
+	var flockHollowStruct = new cutils.HollowStructure('flock', OS.Constants.libc.OSFILE_SIZEOF_FLOCK);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_WHENCE, 'l_whence', this.short);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_TYPE, 'l_type', this.short);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_START, 'l_start', this.off_t);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_PID, 'l_pid', this.pid_t);
+	flockHollowStruct.add_field_at(OS.Constants.libc.OSFILE_OFFSETOF_FLOCK_L_LEN, 'l_len', this.off_t);
+	this.flock = flockHollowStruct.getType().implementation;
+	
 	this.timeval = ctypes.StructType('timeval', [
 		{ 'tv_sec': this.long },
 		{ 'tv_usec': this.long }
 	]);
+	
+	// SIMPLE STRUCTS
 	this.XButtonEvent = ctypes.StructType('XButtonEvent', [ // http://tronche.com/gui/x/xlib/events/keyboard-pointer/keyboard-pointer.html#XButtonEvent
 		{ type: this.int },
 		{ serial: this.unsigned_long },
@@ -681,6 +699,18 @@ var x11Init = function() {
 			);
 		},
 		// libc
+		close: function() {
+			/* http://linux.die.net/man/2/close
+			 * int close(int fd);
+			 *
+			 * https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/close.2.html#//apple_ref/doc/man/2/close
+			 * int close(int fildes);
+			 */
+			return lib('libc').declare('close', self.TYPE.ABI,
+				self.TYPE.int,	// return
+				self.TYPE.int	// fd
+			);
+		},
 		memcpy: function() {
 			/* http://linux.die.net/man/3/memcpy
 			 * void *memcpy (
@@ -694,6 +724,21 @@ var x11Init = function() {
 				self.TYPE.void.ptr,	// *dest
 				self.TYPE.void.ptr,	// *src
 				self.TYPE.size_t	// count
+			);
+		},
+		open: function() {
+			/* http://linux.die.net/man/2/open
+			 * int open(const char *pathname, int flags);
+			 * int open(const char *pathname, int flags, mode_t mode);
+			 * int creat(const char *pathname, mode_t mode);
+			 *
+			 * https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/open.2.html#//apple_ref/doc/man/2/open
+			 * int open(const char *path, int oflag, ...);
+			 */
+			return lib('libc').declare('open', self.TYPE.ABI,
+				self.TYPE.int,		// return
+				self.TYPE.char.ptr,	// *path
+				self.TYPE.int		// flags
 			);
 		},
 		// x11
