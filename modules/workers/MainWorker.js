@@ -331,18 +331,24 @@ function readIni() {
 }
 
 function formatNoWriteObjs() {
-	// delets the noWriteObj in each entry, then populates it
-	// works on gIniObj
+	// deletes the noWriteObj in each entry, then populates it
+	// acts on gIniObj
 	
 	// also triggers writeIni in cases where it is needed, does so in these instances:
-	//	* if the curProf_iniEntry is not touched
+	//	* if the curProfIniEntry is not touched
 	//	* 
 	
 	// format gIniObj - :note: :important: all values must be strings, UNLESS in noWriteObj
 	// format means to go through and set noWriteObj in the gIniObj appropariately. appropariately means based on the prefs it will set stuff
-	// for testing if currentProfile
-	var curProf_iniEntry;
-	var osFilePathSeperator = OS.Path.join(' ', ' ').replace(/ /g, '');
+	
+	
+	// give every iniEntry a noWriteObj
+	for (var i=0; i<gIniObj.length; i++) {
+		gIniObj[i].noWriteObj = {};
+	}
+	
+	// identify AND mark the ini entry that is of the currently selected profile (meaning this profile that is running the code)
+	var curProfIniEntry; // short for currently selected profile's ini entry
 	var curProfRt = OS.Constants.Path.profileDir; // using same pattern as ```defProfRt: Services.dirsvc.get('DefProfRt', Ci.nsIFile).path,```
 	var curProf_isRelative;
 	var curProf_relativeDescriptor; // only set it curProf_isRelative == true
@@ -352,42 +358,31 @@ function formatNoWriteObjs() {
 	} else {
 		curProf_isRelative = false;
 	}
-	
-	// end - for testing if currentProfile
 	for (var i=0; i<gIniObj.length; i++) {
-		gIniObj[i].noWriteObj = {};
-		
 		// if its a profile
 		if (gIniObj[i].Path) {
 			
 			// test if it is the currentProfile
-			if (!curProf_iniEntry) {
-				if (curProf_isRelative && gIniObj[i].IsRelative == '1') {
-					if (curProf_relativeDescriptor == gIniObj[i].Path) {
-						foundCurrentProfile = true;
-						gIniObj[i].noWriteObj.currentProfile = true;
-						curProf_iniEntry = gIniObj[i];
-					}
-				} else if (!curProf_isRelative && (gIniObj[i].IsRelative == '0' || !gIniObj[i].IsRelative /* verify if a non-relative profile exists, check to see if ever IsRelative is omitted, or is it everytime set equal to 0*/)) {
-					if (curProfRt == gIniObj[i].Path) {
-						foundCurrentProfile = true;
-						gIniObj[i].noWriteObj.currentProfile = true;
-						curProf_iniEntry = gIniObj[i];
-					}
+			if (!curProfIniEntry) {
+				if (curProf_isRelative && gIniObj[i].IsRelative == '1' && curProf_relativeDescriptor == gIniObj[i].Path) {
+					foundCurrentProfile = true;
+					gIniObj[i].noWriteObj.currentProfile = true;
+					curProfIniEntry = gIniObj[i];
+				} else if (!curProf_isRelative && (gIniObj[i].IsRelative == '0' || !gIniObj[i].IsRelative /* verify if a non-relative profile exists, check to see if ever IsRelative is omitted, or is it everytime set equal to 0*/) && curProfRt == gIniObj[i].Path) {
+					foundCurrentProfile = true;
+					gIniObj[i].noWriteObj.currentProfile = true;
+					curProfIniEntry = gIniObj[i];
 				}
 			}
 			
 		}
-		
-		
-		
 	}
 	
-	// settle curProf_iniEntry - meaning if its temporary profile, and it has no entry in ini, then put one in -- no need to test/set writeIni here, at the end i test if curProf_iniEntry is touched, and obviously it wont be so it will get touched and written
+	// settle curProfIniEntry - meaning if its temporary profile, and it has no entry in ini, then put one in -- no need to test/set writeIni here, at the end i test if curProfIniEntry is touched, and obviously it wont be so it will get touched and written
 	// update noWriteObj of currentProfile OR if its a temp profile then update gIniObj with it and write it to ini
-	// if (!foundCurrentProfile || (foundCurrentProfile && curProf_iniEntry.groupName.indexOf('TempProfile') == 0)) {
+	// if (!foundCurrentProfile || (foundCurrentProfile && curProfIniEntry.groupName.indexOf('TempProfile') == 0)) {
 		// its a temp profile
-		if (!curProf_iniEntry) {
+		if (!curProfIniEntry) {
 			// find max num
 			var cMaxProfileNum = -1;
 			var pattProfileNum = /\[(?:Temp)?Profile(\d+)\]/;
@@ -400,7 +395,7 @@ function formatNoWriteObjs() {
 					}
 				}
 			}
-			curProf_iniEntry = {
+			curProfIniEntry = {
 				groupName: 'TempProfile' + (cMaxProfileNum + 1)
 			}
 		}
@@ -409,58 +404,53 @@ function formatNoWriteObjs() {
 	// go through and note in noWriteObj if its a temporary profile
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].groupName.indexOf('[TempProfile') > -1) {
-			gIniObj[i].noWriteObj.TempProfile = true;
+			gIniObj[i].noWriteObj.temporaryProfile = true;
 		}
 	}
 	
 	// set running statuses
-	curProf_iniEntry.noWriteObj.status = true; // :note: if anything is running it needs exePath, this is not a GUI requirement, but a business-layer requirement link135246970
-	curProf_iniEntry.noWriteObj.exePath = core.profilist.path.XREExeF;
-	// :todo: do for rest in gIniObj
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path) {
+			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path);
+		}
+	}
 	
-	
-	// set gJProfilistBuilds
-	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-	if (!this.debuggedProfilistBuilds) { // :debug:
-		gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
-		this.debuggedProfilistBuilds = true; // :debug:
-	} // :debug:
-	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
+	// set global var telling if dev mode is on or off
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // not really global. i usually use g prefix on real global vars. but here im just using it to idicate that the general etnry if from gIniObj
+	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
 	console.error('gJProfilistDev:', gJProfilistDev);
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff
 	if (gJProfilistDev) {
+		
+		/////// debug
 		// set gJProfilistBuilds
-		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProf_iniEntry, gGenIniEntry, 'ProfilistBuilds'));
-		
-		// start - for all that are running set exePath :todo:
-		curProf_iniEntry.noWriteObj.exePath = core.profilist.path.XREExeF;
-		// end - for all that are running set exePath
-		
-		// start - for all that are running set exeIconSlug
-			//////////
-			// LOGIC
-			// get slug for img its exePath
-			//	 check if one exists in in tie
-			//		true - take that slug
-			//		false -
-			//			getSlugForChannel(that channel, for curProf you can use core.firefox.channel)
-			//////////
-			// do currentProfile
-			var cBuildEntryForExePath = getBuildEntryByKeyValue(gJProfilistBuilds, 'p', curProf_iniEntry.exePath);
-			if (cBuildEntryForExePath) {
-				curProf_iniEntry.noWriteObj.exeIconSlug = cBuildEntryForExePath.i;
-			} else {
-				curProf_iniEntry.noWriteObj.exeIconSlug = getSlugForChannel(core.firefox.channel);
+		if (!this.debuggedProfilistBuilds) { // :debug:
+			gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
+			this.debuggedProfilistBuilds = true; // :debug:
+		} // :debug:
+		/////// debug
+
+		// set gJProfilistBuilds
+		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+
+		// for all that are running set exeIconSlug
+		// in order to set exeIconSlug I need exePath (since i need exePath anyways i set it - this is INIOBJ_RULE#7)
+		for (var i=0; i<gIniObj.length; i++) {
+			if (gIniObj[i].noWriteObj.status) {
+				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
+				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].exePath, gJProfilistDev, gJProfilistBuilds, getExeChanForParamsFromFSFromCache(gIniObj[i].exePath));// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
 			}
-			// do remaining that are running
-		// start - for all that are running set exeIconSlug
+		}
+
+	} else {
+		gJProfilistBuilds = [];
 	}
 	
 	// figure out if need to touch ini for currentProfile, and if have to, then touch it, then write it to ini and inibkp
-	if (!('ProfilistStatus' in curProf_iniEntry)) { // even though i store as string, i am doing ```key in``` check instead of !curProf_iniEntry.ProfilistStatus - just in case somehow in future ProfilistStatus = "0" gets parsed as int, it should never though
+if (!('ProfilistStatus' in curProfIniEntry) || curProfIniEntry.ProfilistStatus !== '1') { // INIOBJ_RULE#3 // even though i store as string, i am doing ```key in``` check instead of !curProfIniEntry.ProfilistStatus - just in case somehow in future ProfilistStatus = "0" gets parsed as int, it should never though
 		// need to touch
-		curProf_iniEntry.ProfilistStatus = '1';
+		curProfIniEntry.ProfilistStatus = '1';
 		writeIni();
 	}
 }
@@ -515,6 +505,7 @@ function isSlugInChromeChannelIconsets(aPossibleSlug) {
 	}
 }
 function getSlugForChannel(aChannel) {
+	// GEN_RULE#1 slug is a plat slafed string
 	switch (aChannel) {
 		case 'esr':
 		case 'release':
@@ -543,6 +534,23 @@ function getSlugForChannel(aChannel) {
 				throw new Error('no slug for this channel... should never ever get here!!! channel value was "' + aChannel + '"');
 	}
 }
+
+function getSlugForExePathFromParams(aExePath, aJProfilistDev, aJProfilistBuilds, aExeChannel) {
+	// 010916
+	// FromChannel means it may read platform (so FromFS) to figure out channel of that exePath, but after it figures it once, then it is cached and it is no longer FromFS it is FromCache
+	// RETURNS
+		// string - platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'``` - GEN_RULE#1
+	
+	if (aJProfilistDev) {
+		var cBuildEntry = getBuildEntryByKeyValue(aJProfilistBuilds, 'p', aExePath);
+		if (cBuildEntry) {
+			return cBuildEntry.i;
+		} // else it is totally possible for cBuildEntry to be null, because i searched by `p` it just means that path does not have a custom icon
+	}
+	// if get to this line - it means no custom icon set or dev mode is off... so use aExeChannel to determine base
+	return getSlugForChannel(aExeChannel);
+}
+
 function getBuildEntryByKeyValue(aJProfilistBuilds, aKeyName, aKeyValue) {
 	// returns null if entry with aKeyName having a val of aKeyValue is not found, else it returns that entry
 	for (var i=0; i<aJProfilistBuilds.length; i++) {
@@ -696,12 +704,13 @@ function getImgPathOfSlug(aSlug) {
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
 // Start - Launching profile and other profile functionality
-function getIsRunningFromIni(aProfPath) {
+function getIsRunningFromIniFromPlat(aProfPath) {
 	// does not update ini
 	// RETURNS
 		// 1 or pid - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
 		// false - if NOT running
-		
+	// currentProfile must be marked in gIniObj before using this
+
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	
 	var cIsRunning;
@@ -739,11 +748,11 @@ function getIsRunningFromIni(aProfPath) {
 						// path not even there, this is weird shouldnt happen, but if its not there obviously the profile doesnt exist so nothing in use so just return 0
 						cIsRunning = 0;
 					} else {
-						console.error('getIsRunningFromIni', {
+						console.error('getIsRunningFromIniFromPlat', {
 							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
 							OSFileError: OSFileError
 						});
-						throw new MainWorkerError('getIsRunningFromIni', {
+						throw new MainWorkerError('getIsRunningFromIniFromPlat', {
 							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
 							OSFileError: OSFileError
 						});
@@ -761,11 +770,11 @@ function getIsRunningFromIni(aProfPath) {
 				if (cutils.jscEqual(rez_lockFd, -1)) {
 					// failed to open
 					// :todo: add test for errno, if it tells me it file doesnt exist then obviously return 0 meaning its not in use
-					console.error('getIsRunningFromIni -> ostypes.api.open', {
+					console.error('getIsRunningFromIniFromPlat -> ostypes.api.open', {
 						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
 						errno: ctypes.errno
 					});
-					throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.open', {
+					throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.open', {
 						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
 						errno: ctypes.errno
 					});
@@ -783,7 +792,7 @@ function getIsRunningFromIni(aProfPath) {
 					console.log('rez_fcntl:', rez_fcntl);
 					if (cutils.jscEqual(rez_fcntl, -1)) {
 						// failed to open
-						throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.fcntl', {
+						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.fcntl', {
 							msg: 'failed to fcntl cParentLockPath: "' + cParentLockPath + '"',
 							errno: ctypes.errno
 						});
@@ -798,7 +807,7 @@ function getIsRunningFromIni(aProfPath) {
 					console.log('rez_closeLockFd:', rez_closeLockFd);
 					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
 						// failed to close
-						throw new MainWorkerError('getIsRunningFromIni -> ostypes.api.close', {
+						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
 							msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
 							errno: ctypes.errno
 						});
@@ -827,10 +836,11 @@ function getIsRunningFromIni(aProfPath) {
 	return cIsRunning;
 }
 function getLastExePathForProfFromFS(aProfPath) {
+	// the difference between this function and ```getCalcdExePathForProfFromIniFromFS``` is explained on link883939272722
 	// RETURNS
 		// string - the last exePath its compatibility.ini was updated to. :note: :assume: i tested awhile back, that the compaitiblity.ini stores the last exePath-like path in there right away on startup :todo: verify this again // :todo: verify - if profile is running, the path in compaitiblity.ini should be the exePath it is running in right now
-
-		
+	// gIniObj must have currentProfile noted (WITH exePath noted within) before calling this function 
+	
 	var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // this is the currently running profiles ini entry
 	if (aProfPath == curProfIniEntry.Path) {
 		console.log('checking self prof, so returning XREExeF');
@@ -906,26 +916,23 @@ function getLastExePathForProfFromFS(aProfPath) {
 	}
 	
 	return cLastExePath;
-	// get the firefox path a profile is running in, else null
-	// synonomous with getIsProfRunning
-	// this does heavy ctypes stuff to check system
-	// tests if profile is running, if it is, it returns to you the exepath it is running in, if not running it returns false
-	// RETURNS
-		// if RUNNING - path to build its running
-		// if NOT running - returns null
 }
 // start - get profile spec functions based on gIniObj
-function getExePathForProfFromIni(aProfPath) {
-	// test gIniObj for if it is running, if it is tied
+function getCalcdExePathForProfFromIniFromFS(aProfPath) {
+	// this is different from `getLastExePathForProfFromFS` in that it -- this is a calculated exePath, it tells what it SHOULD BE, of course if its running then this function will use `getLastExePathForProfFromFS` (link883939272722) -- tests gIniObj for 1) if it is running - if it is then getLastExePathForProfFromFS, 2) if it is not running - 2a) if it is tied - then that, 2b) current profile exe so XREExeF
 	// :note: this does not do running check, it just returns the exe path based on what is in in gIniObj and tie
 	// RETURNS
-		// if, based on gIniObj, it is RUNNING, then it returns that path
+		// if, based on gIniObj, it is RUNNING, then it gets the path for that profile from platform with getLastExePathForProfFromFS
 		// if, based on gIniObj, it is NOT running, then it returns the tied path if it has one ELSE the currentProfile path
 		
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (cIniEntry.noWriteObj.status) {
 		// its running
-		return cIniEntry.noWriteObj.exePath; // link135246970
+		if (gJProfilistDev) {
+			// :note: per INIOB_RULE#7 - ini entires have exePath so just return that, which saves some filestystem checks which would haveen from running ```getLastExePathForProfFromFS(aProfPath)```
+			return cIniEntry.noWriteObj.exePath;
+		}
+		return getLastExePathForProfFromFS(aProfPath);
 	} else {
 		if (gJProfilistDev && cIniEntry.ProfilistTie) {
 			// :note: if the current profile is in dev mode, then we check for tie. else we dont consider tie - :todo: tell this to users in description somewhere
@@ -937,10 +944,8 @@ function getExePathForProfFromIni(aProfPath) {
 			return cBuildEntry.p;
 		}
 		// gets to this point if gJProfilistDev is false, OR it was true but no tie in the ini
-		// var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // link135246970
-		// return curProfIniEntry.noWriteObj.exePath;
-		// well obviously the currentProfile is running in core.profilist.path.XREExeF so lets just return this, save some looping
-		return core.profilist.path.XREExeF; // the link135246970 for the immediately 3 lines above comment is valid though
+		// well obviously the currentProfile is running in core.profilist.path.XREExeF so lets just return this, save some looping which would have happend if i ran ```getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true).noWriteObj.exePath```
+		return core.profilist.path.XREExeF;
 	}
 }
 function getBadgeSlugForProfFromIni(aProfPath) {
@@ -955,16 +960,16 @@ function getBadgeSlugForProfFromIni(aProfPath) {
 }
 // end - get profile spec functions based on gIniObj
 // start - get profile spec based on function arguments
-_cache_getExeChanForParamsFromFS = {};
-function getExeChanForParamsFromFS(aExePath) {
+_cache_getExeChanForParamsFromFSFromCache = {};
+function getExeChanForParamsFromFSFromCache(aExePath) {
 	// :note: this does not do running check, it just returns the exe path based on what parameters passed
 	// RETURNS
 		// string - beta etc
 		// if any error then null
-	// if (!(aExePath in _cache_getExeChanForParamsFromFS)) {
-	if (!_cache_getExeChanForParamsFromFS[aExePath]) { // changed from in to do this, because if it was null for some reason i want to keep checking it
+	// if (!(aExePath in _cache_getExeChanForParamsFromFSFromCache)) {
+	if (!_cache_getExeChanForParamsFromFSFromCache[aExePath]) { // changed from in to do this, because if it was null for some reason i want to keep checking it
 		if (aExePath == core.profilist.path.XREExeF) {
-			_cache_getExeChanForParamsFromFS[aExePath] = core.firefox.channel;
+			_cache_getExeChanForParamsFromFSFromCache[aExePath] = core.firefox.channel;
 		} else {
 			console.time('getExeChanFromFS');
 			var channelPrefsJsPath;
@@ -991,16 +996,18 @@ function getExeChanForParamsFromFS(aExePath) {
 			// console.log('rez_read:', rez_read);
 
 			var channel_name = rez_read.match(/app\.update\.channel", "([^"]+)/);
-			console.log('channel_name:', channel_name);
+			// console.log('channel_name:', channel_name);
 			if (!channel_name) {
-				_cache_getExeChanForParamsFromFS[aExePath] = null;
+				_cache_getExeChanForParamsFromFSFromCache[aExePath] = null;
+				console.error('should-nver-happen!', 'as a exe path must exist for all builds!!!');
+				throw new MainWorkerError('should-nver-happen!', 'as a exe path must exist for all builds!!!');
 			} else {
-				_cache_getExeChanForParamsFromFS[aExePath] = channel_name[0];
+				_cache_getExeChanForParamsFromFSFromCache[aExePath] = channel_name[0];
 			}
 			console.timeEnd('getExeChanFromFS');
 		}
 	}
-	return _cache_getExeChanForParamsFromFS[aExePath];
+	return _cache_getExeChanForParamsFromFSFromCache[aExePath];
 }
 function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug) {
 	// :note: this does not do running check, it just returns the icon path based on what is in in gIniObj
@@ -1023,17 +1030,7 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug)
 	var iconInfosObj = {}; // short for iconInfoObj	
 	
 	iconInfosObj.base = {};
-	if (gJProfilistDev) {
-		// note: if dev mode is on in this current profile, then check if there is a custom icon for aExePath. else dont check custom just check channel
-		var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'p', aExePath);
-		if (cBuildEntry) {
-			iconInfosObj.base.slug = cBuildEntry.i;
-		} // else it is totally possible for cBuildEntry to be null, because i searched by `p` it just means that path does not have a custom icon
-	}
-	if (!iconInfosObj.base.slug) {
-		// means no custom icon set or dev mode is off... so use aExeChannel to determine base
-		iconInfosObj.base.slug = getSlugForChannel(aExeChannel);
-	}
+	iconInfosObj.base.slug = getSlugForExePathFromParams(aExePath, gJProfilistDev, gJProfilistBuilds, aExeChannel);
 	
 	if (isSlugInChromeChannelIconsets(iconInfosObj.base.slug)) {
 		iconInfosObj.base.chrome = true;
@@ -1659,7 +1656,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	
 	// aOptions
 	var cOptionsDefaults = {
-		usePlat: false // by default will use ini
+		// refreshRunningStatus: false // re-check if it is indeeded running - i havent set this up yet, and i plan not to, but leaving it here as a comment as it was a thought of mine
 	}
 	
 	validateOptionsObj(aOptions, cOptionsDefaults);
@@ -1668,30 +1665,20 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cIniEntry could not be found'); }
 	
-	/* as of 010816 this is not used
-	if (aOptions.usePlat) {
-		// get from platform, if the profile is running, and if it is then get the exePath it is in
-		// :consider: right now i am updating gIniObj with the newly fetch details, but have :todo: deliver it to everywehre.
-		var cRunningExePath = getLastExePathForProfFromFS(aProfPath);
-		// :todo: check if gIniObj matches, if not as i modify it, then update it and send updates to gui's
-		if (cRunningExePath) {
-			cIniEntry.noWriteObj.status = true;
-			cIniEntry.noWriteObj.exePath = cRunningExePath; // link135246970
-		} else {
-			delete cIniEntry.noWriteObj.status;
-			delete cIniEntry.noWriteObj.exePath;
-		}
+	/*
+	if (aOptions.refreshRunningStatus) {
+		
 	}
 	*/
 	
 	if (cIniEntry.noWriteObj.status) { // link6847494493
-		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams
+		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams - it will not launch as .status is existing
 	}
 	
 	// these vars, are all the things it should SET-TO/NOW be - on launching
-	var cExePath = getExePathForProfFromIni(aProfPath);
+	var cExePath = getCalcdExePathForProfFromIniFromFS(aProfPath);
 	console.info('cExePath:', cExePath);
-	var cExeChannel = getExeChanForParamsFromFS(cExePath);
+	var cExeChannel = getExeChanForParamsFromFSFromCache(cExePath);
 	console.info('cExeChannel:', cExeChannel);
 	var cBadgeIconSlug = getBadgeSlugForProfFromIni(aProfPath);
 	console.info('cBadgeIconSlug:', cBadgeIconSlug);
@@ -2001,10 +1988,7 @@ function getRelativeDescriptor(ofOsPath, fromOsPath) {
 		// for: ```new FileUtils.File(OS.Constants.Path.profileDir).getRelativeDescriptor(Services.dirsvc.get('UAppData', Ci.nsIFile))```
 		// so now is: ```getRelativeDescriptor(OS.Constants.Path.profileDir, OS.Constants.Path.userApplicationDataDir)```
 	
-	var osFilePathSeperator = OS.Path.join(' ', ' ').replace(/ /g, '');
-	// console.error('osFilePathSeperator:', osFilePathSeperator);
-	
-	var pattGlobalFileSperator = new RegExp(escapeRegExp(osFilePathSeperator), 'g');
+	var pattGlobalFileSperator = new RegExp(escapeRegExp(platformFilePathSeperator()), 'g');
 	
 	return ofOsPath.replace(fromOsPath, '').replace(pattGlobalFileSperator, '/').substr(1); // substr 1 because first char will be osFilePathSeperator
 }
@@ -2185,5 +2169,14 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}
+}
+
+// var _cache_platformFilePathSeperator;
+function platformFilePathSeperator() {
+	// if (!_cache_platformFilePathSeperator) {
+	// 	_cache_platformFilePathSeperator = OS.Path.join(' ', ' ').replace(/ /g, '');
+	// }
+	// return _cache_platformFilePathSeperator;
+	return OS.Path.join(' ', ' ').replace(/ /g, '');
 }
 // end - common helper functions

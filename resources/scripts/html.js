@@ -26,6 +26,57 @@ XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.stri
 
 
 /*
+GEN_RULEs - stands for GENERAL_RULES
+1. Icon Slug
+	* platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'```
+INIOBJ_RULEs
+1. groupName
+	* This is the text between the square brackets [] in the ini group title
+	* Valids
+		* General - this is standard
+		* Profile# - this is standard
+		* TempProfile#
+			* Whenever profilist is installed into a temporary profile, it should add this, the # should be one plus the previous #, the seequence of profile and TempProfile should be in order. So like Profile0 Profile1 TempProfile2 Profile3
+			* Also added in when profilist finds a temp profile running
+2. ProfilistBadge
+	* On profile entry if it is badged
+	* It is the icon slug, which is the platform safed file name before the .png, from jProfilistBuilds
+3. ProfilistStatus
+	* Found on all profile ini entrys that have profilist installed - meaing if it is not on it, then profilist is not installed on it
+	* '0' - installed BUT disabled
+	* '1' - installed AND enabled
+4. ProfilistBuilds
+	* JSON.stringify of:
+	  ```
+	  [
+		{
+			i: string - slug of icon. slug is plat safed, slug is defined on cross-file-link33464648958
+			id: max increment - should never reduce, always find the max one, and the next id is one plus that
+			p: string - exePath
+		}
+	  ]
+	  ```
+5. noWriteObj.currentProfile
+	* The profile that the code is running from
+6. noWriteObj.status
+	* Integer
+	* 0 if profile is not running
+	* >= 1 if its running
+		* on windows the currentProfile is always pid, all others are just 1
+		* on unix based it is always pid
+7. noWriteObj.exePath
+	* String to XREExeF the profile IS RUNNING IN
+	* Only required if dev mode is on && profile is running
+		* DOM
+			* Required on currentProfile
+		* BL
+	* Even though not required, it is provided if dev mode is on && profile is running ---- because it is needed to calculate exeIconSlug
+8. noWriteObj.exeIconSlug
+	* Only required if dev mode is on && profile is running
+		* It is used to show the buildhint icon
+9. noWriteObj.temporaryProfile
+	* If the profile is temporary, then it is marked true
+------------
 var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile0',
@@ -39,7 +90,7 @@ var gIniObj = [ // noWriteObj are not written to file
 	{
 		groupName: 'Profile1',
 		noWriteObj: { // noWriteObj is not written to ini
-			status: true, // this is obvious, because if its currentProfile then it is obviously running
+			status: jsInt of pid, // this is obvious, because if its currentProfile then it is obviously running
 			currentProfile: true, // indicates that the running profile is this one
 			exePath: Services.dirsvc.get('XREExeF', Ci.nsIFile).path.toLowerCase(), // is needed if devmode is on. needed for mouseLeave of SubiconTie. needed ONLY for currentProfile:true entry // lower case what is needed to be lowered - link472738374
 			exeIconSlug: 'beta' // REQUIRED if this profile status:true && devmode is true // currentProfile should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status == true // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-buildhint
@@ -47,7 +98,7 @@ var gIniObj = [ // noWriteObj are not written to file
 		Name: 'Developer',
 		IsRelative: '1',
 		Path: 'Profiles/m2b8zkct.Unnamed Profile 1'
-		//ProfilistStatus: '1' // if it does not have this key, then profilist is not installed in it
+		ProfilistStatus: '1'
 	},
 	{
 		groupName: 'General',
@@ -117,45 +168,13 @@ function initPage(isReInit) {
 
 }
 
-function myFakeTests() {
-	
-	setTimeout(function() {
-		console.error('OK ON defaulted DOING RENAME AND SETTING TO ONLINE NOW');
-		// 0) get the ini entry to modify
-		var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Name', 'defaulted');
-		
-		// 1) set it to running
-		cIniEntry.noWriteObj.status = true;
-		// cIniEntry.noWriteObj.exePath = 'c:\\aurora.exe'; // :note: only needed for iniEntry marked currentProfile ```getIniEntryByNoWriteObjKeyValue(xIniObj, 'currentProfile', true)```
-		// check if devmode is on for this profile, if it is, then supply exeIconSlug -- REQUIRED when noWriteObj.status is true
-		// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-		// var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-		// var keyValDevMode = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistDev');
-		// if (keyValDevMode == '1') {
-			cIniEntry.noWriteObj.exeIconSlug = 'aurora'; // :note: IF devmode is on, then must set this because is set status true i have to set this
-		// }
-		// commented out checks because thats checks for bootstrap side before sending ini over. in our test case for dev, we should set it everytime because i go back and forth between dev and not.
-		
-		// 2) rename it to RAWR
-		cIniEntry.Name = 'RAWR';
-		MyStore.updateStatedIniObj();
-	}, 4000);
-	
-	setTimeout(function() {
-		getIniEntryByKeyValue(gIniObj, 'groupName', 'General').ProfilistDev = '1';
-		MyStore.updateStatedIniObj();
-	}, 8000);
-}
-
 function initReactComponent() {
 	var myMenu = React.createElement(Menu);
-	
+
 	ReactDOM.render(
 		myMenu,
 		document.getElementById('profilist_menu_container')
 	);
-	
-
 }
 
 var MyStore = {};
