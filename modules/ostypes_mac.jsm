@@ -411,7 +411,10 @@ var macInit = function() {
 		YES: self.TYPE.BOOL(1), // i do this instead of 1 becuase for varidic types we need to expclicitly define it
 		NIL: self.TYPE.void.ptr(ctypes.UInt64('0x0')), // needed for varidic args, as i cant pass null there
 		NSFileWriteFileExistsError: 516, // i dont use this a variadic, just for compare so i dont wrap this in a type, but the type is  NSInteger. I figured this because NSError says its code value is NSInteger. The types for NSFileWriteFileExistsError says its enum - but by looking up code i can see that enum is type NSInteger - sources: https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Classes/NSError_Class/index.html#//apple_ref/occ/instp/NSError/code && https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_Constants/index.html#//apple_ref/doc/constant_group/NSError_Codes
-		NSURLBookmarkCreationSuitableForBookmarkFile: self.TYPE.NSURLBookmarkCreationOptions(1 << 10)
+		NSURLBookmarkCreationSuitableForBookmarkFile: self.TYPE.NSURLBookmarkCreationOptions(1 << 10),
+		
+		NSApplicationActivateAllWindows: self.TYPE.NSUInteger(1 << 0),
+		NSApplicationActivateIgnoringOtherApps: self.TYPE.NSUInteger(1 << 1)
 	};
 	
 	

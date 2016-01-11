@@ -409,9 +409,13 @@ function formatNoWriteObjs() {
 	}
 	
 	// set running statuses
+	var optsFor_GetIsRunningFromIniFromPlat = {};
+	if (['winnt', 'wince', 'winmo'].indexOf(core.os.mname) > -1) {
+		optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos = getAllPID({firefoxOnly:false});
+	}
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path) {
-			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path);
+			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path, optsFor_GetIsRunningFromIniFromPlat);
 		}
 	}
 	
@@ -506,6 +510,7 @@ function isSlugInChromeChannelIconsets(aPossibleSlug) {
 }
 function getSlugForChannel(aChannel) {
 	// GEN_RULE#1 slug is a plat slafed string
+	// console.info('aChannel: -----' + aChannel + '------');
 	switch (aChannel) {
 		case 'esr':
 		case 'release':
@@ -704,13 +709,19 @@ function getImgPathOfSlug(aSlug) {
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
 // Start - Launching profile and other profile functionality
-function getIsRunningFromIniFromPlat(aProfPath) {
+function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 	// does not update ini
 	// RETURNS
 		// 1 or pid - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
 		// false - if NOT running
 	// currentProfile must be marked in gIniObj before using this
 
+	var cOptionsDefaults = {
+		winProcessIdsInfos: undefined // provide thte return value from getAllPID, it needs to have creation time of the pid in here. then this function will return the pid for windows as well
+	};
+	
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	
 	var cIsRunning;
@@ -757,6 +768,31 @@ function getIsRunningFromIniFromPlat(aProfPath) {
 							OSFileError: OSFileError
 						});
 					}
+				}
+				
+				if (cIsRunning && aOptions.winProcessIdsInfos) {
+					// get pid for the firefox locking this file
+					
+					// ok lets get the time the parentlock was locked
+					var rez_statLock = OS.File.stat(cParentLockPath);
+					// console.info('rez_statLock:', 'lastModificationDate:', rez_statLock.lastModificationDate.toLocaleString());
+					
+					var lockTime = rez_statLock.lastModificationDate;
+					
+					// compare with all the pids creation time in infos, and set it to pid that has creationTime that is closest to lockTime
+					var closestPidInfo = {
+						pid: null,
+						msBetween_createTime_lockTime: null
+					};
+					for (var pid in aOptions.winProcessIdsInfos) {
+						var msBetween_createTime_lockTime = Math.abs(aOptions.winProcessIdsInfos[pid].createTime - lockTime);
+						if (closestPidInfo.pid === null || msBetween_createTime_lockTime < closestPidInfo.msBetween_createTime_lockTime) {
+							closestPidInfo.pid = pid;
+							closestPidInfo.msBetween_createTime_lockTime = msBetween_createTime_lockTime;
+						}
+					}
+					// console.log('closest pid is:', closestPidInfo, 'its info obj is:', aOptions.winProcessIdsInfos[closestPidInfo.pid], 'cParentLockPath:', cParentLockPath);
+					cIsRunning = closestPidInfo.pid;
 				}
 
 			break;
@@ -993,16 +1029,16 @@ function getExeChanForParamsFromFSFromCache(aExePath) {
 				}
 			}
 			
-			// console.log('rez_read:', rez_read);
+			// console.log('rez_read channelPrefsJsPath:', rez_read);
 
 			var channel_name = rez_read.match(/app\.update\.channel", "([^"]+)/);
-			// console.log('channel_name:', channel_name);
+			// console.log('channel_name post regex match:', channel_name);
 			if (!channel_name) {
 				_cache_getExeChanForParamsFromFSFromCache[aExePath] = null;
 				console.error('should-nver-happen!', 'as a exe path must exist for all builds!!!');
 				throw new MainWorkerError('should-nver-happen!', 'as a exe path must exist for all builds!!!');
 			} else {
-				_cache_getExeChanForParamsFromFSFromCache[aExePath] = channel_name[0];
+				_cache_getExeChanForParamsFromFSFromCache[aExePath] = channel_name[1];
 			}
 			console.timeEnd('getExeChanFromFS');
 		}
@@ -1651,6 +1687,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	return cLauncherPath;
 }
 
+var debugVar = false;
 function launchOrFocusProfile(aProfPath, aOptions={}) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
 	
@@ -1673,6 +1710,100 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	
 	if (cIniEntry.noWriteObj.status) { // link6847494493
 		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams - it will not launch as .status is existing
+		// no need to continue to create launcher, just focus it, i changed my desciion to this on 011016, before this i was thinking launch it, and in the bg adjust the launcher to match, maybe should do this not sure, :todo: consider
+		
+		// focus all windows of that pid
+		switch (core.os.mname) {
+			case 'winnt':
+			case 'winmo':
+			case 'wince':
+			
+					var allWinInfos = getAllWin({
+						filterVisible: true,
+						getPid: true
+					});
+					console.log('allWinInfos:', allWinInfos);
+					
+					var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
+						if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
+							aWinInfo.hwndPtr = ctypes.voidptr_t(ctypes.UInt64(aWinInfo.hwnd));
+							aWinInfo.isMinimized = ostypes.API('IsIconic')(aWinInfo.hwndPtr);
+							return true;
+						}
+					});
+					
+					// :todo: maybe consider, instead of focusing all in order - find all minimized. if all minimized, then focus in order such that last one is top most. if all non-minimized then focus such that first one is top most focus. if mixed, then focus all windows but make the second to top be the last most minimized, and then the top most is the one that was first non-minimized
+					// :todo: test and figure out how to get the right order such that it is "last used" order
+					// for now just focusing them in the order that they come up
+
+					for (var i=matchingWinInfos.length-1; i>=0; i--) {
+						if (matchingWinInfos[i].isMinimized) {
+							var rez_unMinimize = ostypes.API('ShowWindow')(matchingWinInfos[i].hwndPtr, ostypes.CONST.SW_RESTORE);
+							console.log('rez_unMinimize:', rez_unMinimize);
+						}
+						var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
+						console.log('rez_focus:', rez_focus);
+					}
+					
+				break;
+			case 'gtk':
+			
+					//
+					
+				break;
+			case 'darwin':
+
+					// app = [NSRuningApplication runningApplicationWithProcessIdentifier: pid];
+					var NSRunningApplication = ostypes.API('objc_getClass')('NSRunningApplication');
+					var runningApplicationWithProcessIdentifier = ostypes.API('sel_registerName')('runningApplicationWithProcessIdentifier:');
+					var app = ostypes.API('objc_msgSend')(NSRunningApplication, runningApplicationWithProcessIdentifier, ostypes.TYPE.pid_t(cIniEntry.noWriteObj.status));
+					console.info('app:', app, app.toString(), uneval(app));
+                    
+					// [app activateWithOptions: NSApplicationActivateAllWindows]
+					var activateWithOptions = ostypes.API('sel_registerName')('activateWithOptions:');
+					var rez_focus = ostypes.API('objc_msgSend')(app, activateWithOptions, ostypes.TYPE.NSUInteger(3));
+					
+					// C:\Users\Mercurius\OneDrive\Documents\jscGetDepeest with args.png
+					//// console.info('rez_focus:', rez_focus, rez_focus.toString(), uneval(rez_focus));
+					//// 
+					//// console.info('rez_focus jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
+					//// console.info('rez_focus jscGetDeepest 16:', cutils.jscGetDeepest(rez_focus, 16));
+					//// console.info('rez_focus jscGetDeepest 10:', cutils.jscGetDeepest(rez_focus, 10));
+                    //// 
+					//// rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
+					//// console.info('rez_focus casted:', rez_focus);
+					//// console.info('rez_focus casted jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
+					//// 
+					//// console.info('YES jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.YES));
+					
+					rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
+					
+					if (cutils.jscEqual(rez_focus, ostypes.CONST.YES)) {
+						console.log('App was focused!');
+					} else {
+						console.log('Failed to focus app :(');
+					}
+					
+					debugVar = !debugVar;
+					// if (!debugVar) {
+					// 	var unhide = ostypes.API('sel_registerName')('unhide');
+					// 	var rez_unhide = ostypes.API('objc_msgSend')(app, unhide);
+					// 	console.log('rez_unhide:', rez_unhide);
+					// } else {
+					// 	var hide = ostypes.API('sel_registerName')('hide');
+					// 	var rez_hide = ostypes.API('objc_msgSend')(app, hide);
+					// 	console.log('rez_hide:', rez_hide);
+					// }
+					
+				break;
+			default:
+				throw new MainWorkerError({
+					name: 'addon-error',
+					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+				});
+		}
+		
+		return;
 	}
 	
 	// these vars, are all the things it should SET-TO/NOW be - on launching
@@ -2099,6 +2230,7 @@ function getAllWin(aOptions) {
 			break;
 		case 'gtk':
 			
+				aOptions.getBounds = true; // required for gtk, as it needs to correlate-groups-from-xquerytree-data-to-a-window
 				var xqRoot = ostypes.TYPE.Window();
 				var xqParent = ostypes.TYPE.Window();
 				var xqChildArr = ostypes.TYPE.Window.ptr();

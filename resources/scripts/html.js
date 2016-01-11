@@ -604,7 +604,7 @@ var ToolbarButton = React.createClass({
 				alert('clicked on current profile tbb, do any acction? nothing planned as of now');
 			} else {
 				// launch this profile
-				alert('launch profile');
+				// alert('launch profile');
 				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
 			}
 		}

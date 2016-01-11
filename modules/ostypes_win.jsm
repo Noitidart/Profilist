@@ -832,7 +832,9 @@ var winInit = function() {
 		STATUS_BUFFER_TOO_SMALL: 0xC0000023 >> 0, // link847456312312132 - need the >> 0
 		STATUS_INFO_LENGTH_MISMATCH: 0xC0000004 >> 0, // link847456312312132 - need the >> 0 otherwise cutils.jscGetDeepest of return of NtQuerySystemInformation is -1073741820 and jscGetDeepest of CONST.STATUS_INFO_LENGTH_MISMATCH is 3221225476
 		
-		SYSTEMPROCESSINFORMATION: 5
+		SYSTEMPROCESSINFORMATION: 5,
+		
+		SW_RESTORE: 9
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1380,6 +1382,17 @@ var winInit = function() {
 				self.TYPE.LPDWORD	// lpdwProcessId
 			);
 		},
+		IsIconic: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633507%28v=vs.85%29.aspx
+			 * BOOL WINAPI IsIconic(
+			 *   __in_ HWND hWnd
+			 * );
+			 */
+			return lib('user32').declare('IsIconic', self.TYPE.ABI,
+				self.TYPE.BOOL,	// return
+				self.TYPE.HWND	// hWnd
+			);
+		},
 		KillTimer: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633522%28v=vs.85%29.aspx
 			 * BOOL WINAPI KillTimer(
@@ -1539,6 +1552,17 @@ var winInit = function() {
 				self.TYPE.HGDIOBJ // hgdiobj
 			);
 		},
+		SetForegroundWindow: function() {
+			/* http://msdn.microsoft.com/en-us/library/ms633539%28v=vs.85%29.aspx
+			 * BOOL WINAPI SetForegroundWindow(
+			 *   __in_ HWND hWnd
+			 * );
+			 */
+			return lib('user32').declare('SetForegroundWindow', self.TYPE.ABI,
+				self.TYPE.BOOL,	// return
+				self.TYPE.HWND	// hWnd
+			);
+		},
 		SetTimer: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644906%28v=vs.85%29.aspx
 			 * UINT_PTR WINAPI SetTimer(
@@ -1589,6 +1613,19 @@ var winInit = function() {
 				self.TYPE.BOOL,					// return
 				self.TYPE.SHELLEXECUTEINFO.ptr	// *pExecInfo
 			);
+		},
+		ShowWindow: function() {
+				/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms633507%28v=vs.85%29.aspx
+				* BOOL WINAPI ShowWindow(
+				*   __in HWND hWnd
+				*   __in INT nCmdShow
+				* );
+				*/
+				return lib('user32').declare('ShowWindow', self.TYPE.ABI,
+					self.TYPE.BOOL,		// BOOL
+					self.TYPE.HWND,		// hWnd
+					self.TYPE.INT		// nCmdShow
+				);
 		},
 		SHStrDup: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/bb759924%28v=vs.85%29.aspx
