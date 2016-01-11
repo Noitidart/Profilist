@@ -37,7 +37,10 @@ var winTypes = function() {
 	this.FXPT2DOT30 = ctypes.long; // http://stackoverflow.com/a/20864995/1828637 // https://github.com/wine-mirror/wine/blob/a7247df6ca54fd1209eff9f9199447643ebdaec5/include/wingdi.h#L150
 	this.INT = ctypes.int;
 	this.INT_PTR = is64bit ? ctypes.int64_t : ctypes.int;
+	this.KPRIORITY = ctypes.long; // Definition at line 51 of file ntbasic.h.
+	this.KWAIT_REASON = ctypes.int; // im guessing its int because its enum - https://github.com/wine-mirror/wine/blob/1d19eb15d4abfdd14dccc5ac05b83c0ee1a1ace1/include/ddk/wdm.h#L105-L133
 	this.LONG = ctypes.long;
+	this.LONGLONG = ctypes.long_long;
 	this.LONG_PTR = is64bit ? ctypes.int64_t : ctypes.long; // i left it at what i copied pasted it as but i thought it would be `ctypes.intptr_t`
 	this.LPCVOID = ctypes.voidptr_t;
 	this.LPVOID = ctypes.voidptr_t;
@@ -48,6 +51,7 @@ var winTypes = function() {
 	this.UINT = ctypes.unsigned_int;
 	this.UINT_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_int;
 	this.ULONG = ctypes.unsigned_long;
+	this.ULONGLONG = ctypes.unsigned_long_long;
 	this.ULONG_PTR = is64bit ? ctypes.uint64_t : ctypes.unsigned_long; // i left it at what i copied pasted it as, but i thought it was this: `ctypes.uintptr_t`
 	this.USHORT = ctypes.unsigned_short;
 	this.VARIANT_BOOL = ctypes.short;
@@ -100,6 +104,7 @@ var winTypes = function() {
 	this.LPHANDLE = this.HANDLE.ptr;
 	this.LPOLESTR = this.OLECHAR.ptr; // typedef [string] OLECHAR *LPOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L287 // http://stackoverflow.com/a/1607335/1828637 // LPOLESTR is usually to be allocated with CoTaskMemAlloc()
 	this.LPTSTR = ifdef_UNICODE ? this.LPWSTR : this.LPSTR;
+	this.PWSTR = this.LPWSTR; // PWSTR and LPWSTR are the same. The L in LPWSTR stands for "long/far pointer" and it is a leftover from 16 bit when pointers were "far" or "near". Such a distinction no longer exists on 32/64 bit, all pointers have the same size. SOURCE: https://social.msdn.microsoft.com/Forums/vstudio/en-US/52ab8d94-f8f8-427f-ad66-5b38db9a61c9/difference-between-lpwstr-and-pwstr?forum=vclanguage
 	
 	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
 	this.HCURSOR = this.HICON;
@@ -140,6 +145,10 @@ var winTypes = function() {
 		{ ciexyzY: this.FXPT2DOT30 },
 		{ ciexyzZ: this.FXPT2DOT30 }
 	]);
+	this.CLIENT_ID = ctypes.StructType('_CLIENT_ID', [ // http://processhacker.sourceforge.net/doc/struct___c_l_i_e_n_t___i_d.html
+		{ UniqueProcess: this.HANDLE },
+		{ UniqueThread: this.HANDLE }
+	]);
 	this.DISPLAY_DEVICE = ctypes.StructType('_DISPLAY_DEVICE', [
 		{ cb:			this.DWORD },
 		{ DeviceName:	this.TCHAR.array(32) },
@@ -157,6 +166,9 @@ var winTypes = function() {
 	  { 'Data2': this.USHORT },
 	  { 'Data3': this.USHORT },
 	  { 'Data4': this.BYTE.array(8) }
+	]);
+	this.LARGE_INTEGER = ctypes.StructType('_LARGE_INTEGER', [ // its a union, so i picked the one that my use case needs // https://msdn.microsoft.com/en-us/library/windows/desktop/aa383713%28v=vs.85%29.aspx
+		{ QuadPart: this.LONGLONG }
 	]);
 	this.POINT = ctypes.StructType('tagPOINT', [
 		{ x: this.LONG },
@@ -229,7 +241,12 @@ var winTypes = function() {
 		{ 'hIcon': this.HANDLE }, // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
 		{ 'hProcess': this.HANDLE }
 	]);
-	
+	this.UNICODE_STRING = ctypes.StructType('_LSA_UNICODE_STRING', [ // https://msdn.microsoft.com/en-us/library/windows/desktop/aa380518%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+		{ 'Length': this.USHORT },
+		{ 'MaximumLength': this.USHORT },
+		{ 'Buffer': this.PWSTR }
+	]);
+
 	// ADVANCED STRUCTS // based on "simple structs" to be defined first
 	this.BITMAPINFO = ctypes.StructType('BITMAPINFO', [
 		{ bmiHeader: this.BITMAPINFOHEADER },
@@ -316,6 +333,19 @@ var winTypes = function() {
 		{ mouse: this.RAWMOUSE } // use this.RAWMOUSE instead of RAWHID or RAWKEYBOARD as RAWMOUSE struct is the biggest, the tutorial linked below also says this
 	]);
 	this.REFPROPVARIANT = this.PROPVARIANT.ptr;
+	this.SYSTEM_THREAD_INFORMATION = ctypes.StructType('_SYSTEM_THREAD_INFORMATION', [ // http://processhacker.sourceforge.net/doc/struct___s_y_s_t_e_m___t_h_r_e_a_d___i_n_f_o_r_m_a_t_i_o_n.html
+		{ KernelTime: this.LARGE_INTEGER },
+		{ UserTime: this.LARGE_INTEGER },
+		{ CreateTime: this.LARGE_INTEGER },
+		{ WaitTime: this.ULONG },
+		{ StartAddress: this.PVOID },
+		{ ClientId: this.CLIENT_ID },
+		{ Priority: this.KPRIORITY },
+		{ BasePriority: this.LONG },
+		{ ContextSwitches: this.ULONG },
+		{ ThreadState: this.ULONG },
+		{ WaitReason: this.KWAIT_REASON }
+	]);
 	this.WIN32_FIND_DATA = ctypes.StructType('_WIN32_FIND_DATA', [ // https://msdn.microsoft.com/en-us/library/windows/desktop/aa365740%28v=vs.85%29.aspx
 		{ 'dwFileAttributes': this.DWORD },
 		{ 'ftCreationTime': this.FILETIME },
@@ -333,6 +363,43 @@ var winTypes = function() {
 	this.REFCLSID = this.CLSID.ptr; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L288
 	this.REFIID = this.IID.ptr;
 	this.REFPROPERTYKEY = this.PROPERTYKEY.ptr; // note: if you use any REF... (like this.REFPROPERTYKEY) as an arg to a declare, that arg expects a ptr. this is basically like
+	this.SYSTEM_PROCESS_INFORMATION = ctypes.StructType('_SYSTEM_PROCESS_INFORMATION', [ // http://processhacker.sourceforge.net/doc/struct___s_y_s_t_e_m___p_r_o_c_e_s_s___i_n_f_o_r_m_a_t_i_o_n.html
+		{ NextEntryOffset: this.ULONG },
+		{ NumberOfThreads: this.ULONG },
+		{ WorkingSetPrivateSize: this.LARGE_INTEGER },		// since VISTA
+		{ HardFaultCount: this.ULONG },						// since WIN7
+		{ NumberOfThreadsHighWatermark: this.ULONG },		// since WIN7
+		{ CycleTime: this.ULONGLONG },						// since WIN7
+		{ CreateTime: this.LARGE_INTEGER },
+		{ UserTime: this.LARGE_INTEGER },
+		{ KernelTime: this.LARGE_INTEGER },
+		{ ImageName: this.UNICODE_STRING },
+		{ BasePriority: this.KPRIORITY },
+		{ UniqueProcessId: this.HANDLE },
+		{ InheritedFromUniqueProcessId: this.HANDLE },
+		{ HandleCount: this.ULONG },
+		{ SessionId: this.ULONG },
+		{ UniqueProcessKey: this.ULONG_PTR },				// since VISTA (requires SystemExtendedProcessInformation)
+		{ PeakVirtualSize: this.size_t },
+		{ VirtualSize: this.size_t },
+		{ PageFaultCount: this.ULONG },
+		{ PeakWorkingSetSize: this.size_t },
+		{ WorkingSetSize: this.size_t },
+		{ QuotaPeakPagedPoolUsage: this.size_t },
+		{ QuotaPagedPoolUsage: this.size_t },
+		{ QuotaPeakNonPagedPoolUsage: this.size_t },
+		{ QuotaNonPagedPoolUsage: this.size_t },
+		{ PagefileUsage: this.size_t },
+		{ PeakPagefileUsage: this.size_t },
+		{ PrivatePageCount: this.size_t },
+		{ ReadOperationCount: this.LARGE_INTEGER },
+		{ WriteOperationCount: this.LARGE_INTEGER },
+		{ OtherOperationCount: this.LARGE_INTEGER },
+		{ ReadTransferCount: this.LARGE_INTEGER },
+		{ WriteTransferCount: this.LARGE_INTEGER },
+		{ OtherTransferCount: this.LARGE_INTEGER },
+		{ Threads: this.SYSTEM_THREAD_INFORMATION.array(1) }
+	]);
 
 	this.BITMAPV5HEADER = ctypes.StructType('BITMAPV5HEADER', [
 		{ bV5Size:			this.DWORD },
@@ -365,7 +432,7 @@ var winTypes = function() {
 	
 	// SUPER ADVANCED STRUCTS
 	this.PBITMAPINFO = this.BITMAPINFO.ptr;
-	this.LPMSG = this.MSG.ptr;
+	this.LPMSG = this.MSG.ptr;	
 	
 	// FUNCTION TYPES
 	this.MONITORENUMPROC = ctypes.FunctionType(this.CALLBACK_ABI, this.BOOL, [this.HMONITOR, this.HDC, this.LPRECT, this.LPARAM]);
@@ -759,7 +826,13 @@ var winInit = function() {
 		VARIANT_TRUE: -1, // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 		VT_LPWSTR: 0x001F, // 31
 		
-		SW_SHOWNORMAL: 1
+		SW_SHOWNORMAL: 1,
+		
+		STATUS_SUCCESS: 0x00000000,
+		STATUS_BUFFER_TOO_SMALL: 0xC0000023 >> 0, // link847456312312132 - need the >> 0
+		STATUS_INFO_LENGTH_MISMATCH: 0xC0000004 >> 0, // link847456312312132 - need the >> 0 otherwise cutils.jscGetDeepest of return of NtQuerySystemInformation is -1073741820 and jscGetDeepest of CONST.STATUS_INFO_LENGTH_MISMATCH is 3221225476
+		
+		SYSTEMPROCESSINFORMATION: 5
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1380,6 +1453,23 @@ var winInit = function() {
 				self.TYPE.HMONITOR,	// HMONITOR
 				self.TYPE.POINT,	// pt
 				self.TYPE.DWORD		// dwFlags
+			);
+		},
+		NtQuerySystemInformation: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724509%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+			 * NTSTATUS WINAPI NtQuerySystemInformation(
+			 *  __in_      SYSTEM_INFORMATION_CLASS SystemInformationClass,
+			 *  __inout_   PVOID                    SystemInformation,
+			 *  __in_      ULONG                    SystemInformationLength,
+			 *  __out_opt_ PULONG                   ReturnLength
+			 * );
+			 */
+			return lib('ntdll').declare('NtQuerySystemInformation', self.TYPE.ABI,
+				self.TYPE.NTSTATUS,					// return
+				self.TYPE.SYSTEM_INFORMATION_CLASS,	// SystemInformationClass
+				self.TYPE.PVOID,					// SystemInformation
+				self.TYPE.ULONG,					// SystemInformationLength
+				self.TYPE.PULONG					// ReturnLength
 			);
 		},
 		PeekMessage: function() {

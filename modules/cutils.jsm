@@ -15,7 +15,10 @@ if (ctypes.voidptr_t.size == 4 /* 32-bit */) {
 function utilsInit() {
 	// start - comparison stuff
 	// https://gist.github.com/Noitidart/1ae3ff204dbe5c46befa - rev1
-	this.jscGetDeepest = function(obj) {
+	this.jscGetDeepest = function(obj, castVoidptrAsDecOrAsHex) {
+		// set castVoidptrAsDecOrAsHex to 10 (AsDec) or 16 (AsHex). 10 is same as doing .toString() -- see link118489111
+			// by default it will not. so if you do jscGetDeepest on ```ctypes.voidptr_t(ctypes.UInt64("0x1148"))``` it will give you ```ctypes.voidptr_t(ctypes.UInt64("0x1148")).toString``` which is "ctypes.voidptr_t(ctypes.UInt64("0x1148"))"
+			// this argument means if at deepest level, it finds it has .contents but cannot access .contents on it, then it will get the number that pointer is pointing to (of course if its a ctype [meaning a cdata], meaning if its just an object with a .contents it wont do it on that)
 		/*
 		if (obj !== null && obj !== undefined) {
 			console.log('trying on:', obj.toString())
@@ -25,7 +28,10 @@ function utilsInit() {
 		while ((lastTypeof == 'function' || lastTypeof == 'object') && ('contents' in obj || 'value' in obj)) { // the first part tests if i can use `in obj`
 			if ('contents' in obj) {
 				if (obj.constructor.targetType && obj.constructor.targetType.size === undefined) {
-					// this avoids the error of like ctypes.voidptr_t(ctypes.UInt64("0x204")).contents as this will throw "Error: cannot get contents of undefined size"
+					// this avoids the error of like ctypes.voidptr_t(ctypes.UInt64("0x204")).contents as this will throw "Error: cannot get contents of undefined size" ---- link118489111
+					if (castVoidptrAsDecOrAsHex && obj instanceof ctypes.CData) { // because if it has a .contents it got there, so its something like ```ctypes.voidptr_t(ctypes.UInt64("0x1148"))```, so we want  that number so we do this. ```ctypes.cast(a, ctypes.uintptr_t).value.toString()``` gives us ```4424``` while ```ctypes.cast(a, ctypes.uintptr_t).value.toString(16)``` gives us the exact same hex number we see in a.toString() so it gives us ```1148``` (notice the no prefix of 0x). so by default it is toString(10)
+						obj = ctypes.cast(obj, ctypes.uintptr_t).value.toString(castVoidptrAsDecOrAsHex);
+					}
 					break;
 				} else {
 					obj = obj.contents;
