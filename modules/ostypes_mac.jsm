@@ -35,6 +35,7 @@ var macTypes = function() {
 	this.unsigned_long = ctypes.unsigned_long;
 	this.unsigned_long_long = ctypes.unsigned_long_long;
 	this.void = ctypes.void_t;
+	this.float = ctypes.float;
 	
 	// LIBC SIMPLE TYPES
 	this.pid_t = ctypes.int32_t;
@@ -60,6 +61,13 @@ var macTypes = function() {
 	this.CGEventType = ctypes.uint32_t;
 	this.CGFloat = is64bit ? ctypes.double : ctypes.float; // ctypes.float is 32bit deosntw ork as of May 10th 2015 see this bug: https://bugzilla.mozilla.org/show_bug.cgi?id=1163406 this would cause crash on CGDisplayGetBounds http://stackoverflow.com/questions/28216681/how-can-i-get-screenshot-from-all-displays-on-mac#comment48414568_28247749
 	this.CGEventField = ctypes.uint32_t;
+	this.CGSConnection = ctypes.int;
+	this.CGSTransitionOption = ctypes.int; // type is enum so i guess int - https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L162
+	this.CGSTransitionType = ctypes.int; // type is enum so i guess int - https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L148
+	this.CGSWindow = ctypes.int;
+	this.CGSWindowOrderingMode = ctypes.int; // type is enum so i guess int - https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L66
+	this.CGSWorkspace = ctypes.int;
+	this.CGSValue = ctypes.int;
 	this.CGWindowID = ctypes.uint32_t;
 	this.CGWindowLevel = ctypes.int32_t;
 	this.CGWindowLevelKey = ctypes.int32_t;
@@ -284,6 +292,8 @@ var macInit = function() {
 		get kCFAllocatorDefault () { if (!('kCFAllocatorDefault' in _const)) { _const['kCFAllocatorDefault'] = lib('CoreFoundation').declare('kCFAllocatorDefault', self.TYPE.CFAllocatorRef); } return _const['kCFAllocatorDefault']; },
 		get kCFRunLoopDefaultMode () { if (!('kCFRunLoopDefaultMode' in _const)) { _const['kCFRunLoopDefaultMode'] = lib('CoreFoundation').declare('kCFRunLoopDefaultMode', self.TYPE.CFStringRef); } return _const['kCFRunLoopDefaultMode']; },
 		get kCFRunLoopCommonModes () { if (!('kCFRunLoopCommonModes' in _const)) { _const['kCFRunLoopCommonModes'] = lib('CoreFoundation').declare('kCFRunLoopCommonModes', self.TYPE.CFStringRef); } return _const['kCFRunLoopCommonModes']; },
+		get CGSDefaultConnection () { if (!('CGSDefaultConnection' in _const)) { _const['CGSDefaultConnection'] = self.API('_CGSDefaultConnection')(); } return _const['CGSDefaultConnection']; }, // https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L39
+		
 		kCGErrorSuccess: 0,
 		kCGNullDirectDisplay: 0,
 		kCGBaseWindowLevelKey: 0,
@@ -404,6 +414,10 @@ var macInit = function() {
 		kCFRunLoopRunStopped: 2,
 		kCFRunLoopRunTimedOut: 3,
 		kCFRunLoopRunHandledSource: 4,
+		
+		kCGSOrderAbove: 1,
+		kCGSOrderBelow: -1,
+		kCGSOrderOut: 0,
 		
 		///////// OBJC - all consts are wrapped in a type as if its passed to variadic it needs to have type defind, see jsctypes chat with arai on 051015 357p
 		NO: self.TYPE.BOOL(0),
@@ -583,6 +597,138 @@ var macInit = function() {
 
 	// start - predefine your declares here
 	var preDec = { //stands for pre-declare (so its just lazy stuff) //this must be pre-populated by dev // do it alphabateized by key so its ez to look through
+		_CGSDefaultConnection: function () {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L39
+			 * CGSConnection _CGSDefaultConnection(
+			 *   void
+			 * );
+			 */
+			return lib('CoreGraphics').declare('_CGSDefaultConnection', self.TYPE.ABI,
+				self.TYPE.CGSConnection		// return
+			);
+		},
+		CGSConnectionGetPID: function () {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L108
+			 * CGError CGSConnectionGetPID(
+			 *   const CGSConnection cid,
+			 *   pid_t *pid,
+			 *   const CGSConnection ownerCid
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSConnectionGetPID', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.pid_t.ptr,		// *pid
+				self.TYPE.CGSConnection		// ownerCid
+			);
+		},
+		CGSGetWindowCount: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L48
+			 * CGError CGSGetWindowCount(
+			 *   const CGSConnection cid,
+			 *   CGSConnection targetCID,
+			 *   int* outCount
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSGetWindowCount', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.CGSConnection,	// targetCID
+				self.TYPE.int.ptr			// outCount
+			);
+		},
+		CGSGetWindowWorkspace: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L196
+			 * CGError CGSGetWindowWorkspace(
+			 *   const CGSConnection cid,
+			 *   const CGSWindow wid,
+			 *   CGSWorkspace *workspace
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSGetWindowWorkspace', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.CGSWindow,		// wid
+				self.TYPE.CGSWorkspace.ptr	// *workspace
+			);
+		},
+		CGSGetWindowOwner: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L107
+			 * CGError CGSGetWindowOwner(
+			 *   const CGSConnection cid,
+			 *   const CGSWindow wid,
+			 *   CGSConnection *ownerCid
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSGetWindowOwner', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.CGSWindow,		// wid
+				self.TYPE.CGSConnection.ptr	// *ownerCid
+			);
+		},
+		CGSGetWorkspace: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L56
+			 * CGSGetWorkspace(
+			 *   const CGSConnection cid,
+			 *   CGSWorkspace *workspace
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSGetWorkspace', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.CGSWorkspace.ptr	// *workspace
+			);
+		},
+		CGSOrderWindow: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L72
+			 * CGError CGSOrderWindow(
+			 *   const CGSConnection cid,
+			 *   const CGSWindow wid,
+			 *   CGSWindowOrderingMode place,
+			 *   CGSWindow relativeToWindowID		// can be NULL
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSOrderWindow', self.TYPE.ABI,
+				self.TYPE.CGError,					// return
+				self.TYPE.CGSConnection,			// cid
+				self.TYPE.CGSWindow,				// wid
+				self.TYPE.CGSWindowOrderingMode,	// place
+				self.TYPE.CGSWindow					// relativeToWindowID
+			);
+		},
+		CGSSetWorkspace: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L197
+			 * CGError CGSSetWorkspace(
+			 *   const CGSConnection cid,
+			 *   CGSWorkspace workspace
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSSetWorkspace', self.TYPE.ABI,
+				self.TYPE.CGError,			// return
+				self.TYPE.CGSConnection,	// cid
+				self.TYPE.CGSWorkspace		// workspace
+			);
+		},
+		CGSSetWorkspaceWithTransition: function() {
+			/* https://gist.github.com/Noitidart/3664c5c2059c9aa6779f#file-cgsprivate-h-L198
+			 * CGError CGSSetWorkspaceWithTransition(
+			 *   const CGSConnection cid,
+			 *   CGSWorkspace workspace,
+			 *   CGSTransitionType transition,
+			 *   CGSTransitionOption subtype,
+			 *   float time
+			 * );
+			 */
+			return lib('CoreGraphics').declare('CGSSetWorkspaceWithTransition', self.TYPE.ABI,
+				self.TYPE.CGError,				// return
+				self.TYPE.CGSConnection,		// cid
+				self.TYPE.CGSWorkspace,			// workspace
+				self.TYPE.CGSTransitionType,	// transition
+				self.TYPE.CGSTransitionOption,	// subtype
+				self.TYPE.float					// time
+			);
+		},
 		CFArrayCreate: function() {
 			return lib('CoreFoundation').declare('CFArrayCreate', self.TYPE.ABI,
 				self.TYPE.CFArrayRef,

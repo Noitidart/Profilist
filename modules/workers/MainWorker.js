@@ -2135,6 +2135,8 @@ function getAllWin(aOptions) {
 		getIcon: bool, set to true if you want to test if window has custom icon, if it does it returns its byte data? maybe hwnd? not sure maybe different per os, but if it doesnt have custom icon then key is present but set to null, // NOT YET SUPPORTED
 		getAlwaysTop: bool, set to true if you want to test if window is set to always on top, // NOT YET SUPPORTED
 		hwndAsPtr: bool, set to true if you want the hwnd to be ptr, otherwise it will be string of pointer, i recall that the loop would jack up and pointers would be bad so by default it will give strings, should verify and fix why the pointers were bad if they are aug 7 2015
+		macGetCgWinId: bool, // mac only
+		macGetWorkspace: bool, // mac only
 	}
 	*/
 	
@@ -2524,6 +2526,30 @@ function getAllWin(aOptions) {
 
 							thisWin.right = thisWin.left + thisWin.width;
 							thisWin.bottom = thisWin.top + thisWin.height;
+						}
+						
+						if (aOptions.macGetWorkspace) {
+							var rez_workspace = ostypes.API('objc_msgSend')(c_win, ostypes.HELPER.sel('objectForKey:'), myNSStrings.get('kCGWindowWorkspace'));
+							
+							var int_workspace = ostypes.API('objc_msgSend')(rez_workspace, ostypes.HELPER.sel('integerValue'));
+							int_workspace = ctypes.cast(int_workspace, ostypes.TYPE.NSInteger);
+
+							
+							int_workspace = parseInt(cutils.jscGetDeepest(int_workspace));
+
+							thisWin.workspace = int_workspace;
+						}
+						
+						if (aOptions.macGetCgWinId) {
+							var rez_cgwinid = ostypes.API('objc_msgSend')(c_win, ostypes.HELPER.sel('objectForKey:'), myNSStrings.get('kCGWindowNumber'));
+							
+							var int_cgwinid = ostypes.API('objc_msgSend')(rez_cgwinid, ostypes.HELPER.sel('integerValue'));
+							int_cgwinid = ctypes.cast(int_cgwinid, ostypes.TYPE.NSInteger);
+
+							
+							int_cgwinid = parseInt(cutils.jscGetDeepest(int_cgwinid));
+
+							thisWin.cgwinid = int_cgwinid;
 						}
 						
 						rezWinArr.push(thisWin);
