@@ -243,8 +243,8 @@ var xlibTypes = function() {
 	// ADVANCED STRUCTS
 	// XEvent is one huge union, js-ctypes doesnt have union so i just set it to what I use for my addon
 	this.XEvent = ctypes.StructType('_XEvent', [ // http://tronche.com/gui/x/xlib/events/structures.html
-		// { xclient: this.XClientMessageEvent }
-		{ xbutton: this.XButtonEvent }
+		{ xclient: this.XClientMessageEvent } // for nativeshot and profilist i use this type which is xevent.xclient.type = ostypes.CONST.ClientMessage;
+		// { xbutton: this.XButtonEvent } // for mousecontrol i use this type
 	])
 	
 	/////////////// GTK stuff temporary for test, i want to use x11 for everything

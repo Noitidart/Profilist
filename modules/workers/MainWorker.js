@@ -1747,9 +1747,48 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 					
 				break;
 			case 'gtk':
-			
-					//
+
+					var allWinInfos = getAllWin({
+						filterVisible: true,
+						getPid: true,
+						getTitle: true,
+						getBounds: true // this is force set to true if i dont specify this or set it to false for gtk
+					});
 					
+					console.log('allWinInfos:', allWinInfos);
+					
+					var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
+						if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
+							return true;
+						}
+					});
+					
+					console.log('matchingWinInfos:', matchingWinInfos);
+					
+					// focus the matching windows
+					var xevent = ostypes.TYPE.XEvent();
+
+					xevent.xclient.type = ostypes.CONST.ClientMessage;
+					xevent.xclient.serial = 0;
+					xevent.xclient.send_event = ostypes.CONST.True;
+					xevent.xclient.display = ostypes.HELPER.cachedXOpenDisplay();
+					// xevent.xclient.window = ostypes.HELPER.gdkWinPtrToXID(hwndPtr); // gdkWinPtrToXID returns ostypes.TYPE.XID, but XClientMessageEvent.window field wants ostypes.TYPE.Window..... but XID and Window are same type so its ok no need to cast
+					xevent.xclient.message_type = ostypes.HELPER.cachedAtom('_NET_ACTIVE_WINDOW');
+					xevent.xclient.format = 32; // because xclient.data is long, i defined that in the struct union
+					xevent.xclient.data = ostypes.TYPE.long.array(5)([ostypes.CONST._NET_WM_STATE_TOGGLE /* requestor type; we're a tool */, ostypes.CONST.CurrentTime /* timestamp, the tv_sec of timeval struct */, ostypes.CONST.None /* currently active window */, 0, 0]); // im not sure if i set this right
+					
+					// ubuntu is cool in that even if minimized, the order is proper z order, unlike windows
+					
+					for (var i=matchingWinInfos.length-1; i>=0; i--) {
+						console.log('setting xclient.window to:', matchingWinInfos[i].hwndXid);
+						xevent.xclient.window = matchingWinInfos[i].hwndXid;
+						var rez_focus = ostypes.API('XSendEvent')(ostypes.HELPER.cachedXOpenDisplay(), ostypes.HELPER.cachedDefaultRootWindow(), ostypes.CONST.False, ostypes.CONST.SubstructureRedirectMask | ostypes.CONST.SubstructureNotifyMask, xevent.address()); // need for SubstructureRedirectMask is because i think this topic - http://stackoverflow.com/q/650223/1828637 - he says "I've read that Window Managers try to stop this behaviour, so tried to disable configure redirection"
+						console.log('rez_focus:', rez_focus);
+						// the zotero guy tests if rez_focus is 1, and if so then he does XMapRaised, i dont know why, as simply doing a flush after this focuses. this is zotero - https://github.com/zotero/zotero/blob/7d404e8d4ad636987acfe33d0b8620263004d6d0/chrome/content/zotero/xpcom/integration.js#L619
+						// i suspect zotero does that for cross window manager abilty, as just simply flushing worked for me on ubuntu
+						ostypes.API('XFlush')(ostypes.HELPER.cachedXOpenDisplay()); // will not set on top if you dont do this, wont even change window title name which was done via XChangeProperty, MUST FLUSH
+					}
+
 				break;
 			case 'darwin':
 
@@ -2383,22 +2422,20 @@ function getAllWin(aOptions) {
 				for (var i = 0; i < rezWinArr.length; i++) {
 					if (rezWinArr[i].pid || (rezWinArr[i].title && cWinObj.title)) { // apparently sometimes you can hvae a new win title but no pid. like after "browser console" came a "compiz" title but no pid on it
 						pushItBlock();
-						cWinObj = {
-							pid: rezWinArr[i].pid,
-							left: [],
-							top: [],
-							width: [],
-							height: []
-						};
+						cWinObj = {}
+						for (var p in rezWinArr[i]) {
+							cWinObj[p] = rezWinArr[i][p];
+						}
+						cWinObj.left = [];
+						cWinObj.top = [];
+						cWinObj.width = [];
+						cWinObj.height = [];
 					}
 					if (cWinObj) {
 						cWinObj.left.push(rezWinArr[i].left);
 						cWinObj.top.push(rezWinArr[i].top);
 						cWinObj.width.push(rezWinArr[i].width);
 						cWinObj.height.push(rezWinArr[i].height);
-						if (rezWinArr[i].title) {
-							cWinObj.title = rezWinArr[i].title;
-						}
 					}
 				}
 				pushItBlock();
@@ -2412,9 +2449,9 @@ function getAllWin(aOptions) {
 					}
 				}
 				// 2) remove all windows who have height and width == to Desktop which is that last entry
-				if (analyzedArr[analyzedArr.length - 1].title != 'Desktop') {
-
-				}
+				// if (analyzedArr[analyzedArr.length - 1].title != 'Desktop') {
+                // 
+				// }
 				var deskW = analyzedArr[analyzedArr.length - 1].width;
 				var deskH = analyzedArr[analyzedArr.length - 1].height;
 				for (var i = 0; i < analyzedArr.length - 1; i++) { // - 1 as we dont want the very last item
