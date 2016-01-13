@@ -429,10 +429,10 @@ function formatNoWriteObjs() {
 		
 		/////// debug
 		// set gJProfilistBuilds
-		if (!this.debuggedProfilistBuilds) { // :debug:
-			gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
-			this.debuggedProfilistBuilds = true; // :debug:
-		} // :debug:
+		// if (!this.debuggedProfilistBuilds) { // :debug:
+		// 	gGenIniEntry.ProfilistBuilds = '[{"id":10,"p":"d.exe","i":"dev"},{"id":9,"p":"a.exe","i":"aurora"},{"id":8,"p":"n.exe","i":"nightly"}]'; // :debug:
+		// 	this.debuggedProfilistBuilds = true; // :debug:
+		// } // :debug:
 		/////// debug
 
 		// set gJProfilistBuilds
@@ -443,7 +443,7 @@ function formatNoWriteObjs() {
 		for (var i=0; i<gIniObj.length; i++) {
 			if (gIniObj[i].noWriteObj.status) {
 				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
-				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].exePath, gJProfilistDev, gJProfilistBuilds, getExeChanForParamsFromFSFromCache(gIniObj[i].exePath));// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
+				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath));// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
 			}
 		}
 
@@ -462,6 +462,33 @@ if (!('ProfilistStatus' in curProfIniEntry) || curProfIniEntry.ProfilistStatus !
 function writeIni() {
 	// write gIniObj to core.profilist.path.ini && core.profilist.path.inibkp
 	// :note: :important: things in noWriteObj are not strings, and even if they are, it doesnt get written
+	
+	var writeStrArr = [];
+	
+	var thisProfileGroupNum = 0;
+	for (var i=0; i<gIniObj.length; i++) {
+		var indexOfProfile = gIniObj[i].groupName.indexOf('Profile');
+		if (indexOfProfile == 0 /* std profile group */ || indexOfProfile == 4 /* temp profile */) {
+			writeStrArr.push('[' + gIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */) + thisProfileGroupNum + ']'); // i calculate the TempProfile## or the Profile## so when I create or delete a profile I dont have to worry about using right number :note: // link88574221
+			thisProfileGroupNum++;
+		} else {
+			writeStrArr.push('[' + gIniObj[i].groupName + ']');
+		}
+		for (var p in gIniObj[i]) {
+			if (p == 'noWriteObj' || p == 'groupName') {
+				continue;
+			}
+			writeStrArr.push(p + '=' + gIniObj[i][p]);
+		}
+		writeStrArr.push('');
+	}
+	writeStrArr.push('');
+	var writeStr = writeStrArr.join('\n');
+	console.error('should now write:', writeStr);
+	
+	OS.File.writeAtomic(core.profilist.path.ini, writeStr, {encoding:'utf-8'});
+	
+	OS.File.writeAtomic(core.profilist.path.inibkp, writeStr, {encoding:'utf-8'});
 }
 
 function fetchAll() {
@@ -490,6 +517,8 @@ function fetchJustIniObj() {
 function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 	gIniObj = JSON.parse(aNewIniObjStr);
 	formatNoWriteObjs();
+	
+	writeIni();
 	
 	return JSON.stringify(gIniObj);
 }
@@ -1554,7 +1583,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, '-profile "' + aFullPathToProfileDir + '" -no-remote');
 						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'createLauncher -> SetArguments');
 						
-						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
+						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, core.os.version > 5.2 ? 1 : 2); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 						
 						if (core.os.version >= 6.1) {

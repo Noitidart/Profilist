@@ -29,6 +29,7 @@ XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.stri
 GEN_RULEs - stands for GENERAL_RULES
 1. Icon Slug
 	* platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'```
+2. Reason for using [TempProfile##] is so that regular Firefox profile manager doesn't pick these up and show them
 INIOBJ_RULEs
 1. groupName
 	* This is the text between the square brackets [] in the ini group title
