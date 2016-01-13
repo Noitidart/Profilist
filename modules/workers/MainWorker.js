@@ -473,7 +473,7 @@ function fetchAll() {
 		sIniObj[i].noWriteObj = {};
 	}
 	*/
-	
+	readIni(); // // link9111119111 this is temporary, till i hook up file watcher
 	return {
 		aIniObj: gIniObj,
 		aKeyInfoStore: gKeyInfoStore,
@@ -483,7 +483,7 @@ function fetchAll() {
 
 function fetchJustIniObj() {
 	// returns gIniObj
-	
+	readIni(); // // link9111119111 this is temporary, till i hook up file watcher
 	return gIniObj;
 }
 
@@ -1775,7 +1775,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 					// xevent.xclient.window = ostypes.HELPER.gdkWinPtrToXID(hwndPtr); // gdkWinPtrToXID returns ostypes.TYPE.XID, but XClientMessageEvent.window field wants ostypes.TYPE.Window..... but XID and Window are same type so its ok no need to cast
 					xevent.xclient.message_type = ostypes.HELPER.cachedAtom('_NET_ACTIVE_WINDOW');
 					xevent.xclient.format = 32; // because xclient.data is long, i defined that in the struct union
-					xevent.xclient.data = ostypes.TYPE.long.array(5)([ostypes.CONST._NET_WM_STATE_TOGGLE /* requestor type; we're a tool */, ostypes.CONST.CurrentTime /* timestamp, the tv_sec of timeval struct */, ostypes.CONST.None /* currently active window */, 0, 0]); // im not sure if i set this right
+					xevent.xclient.data = ostypes.TYPE.long.array(5)([ostypes.CONST._NET_WM_STATE_TOGGLE /* requestor type; we're a tool */, ostypes.CONST.CurrentTime /* timestamp, the tv_sec of timeval struct */, ostypes.CONST.None /* currently active window */, 0, 0]); // im not sure if i set this right // i got this idea because this is how this guy did it - https://github.com/vovochka404/deadbeef-statusnotifier-plugin/blob/8d72fffc0fb98ed0efb3ca86e4abf6e8b5c749ba/src/x11-force-focus.c#L67-L69
 					
 					// ubuntu is cool in that even if minimized, the order is proper z order, unlike windows
 					

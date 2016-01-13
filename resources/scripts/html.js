@@ -145,8 +145,41 @@ function doOnContentLoad() {
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
 window.addEventListener('beforeunload', doOnBeforeUnload, false);
 
+// :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
+function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
+	if (!isFocused(window)) {
+		attachFocusListener();
+	}
+}
+
+function attachFocusListener() {
+	// :note: i dont know why im removing focus on blur, but thats how i did it in nativeshot, it must avoid some redundancy
+	window.addEventListener('focus', doOnFocus, false);
+}
+
+function detachFocusListener() {
+	window.removeEventListener('focus', doOnFocus, false);
+}
+
+function doOnFocus() {
+	detachFocusListener();
+	// fetch prefs from bootstrap, and update dom
+	fetchJustIniObj();
+}
+
 // End - DOM Event Attachments
 // Start - Page Functionalities
+function fetchJustIniObj() {
+	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchJustIniObj'], bootstrapMsgListener.funcScope, function(aIniObj) {
+		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
+		// alert('ok got new ini obj, will now set global nad update react component');
+		gIniObj = aIniObj;
+		
+		MyStore.setState({
+			sIniObj: gIniObj
+		})
+	});
+}
 function initPage(isReInit) {
 	// if isReInit then it will skip some stuff
 	
@@ -163,6 +196,9 @@ function initPage(isReInit) {
 			gKeyInfoStore = aObjs.aKeyInfoStore;
 			
 			MyStore.updateStatedIniObj();
+			
+			window.addEventListener('blur', attachFocusListener, false); // link147928272
+			ifNotFocusedDoOnBlur();
 		});
 	}, 2000);
 
@@ -605,7 +641,11 @@ var ToolbarButton = React.createClass({
 			} else {
 				// launch this profile
 				// alert('launch profile');
-				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
+				// contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path], bootstrapMsgListener.funcScope, function() {
+					console.error('okkkk back from launching');
+					// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
+				});
 			}
 		}
 		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
@@ -1191,5 +1231,19 @@ function compareAlphaNumeric(a, b) {
     } else {
         return aA > bA ? 1 : -1;
     }
+}
+
+function isFocused(window) {
+    var childTargetWindow = {};
+    Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
+    childTargetWindow = childTargetWindow.value;
+
+    var focusedChildWindow = {};
+    if (Services.focus.activeWindow) {
+        Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
+        focusedChildWindow = focusedChildWindow.value;
+    }
+
+    return (focusedChildWindow === childTargetWindow);
 }
 // end - common helper functions

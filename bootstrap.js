@@ -499,14 +499,17 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 	},
 	launchOrFocusProfile: function(aProfPath) {
 		// launch profile - this will create launcher if it doesnt exist already
+		var deferredMain_launchOrFocusProfile = new Deferred();
 		var promise_launchfocus = MainWorker.post('launchOrFocusProfile', [aProfPath]);
 		promise_launchfocus.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_launchfocus - ', aVal);
-				
+				deferredMain_launchOrFocusProfile.resolve([aVal]);
 			},
-			genericReject.bind(null, 'promise_launchfocus', 0)
-		).catch(genericReject.bind(null, 'promise_launchfocus', 0));
+			genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile)
+		).catch(genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile));
+		
+		return deferredMain_launchOrFocusProfile.promise;
 	}
 };
 var fsMsgListener = {
