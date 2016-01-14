@@ -220,6 +220,16 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 	ProfilistBadge: {			// slug_of_icon_in_icons_folder
 		specificOnly: true
 	},
+	ProfilistBadgeLoc: {	// slug_of_icon_in_icons_folder
+		unspecificOnly: true,
+		defaultValue: '4',
+		possibleValues: [
+			'1',				// top left
+			'2',				// top right
+			'3',				// bottom left
+			'4'					// bottom right
+		]
+	},
 	ProfilistTie: {			// slug_of_icon_in_icons_folder
 		specificOnly: true
 		// value should be id of something in the ProfilistBuilds.
@@ -1208,7 +1218,7 @@ function uninstallLinuxIconForParamsFromFS(aIconName) {
 	}
 }
 
-function createIconForParamsFromFS(aIconInfosObj) {
+function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 	// RETURNS
 		// promise
 			// resolve -
@@ -1236,7 +1246,7 @@ function createIconForParamsFromFS(aIconInfosObj) {
 		var cCreateName = aIconInfosObj.name; // plat specific only for linux link787575758
 		var cCreatePathDir = core.profilist.path.icons;
 		var cOptions = {
-			aBadge: aIconInfosObj.badge ? 4 : 0, // bottom right
+			aBadge: aBadgeLoc, // bottom right
 			aScalingAlgo: 0 // jagged first
 		};
 		var cCreateType;
@@ -1583,6 +1593,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, '-profile "' + aFullPathToProfileDir + '" -no-remote');
 						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'createLauncher -> SetArguments');
 						
+						console.error('usssssing aLauncherIconPath:', aLauncherIconPath);
 						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, core.os.version > 5.2 ? 1 : 2); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 						
@@ -1891,6 +1902,8 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	var cFullPathToProfileDir = getFullPathToProfileDirFromIni(aProfPath);
 	console.info('cFullPathToProfileDir:', cFullPathToProfileDir);
 	
+	var cBadgeLoc = getPrefLikeValForKeyInIniEntry(cIniEntry, getIniEntryByKeyValue(gIniObj, 'groupName', 'General'), 'ProfilistBadgeLoc');
+	
 	// this is done after promise_createIcon
 	var postCreateIcon = function() {
 		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir); // on success it is the launcher full path
@@ -1905,7 +1918,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 		}
 	};
 	
-	var promise_createIcon = createIconForParamsFromFS(cIconInfosObj);
+	var promise_createIcon = createIconForParamsFromFS(cIconInfosObj, cBadgeLoc);
 	promise_createIcon.then(
 		function(aVal) {
 			console.log('Fullfilled - promise_createIcon - ', aVal);

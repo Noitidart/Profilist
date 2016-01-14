@@ -145,8 +145,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistLaunch',
 				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.enabled'),
-					'1': myServices.sb.GetStringFromName('profilist.cp.disabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
 				}
 			},
 			{
@@ -178,6 +178,18 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 	{
 		section: myServices.sb.GetStringFromName('profilist.cp.system'),
 		rows: [
+			{
+				label: myServices.sb.GetStringFromName('profilist.cp.badgeloc'),
+				desc: myServices.sb.GetStringFromName('profilist.cp.badgeloc-desc'),
+				type: 'select',
+				key: 'ProfilistBadgeLoc',
+				values: {
+					'1': myServices.sb.GetStringFromName('profilist.cp.badgeloc-topleft'),
+					'2': myServices.sb.GetStringFromName('profilist.cp.badgeloc-topright'),
+					'3': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomleft'),
+					'4': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomright')
+				}
+			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.desktop-shortcut'),
 				type: 'select',
