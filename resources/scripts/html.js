@@ -382,7 +382,28 @@ var Menu = React.createClass({
 			sSearchPhrase: '',
 			sSearchHasResults: false,
 			sArrowIndex: '', // when user does up/down arrow keys this will keep track of the index it has selected
-			sMsgObj: {} // key is sKey, value is object
+			sMsgObj: {}, // key is sKey, value is object
+			sSearch: null, // if search is in progress this is an object. {phrase:'what he typed', matches:{key is tbbIniEntry.Path : [value is array of indexes matched at]}}
+			sMessage: {interactive:{},hover:{}}
+			/*
+			{
+				interactive: {
+					sKey:,
+					details: { // generic messagesdetails object - link214111222
+						type: 'textbox' || 'label',
+						placeholder: string, only for textbox
+						text: string. if type is textbox, then this it is initialized to this text
+					}
+					onAccept: optional
+					onCancel: optional
+				},
+				hover: {
+					sKey: {
+						// generic messagesdetails object - see link214111222
+					}
+				}
+			}
+			*/
 		};
 	},
 	componentDidMount: function() {
@@ -403,27 +424,48 @@ var Menu = React.createClass({
 		console.log('newSearchPhrase:', newSearchPhrase);
 		
 		var cSearchHasResults = 0;
+		var new_sSearch;
 		if (newSearchPhrase == '') {
+			new_sPhrase = null;
+			/*
 			for (var i=0; i<this.state.sIniObj.length; i++) {
 				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile) {
 					// its a profile
 					cSearchHasResults++;
 				}
 			}
+			*/
 		} else {
-			var searchPatt = new RegExp(escapeRegExp(newSearchPhrase), 'i');
+			new_sSearch = {
+				phrase: newSearchPhrase,
+				matches: {}
+			}
+			var searchPatt = new RegExp(escapeRegExp(new_sSearch.phrase), 'ig');
 			for (var i=0; i<this.state.sIniObj.length; i++) {
-				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile && searchPatt.test(this.state.sIniObj[i].Name)) {
-					// its a profile
-					cSearchHasResults++;
+				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile) {
+					// its a profile so test it
+					var searchPattMatch;
+					var searchMatchedAtIndex = []; // indexes in tbbIniEntry.Name substring where it matches
+					searchPatt.lastIndex = 0;
+					while (searchPattMatch = searchPatt.exec(this.state.sIniObj[i].Name)) {
+						searchMatchedAtIndex.push(searchPatt.lastIndex - new_sSearch.phrase.length);
+					}
+					if (searchMatchedAtIndex.length) {
+						new_sSearch.matches[this.state.sIniObj[i].Path] = searchMatchedAtIndex;
+					}
+					// cSearchHasResults++;
 				}
 			}
 		}
+		// this.setState({
+			// sSearchPhrase: newSearchPhrase,
+			// sSearchHasResults: cSearchHasResults
+		// });
+		console.info('new_sSearch:', new_sSearch);
 		this.setState({
-			sSearchPhrase: newSearchPhrase,
-			sSearchHasResults: cSearchHasResults
+			sSearch: new_sSearch
 		});
-		console.log('cSearchHasResults:', cSearchHasResults);
+		// console.log('cSearchHasResults:', cSearchHasResults);
 	},
 	onKeyPress: function(e) {
 		console.log('onKeyPress, e:', e);
@@ -445,9 +487,12 @@ var Menu = React.createClass({
 			
 					// search stuff
 					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
-						if (this.state.sSearchPhrase.length > 0) {
-							this.executeSearch(this.state.sSearchPhrase.substr(0, this.state.sSearchPhrase.length - 1));
-							// e.preventDefault(); // so page doesnt go back // needed if decide to use div contentEditable. For textbox this is not needed
+						if (this.state.sSearch) {
+							// search was already in progress, so delete last char
+							if (this.state.sSearch.phrase.length > 0) {
+								this.executeSearch(this.state.sSearch.phrase.substr(0, this.state.sSearch.phrase.length - 1));
+								// e.preventDefault(); // so page doesnt go back // needed if decide to use div contentEditable. For textbox this is not needed
+							}
 						}
 					}
 					
@@ -457,20 +502,36 @@ var Menu = React.createClass({
 					// if editing something, then cancel edit. if mouse is not over the stack, then close profilist_menu. as during edit, force open happens
 					// if cloning, then cancel clone.
 					
-					// tbb-msg stuff
-					if (this.state.sMsgObj) {
-						if (this.state.sMsgObj.onCancel) {
-							this.state.sMsgObj.onCancel();
-						} else {
-							this.setState({
-								sMsgObj: {}
-							});
+					// message stuff
+					// if (this.state.sMsgObj) {
+					// 	if (this.state.sMsgObj.onCancel) {
+					// 		this.state.sMsgObj.onCancel();
+					// 	} else {
+					// 		this.setState({
+					// 			sMsgObj: {}
+					// 		});
+					// 	}
+					// }
+					if (this.state.sMessage.interactive.sKey !== undefined) {
+						// meaning an interactive message is showing somewhere
+						// cancel it
+						if (this.state.sMessage.interactive.onCancel) {
+							var rez_cbOnCancel = this.state.sMessage.interactive.onCancel(); // :note: return true; from sMessage.interactive.onCancel to prevent the canceling
+							if (rez_cbOnCancel === true) {
+								return;
+							}
 						}
+						// gets here if the onCancel did not return true
+						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage));
+						new_sMessage.interactive = {};
+						
+						MyStore.setState({sMessage:new_sMessage});
 					}
 					
 					// search stuff
 					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
-						if (this.state.sSearchPhrase.length > 0) {
+						if (this.state.sSearch) {
+							// search is in progress - cancel it
 							this.executeSearch('');
 						}
 					}
@@ -480,14 +541,32 @@ var Menu = React.createClass({
 			case 'Enter':
 				
 					// tbb-msg stuff
-					if (this.state.sMsgObj) {
-						if (this.state.sMsgObj.onAccept) {
-							this.state.sMsgObj.onAccept();
-						} else {
-							this.setState({
-								sMsgObj: {}
-							});
+					// message stuff
+					// if (this.state.sMsgObj) {
+					// 	if (this.state.sMsgObj.onAccept) {
+					// 		this.state.sMsgObj.onAccept();
+					// 	} else {
+					// 		this.setState({
+					// 			sMsgObj: {}
+					// 		});
+					// 	}
+					// }
+					if (this.state.sMessage.interactive.sKey !== undefined) {
+						// meaning an interactive message is showing somewhere
+						// accept it - meaning get the object they return, added in cleared sMessage and then setState link331266162
+						var rez_cbOnAccept
+						if (this.state.sMessage.interactive.onAccept) {
+							rez_cbOnAccept = this.state.sMessage.interactive.onAccept(); // :note: return true; from sMessage.interactive.onCancel to prevent the accepting link331266162 - return an object for setState, it will get sMessage with .interactive cleared added into it
+							if (rez_cbOnAccept === true) {
+								return; // meaning dont handle setState or clearing sMessage link331266162
+							}
 						}
+						// gets here if the onAccept did not return true - it must be an object then!!! link331266162
+						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage));
+						new_sMessage.interactive = {};
+						rez_cbOnAccept.sMessage = new_sMessage;
+						
+						MyStore.setState(rez_cbOnAccept);
 					}
 				
 				break;
@@ -496,13 +575,18 @@ var Menu = React.createClass({
 				// search stuff
 				if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 					if (e.key.length == 1) { // test to make sure its a character, not a special key like Home or something
-						// append to sSearchPhrase
-						this.executeSearch(this.state.sSearchPhrase + e.key);
+						if (this.state.sSearch) {
+							// search was in progress, so append to current phrase
+							this.executeSearch(this.state.sSearch.phrase + e.key);
+						} else {
+							// its a new search
+							this.executeSearch(e.key);
+						}
 					} // else do nothing
 				}
 		}
 	},
-    render: function render() {
+    render: function() {
 		
 		var THAT = this;
 		var addToolbarButton = function(aProps) {
@@ -512,8 +596,11 @@ var Menu = React.createClass({
 			// start - common props, everything should get these
 			aProps.key = aProps.nonProfileType ? aProps.nonProfileType : aProps.tbbIniEntry.Path; // note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813 // i set key to avoid react-reconciliation
 			aProps.sKey = aProps.key; // because this.props.key is not accessible to the child i pass it to, i have to create sKey. its a react thing.
-			aProps.sMsgObj = THAT.state.sMsgObj.aKey == aProps.key || aProps.key == 'createnewprofile' ? THAT.state.sMsgObj : undefined;
+			// aProps.sMsgObj = THAT.state.sMsgObj.aKey == aProps.key || aProps.key == 'createnewprofile' ? THAT.state.sMsgObj : undefined;
+			aProps.sMessage = THAT.state.sMessage;
 			// end - common props, everything should get these
+			
+			delete aProps.nonProfileType;
 			
 			list.push(
 				React.createElement(ToolbarButton, aProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
@@ -578,11 +665,14 @@ var Menu = React.createClass({
 					tbbIniEntry: onlyProfilesIniObj[i],
 					sGenIniEntry: sGenIniEntry, // for statedIniObj_GeneralEntry
 					// sIniObj: this.state.sIniObj,
+					sMessage: this.state.sMessage
 				};
 				
 				// search/filter stuff
 				if (i != 0) {
-					aProfTbbProps.sSearchPhrase = this.state.sSearchPhrase;
+					// we dont give the currentProfile the sSearch object
+					// aProfTbbProps.sSearchPhrase = this.state.sSearchPhrase;
+					aProfTbbProps.sSearch = this.state.sSearch;
 				}
 
 				
@@ -603,16 +693,19 @@ var Menu = React.createClass({
 			// add in the ending toolbar buttons
 			addToolbarButton({
 				nonProfileType: 'noresultsfor',
-				sSearchPhrase: this.state.sSearchPhrase,
-				sSearchHasResults: this.state.sSearchHasResults
+				// sSearchPhrase: this.state.sSearchPhrase,
+				// sSearchHasResults: this.state.sSearchHasResults
+				sSearch: this.state.sSearch
 			});
 			addToolbarButton({
-				nonProfileType: 'createnewprofile'
+				nonProfileType: 'createnewprofile',
+				sMessage: this.state.sMessage
 			});
 		}
 		
 		var cClassList = [];
-		if (this.state.sMsgObj.aKey == 'createnewprofile' && this.state.sMsgObj.label == myServices.sb.GetStringFromName('pick-to-clone')) {
+		if (this.state.sMessage.interactive.sKey == 'createnewprofile' && this.state.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
+			// i have to test the text, because if it can be interactive but in typing profile name, or showing an error message due to like "already used profile name" etc
 			cClassList.push('profilist-clone-pick');
 		}
 		if (cClassList.length) {
@@ -651,55 +744,51 @@ var ToolbarButton = React.createClass({
 		}
 		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
 	},
-    render: function render() {
-		// this.props.tbbIniEntry is not set, so undefined, for non-porilfes, so for "loading", "createnewprofile"
-			// instead, the nonProfileType key will be set, so this.props.nonProfileType // so if nonProfileType not set, then assume its "profile" (so "inactive" or "active") toolbarbutton
-		console.log('ToolbarButton-render FOR key:', this.props.tbbIniEntry ? this.props.tbbIniEntry.Path : this.props.nonProfileType, 'this.props:', this.props);
+    render: function() {
+		// incoming props
+			// sMessage - only for createnewprofile and profile tbb's
+			// sKey - for profiles its the .Path, others are createnewprofile, loading, noresultsfor
+			// sSearch - available to all non-currentProfile tbb's and noresultsfor tbb
+			// tbbIniEntry - only to profile type tbb's - it is really sTbbIniEntry but i haven't got a chance to rename it. what i want to clarify is that it is not connected to gIniObj, so modifying it would have no effect
+			
+
+		// console.log('ToolbarButton-render FOR key:', this.props.sKey, 'this.props:', this.props, 'this:', this);
 		
-		// test if in search mode
+		// // test if in search mode
 		var hideDueToSearch = false;
-		
-		var searchMatchedAtIndex = []; // holds index at which sSearchPhrase was found in name. the end is obviously known, its the index PLUS sSearchPhrase length
-		if (this.props.sSearchPhrase && this.props.sSearchPhrase != '') {
-			// searchInProccess = true;
-			if (this.props.nonProfileType == 'noresultsfor') {
-				if (this.props.sSearchHasResults) {
+		if (this.props.sKey == 'noresultsfor') {
+			if (this.props.sSearch) {
+				for (var anyMatchesInSearch in this.props.sSearch.matches) {
+					// yes matches exist so dont show the "no results" button
 					hideDueToSearch = true;
-				} // else { hideDueToSearch = false; } // no need as it inits at false
-			} else if (this.props.tbbIniEntry && this.props.tbbIniEntry.Path) {
-				// its a profile
-				var searchPatt = new RegExp(escapeRegExp(this.props.sSearchPhrase), 'ig');
-				while (searchPatt.exec(this.props.tbbIniEntry.Name)) {
-					searchMatchedAtIndex.push(searchPatt.lastIndex - this.props.sSearchPhrase.length);
+					break;
 				}
-				if (searchMatchedAtIndex.length == 0) {
-					hideDueToSearch = true;
-				}
+			} else {
+				// no search in progress
+				hideDueToSearch = true;
 			}
 		} else {
-			if (this.props.nonProfileType == 'noresultsfor') {
-				hideDueToSearch = true;
-			} // else { hideDueToSearch = false; } // no need as it inits at false
+			if (this.props.sSearch) {
+				if (this.props.sKey in this.props.sSearch.matches) { // same thing as `this.props.tbbIniEntry.Path in this.sSearch.matches)` because sKey for profile tbb's is the .Path
+					hideDueToSearch = false;
+				} else {
+					hideDueToSearch = true;
+				}
+			} // else no search is in progress
 		}
-		
 		
 		var cClassList = ['profilist-tbb'];
-		if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
-			cClassList.push('profilist-tbb-show-msg');
-		}
-		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.nonProfileType : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (hideDueToSearch ? {display:'none'} : undefined), onClick: this.click},
+		// if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
+			// cClassList.push('profilist-tbb-show-msg');
+		// }
+		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.sKey : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (!hideDueToSearch ? undefined : {display:'none'}), onClick: this.click},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
-				this.props.nonProfileType == 'noresultsfor' || this.props.nonProfileType == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
-				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey}),
-				!this.props.sMsgObj || this.props.sMsgObj.aKey != this.props.sKey ? undefined : React.createElement(TBBMsg, {sKey: this.props.sKey, sMsgObj: this.props.sMsgObj}),
-				searchMatchedAtIndex.length == 0 ? undefined : React.createElement(LabelHighlighted, {value:this.props.tbbIniEntry.Name, searchMatchedAtIndex: searchMatchedAtIndex, sSearchPhrase: this.props.sSearchPhrase}),
-				React.createElement('input', {className: 'profilist-tbb-textbox', type:'text', disabled:'disabled', /*defaultValue: (!this.props.tbbIniEntry ? undefined : this.props.tbbIniEntry.Name),*/ value: (this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType))) })
-				// React.createElement('div', {className: 'profilist-tbb-textbox', contentEditable:true, disabled:'disabled'},
-				// 	(this.props.tbbIniEntry ? /*undefined*/ this.props.tbbIniEntry.Name : (this.props.nonProfileType == 'noresultsfor' ? myServices.sb.formatStringFromName('noresultsfor', [this.props.sSearchPhrase], 1) : myServices.sb.GetStringFromName(this.props.nonProfileType)))
-				// )
+				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
+				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
+				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interaction like a textbox
 			),
-			this.props.nonProfileType != 'createnewprofile' && !this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
-				this.props.nonProfileType != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMsgObj: this.props.sMsgObj}),
+			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
+				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage}),
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev || (!this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.tbbIniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.tbbIniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never render this element)*/ getImgPathOfSlug(getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i'))) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
@@ -707,15 +796,121 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename),
-				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey})
+				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
         );
     }
 });
 
+var PrimarySquishy = React.createClass({
+	displayName: 'PrimarySquishy',
+	render: function() {
+		// incoming props
+			// sKey
+			// tbbIniEntry - only comes in for profile type tbb. not for createnewprofile sKey. squishy is not made for any other tbb types, just createnewprofile and profile type tbb's
+			// sMessage
+			// sSearch - only comes in if a search is in progress and this is a match
+
+		// check if this entry has a message
+
+		if (this.props.sKey == 'createnewprofile') {
+			console.error('hover:', this.props.sMessage.hover[this.props.sKey], 'this.props.sMessage:', this.props.sMessage);
+		}
+
+		var cPrimarySquishySingleElement;
+		
+		// determine what primary content should be
+		if (this.props.sMessage.interactive.sKey == this.props.sKey || this.props.sMessage.hover[this.props.sKey])  {
+			// show sMessage
+			// classNamePrimarySquishy += ' profilist-tbb-show-msg';
+			// only increment lastMsgId if the text of last was different
+			
+			var cMessage = this.props.sMessage.hover[this.props.sKey] || this.props.sMessage.interactive;
+
+			cPrimarySquishySingleElement = React.createElement(PrimaryMessage, {key:cMessage.details.type + '__' + cMessage.details.text, sKey:this.props.sKey, sMessage:this.props.sMessage});
+		} else {
+			// show sKey name
+			cPrimarySquishySingleElement = React.createElement(PrimaryLabel, {key:'primarylabel', sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:this.props.sSearch});
+		}
+		
+		return React.createElement('div', {className:'profilist-tbb-primary-squishy'},
+			React.createElement(React.addons.CSSTransitionGroup, {className:'profilist-slowswap-cont', transitionName:'profilist-slowswap', transitionEnterTimeout:200, transitionLeaveTimeout:100},
+				cPrimarySquishySingleElement // because im doing CSSTransitionGroup I cant set this equal to `'show message'` i have to set it to `Reacte.createElement('div', {}, 'show message')`
+			)
+		);
+	}
+});
+
+var PrimaryLabel = React.createClass({ // capable of highlighting self
+	displayName: 'PrimaryLabel',
+	render: function() {
+		// incoming props
+			// sKey - only possibilities are createnewprofile and a profilepath (loading and noresultsfor dont have a squishy element as they dont have a submenu)
+			// tbbIniEntry - this is 
+			// sSearch - only if tbbIniEntry exists for this one (meaning this is PrimaryLabel for a profile tbb) and search is in progress AND this is a match. if it wasnt a match it would never get sSearch
+		
+		var labelChildren = [];
+		if (this.props.tbbIniEntry) {
+			if (this.props.sSearch) {
+				// search is in progress, and this is a match. if it wasnt it would never get sSearch in props
+				var searchMatchedAtIndex = this.props.sSearch.matches[this.props.sKey]
+				var leaveOffIndex = 0;
+				var cProfName = this.props.tbbIniEntry.Name;
+				for (var i=0; i<searchMatchedAtIndex.length; i++) {
+					if (leaveOffIndex < searchMatchedAtIndex[i]) {
+						labelChildren.push(cProfName.substring(leaveOffIndex, searchMatchedAtIndex[i]));
+						leaveOffIndex = searchMatchedAtIndex[i] + 1;
+					}
+					// console.log('start index:', searchMatchedAtIndex[i]);
+					labelChildren.push(React.createElement('span', {className:'profilist-highlight-txt'},
+						cProfName.substr(searchMatchedAtIndex[i], this.props.sSearch.phrase.length)
+					));
+					leaveOffIndex = searchMatchedAtIndex[i] + this.props.sSearch.phrase.length;
+				}
+				
+				if (leaveOffIndex < cProfName.length) {
+					labelChildren.push(cProfName.substr(leaveOffIndex));
+				}
+			} else {
+				labelChildren.push(this.props.tbbIniEntry.Name);
+			}
+		} else {
+			labelChildren.push(myServices.sb.GetStringFromName(this.props.sKey));
+		}
+		
+		return React.createElement('div', {},
+			labelChildren
+		);
+	}
+});
+
+var PrimaryMessage = React.createClass({ // has two fields always there, just opacity:0. first is hoverMessage, second is transformMessage. if transformed, then hover should never show on top. if hovered, can be transformed.
+	displayName: 'PrimaryMessage',
+	render: function() {
+		// incoming props
+			// sKey - only possibilities are createnewprofile and a profilepath (loading and noresultsfor dont have a squishy element as they dont have a submenu)
+			// sMessage
+		
+		// only creates this element if a message exists link37481711473
+		
+		var cMessage = this.props.sMessage.hover[this.props.sKey] || this.props.sMessage.interactive; // can do this because of link37481711473
+		
+		var cMessageContents;
+		if (cMessage.details.type == 'label') {
+			cMessageContents = cMessage.details.text;
+		} else if (cMessage.details.type == 'textbox') {
+			cMessageContents = React.createElement('input', {type:'text', defaultValue:cMessage.details.text, placeholder:(!cMessage.details.placeholder ? undefined : cMessage.details.placeholder)});
+		}
+
+		return React.createElement('div', {},
+			cMessageContents
+		);
+	}
+});
+
 var LabelHighlighted = React.createClass({
-    displayName: 'ToolbarButton',
-	render: function render() {
+    displayName: 'LabelHighlighted',
+	render: function() {
 		var inner = [];
 		
 		// console.info('this.props.searchMatchedAtIndex:', this.props.searchMatchedAtIndex);
@@ -749,14 +944,40 @@ var PrimaryIcon = React.createClass({
 		console.error('ICON CLICKED');
 		
 	},
-	render: function render() {
-		// props
+	mouseEnter: function() {
+		if (this.props.sMessage.interactive.sKey != this.props.sKey) {
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			new_sMessage.hover[this.props.sKey] = {
+				details: {
+					type: 'label',
+					text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge'
+				}
+			};
+			MyStore.setState({sMessage:new_sMessage});
+		}
+	},
+	mouseLeave: function() {
+		if (this.props.sMessage.hover[this.props.sKey]) {
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			delete new_sMessage.hover[this.props.sKey];
+			MyStore.setState({sMessage:new_sMessage});
+		}
+	},
+	render: function() {
+		// incoming props
+		//	tbbIniEntry - if profile type
 		//	sKey
+		//	sMessage
 
 		var aProps = {
 			className: 'profilist-tbb-icon',
 			onClick: this.click
 		};
+		
+		if (this.props.tbbIniEntry) {
+			aProps.onMouseEnter = this.mouseEnter;
+			aProps.onMouseLeave = this.mouseLeave;
+		}
 		
 		if (this.props.sKey == 'createnewprofile' || this.props.sKey == 'loading') {
 			// icon is not clickable
@@ -778,7 +999,7 @@ var SubiconRename = React.createClass({
 		console.error('RENAME CLICKED');
 		
 	},
-	render: function render() {
+	render: function() {
 		// props - none
 
 		var aProps = {
@@ -807,7 +1028,7 @@ var SubiconSetDefault = React.createClass({
 		});
 		
 	},
-	render: function render() {
+	render: function() {
 		// this.props
 		//	tbbIniEntry
 		
@@ -833,7 +1054,7 @@ var SubiconSafe = React.createClass({
 		console.error('SAFE CLICKED');
 		
 	},
-	render: function render() {
+	render: function() {
 		// props - none
 
 		var aProps = {
@@ -853,7 +1074,7 @@ var TBBMsg = React.createClass({
 			field.focus()
 		}
 	},
-	render: function render() {
+	render: function() {
 		// props
 		//	sKey
 		//	sMsgObj
@@ -874,33 +1095,58 @@ var SubiconDel = React.createClass({
 		if (this.props.tbbIniEntry.noWriteObj.status) {
 			alert('error! cannot delete this profile because it is currently running!');
 		} else {
-			var THAT = this;
-			MyStore.setState({
-				sMsgObj: {
-					aKey: this.props.sKey,
-					label: myServices.sb.GetStringFromName('confirm-delete'),
-					onAccept: function() {
-						var cIniObj = gIniObj;
-						for (var i=0; i<cIniObj.length; i++) {
-							if (cIniObj[i].Path && cIniObj[i].Path == THAT.props.tbbIniEntry.Path) {
-								cIniObj.splice(i, 1);
-								MyStore.setState({
-									sIniObj: cIniObj,
-									sMsgObj: {}
-								});
-								return;
-							}
+			// var THAT = this;
+			// MyStore.setState({
+			// 	sMsgObj: {
+			// 		aKey: this.props.sKey,
+			// 		label: myServices.sb.GetStringFromName('confirm-delete'),
+			// 		onAccept: function() {
+			// 			var cIniObj = gIniObj;
+			// 			for (var i=0; i<cIniObj.length; i++) {
+			// 				if (cIniObj[i].Path && cIniObj[i].Path == THAT.props.tbbIniEntry.Path) {
+			// 					cIniObj.splice(i, 1);
+			// 					MyStore.setState({
+			// 						sIniObj: cIniObj,
+			// 						sMsgObj: {}
+			// 					});
+			// 					return;
+			// 				}
+			// 			}
+			// 		}
+			// 	}
+			// });
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			new_sMessage.interactive = {
+				sKey: this.props.sKey,
+				details: {
+					type: 'label',
+					text: myServices.sb.GetStringFromName('confirm-delete')
+				},
+				onAccept: function() {
+					for (var i=0; i<gIniObj.length; i++) {
+						if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
+							gIniObj.splice(i, 1);
+							// MyStore.setState({ // i dont do setState from accept, never should do it!! just return an object, and then the global accepter will push into this the cleared sMessage and then setState link331266162
+								// sIniObj: gIniObj,
+								// sMsgObj: {}
+							// });
+							return {
+								sIniObj: gIniObj
+							}; // because i want to the global accepter to take this and do setState with it link331266162
 						}
 					}
-				}
-			});
+				}.bind(this)
+			};
+			
+			MyStore.setState({sMessage:new_sMessage});
 		}
 		
 	},
-	render: function render() {
+	render: function() {
 		// props
 		//	tbbIniEntry
-
+		//	sMessage
+		//	sKey
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-del',
 			onClick: this.click
@@ -915,37 +1161,63 @@ var SubiconClone = React.createClass({
 	click: function(e) {
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('CLONE CLICKED');
-		MyStore.setState({
-			sMsgObj: {
-				aKey: 'createnewprofile',
-				label: myServices.sb.GetStringFromName('pick-to-clone'),
-				onAccept: function(){}
+		// MyStore.setState({
+			// sMsgObj: {
+				// aKey: 'createnewprofile',
+				// label: myServices.sb.GetStringFromName('pick-to-clone'),
+				// onAccept: function(){}
+			// }
+		// });
+		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+		new_sMessage.interactive = {
+			sKey: 'createnewprofile',
+			details: {
+				type: 'label',
+				text: myServices.sb.GetStringFromName('pick-to-clone')
 			}
-		});
+		};
+		delete new_sMessage.hover.createnewprofile; // so after interactive is canceled, it doesnt go back to hover
+		
+		MyStore.setState({sMessage:new_sMessage});
 		
 	},
 	mouseEnter: function() {
-		if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
-			MyStore.setState({
-				sMsgObj: {
-					aKey: 'createnewprofile',
-					label: myServices.sb.GetStringFromName('clone-profile'),
-					onAccept: function(){},
-					onCancel: function(){}
+		// if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
+			// MyStore.setState({
+				// sMsgObj: {
+					// aKey: 'createnewprofile',
+					// label: myServices.sb.GetStringFromName('clone-profile'),
+					// onAccept: function(){},
+					// onCancel: function(){}
+				// }
+			// });
+		// }
+		if (this.props.sMessage.interactive.sKey != 'createnewprofile') {
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			new_sMessage.hover.createnewprofile = {
+				details: {
+					type: 'label',
+					text: myServices.sb.GetStringFromName('clone-profile')
 				}
-			});
+			};
+			MyStore.setState({sMessage:new_sMessage});
 		}
 	},
 	mouseLeave: function() {
-		if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
-			MyStore.setState({
-				sMsgObj: {}
-			});
+		// if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
+			// MyStore.setState({
+				// sMsgObj: {}
+			// });
+		// }
+		if (this.props.sMessage.hover.createnewprofile) {
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			delete new_sMessage.hover.createnewprofile;
+			MyStore.setState({sMessage:new_sMessage});
 		}
 	},
-	render: function render() {
-		// props
-		//	tbbIniEntry
+	render: function() {
+		// incomping props
+			// sMessage
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-clone',
@@ -1055,7 +1327,7 @@ var SubiconTie = React.createClass({
 			MyStore.updateStatedIniObj();
 		}
 	},
-	render: function render() {
+	render: function() {
 		// props
 		//		jProfilistBuilds
 		//		sCurProfIniEntry

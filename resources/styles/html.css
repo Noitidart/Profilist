@@ -160,7 +160,7 @@
 /* state:mouseover */
 #profilist_menu .profilist-tbb .profilist-tbb-hover:hover {
 	background-color: rgb(224, 224, 224);
-	box-shadow: 0px -6px 0 0px red;
+	/* box-shadow: 0px -6px 0 0px red; */
 }
 #profilist_menu .profilist-tbb:first-of-type .profilist-tbb-hover:hover {
 	background-color: inherit; /*no hover as this is curprofile_tbb*/
@@ -183,21 +183,11 @@
 	padding: 0 5px 0 15px;
 	height: 100%;
 }
-/* note: any containted input=text */
-#profilist_menu .profilist-tbb-primary input[type=text] {
-	flex: 1 0 auto;
-	display: inline-block;
-	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
-	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
-	z-index: 3;
-	border: 1px solid #A6A6A6;
-	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
-	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
-}
 /* state:filter_matched */
 #profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary {
-	text-align: center;
+	justify-content: center;
 	padding: 0;
+	white-space: pre;
 }
 /* end - primary_wrap */
 
@@ -211,6 +201,7 @@
 	justify-content: flex-end;
 	align-items: center;
 	height: 100%;
+	overflow: hidden;
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb-submenu {
@@ -218,6 +209,54 @@
 }
 /* end - submenu_main */
 
+/* start - squishy */
+/* state:innate */
+#profilist_menu .profilist-tbb .profilist-tbb-primary-squishy {
+	z-index: 1;
+	/* background-color: steelblue; */
+	flex: 1 0 auto;
+	position: relative;
+	pointer-events: none;
+	display: flex;
+	height: 100%; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+	align-items: center; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+}
+/* state:picking_clone */
+#profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary-squishy {
+	animation: profilist-vshake 300ms infinite;
+}
+/* end - squishy */
+
+/* start - squishy_react_transition_elements */
+#profilist_menu .profilist-tbb .profilist-tbb-primary-squishy > span > div { /* because contained inside squishy is ```React.createElement(React.addons.CSSTransitionGroup```, and everything within that should be stackable, because of the fade-in-out thing */
+	position: absolute; /* link1473722777 - relatede to that link, but i had to go position absolute otherwise React.addons.CSSTransitionGroup is not making them appear overlapping as it inserts the entering element as soon as it starts the leaving animation - http://stackoverflow.com/questions/34824391/element-is-removed-after-transitionleavetimeout-but-how-come-not-inserted-afte */
+	height: 100%; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+	width: 100%;
+	display: flex;
+	top: 0; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+	align-items: center; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+}
+/* end - squishy_react_transition_elements */
+
+/* start - squishy_textbox */
+/* state:innate */
+#profilist_menu .profilist-tbb .profilist-tbb-primary-squishy input[type=text] {
+	/*margin: -2px 0 0 -2px;*//* accomadate for the border of 1px on top/bottom/left so it lines up with the label text link17433838 */
+	pointer-events: inherit; /* textbox field needs a bunch of inherit otherwise it doesnt get it */
+	flex: 1 0 auto;
+	display: inline-block;
+	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
+	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
+	z-index: 3;
+	border: 1px solid #A6A6A6;
+	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
+	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
+}
+/* end - squishy_textbox */
+
+
+
+/**** end - message stuff ****/
 
 /* start - primary_label_field */
 /* state:innate */
@@ -229,7 +268,7 @@
 	display: inline-block;
 	text-overflow: ellipsis; /* only shows when disabled attribute is set - this is the behavior i was hoping for. cuz when not disabled i dont want ellipsis*/
 	pointer-events: auto; /* so the poitner events intercepted and hover highlight blocked */
-	z-index: 3;
+	/*z-index: 3;*/
 	border: 1px solid #A6A6A6;
 	font-size: inherit; /* for textbox, otherwise, it doesnt take the font-SIZE i set in link123213*/
 	font-family: inherit;/* for textbox, otherwise, it doesnt take the font-FAMILY i set in link93849848*/
@@ -243,7 +282,6 @@
 	flex-direction: row;
 	align-items: center;
 	justify-content: flex-start;
-	position: absolute;
 	top: 0;
 	height: 100%;
 	margin: -1px 0px 0px 1px; /* this is to get the text to overlap the textbox perfectly */
@@ -360,6 +398,7 @@
 	align-items: center;
 	opacity: 0;
 	transition: opacity 200ms ease 200ms;
+	flex: 0 0 auto; /* dont shrink or expand as width of submenu changes */
 }
 /* state:message_showing */
 #profilist_menu .profilist-tbb-show-msg .profilist-tbb-msg {
@@ -443,5 +482,30 @@
 	75% {
 		transform: translate(0, -1px);
 	}
+}
+
+/* squish_content_swap_animation */
+.profilist-slowswap-enter {
+	opacity: 0;
+	display: flex;
+	height: 0;
+	overflow: hidden;
+}
+.profilist-slowswap-enter.profilist-slowswap-enter-active {
+	opacity: 1;
+	height: 100%;
+	transition: opacity 200ms ease-in 100ms, height 0ms ease-out 100ms; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
+}
+.profilist-slowswap-leave {
+	opacity: 1;
+}
+.profilist-slowswap-leave.profilist-slowswap-leave-active {
+	opacity: 0;
+	transition: opacity 100ms ease-out;
+}
+
+/* highlighting text in spans */
+.profilist-highlight-txt {
+	text-shadow: 0 0 1px rgba(241, 60, 47, 1);
 }
 /* end - other_stuff */
