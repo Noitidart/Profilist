@@ -485,21 +485,21 @@
 }
 
 /* squish_content_swap_animation */
-.profilist-slowswap-enter {
+.profilist-fastswap-enter {
 	opacity: 0;
 	display: flex;
 	height: 0;
 	overflow: hidden;
 }
-.profilist-slowswap-enter.profilist-slowswap-enter-active {
+.profilist-fastswap-enter.profilist-fastswap-enter-active {
 	opacity: 1;
 	height: 100%;
 	transition: opacity 200ms ease-in 100ms, height 0ms ease-out 100ms; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
 }
-.profilist-slowswap-leave {
+.profilist-fastswap-leave {
 	opacity: 1;
 }
-.profilist-slowswap-leave.profilist-slowswap-leave-active {
+.profilist-fastswap-leave.profilist-fastswap-leave-active {
 	opacity: 0;
 	transition: opacity 100ms ease-out;
 }

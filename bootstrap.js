@@ -59,6 +59,7 @@ var ADDON_MANAGER_ENTRY;
 const myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'hph', function () { return Cc['@mozilla.org/network/protocol;1?name=http'].getService(Ci.nsIHttpProtocolHandler); });
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'bootstrap.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
+XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
 
 // START - Addon Functionalities	
 // start - about module
@@ -146,6 +147,9 @@ var MainWorkerMainThreadFuncs = {
 		
 		
 		return deferredMain_createIcon.promise;
+	},
+	showNotification: function(aTitle, aBody) {
+		myServices.as.showAlertNotification(core.addon.path.content + 'icon.png', aTitle, aBody, false, null, null, 'Profilist');
 	}
 };
 // End - Launching profile and other profile functionality
@@ -371,6 +375,25 @@ function startup(aData, aReason) {
 		// testReact();
 	};
 	
+	/*
+	// add to core the l10n properties
+	var coreForMainWorker = JSON.parse(JSON.stringify(core));
+	coreForMainWorker.l10n = {};
+	coreForMainWorker.l10n.bootstrap = {};
+
+	var l10ns = myServices.sb.getSimpleEnumeration();
+	while (l10ns.hasMoreElements()) {
+		var l10nProp = l10ns.getNext();
+		var l10nPropEl = l10nProp.QueryInterface(Ci.nsIPropertyElement);
+		// doing console.log(propEl) shows the object has some fields that interest us
+
+		var l10nPropKey = l10nPropEl.key;
+		var l10nPropStr = l10nPropEl.value;
+
+		coreForMainWorker.l10n.bootstrap[l10nPropKey] = l10nPropStr;
+	}
+	*/
+	
 	// startup worker
 	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js', core, MainWorkerMainThreadFuncs);
 	promise_initMainWorker.then(
@@ -510,6 +533,24 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		).catch(genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile));
 		
 		return deferredMain_launchOrFocusProfile.promise;
+	},
+	createNewProfile: function(aNewProfName, aCloneProfPath,  aLaunchIt) {
+		// aNewProfName - string for new profile that will be made. OR set to null to use preset name "Unnamed Profile ##"
+		// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
+		// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
+		
+		var deferredMain_createNewProfile = new Deferred();
+		
+		var promise_workerSide = MainWorker.post('createNewProfile', [aNewProfName, aCloneProfPath,  aLaunchIt]);
+		promise_workerSide.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_workerSide - ', aVal);
+				
+			},
+			genericReject.bind(null, 'promise_workerSide', deferredMain_createNewProfile)
+		).catch(genericCatch.bind(null, 'promise_workerSide', deferredMain_createNewProfile));
+		
+		return deferredMain_createNewProfile.promise;
 	}
 };
 var fsMsgListener = {

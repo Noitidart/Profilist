@@ -1930,6 +1930,38 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	
 	return 'ok launched aProfPath: ' + aProfPath;
 }
+
+function createNewProfile(aNewProfName, aCloneProfPath,  aLaunchIt) {
+	// aNewProfName - string for new profile that will be made. OR set to null to use preset name "Unnamed Profile ##"
+	// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
+	// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
+
+	console.log('in worker side createNewProfile');
+	
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+
+	var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
+	
+	var gCloneIniEntry;
+	if (aCloneProfPath) {
+		gCloneIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aCloneProfPath);
+	}
+	
+	if (!aNewProfName) {
+		// calculate preset
+		var nextAvailNumber = 1; // :todo: calc this from gIniObj
+		aNewProfName = formatStringFromName('preset-profile-name', [nextAvailNumber], 'mainworker');
+	}
+	
+	if (keyValNotif == '1') {
+		if (!aCloneProfPath) {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-profile', null, 'mainworker'), formatStringFromName('notif-body_create-profile', [aNewProfName], 'mainworker')]);
+		} else {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-profile', null, 'mainworker'), formatStringFromName('notif-body_clone-profile', [gCloneIniEntry.Name, aNewProfName], 'mainworker')]);
+		}
+	}
+}
 // End - Launching profile and other profile functionality
 
 // platform helpers
@@ -2986,5 +3018,70 @@ function platformFilePathSeperator() {
 	// }
 	// return _cache_platformFilePathSeperator;
 	return OS.Path.join(' ', ' ').replace(/ /g, '');
+}
+
+function xhr(aUrlOrFileUri, aOptions={}) {
+	// console.error('in xhr!!! aUrlOrFileUri:', aUrlOrFileUri);
+	
+	// all requests are sync - as this is in a worker
+	var aOptionsDefaults = {
+		responseType: 'text',
+		timeout: 0, // integer, milliseconds, 0 means never timeout, value is in milliseconds
+		headers: null, // make it an object of key value pairs
+		method: 'GET', // string
+		data: null // make it whatever you want (formdata, null, etc), but follow the rules, like if aMethod is 'GET' then this must be null
+	};
+	validateOptionsObj(aOptions, aOptionsDefaults);
+	
+	var cRequest = new XMLHttpRequest();
+	
+	cRequest.open(aOptions.method, aUrlOrFileUri, false); // 3rd arg is false for synchronus
+	
+	if (aOptions.headers) {
+		for (var h in aOptions.headers) {
+			cRequest.setRequestHeader(h, aOptions.headers[h]);
+		}
+	}
+	
+	cRequest.responseType = aOptions.responseType;
+	cRequest.send(aOptions.data);
+	
+	// console.log('response:', cRequest.response);
+	
+	// console.error('done xhr!!!');
+	return cRequest.response;
+}
+
+var _cache_formatStringFromName_packages = {}; // holds imported packages
+function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
+	// depends on ```core.addon.path.locale``` it must be set to the path to your locale folder
+
+	// aLocalizedPackageName is name of the .properties file. so mainworker.properties you would provide mainworker
+	// aKey - string for key in aLocalizedPackageName
+	// aReplacements - array of string
+	
+	if (!_cache_formatStringFromName_packages[aLocalizedPackageName]) {
+		var packageStr = xhr(core.addon.path.locale + aLocalizedPackageName + '.properties');
+		var packageJson = {};
+		
+		var propPatt = /(.*?)=(.*?)$/gm;
+		var propMatch;
+		while (propMatch = propPatt.exec(packageStr)) {
+			packageJson[propMatch[1]] = propMatch[2];
+		}
+		
+		_cache_formatStringFromName_packages[aLocalizedPackageName] = packageJson;
+		
+		console.log('packageJson:', packageJson);
+	}
+	
+	var cLocalizedStr = _cache_formatStringFromName_packages[aLocalizedPackageName][aKey];
+	if (aReplacements) {
+		for (var i=0; i<aReplacements.length; i++) {
+			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+		}
+	}
+	
+	return cLocalizedStr;
 }
 // end - common helper functions

@@ -412,7 +412,7 @@ var Menu = React.createClass({
 						placeholder: string, only for textbox
 						text: string. if type is textbox, then this it is initialized to this text
 					}
-					// onAccept: optional - moved to gInteractiveCallbacks.onAccept - because i need to keep this difffable objects simple - but more importantly, the JSON.stringify on it kills the function/domnode etc
+					// onAccept: optional - gets e passed to it. moved to gInteractiveCallbacks.onAccept - because i need to keep this difffable objects simple - but more importantly, the JSON.stringify on it kills the function/domnode etc
 					// onCancel: optional - moved to gInteractiveCallbacks.onCancel
 					// refs: - moved to gInteractiveRefs // this is added if there are refs in the PrimaryMessage component - as of now refs exists for textbox type and its .refs.textbox
 				},
@@ -488,7 +488,7 @@ var Menu = React.createClass({
 	},
 	onKeyPress: function(e) {
 		console.log('onKeyPress, e:', e);
-		if (e.ctrlKey || e.altKey || e.metaKey) {
+		if (e.key != 'Enter' && e.ctrlKey || e.altKey || e.metaKey) { // disallow modifier keys if its not enter
 			return;
 		}
 		// test if textbox field is showing in interactive
@@ -566,13 +566,13 @@ var Menu = React.createClass({
 						// accept it - meaning get the object they return, added in cleared sMessage and then setState link331266162
 						var rez_cbOnAccept;
 						if (gInteractiveCallbacks.onAccept) {
-							rez_cbOnAccept = gInteractiveCallbacks.onAccept(); // :note: return true; from sMessage.interactive.onCancel to prevent the accepting link331266162 - return an object for setState, it will get sMessage with .interactive cleared added into it
+							rez_cbOnAccept = gInteractiveCallbacks.onAccept(e); // :note: return true; from sMessage.interactive.onCancel to prevent the accepting link331266162 - return an object for setState, it will get sMessage with .interactive cleared added into it
 							if (rez_cbOnAccept === true) {
 								return; // meaning dont handle setState or clearing sMessage link331266162
 							}
 						}
 						// gets here if the onAccept did not return true OR if there was no gInteractiveCallbacks.onAccept - it must be an object then!!! link331266162
-						console.error('rez_cbOnAccept:', rez_cbOnAccept);
+						// console.log('rez_cbOnAccept:', rez_cbOnAccept);
 						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage)); // link3818888888
 						new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
 						gInteractiveCallbacks = {};
@@ -718,7 +718,9 @@ var Menu = React.createClass({
 			});
 			addToolbarButton({
 				nonProfileType: 'createnewprofile',
-				sMessage: this.state.sMessage
+				sMessage: this.state.sMessage,
+				sCurProfIniEntry: sCurProfIniEntry,
+				sGenIniEntry: sGenIniEntry
 			});
 		}
 		
@@ -742,24 +744,85 @@ var Menu = React.createClass({
         );
     }
 });
+
+var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
+	// aKeyForClone should be the .Path of the profile to clone
+	
+	console.error('nameThenCreateProfileAcceptor, gInteractiveRefs:', gInteractiveRefs);
+	
+	var newProfileName = gInteractiveRefs.textbox.value;
+	console.error('newProfileName:', newProfileName);
+	
+	if (document.activeElement != gInteractiveRefs.textbox) {
+		console.error('cancel accept as focus is not textbox when hit enter, user obviously hit enter as onAccept is only called on hit enter');
+		return true; // cancel accept
+	}
+	
+	var cLaunchIt = e.ctrlKey || e.metaKey;
+	console.error('cLaunchIt:', cLaunchIt);
+	
+	console.error('ok create here are args:', 'aKeyForClone:', aKeyForClone, 'e:', e);
+	
+	contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', newProfileName, aKeyForClone, cLaunchIt]);
+	// send message to worker to create it
+}
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 	click: function() {
 		console.error('TBB CLICKED, props:', this.props);
 		if (this.props.sKey == 'createnewprofile') {
-			alert('create new profile');
+			var keyValLaunchOnCreate = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistLaunch');
+			if (keyValLaunchOnCreate === '0') {
+				// dont launch right away, allow naming
+				var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+				setInteractiveMsg(new_sMessage, 'createnewprofile',
+					{
+						type: 'textbox',
+						placeholder: 'enter name for new profile' // :l10n:
+					},
+					{
+						onAccept: nameThenCreateProfileAcceptor.bind(this, null)
+					}
+				);
+				MyStore.setState({
+					sMessage: new_sMessage
+				});
+			} else {
+				// keyValLaunchOnCreate === '1'
+				// launch right away
+				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, null, true]);
+				// alert('create profile with predefined name "Unnamed Profile ##" and then launch it right away');
+			}
 		} else if (this.props.tbbIniEntry) {
 			// check if there is interactive message showing, if it is, then dont do the click action, if its a textbox then focus that
 			if (this.props.sMessage.interactive.sKey == this.props.sKey) {
-				console.error('cancel click because this prof tbb is in interactive message');
+				// console.log('cancel click because this prof tbb is in interactive message');
 				if (this.props.sMessage.interactive.details.type == 'textbox') {
 					// if not focused on the textbox then focus it
-					console.error('its a textbox message, so gInteractiveRefs should have textbox, gInteractiveRefs:', gInteractiveRefs);
+					// console.log('its a textbox message, so gInteractiveRefs should have textbox, gInteractiveRefs:', gInteractiveRefs);
 					if (document.activeElement != gInteractiveRefs.textbox) {
-						console.error('focusing the textbox as it wasnt focused');
+						// console.log('focusing the textbox as it wasnt focused');
 						gInteractiveRefs.textbox.focus();
 					}
 				}
+				return;
+			}
+			if (this.props.sMessage.interactive.sKey == 'createnewprofile' && this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
+				// this was picked for clone
+				var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+				setInteractiveMsg(new_sMessage, 'createnewprofile',
+					{
+						type: 'textbox',
+						text: 'Copy of ' + this.props.tbbIniEntry.Name, // :l10n:
+						placeholder: 'enter name for new profile' // :l10n:
+					},
+					{
+						onAccept: nameThenCreateProfileAcceptor.bind(this, this.props.sKey)
+					}
+				);
+				MyStore.setState({
+					sMessage: new_sMessage
+				});
 				return;
 			}
 			if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
@@ -782,8 +845,9 @@ var ToolbarButton = React.createClass({
 			// sKey - for profiles its the .Path, others are createnewprofile, loading, noresultsfor
 			// sSearch - available to all non-currentProfile tbb's and noresultsfor tbb
 			// tbbIniEntry - only to profile type tbb's - it is really sTbbIniEntry but i haven't got a chance to rename it. what i want to clarify is that it is not connected to gIniObj, so modifying it would have no effect
+			// sCurProfIniEntry - present if dev mode is on OR this is createnewprofile
+			// sGenIniEntry - present for createnewprofile and all profile type tbb's
 			
-
 		// console.log('ToolbarButton-render FOR key:', this.props.sKey, 'this.props:', this.props, 'this:', this);
 		
 		// // test if in search mode
@@ -866,7 +930,7 @@ var PrimarySquishy = React.createClass({
 		}
 		
 		return React.createElement('div', {className:'profilist-tbb-primary-squishy'},
-			React.createElement(React.addons.CSSTransitionGroup, {className:'profilist-slowswap-cont', transitionName:'profilist-slowswap', transitionEnterTimeout:200, transitionLeaveTimeout:100},
+			React.createElement(React.addons.CSSTransitionGroup, {className:'profilist-fastswap-cont', transitionName:'profilist-fastswap', transitionEnterTimeout:200, transitionLeaveTimeout:100},
 				cPrimarySquishySingleElement // because im doing CSSTransitionGroup I cant set this equal to `'show message'` i have to set it to `Reacte.createElement('div', {}, 'show message')`
 			)
 		);
