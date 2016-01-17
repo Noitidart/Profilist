@@ -373,6 +373,24 @@ function getImgPathOfSlug(aSlug) {
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
+function setInteractiveMsg(aMessage, aKey, aDetails, aInteractiveCallbacks) {
+	
+	if (!aDetails) { console.error('dev error! must set aDetails!!!'); throw new Error('dev error! must set aDetails!!!'); }
+	
+	aMessage.interactive = {
+		sKey: aKey,
+		details: aDetails
+	};
+	
+	if (!aInteractiveCallbacks) {
+		gInteractiveCallbacks = {};
+	} else {
+		gInteractiveCallbacks = aInteractiveCallbacks;
+	}
+	
+	// dont worry about gInteractiveRefs, that is set on componentDidMount
+}
+
 // start - react components
 var Menu = React.createClass({
     displayName: 'Menu',
@@ -387,15 +405,16 @@ var Menu = React.createClass({
 			sMessage: {interactive:{},hover:{}}
 			/*
 			{
-				interactive: {
+				interactive: { ///// link38181 :note: :important: neeeeeeeever set .interactive object with new_```sMessage.interactive = {......}````
 					sKey:,
 					details: { // generic messagesdetails object - link214111222
 						type: 'textbox' || 'label',
 						placeholder: string, only for textbox
 						text: string. if type is textbox, then this it is initialized to this text
 					}
-					onAccept: optional
-					onCancel: optional
+					// onAccept: optional - moved to gInteractiveCallbacks.onAccept - because i need to keep this difffable objects simple - but more importantly, the JSON.stringify on it kills the function/domnode etc
+					// onCancel: optional - moved to gInteractiveCallbacks.onCancel
+					// refs: - moved to gInteractiveRefs // this is added if there are refs in the PrimaryMessage component - as of now refs exists for textbox type and its .refs.textbox
 				},
 				hover: {
 					sKey: {
@@ -426,7 +445,7 @@ var Menu = React.createClass({
 		var cSearchHasResults = 0;
 		var new_sSearch;
 		if (newSearchPhrase == '') {
-			new_sPhrase = null;
+			new_sSearch = null;
 			/*
 			for (var i=0; i<this.state.sIniObj.length; i++) {
 				if (this.state.sIniObj[i].Path && !this.state.sIniObj[i].noWriteObj.currentProfile) {
@@ -472,6 +491,17 @@ var Menu = React.createClass({
 		if (e.ctrlKey || e.altKey || e.metaKey) {
 			return;
 		}
+		// test if textbox field is showing in interactive
+		if (e.key != 'Escape' && e.key != 'Enter') {
+			// check if user is typing in a message field textbox
+			// if user is typing in a field, so dont listen UNLESS key is Escape. Because Escape should cancel out of that field
+			if (this.state.sMessage.interactive.sKey && this.state.sMessage.interactive.details.type == 'textbox' && document.activeElement == gInteractiveRefs.textbox) {
+				// there is message in interactive
+				// the interactive is a textbox
+				// focus is in that textbox
+				return;
+			}
+		}
 		switch (e.key) {
 			case 'ArrowUp':
 			
@@ -499,31 +529,21 @@ var Menu = React.createClass({
 				break;
 			case 'Escape':
 				
-					// if editing something, then cancel edit. if mouse is not over the stack, then close profilist_menu. as during edit, force open happens
-					// if cloning, then cancel clone.
-					
 					// message stuff
-					// if (this.state.sMsgObj) {
-					// 	if (this.state.sMsgObj.onCancel) {
-					// 		this.state.sMsgObj.onCancel();
-					// 	} else {
-					// 		this.setState({
-					// 			sMsgObj: {}
-					// 		});
-					// 	}
-					// }
-					if (this.state.sMessage.interactive.sKey !== undefined) {
+					if (this.state.sMessage.interactive.sKey) {
 						// meaning an interactive message is showing somewhere
 						// cancel it
-						if (this.state.sMessage.interactive.onCancel) {
-							var rez_cbOnCancel = this.state.sMessage.interactive.onCancel(); // :note: return true; from sMessage.interactive.onCancel to prevent the canceling
+						if (gInteractiveCallbacks.onCancel) {
+							var rez_cbOnCancel = gInteractiveCallbacks.onCancel(); // :note: return true; from sMessage.interactive.onCancel to prevent the canceling
 							if (rez_cbOnCancel === true) {
 								return;
 							}
 						}
 						// gets here if the onCancel did not return true
 						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage));
-						new_sMessage.interactive = {};
+						new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
+						gInteractiveCallbacks = {};
+						gInteractiveRefs = {}; // for good measure, mem stuff, theres no need to clear gInteractiveRefs though it wont harm
 						
 						MyStore.setState({sMessage:new_sMessage});
 					}
@@ -540,33 +560,32 @@ var Menu = React.createClass({
 				
 			case 'Enter':
 				
-					// tbb-msg stuff
 					// message stuff
-					// if (this.state.sMsgObj) {
-					// 	if (this.state.sMsgObj.onAccept) {
-					// 		this.state.sMsgObj.onAccept();
-					// 	} else {
-					// 		this.setState({
-					// 			sMsgObj: {}
-					// 		});
-					// 	}
-					// }
-					if (this.state.sMessage.interactive.sKey !== undefined) {
+					if (this.state.sMessage.interactive.sKey) {
 						// meaning an interactive message is showing somewhere
 						// accept it - meaning get the object they return, added in cleared sMessage and then setState link331266162
-						var rez_cbOnAccept
-						if (this.state.sMessage.interactive.onAccept) {
-							rez_cbOnAccept = this.state.sMessage.interactive.onAccept(); // :note: return true; from sMessage.interactive.onCancel to prevent the accepting link331266162 - return an object for setState, it will get sMessage with .interactive cleared added into it
+						var rez_cbOnAccept;
+						if (gInteractiveCallbacks.onAccept) {
+							rez_cbOnAccept = gInteractiveCallbacks.onAccept(); // :note: return true; from sMessage.interactive.onCancel to prevent the accepting link331266162 - return an object for setState, it will get sMessage with .interactive cleared added into it
 							if (rez_cbOnAccept === true) {
 								return; // meaning dont handle setState or clearing sMessage link331266162
 							}
 						}
-						// gets here if the onAccept did not return true - it must be an object then!!! link331266162
-						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage));
-						new_sMessage.interactive = {};
-						rez_cbOnAccept.sMessage = new_sMessage;
+						// gets here if the onAccept did not return true OR if there was no gInteractiveCallbacks.onAccept - it must be an object then!!! link331266162
+						console.error('rez_cbOnAccept:', rez_cbOnAccept);
+						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage)); // link3818888888
+						new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
+						gInteractiveCallbacks = {};
+						gInteractiveRefs = {}; // for good measure, mem stuff, theres no need to clear gInteractiveRefs though it wont harm
 						
-						MyStore.setState(rez_cbOnAccept);
+						if (gInteractiveCallbacks.onAccept) {
+							rez_cbOnAccept.sMessage = new_sMessage;
+							MyStore.setState(rez_cbOnAccept);
+						} else {
+							MyStore.setState({
+								sMessage: new_sMessage
+							});
+						}
 					}
 				
 				break;
@@ -730,6 +749,19 @@ var ToolbarButton = React.createClass({
 		if (this.props.sKey == 'createnewprofile') {
 			alert('create new profile');
 		} else if (this.props.tbbIniEntry) {
+			// check if there is interactive message showing, if it is, then dont do the click action, if its a textbox then focus that
+			if (this.props.sMessage.interactive.sKey == this.props.sKey) {
+				console.error('cancel click because this prof tbb is in interactive message');
+				if (this.props.sMessage.interactive.details.type == 'textbox') {
+					// if not focused on the textbox then focus it
+					console.error('its a textbox message, so gInteractiveRefs should have textbox, gInteractiveRefs:', gInteractiveRefs);
+					if (document.activeElement != gInteractiveRefs.textbox) {
+						console.error('focusing the textbox as it wasnt focused');
+						gInteractiveRefs.textbox.focus();
+					}
+				}
+				return;
+			}
 			if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
 				alert('clicked on current profile tbb, do any acction? nothing planned as of now');
 			} else {
@@ -785,7 +817,7 @@ var ToolbarButton = React.createClass({
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
-				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interaction like a textbox
+				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
 			),
 			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage}),
@@ -795,7 +827,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry}),
-				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename),
+				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
         );
@@ -813,9 +845,9 @@ var PrimarySquishy = React.createClass({
 
 		// check if this entry has a message
 
-		if (this.props.sKey == 'createnewprofile') {
-			console.error('hover:', this.props.sMessage.hover[this.props.sKey], 'this.props.sMessage:', this.props.sMessage);
-		}
+		// if (this.props.sKey == 'createnewprofile') {
+			// console.error('hover:', this.props.sMessage.hover[this.props.sKey], 'this.props.sMessage:', this.props.sMessage);
+		// }
 
 		var cPrimarySquishySingleElement;
 		
@@ -884,8 +916,26 @@ var PrimaryLabel = React.createClass({ // capable of highlighting self
 	}
 });
 
+var gInteractiveRefs;
+var gInteractiveCallbacks = {
+	onAccept: null,
+	onCancel: null
+};
 var PrimaryMessage = React.createClass({ // has two fields always there, just opacity:0. first is hoverMessage, second is transformMessage. if transformed, then hover should never show on top. if hovered, can be transformed.
 	displayName: 'PrimaryMessage',
+	componentDidMount: function() {
+		if (this.refs && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey && this.props.sMessage.interactive.details.type == 'textbox') {
+			console.error('ok setting reffs to gInteractiveRefs for sKey:', this.props.sKey);
+			// i need the ``this.props.sMessage.interactive.sKey == this.props.sKey`` test because on hover of other elements, it will set it to that when its not interactive for that
+			gInteractiveRefs = this.refs;
+			// this.props.sMessage.interactive.refs = this.refs; // do not do this, otherwise it casues `TypeError: cyclic object value` error on link3818888888 - this is because i cant do JSON.stringify on DOM nodes
+		}
+		if (this.refs.textbox) {
+			// focus it
+			this.refs.textbox.setSelectionRange(0, this.refs.textbox.value.length, 'backward'); //backwards so if the value.length is longer then field width, on select all it will not end at end, it will be at start
+			this.refs.textbox.focus()
+		}
+	},
 	render: function() {
 		// incoming props
 			// sKey - only possibilities are createnewprofile and a profilepath (loading and noresultsfor dont have a squishy element as they dont have a submenu)
@@ -899,7 +949,7 @@ var PrimaryMessage = React.createClass({ // has two fields always there, just op
 		if (cMessage.details.type == 'label') {
 			cMessageContents = cMessage.details.text;
 		} else if (cMessage.details.type == 'textbox') {
-			cMessageContents = React.createElement('input', {type:'text', defaultValue:cMessage.details.text, placeholder:(!cMessage.details.placeholder ? undefined : cMessage.details.placeholder)});
+			cMessageContents = React.createElement('input', {type:'text', ref:'textbox', defaultValue:cMessage.details.text, placeholder:(!cMessage.details.placeholder ? undefined : cMessage.details.placeholder)});
 		}
 
 		return React.createElement('div', {},
@@ -950,7 +1000,7 @@ var PrimaryIcon = React.createClass({
 			new_sMessage.hover[this.props.sKey] = {
 				details: {
 					type: 'label',
-					text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge'
+					text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
 				}
 			};
 			MyStore.setState({sMessage:new_sMessage});
@@ -996,11 +1046,38 @@ var SubiconRename = React.createClass({
 	click: function(e) {
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('RENAME CLICKED');
+
+		if (this.props.sMessage.interactive.sKey != this.props.sKey) {
+			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+			setInteractiveMsg(new_sMessage, this.props.sKey,
+				{
+					type: 'textbox',
+					text: this.props.tbbIniEntry.Name,
+					placeholder: 'New profile name' // :l10n:
+				},
+				{
+					onAccept: function() {
+						// console.error('gInteractiveRefs.textbox:', gInteractiveRefs.textbox, 'Services.focus.focusedElement:', Services.focus.focusedElement, 'document.activeElement:', document.activeElement);
+						if (document.activeElement != gInteractiveRefs.textbox) {
+							return true; // cancel accept
+						}
+						var gTbbIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.sKey);
+						gTbbIniEntry.Name = gInteractiveRefs.textbox.value;
+						return {
+							sIniObj: gIniObj
+						};
+					}.bind(this)
+				}
+			);
+			MyStore.setState({sMessage:new_sMessage});
+		}
 		
 	},
 	render: function() {
-		// props - none
+		// incoming props
+			// tbbIniEntry
+			// sKey
+			// sMessage
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-rename',
@@ -1095,48 +1172,29 @@ var SubiconDel = React.createClass({
 		if (this.props.tbbIniEntry.noWriteObj.status) {
 			alert('error! cannot delete this profile because it is currently running!');
 		} else {
-			// var THAT = this;
-			// MyStore.setState({
-			// 	sMsgObj: {
-			// 		aKey: this.props.sKey,
-			// 		label: myServices.sb.GetStringFromName('confirm-delete'),
-			// 		onAccept: function() {
-			// 			var cIniObj = gIniObj;
-			// 			for (var i=0; i<cIniObj.length; i++) {
-			// 				if (cIniObj[i].Path && cIniObj[i].Path == THAT.props.tbbIniEntry.Path) {
-			// 					cIniObj.splice(i, 1);
-			// 					MyStore.setState({
-			// 						sIniObj: cIniObj,
-			// 						sMsgObj: {}
-			// 					});
-			// 					return;
-			// 				}
-			// 			}
-			// 		}
-			// 	}
-			// });
 			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			new_sMessage.interactive = {
-				sKey: this.props.sKey,
-				details: {
+			setInteractiveMsg(new_sMessage, this.props.sKey,
+				{
 					type: 'label',
 					text: myServices.sb.GetStringFromName('confirm-delete')
 				},
-				onAccept: function() {
-					for (var i=0; i<gIniObj.length; i++) {
-						if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
-							gIniObj.splice(i, 1);
-							// MyStore.setState({ // i dont do setState from accept, never should do it!! just return an object, and then the global accepter will push into this the cleared sMessage and then setState link331266162
-								// sIniObj: gIniObj,
-								// sMsgObj: {}
-							// });
-							return {
-								sIniObj: gIniObj
-							}; // because i want to the global accepter to take this and do setState with it link331266162
+				{
+					onAccept: function() {
+						for (var i=0; i<gIniObj.length; i++) {
+							if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
+								gIniObj.splice(i, 1);
+								// MyStore.setState({ // i dont do setState from accept, never should do it!! just return an object, and then the global accepter will push into this the cleared sMessage and then setState link331266162
+									// sIniObj: gIniObj,
+									// sMsgObj: {}
+								// });
+								return {
+									sIniObj: gIniObj
+								}; // because i want to the global accepter to take this and do setState with it link331266162
+							}
 						}
-					}
-				}.bind(this)
-			};
+					}.bind(this)
+				}
+			);
 			
 			MyStore.setState({sMessage:new_sMessage});
 		}
@@ -1161,37 +1219,24 @@ var SubiconClone = React.createClass({
 	click: function(e) {
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('CLONE CLICKED');
-		// MyStore.setState({
-			// sMsgObj: {
-				// aKey: 'createnewprofile',
-				// label: myServices.sb.GetStringFromName('pick-to-clone'),
-				// onAccept: function(){}
-			// }
-		// });
 		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-		new_sMessage.interactive = {
-			sKey: 'createnewprofile',
-			details: {
+		setInteractiveMsg(new_sMessage, 'createnewprofile',
+			{
 				type: 'label',
 				text: myServices.sb.GetStringFromName('pick-to-clone')
+			},
+			{
+				onAccept: function() {
+					return true; // cancel accept as there is no accept for this one, the click on the bouncing profile will handle it
+				}
 			}
-		};
+		);
 		delete new_sMessage.hover.createnewprofile; // so after interactive is canceled, it doesnt go back to hover
 		
 		MyStore.setState({sMessage:new_sMessage});
 		
 	},
 	mouseEnter: function() {
-		// if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
-			// MyStore.setState({
-				// sMsgObj: {
-					// aKey: 'createnewprofile',
-					// label: myServices.sb.GetStringFromName('clone-profile'),
-					// onAccept: function(){},
-					// onCancel: function(){}
-				// }
-			// });
-		// }
 		if (this.props.sMessage.interactive.sKey != 'createnewprofile') {
 			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 			new_sMessage.hover.createnewprofile = {
@@ -1204,11 +1249,6 @@ var SubiconClone = React.createClass({
 		}
 	},
 	mouseLeave: function() {
-		// if (this.props.sMsgObj.label != myServices.sb.GetStringFromName('pick-to-clone')) {
-			// MyStore.setState({
-				// sMsgObj: {}
-			// });
-		// }
 		if (this.props.sMessage.hover.createnewprofile) {
 			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 			delete new_sMessage.hover.createnewprofile;
