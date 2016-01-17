@@ -809,20 +809,38 @@ var ToolbarButton = React.createClass({
 			}
 			if (this.props.sMessage.interactive.sKey == 'createnewprofile' && this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
 				// this was picked for clone
-				var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-				setInteractiveMsg(new_sMessage, 'createnewprofile',
-					{
-						type: 'textbox',
-						text: 'Copy of ' + this.props.tbbIniEntry.Name, // :l10n:
-						placeholder: 'enter name for new profile' // :l10n:
-					},
-					{
-						onAccept: nameThenCreateProfileAcceptor.bind(this, this.props.sKey)
-					}
-				);
-				MyStore.setState({
-					sMessage: new_sMessage
-				});
+				// check if should create with preset name, or allow naming field
+				var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // have to do this because i dont pass in sCurProfIniEntry when dev mode is off
+				var keyValLaunchOnCreate = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistLaunch');
+				
+				if (keyValLaunchOnCreate === '0') {
+					// dont launch right away, allow naming
+					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+					setInteractiveMsg(new_sMessage, 'createnewprofile',
+						{
+							type: 'textbox',
+							text: 'Copy of ' + this.props.tbbIniEntry.Name, // :l10n:
+							placeholder: 'enter name for new profile' // :l10n:
+						},
+						{
+							onAccept: nameThenCreateProfileAcceptor.bind(this, this.props.sKey)
+						}
+					);
+					MyStore.setState({
+						sMessage: new_sMessage
+					});
+				} else {
+					// keyValLaunchOnCreate === '1'
+					// launch right away
+					contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, this.props.sKey, true]);
+					
+					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+					new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
+					gInteractiveCallbacks = {};
+					gInteractiveRefs = {}; // for good measure, mem stuff, theres no need to clear gInteractiveRefs though it wont harm
+					
+					MyStore.setState({sMessage:new_sMessage});
+				}
 				return;
 			}
 			if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
