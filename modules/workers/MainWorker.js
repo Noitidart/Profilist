@@ -1950,8 +1950,12 @@ function createNewProfile(aNewProfName, aCloneProfPath,  aLaunchIt) {
 	
 	if (!aNewProfName) {
 		// calculate preset
-		var nextAvailNumber = 1; // :todo: calc this from gIniObj
-		aNewProfName = formatStringFromName('preset-profile-name', [nextAvailNumber], 'mainworker');
+		if (!aCloneProfPath) {
+			var nextAvailNumber = 1; // :todo: calc this from gIniObj
+			aNewProfName = formatStringFromName('preset-profile-name', [nextAvailNumber], 'mainworker');
+		} else {
+			aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker')
+		}
 	}
 	
 	if (keyValNotif == '1') {
