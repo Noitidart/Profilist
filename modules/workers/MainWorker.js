@@ -494,7 +494,7 @@ function writeIni() {
 	}
 	writeStrArr.push('');
 	var writeStr = writeStrArr.join('\n');
-	console.error('should now write:', writeStr);
+	console.log('should now write:', writeStr);
 	
 	OS.File.writeAtomic(core.profilist.path.ini, writeStr, {encoding:'utf-8'});
 	
@@ -2053,6 +2053,52 @@ function deleteProfile(aProfPath) {
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
 			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', null, 'mainworker'), formatStringFromName('notif-body_delete-failed', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason], 'mainworker')]);
+		}
+		throw new MainWorkerError('something-bad-happend', {
+			reason: cFailedReason,
+			aIniObj: gIniObj
+		});
+	}
+}
+
+function toggleDefaultProfile(aProfPath) {
+	// aProfPath is checked if its default
+		// if it is then it is unset and nothing is left as default
+		// else, then the current default is found, and deleted, then this one is set to default
+
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+
+	var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
+	
+	var gTargetIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	var cFailedReason;
+	if (!gTargetIniEntry) {
+		cFailedReason = 'profile not found in profiles.ini'; // :l10n:
+	} else {
+		if (gTargetIniEntry.Default == '1') {
+			var gIniEntry_toUndefault = gTargetIniEntry;
+			delete gIniEntry_toUndefault.Default;
+
+			gGenIniEntry.StartWithLastProfile = '0';
+		} else {
+			var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Default', '1');
+			if (gIniEntry_toUndefault) { // as there may be no default
+				delete gIniEntry_toUndefault.Default;
+			} else {
+				// there was no default set, so we need to set StartWithLastProfile to 1
+				gGenIniEntry.StartWithLastProfile = '1';
+			}
+		
+			var gIniEntry_toSetDefault = gTargetIniEntry;
+			gIniEntry_toSetDefault.Default = '1';
+		}
+		writeIni();
+	}
+
+	if (cFailedReason) {
+		if (keyValNotif == '1') {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_default-failed', null, 'mainworker'), formatStringFromName('notif-body_default-failed', [cFailedReason], 'mainworker')]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
 			reason: cFailedReason,

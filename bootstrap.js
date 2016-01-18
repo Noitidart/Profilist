@@ -589,6 +589,25 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
 			}
 		).catch(genericCatch.bind(null, 'promise_workerDel', 0));
+	},
+	toggleDefaultProfile: function(aProfPath, aMsgEvent) {
+		var promise_workerTogDefault = MainWorker.post('toggleDefaultProfile', [aProfPath]);
+		promise_workerTogDefault.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_workerTogDefault - ', aVal);
+				
+			},
+			function(aReason) {
+				var rejObj = {
+					name: 'promise_workerTogDefault',
+					aReason: aReason
+				};
+				console.error('Rejected - promise_workerTogDefault - ', rejObj);
+				// push aIniObj back to content, as it had premptively toggled default 
+				var aBrowser = aMsgEvent.target;
+				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+			}
+		).catch(genericCatch.bind(null, 'promise_workerTogDefault', 0));
 	}
 };
 var fsMsgListener = {

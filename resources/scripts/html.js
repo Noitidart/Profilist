@@ -917,7 +917,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
-				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry}),
+				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status /*noWriteObj.currentProfile check is not needed because if its currentProfile obviously .status is set to pid */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
@@ -1186,11 +1186,28 @@ var SubiconSetDefault = React.createClass({
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('SETDEFAULT CLICKED');
 		
-		var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Default', '1'); // gIniEntry is alias for liveIniEntry
-		delete gIniEntry_toUndefault.Default;
 		
-		var gIniEntry_toSetDefault = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path); // gIniEntry is alias for liveIniEntry
-		gIniEntry_toSetDefault.Default = '1';
+		if (this.props.tbbIniEntry.Default == '1') {
+			var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path);
+			delete gIniEntry_toUndefault.Default;
+			
+			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+			gGenIniEntry.StartWithLastProfile = '0';
+		} else {
+			var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Default', '1'); // gIniEntry is alias for liveIniEntry
+			if (gIniEntry_toUndefault) { // as there may be no default
+				delete gIniEntry_toUndefault.Default;
+			} else {
+				// there was no default set, so we need to set StartWithLastProfile to 1
+				var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+				gGenIniEntry.StartWithLastProfile = '1';
+			}
+		
+			var gIniEntry_toSetDefault = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path);
+			gIniEntry_toSetDefault.Default = '1';
+		}
+		
+		contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['toggleDefaultProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 		
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
@@ -1198,8 +1215,9 @@ var SubiconSetDefault = React.createClass({
 		
 	},
 	render: function() {
-		// this.props
+		// incoming props
 		//	tbbIniEntry
+		//	sKey
 		
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-setdefault',
