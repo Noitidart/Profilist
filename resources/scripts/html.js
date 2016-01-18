@@ -177,7 +177,7 @@ function fetchJustIniObj() {
 		gIniObj = aIniObj;
 		
 		MyStore.setState({
-			sIniObj: gIniObj
+			sIniObj: JSON.parse(JSON.stringify(gIniObj))
 		})
 	});
 }
@@ -573,19 +573,19 @@ var Menu = React.createClass({
 						}
 						// gets here if the onAccept did not return true OR if there was no gInteractiveCallbacks.onAccept - it must be an object then!!! link331266162
 						// console.log('rez_cbOnAccept:', rez_cbOnAccept);
+						if (!rez_cbOnAccept) {
+							// gets here if there was no onAccept callback
+							// need to do this, as new_sMessage gets set into here
+							rez_cbOnAccept = {};
+						}
+						
 						var new_sMessage = JSON.parse(JSON.stringify(this.state.sMessage)); // link3818888888
 						new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
 						gInteractiveCallbacks = {};
 						gInteractiveRefs = {}; // for good measure, mem stuff, theres no need to clear gInteractiveRefs though it wont harm
 						
-						if (gInteractiveCallbacks.onAccept) {
-							rez_cbOnAccept.sMessage = new_sMessage;
-							MyStore.setState(rez_cbOnAccept);
-						} else {
-							MyStore.setState({
-								sMessage: new_sMessage
-							});
-						}
+						rez_cbOnAccept.sMessage = new_sMessage;
+						MyStore.setState(rez_cbOnAccept);
 					}
 				
 				break;
@@ -738,9 +738,13 @@ var Menu = React.createClass({
 		} else {
 			document.getElementById('profilist_menu_container').removeAttribute('data-state');
 		}
-        return React.createElement(
-            'div', {id: 'profilist_menu', className:cClassList, 'data-state': (this.state.sIniObj.length == 0 ? undefined : 'open') },
-				list
+		var doTbbEnterAnim = gDoTbbEnterAnim;
+		gDoTbbEnterAnim = false;
+		var doTbbLeaveAnim = gDoTbbLeaveAnim;
+		gDoTbbLeaveAnim = false;
+		
+        return React.createElement(React.addons.CSSTransitionGroup, {component:'div', transitionName:'profilist-slowfade', transitionEnterTimeout:300, transitionLeaveTimeout:300, transitionEnter:doTbbEnterAnim, transitionLeave:doTbbLeaveAnim, id: 'profilist_menu', className:cClassList, 'data-state': (this.state.sIniObj.length == 0 ? undefined : 'open') },
+			list
         );
     }
 });
@@ -766,6 +770,10 @@ var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
 	contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', newProfileName, aKeyForClone, cLaunchIt]);
 	// send message to worker to create it
 }
+
+var gDoTbbEnterAnim = false;
+var gDoTbbLeaveAnim = false;
+
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 	click: function() {
@@ -1146,7 +1154,7 @@ var SubiconRename = React.createClass({
 						var gTbbIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.sKey);
 						gTbbIniEntry.Name = gInteractiveRefs.textbox.value;
 						return {
-							sIniObj: gIniObj
+							sIniObj: JSON.parse(JSON.stringify(gIniObj))
 						};
 					}.bind(this)
 				}
@@ -1183,7 +1191,7 @@ var SubiconSetDefault = React.createClass({
 		gIniEntry_toSetDefault.Default = '1';
 		
 		MyStore.setState({
-			sIniObj: gIniObj
+			sIniObj: JSON.parse(JSON.stringify(gIniObj))
 		});
 		
 	},
@@ -1265,12 +1273,9 @@ var SubiconDel = React.createClass({
 						for (var i=0; i<gIniObj.length; i++) {
 							if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
 								gIniObj.splice(i, 1);
-								// MyStore.setState({ // i dont do setState from accept, never should do it!! just return an object, and then the global accepter will push into this the cleared sMessage and then setState link331266162
-									// sIniObj: gIniObj,
-									// sMsgObj: {}
-								// });
+								gDoTbbLeaveAnim = true;
 								return {
-									sIniObj: gIniObj
+									sIniObj: JSON.parse(JSON.stringify(gIniObj))
 								}; // because i want to the global accepter to take this and do setState with it link331266162
 							}
 						}

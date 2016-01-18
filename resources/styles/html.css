@@ -504,6 +504,23 @@
 	transition: opacity 100ms ease-out;
 }
 
+/* squish_content_swap_animation */
+.profilist-slowfade-enter {
+	opacity: 0;
+}
+.profilist-slowfade-enter.profilist-slowfade-enter-active {
+	opacity: 1;
+	transition: opacity 300ms ease-in; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
+}
+.profilist-slowfade-leave {
+	opacity: 1;
+	pointer-events: none;
+}
+.profilist-slowfade-leave.profilist-slowfade-leave-active {
+	opacity: 0;
+	transition: opacity 300ms ease-out;
+}
+
 /* highlighting text in spans */
 .profilist-highlight-txt {
 	text-shadow: 0 0 1px rgba(241, 60, 47, 1);
