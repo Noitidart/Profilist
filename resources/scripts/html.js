@@ -31,6 +31,7 @@ GEN_RULEs - stands for GENERAL_RULES
 	* platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'```
 2. Reason for using [TempProfile##] is so that regular Firefox profile manager doesn't pick these up and show them
 3. The ## in [Profile##] or [TempProfile##] is not guranteed in properly numbered. It is only gurnateed on initial read. If do delete or create profile, it doesnt properly number it. It is properly numbered on write though. However it is guranteed that they are in chronological order. So on create it will take and use the max number + 1 that was found.
+4. To create a profile with a non-relative path. Only way is to set "Launch on Create" option to disabled.
 INIOBJ_RULEs
 1. groupName
 	* This is the text between the square brackets [] in the ini group title
@@ -489,7 +490,7 @@ var Menu = React.createClass({
 	},
 	onKeyPress: function(e) {
 		console.log('onKeyPress, e:', e);
-		if (e.key != 'Enter' && e.ctrlKey || e.altKey || e.metaKey) { // disallow modifier keys if its not enter
+		if (e.key != 'Enter' && (e.ctrlKey || e.altKey || e.metaKey)) { // disallow modifier keys if its not enter
 			return;
 		}
 		// test if textbox field is showing in interactive
@@ -755,20 +756,26 @@ var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
 	
 	console.error('nameThenCreateProfileAcceptor, gInteractiveRefs:', gInteractiveRefs);
 	
-	var newProfileName = gInteractiveRefs.textbox.value;
-	console.error('newProfileName:', newProfileName);
+	if (gInteractiveRefs.textbox.value == '') {
+		return true; // cancel accept - i dont accept blank values
+	}
 	
 	if (document.activeElement != gInteractiveRefs.textbox) {
 		console.error('cancel accept as focus is not textbox when hit enter, user obviously hit enter as onAccept is only called on hit enter');
 		return true; // cancel accept
 	}
 	
+	var newProfileName = gInteractiveRefs.textbox.value;
+	// console.log('newProfileName:', newProfileName);
+	
+	
+	var cNameIsPlatPath = e.altKey && e.shiftKey;
 	var cLaunchIt = e.ctrlKey || e.metaKey;
 	console.error('cLaunchIt:', cLaunchIt);
 	
 	console.error('ok create here are args:', 'aKeyForClone:', aKeyForClone, 'e:', e);
 	
-	contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', newProfileName, aKeyForClone, cLaunchIt]);
+	contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', newProfileName, aKeyForClone, cNameIsPlatPath, cLaunchIt]);
 	// send message to worker to create it
 }
 
@@ -799,7 +806,7 @@ var ToolbarButton = React.createClass({
 			} else {
 				// keyValLaunchOnCreate === '1'
 				// launch right away
-				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, null, true]);
+				contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, null, false, true]);
 				// alert('create profile with predefined name "Unnamed Profile ##" and then launch it right away');
 			}
 		} else if (this.props.tbbIniEntry) {
@@ -823,12 +830,43 @@ var ToolbarButton = React.createClass({
 				var keyValLaunchOnCreate = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistLaunch');
 				
 				if (keyValLaunchOnCreate === '0') {
+					// assume that non-multiple form is taken, so calc for next preset number
+					// start modded copy of block link37371017111 - this link is in mainworker.js
+					var presetPattStr = escapeRegExp(myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 2));
+					presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
+					console.log('presetPattStr:', presetPattStr);
+					var presetPatt = new RegExp(presetPattStr);
+					var presetNextNumber = 1;
+					for (var i=0; i<gIniObj.length; i++) {
+						if (gIniObj[i].Path) {
+							var presetMatch = presetPatt.exec(gIniObj[i].Name);
+							if (presetMatch) {
+								var presetThisNumber = parseInt(presetMatch[1]);
+								console.log('presetThisNumber:', presetThisNumber);
+								if (presetThisNumber >= presetNextNumber) {
+									presetNextNumber = presetThisNumber + 1;
+								}
+							}
+						}
+					}
+					var aPresetCloneName;
+					if (presetNextNumber == 1) {
+						aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone', [this.props.tbbIniEntry.Name], 1);
+						var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aPresetCloneName);
+						if (gPrexistingNameEntry) {
+							aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, 2], 2);
+						}
+					} else {
+						aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, presetNextNumber], 2);
+					}
+					// end copy of block link37371017111 - this link is in mainworker.js
+					
 					// dont launch right away, allow naming
 					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 					setInteractiveMsg(new_sMessage, 'createnewprofile',
 						{
 							type: 'textbox',
-							text: 'Copy of ' + this.props.tbbIniEntry.Name, // :l10n:
+							text: aPresetCloneName,
 							placeholder: 'enter name for new profile' // :l10n:
 						},
 						{
@@ -841,7 +879,7 @@ var ToolbarButton = React.createClass({
 				} else {
 					// keyValLaunchOnCreate === '1'
 					// launch right away
-					contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, this.props.sKey, true]);
+					contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', null, this.props.sKey, false, true]);
 					
 					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 					new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
@@ -1149,6 +1187,11 @@ var SubiconRename = React.createClass({
 				{
 					onAccept: function() {
 						// console.error('gInteractiveRefs.textbox:', gInteractiveRefs.textbox, 'Services.focus.focusedElement:', Services.focus.focusedElement, 'document.activeElement:', document.activeElement);
+	
+						if (gInteractiveRefs.textbox.value == '') {
+							return true; // cancel accept - i dont accept blank values
+						}
+						
 						if (document.activeElement != gInteractiveRefs.textbox) {
 							return true; // cancel accept
 						}
@@ -1533,9 +1576,14 @@ var SubiconTie = React.createClass({
 // sendAsyncMessageWithCallback - rev3
 var bootstrapCallbacks = { // can use whatever, but by default it uses this
 	// put functions you want called by bootstrap/server here,
-	pushIniObj: function(aIniObj) {
+	pushIniObj: function(aIniObj, aDoTbbEnterAnim) {
 		// updates gIniObj with aIniObj and also react component
 		gIniObj = aIniObj;
+		
+		if (aDoTbbEnterAnim) {
+			gDoTbbEnterAnim = true;
+		}
+		
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
 		});

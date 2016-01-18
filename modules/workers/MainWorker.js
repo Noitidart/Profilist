@@ -211,7 +211,7 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		pref: true,
 		specificOnly: false,
 		defaultSpecificness: false,
-		defaultValue: '1',
+		defaultValue: '0',
 		possibleValues: [
 			'0',				// dont launch right away, allow user to type a path, then hit enter (just create dont launch), alt+enter (create with this name then launch) // if user types a system path, then it is created as IsRelative=0
 			'1'					// launch right away, as IsRelative=1, with default naming scheme for Path and Name
@@ -290,11 +290,13 @@ function readIni() {
 	
 	if (rez_read.indexOf('ProfilistStatus') == -1) {
 		// read bkp
+		console.error('needs to read backup file as no ProfilistStatus found in ini');
 		try {
 		   rez_read = OS.File.read(core.profilist.path.inibkp, {encoding:'utf-8'});
 		} catch (ex if ex instanceof OS.File.Error && ex.becauseNoSuchFile) {
 			console.log('inibkp does not exist!');
 		}
+		strIniContents = rez_read;
 	}
 	
 	// parse_gIniObj
@@ -1931,12 +1933,15 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	return 'ok launched aProfPath: ' + aProfPath;
 }
 
-function createNewProfile(aNewProfName, aCloneProfPath,  aLaunchIt) {
-	// aNewProfName - string for new profile that will be made. OR set to null to use preset name "Unnamed Profile ##"
+function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt) {
+	// aNameIsPlatPath - should be true, if user wants aNewProfName to be considered as a platform path. If this is true, the name of the profile is the directory name, and this directory must not exist, therefore the name must be platform safe as i dont run safedForPlatFS on it
+	// aNewProfName - string for new profile that will be made. OR set to null to use preset name. can be platform path, but in this case set aNameIsPlatPath to true
 	// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
 	// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
-
-	console.log('in worker side createNewProfile');
+	
+	console.error('in createNewProfile in worker');
+	
+	var cFailedReason;
 	
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
@@ -1948,22 +1953,210 @@ function createNewProfile(aNewProfName, aCloneProfPath,  aLaunchIt) {
 		gCloneIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aCloneProfPath);
 	}
 	
-	if (!aNewProfName) {
+	if (!aNewProfName) { // even if aNewProfName comes in as '' it will calc preset. but i made the gui not accept blank textbox values
 		// calculate preset
 		if (!aCloneProfPath) {
-			var nextAvailNumber = 1; // :todo: calc this from gIniObj
-			aNewProfName = formatStringFromName('preset-profile-name', [nextAvailNumber], 'mainworker');
+			
+			// get next available number for "New Profile ##"
+			// start original block link37371017111
+			var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name', ['DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+			presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
+			var presetPatt = new RegExp(presetPattStr);
+			var presetNextNumber = 1;
+			for (var i=0; i<gIniObj.length; i++) {
+				if (gIniObj[i].Path) {
+					var presetMatch = presetPatt.exec(gIniObj[i].Name);
+					if (presetMatch) {
+						var presetThisNumber = parseInt(presetMatch[1]);
+						console.log('presetThisNumber:', presetThisNumber);
+						if (presetThisNumber >= presetNextNumber) {
+							presetNextNumber = presetThisNumber + 1;
+						}
+					}
+				}
+			}
+			aNewProfName = formatStringFromName('preset-profile-name', [presetNextNumber], 'mainworker');
+			// end original block link37371017111
 		} else {
-			aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker')
+			// assume that non-multiple form is taken, so calc for next preset number
+			// start modded copy of block link37371017111
+			var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+			presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
+			var presetPatt = new RegExp(presetPattStr);
+			var presetNextNumber = 1;
+			for (var i=0; i<gIniObj.length; i++) {
+				if (gIniObj[i].Path) {
+					var presetMatch = presetPatt.exec(gIniObj[i].Name);
+					if (presetMatch) {
+						var presetThisNumber = parseInt(presetMatch[1]);
+						console.log('presetThisNumber:', presetThisNumber);
+						if (presetThisNumber >= presetNextNumber) {
+							presetNextNumber = presetThisNumber + 1;
+						}
+					}
+				}
+			}
+			if (presetNextNumber == 1) {
+				aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker');
+				var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
+				if (gPrexistingNameEntry) {
+					aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 2], 'mainworker');
+				}
+			} else {
+				aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, presetNextNumber], 'mainworker');
+			}
+			// end copy of block link37371017111
+		}
+	} else {
+		if (aNameIsPlatPath) {
+			// strip trailing platformFilePathSeperator
+			var pattTFSPS = new RegExp('(?:' + escapeRegExp(platformFilePathSeperator()) + ')+$', 'm'); // TFSPS stands for trailing file system path seperators
+			var aNewProfPlatPath_TFSPSS = aNewProfName.replace(pattTFSPS, ''); // TFSPSS stands for trailing file system seperators stripped
+			
+			var startStrOfProfName = OS.Path.basename(aNewProfPlatPath_TFSPSS);
+			var startIndexOfProfName = aNewProfPlatPath_TFSPSS.lastIndexOf(startStrOfProfName);
+			aNewProfName = aNewProfName.substr(startIndexOfProfName);
+			
+			var aNewProfPlatPath = aNewProfPlatPath_TFSPSS.substr(0, startIndexOfProfName) /* this first portion includes the path seperator */ + safedForPlatFS(aNewProfName); // link900073
+			
+			console.error('aNewProfPlatPath:', aNewProfPlatPath);
+			console.error('aNewProfName:', aNewProfName);
+		}
+		if (aNewProfName == '') {
+			cFailedReason = 'New name cannot be blank.'; //:l10n:
+		} else {
+			// check if someone already has this name
+			var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
+			if (gPrexistingNameEntry) {
+				cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
+			}
 		}
 	}
 	
-	if (keyValNotif == '1') {
-		if (!aCloneProfPath) {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-profile', null, 'mainworker'), formatStringFromName('notif-body_create-profile', [aNewProfName], 'mainworker')]);
-		} else {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-profile', null, 'mainworker'), formatStringFromName('notif-body_clone-profile', [gCloneIniEntry.Name, aNewProfName], 'mainworker')]);
+	// initiate newIniEntry and get cProfPlatPathToRootDir
+	var newIniEntry;
+	var cProfPlatPathToRootDir;
+	if (!cFailedReason) {
+		// no errors so far
+		
+		// find next ## for [Profile##]/[TempProfile##]
+		var groupNameNumberNext = 0;
+		for (var i=0; i<gIniObj.length; i++) {
+			if (gIniObj[i].Path) {
+				var indexOfProfile = gIniObj[i].groupName.indexOf('Profile');
+				if (indexOfProfile == 0 /* std profile group [Profile##] */ || indexOfProfile == 4 /* temp profile [TempProfile##] */) {
+					groupNameNumberThis = parseInt(gIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */));
+					if (groupNameNumberThis >= groupNameNumberNext) {
+						groupNameNumberNext = groupNameNumberThis + 1;
+					}
+				}
+			}
 		}
+		
+		newIniEntry = {
+			groupName: 'Profile' + groupNameNumberNext,
+			Name: aNewProfName, // depends on aNameIsPlatPath but can use aNewProfName here because of link900073
+			// IsRelative: depends on aNameIsPlatPath
+			// Path: depends on aNameIsPlatPath
+		};
+		
+		if (aNameIsPlatPath) { // really is aName__WAS__PlatPath now because of link900073
+			newIniEntry.IsRelative = '0';
+			newIniEntry.Path = aNewProfPlatPath;
+			cProfPlatPathToRootDir = aNewProfPlatPath;
+			// directory must NOT exist
+			var rez_nonRelPathExists = OS.File.exists(newIniEntry.Path);
+			if (rez_nonRelPathExists) {
+				cFailedReason = formatStringFromName('reason_custom-path-exists', [newIniEntry.Path], 'mainworker');
+			}
+		} else {
+			newIniEntry.IsRelative = '1';
+			cProfPlatPathToRootDir = OS.Path.join(core.profilist.path.defProfRt, mozSaltName(safedForPlatFS(aNewProfName)));
+			newIniEntry.Path = getRelativeDescriptor(cProfPlatPathToRootDir, OS.Constants.Path.userApplicationDataDir);
+		}
+	}
+	
+	// create profile root dir
+	if (!cFailedReason) {
+		console.log('cProfPlatPathToRootDir:', cProfPlatPathToRootDir);
+		try {
+			OS.File.makeDir(cProfPlatPathToRootDir);
+		} catch(OSFileError) {
+			if (OSFileError.becauseNoSuchFile) { // this will only happen if aNameIsPlatPath because if it is a relative path the userApplicationDataDir/Profiles always exists
+				cFailedReason = formatStringFromName('reason_parent-dir-missing', [OS.Path.dirname(cProfPlatPathToRootDir)], 'mainworker');
+			}
+		}
+	}
+	
+	// populate profile root dir
+	if (!cFailedReason) {
+		
+		// write time.json
+		var rez_writeTimesJson = OS.File.writeAtomic(OS.Path.join(cProfPlatPathToRootDir, 'times.json'), '{\n"created": ' + new Date().getTime() + '}\n', {encoding:'utf-8'});
+		
+		//  if it is clone, then copy into root dir, DO NOT COPY times.json
+		if (aCloneProfPath) {
+			// :todo:
+		}
+	}
+	
+	// create profile local dir
+	if (!cFailedReason) {
+		// local profile directories only exist for IsRelative == '1' meaning aNameIsPlatPath is false
+		if (newIniEntry.IsRelative == '1') {
+			if (aCloneProfPath) {
+				// :todo: i think when i clone a profile, if i copy the local dir it screws up, i think thats why my old clone method was bad. i need to test and verify this
+			} else {
+				// not a clone, so make a local dir i am sure about this
+				var cProfPlatPathToLocalDir = OS.Path.join(core.profilist.path.defProfLRt, OS.Path.basename(cProfPlatPathToRootDir));
+				console.log('cProfPlatPathToLocalDir:', cProfPlatPathToLocalDir);
+				var rez_makeLocalDir = OS.File.makeDir(cProfPlatPathToLocalDir);
+			}
+		}
+	}
+	
+	// update gIniObj and write to disk ini
+	if (!cFailedReason) {
+		gIniObj.push(newIniEntry);
+		
+		// :todo: format this iniEntry for returning to framescript - for now i format the whole gIniObj
+		formatNoWriteObjs();
+		
+		writeIni();
+	}
+	
+	if (cFailedReason) {
+		if (keyValNotif == '1') {
+			if (!aCloneProfPath) {
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-failed', null, 'mainworker'), formatStringFromName('notif-body_create-failed', [cFailedReason], 'mainworker')]);
+			} else {
+				// clone
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-failed', null, 'mainworker'), formatStringFromName('notif-body_clone-failed', [cFailedReason], 'mainworker')]);
+			}
+		}
+		throw new MainWorkerError('something-bad-happend', {
+			reason: cFailedReason,
+			aIniObj: gIniObj
+		});
+	} else {
+		/*
+		if (keyValNotif == '1') {
+			if (!aCloneProfPath) {
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-profile', null, 'mainworker'), formatStringFromName('notif-body_create-profile', [aNewProfName], 'mainworker')]);
+			} else {
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-profile', null, 'mainworker'), formatStringFromName('notif-body_clone-profile', [gCloneIniEntry.Name, aNewProfName], 'mainworker')]);
+			}
+		}
+		*/
+		
+		// :debug:
+		if (aLaunchIt) {
+			setTimeout(function() { // setTimeout so it triggers after the return
+				launchOrFocusProfile(newIniEntry.Path)
+			}, 0);
+		}
+		
+		return gIniObj;
 	}
 }
 
@@ -1974,14 +2167,29 @@ function renameProfile(aProfPath, aNewProfName) {
 	var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
 	
 	var gTargetIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	if (gTargetIniEntry.Name == aNewProfName) {
+		return 'already set to that name'; // dont error, just dont rename
+	}
+	
 	var cFailedReason;
 	
-	gTargetIniEntry.Name = aNewProfName;
-	writeIni();
+	if (aNewProfName === '') {
+		cFailedReason = 'New name cannot be blank.'; //:l10n:
+	} else {
+		// check if someone already has this name
+		var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
+		if (gPrexistingNameEntry) {
+			cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
+		} else {
+			// ok no errors, go ahead and rename
+			gTargetIniEntry.Name = aNewProfName;
+			writeIni();
+		}
+	}
 	
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', null, 'mainworker'), formatStringFromName('notif-body_rename-failed', [aNewProfName, aNewProfName, cFailedReason], 'mainworker')]);
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', null, 'mainworker'), formatStringFromName('notif-body_rename-failed', [gTargetIniEntry.Name, aNewProfName, cFailedReason], 'mainworker')]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
 			reason: cFailedReason,
@@ -3228,4 +3436,19 @@ function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
 	
 	return cLocalizedStr;
 }
+/*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
+var mozKSaltTable = [
+	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+	'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'
+];
+
+function mozSaltName(aName) {
+	var kSaltString = '';
+	for (var i = 0; i < 8; ++i) {
+		kSaltString += mozKSaltTable[Math.floor(Math.random() * mozKSaltTable.length)];
+	}
+	return kSaltString + '.' + aName;
+}
+/*end - salt generator*/
 // end - common helper functions

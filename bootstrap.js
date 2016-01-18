@@ -534,23 +534,22 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		
 		return deferredMain_launchOrFocusProfile.promise;
 	},
-	createNewProfile: function(aNewProfName, aCloneProfPath,  aLaunchIt) {
+	createNewProfile: function(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt, aMsgEvent) {
 		// aNewProfName - string for new profile that will be made. OR set to null to use preset name "Unnamed Profile ##"
 		// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
 		// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
-		
-		var deferredMain_createNewProfile = new Deferred();
-		
-		var promise_workerSide = MainWorker.post('createNewProfile', [aNewProfName, aCloneProfPath,  aLaunchIt]);
-		promise_workerSide.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_workerSide - ', aVal);
+
+		var promise_workerCreate = MainWorker.post('createNewProfile', [aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt]);
+		promise_workerCreate.then(
+			function(aIniObj) {
+				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
 				
+				var aBrowser = aMsgEvent.target;
+				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aIniObj, true]);
 			},
-			genericReject.bind(null, 'promise_workerSide', deferredMain_createNewProfile)
-		).catch(genericCatch.bind(null, 'promise_workerSide', deferredMain_createNewProfile));
-		
-		return deferredMain_createNewProfile.promise;
+			genericReject.bind(null, 'promise_workerCreate', 0)
+		).catch(genericCatch.bind(null, 'promise_workerCreate', 0));
+
 	},
 	renameProfile: function(aProfPath, aNewProfName, aMsgEvent) {
 		var promise_workerRename = MainWorker.post('renameProfile', [aProfPath, aNewProfName]);
