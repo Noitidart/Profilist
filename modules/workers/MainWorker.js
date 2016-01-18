@@ -1976,14 +1976,86 @@ function renameProfile(aProfPath, aNewProfName) {
 	var gTargetIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	var cFailedReason;
 	
-	cFailedReason = '????';
+	gTargetIniEntry.Name = aNewProfName;
+	writeIni();
 	
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
 			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', null, 'mainworker'), formatStringFromName('notif-body_rename-failed', [aNewProfName, aNewProfName, cFailedReason], 'mainworker')]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
-			reason: '?',
+			reason: cFailedReason,
+			aIniObj: gIniObj
+		});
+	}
+}
+
+function deleteProfile(aProfPath) {
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+
+	var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
+	
+	var gTargetIniEntry;
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path && gIniObj[i].Path == aProfPath) {
+			gTargetIniEntry = gIniObj[i];
+			break;
+		}
+	}
+
+	var cFailedReason;
+	if (!gTargetIniEntry) {
+		cFailedReason = 'profile not found in profiles.ini'; // :l10n:
+	} else {
+		if (gTargetIniEntry.noWriteObj.status) {
+			cFailedReason = 'profile is in use!'; // :l10n:
+		} else {
+			
+			// delete root profile directory
+			var delPlatPath_profRootDir;
+			var profDirName; // only used/set for relative profile
+			if (gTargetIniEntry.IsRelative == '1') {
+				profDirName = OS.Path.basename(OS.Path.normalize(gTargetIniEntry.Path));
+				delPlatPath_profRootDir = OS.Path.join(core.profilist.path.defProfRt, profDirName);
+				
+			} else {
+				delPlatPath_profRootDir = gTargetIniEntry.Path;
+			}
+			try {
+				OS.File.removeDir(delPlatPath_profRootDir, {ignoreAbsent:true, ignorePermissions:false});
+			} catch (OSFileError) {
+				console.error('error deleting root profile directory - ', OSFileError);
+				// this is cause for do not remove from ini
+				cFailedReason = 'Could not delete root directory. Windows error: ' + ctypes.winLastError + '. Unix error: ' + ctypes.errno; // :l10n:
+			}
+			
+			// delete local profile directory
+			if (gTargetIniEntry.IsRelative == '1') {
+				var delPlatPath_profLocalDir = OS.Path.join(core.profilist.path.defProfLRt, profDirName);
+				try {
+					OS.File.removeDir(delPlatPath_profLocalDir, {ignoreAbsent:true, ignorePermissions:false});
+				} catch (OSFileError) {
+					console.error('error deleting local profile directory - ', OSFileError);
+					// if this delete fails its ok, delete from ini, as profile is unusable - however there will be left over files on the users computer. :todo: figure out how to clean it up if delete fails - i never encounterd failed delete though
+						// this is why i dont set cFailedReason
+				}
+			} // else - no local profile directory for non-relative profile
+			
+			if (!cFailedReason) {
+				// if didnt fail, then splice from ini and update to disk
+				gIniObj.splice(i, 1);
+				writeIni();
+			}
+		}
+	}
+	
+	if (cFailedReason) {
+		if (keyValNotif == '1') {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', null, 'mainworker'), formatStringFromName('notif-body_delete-failed', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason], 'mainworker')]);
+		}
+		throw new MainWorkerError('something-bad-happend', {
+			reason: cFailedReason,
 			aIniObj: gIniObj
 		});
 	}

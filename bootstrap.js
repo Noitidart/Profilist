@@ -570,6 +570,25 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
 			}
 		).catch(genericCatch.bind(null, 'promise_workerRename', 0));
+	},
+	deleteProfile: function(aProfPath, aMsgEvent) {
+		var promise_workerDel = MainWorker.post('deleteProfile', [aProfPath]);
+		promise_workerDel.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_workerDel - ', aVal);
+				
+			},
+			function(aReason) {
+				var rejObj = {
+					name: 'promise_workerDel',
+					aReason: aReason
+				};
+				console.error('Rejected - promise_workerDel - ', rejObj);
+				// push aIniObj back to content, as it had premptively deleted
+				var aBrowser = aMsgEvent.target;
+				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+			}
+		).catch(genericCatch.bind(null, 'promise_workerDel', 0));
 	}
 };
 var fsMsgListener = {

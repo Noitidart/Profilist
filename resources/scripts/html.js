@@ -30,6 +30,7 @@ GEN_RULEs - stands for GENERAL_RULES
 1. Icon Slug
 	* platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'```
 2. Reason for using [TempProfile##] is so that regular Firefox profile manager doesn't pick these up and show them
+3. The ## in [Profile##] or [TempProfile##] is not guranteed in properly numbered. It is only gurnateed on initial read. If do delete or create profile, it doesnt properly number it. It is properly numbered on write though. However it is guranteed that they are in chronological order. So on create it will take and use the max number + 1 that was found.
 INIOBJ_RULEs
 1. groupName
 	* This is the text between the square brackets [] in the ini group title
@@ -94,7 +95,7 @@ var gIniObj = [ // noWriteObj are not written to file
 			status: jsInt of pid, // this is obvious, because if its currentProfile then it is obviously running
 			currentProfile: true, // indicates that the running profile is this one
 			exePath: Services.dirsvc.get('XREExeF', Ci.nsIFile).path.toLowerCase(), // is needed if devmode is on. needed for mouseLeave of SubiconTie. needed ONLY for currentProfile:true entry // lower case what is needed to be lowered - link472738374
-			exeIconSlug: 'beta' // REQUIRED if this profile status:true && devmode is true // currentProfile should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status == true // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-buildhint
+			exeIconSlug: 'beta' // REQUIRED if this profile status:true && devmode is true // currentProfile should be slug of icon for the exePath. this key is only available when it is running, meaning noWriteObj.status set to pid // this is needed only if ProfilistDev=='1' meaning devmode is on. it is used to show in the profilist-si-buildhint
 		},
 		Name: 'Developer',
 		IsRelative: '1',
@@ -918,7 +919,7 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
-				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status == true || this.props.tbbIniEntry.noWriteObj.currentProfile /*currentProfile check is not needed because if its currentProfile obviously .status == true */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
+				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status /*noWriteObj.currentProfile check is not needed because if its currentProfile obviously .status is set to pid */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
         );
     }
@@ -1260,32 +1261,29 @@ var SubiconDel = React.createClass({
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('DEL CLICKED');
-		if (this.props.tbbIniEntry.noWriteObj.status) {
-			alert('error! cannot delete this profile because it is currently running!');
-		} else {
-			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			setInteractiveMsg(new_sMessage, this.props.sKey,
-				{
-					type: 'label',
-					text: myServices.sb.GetStringFromName('confirm-delete')
-				},
-				{
-					onAccept: function() {
-						for (var i=0; i<gIniObj.length; i++) {
-							if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
-								gIniObj.splice(i, 1);
-								gDoTbbLeaveAnim = true;
-								return {
-									sIniObj: JSON.parse(JSON.stringify(gIniObj))
-								}; // because i want to the global accepter to take this and do setState with it link331266162
-							}
+		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+		setInteractiveMsg(new_sMessage, this.props.sKey,
+			{
+				type: 'label',
+				text: myServices.sb.GetStringFromName('confirm-delete')
+			},
+			{
+				onAccept: function() {
+					for (var i=0; i<gIniObj.length; i++) {
+						if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
+							gIniObj.splice(i, 1);
+							gDoTbbLeaveAnim = true;
+							contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['deleteProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+							return {
+								sIniObj: JSON.parse(JSON.stringify(gIniObj))
+							}; // because i want to the global accepter to take this and do setState with it link331266162
 						}
-					}.bind(this)
-				}
-			);
-			
-			MyStore.setState({sMessage:new_sMessage});
-		}
+					}
+				}.bind(this)
+			}
+		);
+		
+		MyStore.setState({sMessage:new_sMessage});
 		
 	},
 	render: function() {
