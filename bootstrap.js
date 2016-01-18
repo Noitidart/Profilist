@@ -551,6 +551,25 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		).catch(genericCatch.bind(null, 'promise_workerSide', deferredMain_createNewProfile));
 		
 		return deferredMain_createNewProfile.promise;
+	},
+	renameProfile: function(aProfPath, aNewProfName, aMsgEvent) {
+		var promise_workerRename = MainWorker.post('renameProfile', [aProfPath, aNewProfName]);
+		promise_workerRename.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_workerRename - ', aVal);
+				
+			},
+			function(aReason) {
+				var rejObj = {
+					name: 'promise_workerRename',
+					aReason: aReason
+				};
+				console.error('Rejected - promise_workerRename - ', rejObj);
+				// push aIniObj back to content, as it had premptively renamed
+				var aBrowser = aMsgEvent.target;
+				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+			}
+		).catch(genericCatch.bind(null, 'promise_workerRename', 0));
 	}
 };
 var fsMsgListener = {

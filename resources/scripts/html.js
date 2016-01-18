@@ -1153,6 +1153,7 @@ var SubiconRename = React.createClass({
 						}
 						var gTbbIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.sKey);
 						gTbbIniEntry.Name = gInteractiveRefs.textbox.value;
+						contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['renameProfile', this.props.sKey, gTbbIniEntry.Name]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 						return {
 							sIniObj: JSON.parse(JSON.stringify(gIniObj))
 						};
@@ -1515,8 +1516,14 @@ var SubiconTie = React.createClass({
 // start - server/framescript comm layer
 // sendAsyncMessageWithCallback - rev3
 var bootstrapCallbacks = { // can use whatever, but by default it uses this
-	// put functions you want called by bootstrap/server here
-	
+	// put functions you want called by bootstrap/server here,
+	pushIniObj: function(aIniObj) {
+		// updates gIniObj with aIniObj and also react component
+		gIniObj = aIniObj;
+		MyStore.setState({
+			sIniObj: JSON.parse(JSON.stringify(gIniObj))
+		});
+	}
 };
 const SAM_CB_PREFIX = '_sam_gen_cb_';
 var sam_last_cb_id = -1;

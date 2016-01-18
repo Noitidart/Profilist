@@ -1966,6 +1966,28 @@ function createNewProfile(aNewProfName, aCloneProfPath,  aLaunchIt) {
 		}
 	}
 }
+
+function renameProfile(aProfPath, aNewProfName) {
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+
+	var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
+	
+	var gTargetIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	var cFailedReason;
+	
+	cFailedReason = '????';
+	
+	if (cFailedReason) {
+		if (keyValNotif == '1') {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', null, 'mainworker'), formatStringFromName('notif-body_rename-failed', [aNewProfName, aNewProfName, cFailedReason], 'mainworker')]);
+		}
+		throw new MainWorkerError('something-bad-happend', {
+			reason: '?',
+			aIniObj: gIniObj
+		});
+	}
+}
 // End - Launching profile and other profile functionality
 
 // platform helpers

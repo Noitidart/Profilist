@@ -130,6 +130,23 @@
 }
 /* state:data_state_disabled */
 /*:todo:*/
+/* state:fade */
+/* squish_content_swap_animation */
+.profilist-slowfade-enter {
+	opacity: 0;
+}
+.profilist-slowfade-enter.profilist-slowfade-enter-active {
+	opacity: 1;
+	transition: opacity 300ms ease-in; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
+}
+.profilist-slowfade-leave {
+	opacity: 1;
+	pointer-events: none;
+}
+.profilist-slowfade-leave.profilist-slowfade-leave-active {
+	opacity: 0;
+	transition: opacity 300ms ease-out;
+}
 /* end - toolbarbutton_wrap */
 
 /* start - tbb_after_profilist_menu_when_open */
@@ -227,7 +244,7 @@
 }
 /* end - squishy */
 
-/* start - squishy_react_transition_elements */
+/* start - squishy_react_transition_element */
 #profilist_menu .profilist-tbb .profilist-tbb-primary-squishy > span > div { /* because contained inside squishy is ```React.createElement(React.addons.CSSTransitionGroup```, and everything within that should be stackable, because of the fade-in-out thing */
 	position: absolute; /* link1473722777 - relatede to that link, but i had to go position absolute otherwise React.addons.CSSTransitionGroup is not making them appear overlapping as it inserts the entering element as soon as it starts the leaving animation - http://stackoverflow.com/questions/34824391/element-is-removed-after-transitionleavetimeout-but-how-come-not-inserted-afte */
 	height: 100%; /* link1473722777 - to make position absolut elements, which be centered in the middle */
@@ -236,7 +253,26 @@
 	top: 0; /* link1473722777 - to make position absolut elements, which be centered in the middle */
 	align-items: center; /* link1473722777 - to make position absolut elements, which be centered in the middle */
 }
-/* end - squishy_react_transition_elements */
+/* state:swap */
+.profilist-fastswap-enter {
+	opacity: 0;
+	display: flex;
+	height: 0;
+	overflow: hidden;
+}
+.profilist-fastswap-enter.profilist-fastswap-enter-active {
+	opacity: 1;
+	height: 100%;
+	transition: opacity 200ms ease-in 100ms, height 0ms ease-out 100ms; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
+}
+.profilist-fastswap-leave {
+	opacity: 1;
+}
+.profilist-fastswap-leave.profilist-fastswap-leave-active {
+	opacity: 0;
+	transition: opacity 100ms ease-out;
+}
+/* end - squishy_react_transition_element */
 
 /* start - squishy_textbox */
 /* state:innate */
@@ -482,43 +518,6 @@
 	75% {
 		transform: translate(0, -1px);
 	}
-}
-
-/* squish_content_swap_animation */
-.profilist-fastswap-enter {
-	opacity: 0;
-	display: flex;
-	height: 0;
-	overflow: hidden;
-}
-.profilist-fastswap-enter.profilist-fastswap-enter-active {
-	opacity: 1;
-	height: 100%;
-	transition: opacity 200ms ease-in 100ms, height 0ms ease-out 100ms; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
-}
-.profilist-fastswap-leave {
-	opacity: 1;
-}
-.profilist-fastswap-leave.profilist-fastswap-leave-active {
-	opacity: 0;
-	transition: opacity 100ms ease-out;
-}
-
-/* squish_content_swap_animation */
-.profilist-slowfade-enter {
-	opacity: 0;
-}
-.profilist-slowfade-enter.profilist-slowfade-enter-active {
-	opacity: 1;
-	transition: opacity 300ms ease-in; /* i did ease-out as the leave is ease-out, it might make it match to the millisecond */
-}
-.profilist-slowfade-leave {
-	opacity: 1;
-	pointer-events: none;
-}
-.profilist-slowfade-leave.profilist-slowfade-leave-active {
-	opacity: 0;
-	transition: opacity 300ms ease-out;
 }
 
 /* highlighting text in spans */
