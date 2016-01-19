@@ -1951,84 +1951,88 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	var gCloneIniEntry;
 	if (aCloneProfPath) {
 		gCloneIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aCloneProfPath);
+		if (!gCloneIniEntry) {
+			cFailedReason = 'cannot find target clone profile in profiles.ini'; // :l10n:
+		}
 	}
 	
-	if (!aNewProfName) { // even if aNewProfName comes in as '' it will calc preset. but i made the gui not accept blank textbox values
-		// calculate preset
-		if (!aCloneProfPath) {
-			
-			// get next available number for "New Profile ##"
-			// start original block link37371017111
-			var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name', ['DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
-			presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
-			var presetPatt = new RegExp(presetPattStr);
-			var presetNextNumber = 1;
-			for (var i=0; i<gIniObj.length; i++) {
-				if (gIniObj[i].Path) {
-					var presetMatch = presetPatt.exec(gIniObj[i].Name);
-					if (presetMatch) {
-						var presetThisNumber = parseInt(presetMatch[1]);
-						console.log('presetThisNumber:', presetThisNumber);
-						if (presetThisNumber >= presetNextNumber) {
-							presetNextNumber = presetThisNumber + 1;
+	if (!cFailedReason) {
+		if (!aNewProfName) { // even if aNewProfName comes in as '' it will calc preset. but i made the gui not accept blank textbox values
+			// calculate preset
+			if (!aCloneProfPath) {
+				// get next available number for "New Profile ##"
+				// start original block link37371017111
+				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name', ['DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+				presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
+				var presetPatt = new RegExp(presetPattStr);
+				var presetNextNumber = 1;
+				for (var i=0; i<gIniObj.length; i++) {
+					if (gIniObj[i].Path) {
+						var presetMatch = presetPatt.exec(gIniObj[i].Name);
+						if (presetMatch) {
+							var presetThisNumber = parseInt(presetMatch[1]);
+							console.log('presetThisNumber:', presetThisNumber);
+							if (presetThisNumber >= presetNextNumber) {
+								presetNextNumber = presetThisNumber + 1;
+							}
 						}
 					}
 				}
+				aNewProfName = formatStringFromName('preset-profile-name', [presetNextNumber], 'mainworker');
+				// end original block link37371017111
+			} else {
+				// assume that non-multiple form is taken, so calc for next preset number
+				// start modded copy of block link37371017111
+				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+				presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
+				var presetPatt = new RegExp(presetPattStr);
+				var presetNextNumber = 1;
+				for (var i=0; i<gIniObj.length; i++) {
+					if (gIniObj[i].Path) {
+						var presetMatch = presetPatt.exec(gIniObj[i].Name);
+						if (presetMatch) {
+							var presetThisNumber = parseInt(presetMatch[1]);
+							console.log('presetThisNumber:', presetThisNumber);
+							if (presetThisNumber >= presetNextNumber) {
+								presetNextNumber = presetThisNumber + 1;
+							}
+						}
+					}
+				}
+				if (presetNextNumber == 1) {
+					aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker');
+					var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
+					if (gPrexistingNameEntry) {
+						aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 2], 'mainworker');
+					}
+				} else {
+					aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, presetNextNumber], 'mainworker');
+				}
+				// end copy of block link37371017111
 			}
-			aNewProfName = formatStringFromName('preset-profile-name', [presetNextNumber], 'mainworker');
-			// end original block link37371017111
 		} else {
-			// assume that non-multiple form is taken, so calc for next preset number
-			// start modded copy of block link37371017111
-			var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
-			presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
-			var presetPatt = new RegExp(presetPattStr);
-			var presetNextNumber = 1;
-			for (var i=0; i<gIniObj.length; i++) {
-				if (gIniObj[i].Path) {
-					var presetMatch = presetPatt.exec(gIniObj[i].Name);
-					if (presetMatch) {
-						var presetThisNumber = parseInt(presetMatch[1]);
-						console.log('presetThisNumber:', presetThisNumber);
-						if (presetThisNumber >= presetNextNumber) {
-							presetNextNumber = presetThisNumber + 1;
-						}
-					}
-				}
+			if (aNameIsPlatPath) {
+				// strip trailing platformFilePathSeperator
+				var pattTFSPS = new RegExp('(?:' + escapeRegExp(platformFilePathSeperator()) + ')+$', 'm'); // TFSPS stands for trailing file system path seperators
+				var aNewProfPlatPath_TFSPSS = aNewProfName.replace(pattTFSPS, ''); // TFSPSS stands for trailing file system seperators stripped
+				
+				var startStrOfProfName = OS.Path.basename(aNewProfPlatPath_TFSPSS);
+				var startIndexOfProfName = aNewProfPlatPath_TFSPSS.lastIndexOf(startStrOfProfName);
+				aNewProfName = aNewProfName.substr(startIndexOfProfName);
+				
+				var aNewProfPlatPath = aNewProfPlatPath_TFSPSS.substr(0, startIndexOfProfName) /* this first portion includes the path seperator */ + safedForPlatFS(aNewProfName); // link900073
+				
+				console.error('aNewProfPlatPath:', aNewProfPlatPath);
+				console.error('aNewProfName:', aNewProfName);
 			}
-			if (presetNextNumber == 1) {
-				aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker');
+			if (aNewProfName == '') {
+				cFailedReason = 'New name cannot be blank.'; //:l10n:
+			} else {
+				// check if someone already has this name
 				var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
 				if (gPrexistingNameEntry) {
-					aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 2], 'mainworker');
+					cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
 				}
-			} else {
-				aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, presetNextNumber], 'mainworker');
-			}
-			// end copy of block link37371017111
-		}
-	} else {
-		if (aNameIsPlatPath) {
-			// strip trailing platformFilePathSeperator
-			var pattTFSPS = new RegExp('(?:' + escapeRegExp(platformFilePathSeperator()) + ')+$', 'm'); // TFSPS stands for trailing file system path seperators
-			var aNewProfPlatPath_TFSPSS = aNewProfName.replace(pattTFSPS, ''); // TFSPSS stands for trailing file system seperators stripped
-			
-			var startStrOfProfName = OS.Path.basename(aNewProfPlatPath_TFSPSS);
-			var startIndexOfProfName = aNewProfPlatPath_TFSPSS.lastIndexOf(startStrOfProfName);
-			aNewProfName = aNewProfName.substr(startIndexOfProfName);
-			
-			var aNewProfPlatPath = aNewProfPlatPath_TFSPSS.substr(0, startIndexOfProfName) /* this first portion includes the path seperator */ + safedForPlatFS(aNewProfName); // link900073
-			
-			console.error('aNewProfPlatPath:', aNewProfPlatPath);
-			console.error('aNewProfName:', aNewProfName);
-		}
-		if (aNewProfName == '') {
-			cFailedReason = 'New name cannot be blank.'; //:l10n:
-		} else {
-			// check if someone already has this name
-			var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
-			if (gPrexistingNameEntry) {
-				cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
 			}
 		}
 	}
@@ -2059,7 +2063,8 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			// IsRelative: depends on aNameIsPlatPath
 			// Path: depends on aNameIsPlatPath
 		};
-		
+
+		// cannot use getFullPathToProfileDirFromIni as this newIniEntry hasnt been added to gIniObj yet
 		if (aNameIsPlatPath) { // really is aName__WAS__PlatPath now because of link900073
 			newIniEntry.IsRelative = '0';
 			newIniEntry.Path = aNewProfPlatPath;
@@ -2079,25 +2084,35 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	// create profile root dir
 	if (!cFailedReason) {
 		console.log('cProfPlatPathToRootDir:', cProfPlatPathToRootDir);
-		try {
-			OS.File.makeDir(cProfPlatPathToRootDir);
-		} catch(OSFileError) {
-			if (OSFileError.becauseNoSuchFile) { // this will only happen if aNameIsPlatPath because if it is a relative path the userApplicationDataDir/Profiles always exists
-				cFailedReason = formatStringFromName('reason_parent-dir-missing', [OS.Path.dirname(cProfPlatPathToRootDir)], 'mainworker');
+		if (!aCloneProfPath) {
+			try {
+				OS.File.makeDir(cProfPlatPathToRootDir);
+			} catch(OSFileError) {
+				if (OSFileError.becauseNoSuchFile) { // this will only happen if aNameIsPlatPath because if it is a relative path the userApplicationDataDir/Profiles always exists
+					cFailedReason = formatStringFromName('reason_parent-dir-missing', [OS.Path.dirname(cProfPlatPathToRootDir)], 'mainworker');
+				}
 			}
-		}
+		} // else dont make dir, as copyDirRecursive makes the dir for me
 	}
 	
 	// populate profile root dir
 	if (!cFailedReason) {
 		
-		// write time.json
-		var rez_writeTimesJson = OS.File.writeAtomic(OS.Path.join(cProfPlatPathToRootDir, 'times.json'), '{\n"created": ' + new Date().getTime() + '\n}\n', {encoding:'utf-8'});
-		
-		//  if it is clone, then copy into root dir
-			// DO NOT COPY: times.json, parent.lock/.parentlock
-		if (aCloneProfPath) {
-			// :todo:
+		if (!aCloneProfPath) {
+			// write time.json
+			var rez_writeTimesJson = OS.File.writeAtomic(OS.Path.join(cProfPlatPathToRootDir, 'times.json'), '{\n"created": ' + new Date().getTime() + '\n}\n', {encoding:'utf-8'});
+		} else {
+			//  if it is clone, then copy into root dir
+			// DO NOT COPY: parent.lock/.parentlock
+			
+			if (keyValNotif == '1') {
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-started', null, 'mainworker'), formatStringFromName('notif-body_clone-started', [], 'mainworker')]);
+			}
+			var cCloneProfPlatPathToRootDir = getFullPathToProfileDirFromIni(aCloneProfPath);
+			copyDirRecursive(cCloneProfPlatPathToRootDir, OS.Path.dirname(cProfPlatPathToRootDir), {
+				newDirName: OS.Path.basename(cProfPlatPathToRootDir),
+				excludeFiles: [(['winnt', 'wince', 'winmo'].indexOf(core.os.mname) > -1 ? 'parent.lock' : '.parentlock')]
+			});
 		}
 	}
 	
@@ -2105,14 +2120,15 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	if (!cFailedReason) {
 		// local profile directories only exist for IsRelative == '1' meaning aNameIsPlatPath is false
 		if (newIniEntry.IsRelative == '1') {
-			if (aCloneProfPath) {
-				// :todo: i think when i clone a profile, if i copy the local dir it screws up, i think thats why my old clone method was bad. i need to test and verify this
-			} else {
+			// i decided yes make it for ```if aCloneProfPath``` as well
+			// if (aCloneProfPath) {
+			// 	// :todo: i think when i clone a profile, if i copy the local dir it screws up, i think thats why my old clone method was bad. i need to test and verify this
+			// } else {
 				// not a clone, so make a local dir i am sure about this
 				var cProfPlatPathToLocalDir = OS.Path.join(core.profilist.path.defProfLRt, OS.Path.basename(cProfPlatPathToRootDir));
 				console.log('cProfPlatPathToLocalDir:', cProfPlatPathToLocalDir);
 				var rez_makeLocalDir = OS.File.makeDir(cProfPlatPathToLocalDir);
-			}
+			// }
 		}
 	}
 	
