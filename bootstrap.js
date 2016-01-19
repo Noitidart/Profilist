@@ -447,7 +447,7 @@ function shutdown(aData, aReason) {
 			function(aVal) {
 				console.log('Fullfilled - promise_prepForTerm - ', aVal);
 				MainWorker._worker.terminate();
-				console.warn('mainworker terminated');
+				console.log('mainworker terminated');
 			},
 			genericReject.bind(null, 'promise_prepForTerm', 0)
 		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));

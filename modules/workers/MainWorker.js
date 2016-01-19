@@ -2092,9 +2092,10 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	if (!cFailedReason) {
 		
 		// write time.json
-		var rez_writeTimesJson = OS.File.writeAtomic(OS.Path.join(cProfPlatPathToRootDir, 'times.json'), '{\n"created": ' + new Date().getTime() + '}\n', {encoding:'utf-8'});
+		var rez_writeTimesJson = OS.File.writeAtomic(OS.Path.join(cProfPlatPathToRootDir, 'times.json'), '{\n"created": ' + new Date().getTime() + '\n}\n', {encoding:'utf-8'});
 		
-		//  if it is clone, then copy into root dir, DO NOT COPY times.json
+		//  if it is clone, then copy into root dir
+			// DO NOT COPY: times.json, parent.lock/.parentlock
 		if (aCloneProfPath) {
 			// :todo:
 		}
@@ -3436,19 +3437,171 @@ function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
 	
 	return cLocalizedStr;
 }
-/*start - salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
-var mozKSaltTable = [
-	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-	'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'
-];
 
 function mozSaltName(aName) {
+	// salt generator from http://mxr.mozilla.org/mozilla-aurora/source/toolkit/profile/content/createProfileWizard.js?raw=1*/
+
+	var mozKSaltTable = [
+		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+		'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+		'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'
+	];
+
 	var kSaltString = '';
 	for (var i = 0; i < 8; ++i) {
 		kSaltString += mozKSaltTable[Math.floor(Math.random() * mozKSaltTable.length)];
 	}
 	return kSaltString + '.' + aName;
 }
-/*end - salt generator*/
+
+// rev1 - https://gist.github.com/Noitidart/18f314bc508554fe6144
+function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
+	// update 061215 0401p - just comments on throwing link10000002551
+	// if pathToDir does not exist this will throw on link10000002551
+	
+	// sync version of https://gist.github.com/Noitidart/0104294ce25386e4788f
+	// C:\Users\Vayeate\Pictures\enumChildEntries sync version varviewer.png
+	// if delegate returns true, then enumChildEntries returns the entry it ended on
+	/* dig techqniue if max_depth 3:
+	root > SubDir1
+	root > SubDir2
+	root > SubDir1 > SubSubDir1
+	root > SubDir1 > SubSubDir2
+	root > SubDir1 > SubSubDir3
+	root > SubDir2 > SubSubDir1
+	root > SubDir2 > SubSubDir1 > SubSubSubDir1
+	// so it digs deepest into all level X then goes X+1 then goes X+2
+		1 "C:\Users\Vayeate\Desktop\p\p in" ProfilistWorker.js:2092:2
+		2 "C:\Users\Vayeate\Desktop\p\p in\a0" ProfilistWorker.js:2092:2
+		2 "C:\Users\Vayeate\Desktop\p\p in\a1" ProfilistWorker.js:2092:2
+		3 "C:\Users\Vayeate\Desktop\p\p in\a0\b" ProfilistWorker.js:2092:2
+		3 "C:\Users\Vayeate\Desktop\p\p in\a1\b1" ProfilistWorker.js:2092:2
+		4 "C:\Users\Vayeate\Desktop\p\p in\a1\b1\o"
+	*/
+	var depth = 0;
+	// at root pathDir
+	if (runDelegateOnRoot) {
+		var entry = {
+			isDir: true,
+			name: OS.Path.basename(pathToDir),
+			path: pathToDir
+		};
+		var rez_delegate = delegate(entry, -1);
+		if (rez_delegate) {
+			return entry;
+		}
+	}
+	
+	if (max_depth === 0) {
+		console.log('only wanted to run delegate on root, done');
+		return true; // max_depth reached
+	}
+	
+	var subdirs = {}; // key is level int, and val is arr of all entries within
+	subdirs[0] = [pathToDir];
+	while (true) {
+		depth++;
+		if (max_depth === null || max_depth === undefined) {
+			// go till iterate all
+		} else {
+			if (depth > max_depth) {
+				// finished iterating over all files/dirs at depth of max_depth
+				// depth here will be max_depth + 1
+				console.log('finished running delegate on all files/dirs up to max_depth of', max_depth, 'depth was:', (depth-1));
+				return true;
+			}
+		}
+		subdirs[depth] = []; // holds OSPath's of subdirs
+		var sLen = subdirs[depth-1].length;
+		if (sLen == 0) {
+			return true; // didnt reach max_depth but finished iterating all subdirs
+		}
+		for (var h=0; h<sLen; h++) {
+			try {
+				var iterrator = new OS.File.DirectoryIterator(subdirs[depth-1][h]);
+				var aVal = iterrator.nextBatch();  // this will throw if path at str doesnt exist, this only happens on pathToDir though, as the rest is on stuff thats found link10000002551 i got this: `message:"Error: Win error 2 during operation DirectoryIterator.prototype.next on file C:\Users\Vayeate\AppData\Roaming\Mozilla\Firefox\profilist_data\launcher_exes (The system cannot find the file specified.)`
+			} finally {
+				iterrator.close();
+			}
+			for (var i=0; i<aVal.length; i++) {
+				if (aVal[i].isDir) {
+					subdirs[depth].push(aVal[i].path);
+				}
+				var rez_delegate_on_child = delegate(aVal[i], depth);
+				if (rez_delegate_on_child) {
+					return aVal[i];
+				}
+			}
+		}
+		// finished running delegate on all items at this depth and delegate never returned true
+	}
+}
+
+// rev2 - https://gist.github.com/Noitidart/bf7ebc46f4209468e8c2
+function copyDirRecursive(aDirPlatPath, aNewDirParentPlatPath, aOptions={}) {
+	// aDirPlatPath is a platform path to a directory you want to copy. Such as "C:\\Users\noi\Desktop\mydir"
+	// aNewDirParentPlatPath is the platform path to directory in which aDirPlatPath shold be placed into. IT MUST EXIST. So if you set it to "C:\\Windows". Then the copied dir will be at "C:\\Windows\\mydir"
+	// aOptions - see cOptionsDefaults
+
+	// fails if a directory already exists at the new path - link362548787
+	// on error throws OSFile.Error
+	// if aDirPlatPath does not exist you will get an error like this - Object { operation: "DirectoryIterator.prototype.next", path: "C:\Users\Mercurius\Desktop\rawr\sub", winLastError: 2 }
+	
+	var cOptionsDefaults = {
+		newDirName: null, // a string you want the newly copied dir to be named. default it will use the same name as aDirToCopy
+		excludeFiles: null, // array of strings, of filenames that should be excluded, case-sensitive
+		depth: null // null or undefined, this is based on enumChildEntries definitions. means it will complete directory contents
+	};
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
+	// in aNewDirParentPlatPath, the folder aDirPlatPath will be copied and "pasted" into
+	var dirName = OS.Path.basename(aDirPlatPath);
+	var newDirName = aOptions.newDirName ? aOptions.newDirName : dirName;
+	var newDirPlatPath = OS.Path.join(aNewDirParentPlatPath, newDirName);
+	
+	//var aDirParentPlatPath = OS.Path.dirname(aDirPlatPath);
+	if (newDirPlatPath == aDirPlatPath) {
+		// this tests if devuser did something like this:
+			// copyDirRecursive('C:\\Desktop\\rawr', 'C:\\Desktop')
+			// copyDirRecursive('C:\\Desktop\\rawr', 'C:\\Desktop', {newDirName:'rawr'})
+		throw new OS.File.Error('No operation, but calculated that if it goes forward, the new directory to be made has exact same path as source directory. See `path` key to see the path for the new directory that was to be created.', 0, newDirPlatPath);
+	}
+	
+	try {
+		// var rez_makeNewDir =
+		OS.File.makeDir(newDirPlatPath, {ignoreExisting:false}); // fail if a directory already exists at platform path for new dir to make link362548787
+	} catch (OSFileError) {
+		if (OSFileError.becauseNoSuchFile) {
+			OSFileError.custom_message = 'you specified that the copied dir be placed in a non-existing parent folder, the path at which it was to be created is seen in `path` key of this error object. the parent folder does not exist at "' + aNewDirParentPlatPath + '"';
+			throw OSFileError;
+		} else if (OSFileError.becauseExists) {
+			OSFileError.custom_message = 'a directory already exists at the path the new dir was to be copied to. the path at which it was to be created is seen in `path` key of this error object.';
+			throw OSFileError;
+		} else {
+			throw OSFileError;
+		}
+	}
+
+	var delegateCopy = function(aEntry, aDepth) {
+		if (aOptions.excludeFiles) {
+			if (aOptions.excludeFiles.indexOf(aEntry.name) > -1) {
+				return; // skip copying this file as it is in excludeFiles list // return false/undefined to continue recursion
+			}
+		}
+		var entryPlatPath_relativeTo_aDirPlatPath = aEntry.path.substr(aDirPlatPath.length);
+		var newEntryPlatPath = newDirPlatPath + entryPlatPath_relativeTo_aDirPlatPath;
+		
+		if (aEntry.isDir) {
+			OS.File.makeDir(newEntryPlatPath);
+		} else {
+			OS.File.copy(aEntry.path, newEntryPlatPath);
+		}
+		
+		// return false/undefined to continue recursion
+	};
+	
+	enumChildEntries(aDirPlatPath, delegateCopy, aOptions.depth, false); // 4th arg is false, meaning dont run on root
+	
+	return true;
+}
 // end - common helper functions
