@@ -1505,7 +1505,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var shellLink;
 						var persistFile;
 						var persistFilePtr;
-						// no need for propertyStore because you cant edit the AppUserModelId once it has already been set, so I only do this on creation
+						// no need for propertyStore because you cant edit the AppUserModelId once it has already been set, so I only do this on creation - http://stackoverflow.com/questions/28246057/ipropertystore-change-system-appusermodel-id-of-existing-shortcut
 						// var propertyStore;
 						// var propertyStorePtr;
 						try {
@@ -1607,7 +1607,56 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step5 - verify/update exePath (the build it launches into)
 						// step6 - return full path (with extension)
 						
-						cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
+						
+						var eLauncherContents = OS.File.read(eLauncherPath, {encoding:'utf-8'});
+						var cLauncherContents = eLauncherContents;
+						console.log('eLauncherContents:', eLauncherContents);
+						
+						// step1 - get eLauncherIconPath (for gtk only the icon slug is stored as path with .profilist appended) (meaning aLauncherIconPath is also just iconSlug) // link787575758
+						var eLauncherIconPath_patt = /Icon=(.+)/;
+						var eLauncherIconPath_match = eLauncherIconPath_patt.exec(eLauncherContents);
+						
+						var eLauncherIconPath = eLauncherIconPath_match[1];
+						
+						// step2 - get eLauncherExePath
+						var eLauncherExePath_patt = /Exec=(.+) -profile "/;
+						var eLauncherExePath_match = eLauncherExePath_patt.exec(eLauncherContents);
+						
+						var eLauncherExePath = eLauncherExePath_match[1];
+						
+						// step3 - verify/update name
+						if (eLauncherName != aLauncherName) {
+							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+							var eLauncherName_patt = /Name=(.+)/; // :note: I make the Name match the filenme wthout .desktop //link3771919171700
+							cLauncherContents = cLauncherContents.replace(eLauncherName_patt, 'Name=' + aLauncherName);
+						}
+						
+						// step4 - verify/update icon
+						if (eLauncherIconPath != aLauncherIconPath + '.profilist') { // link787575758
+							console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+							cLauncherContents = cLauncherContents.replace(eLauncherIconPath_patt, 'Icon=' + aLauncherIconPath + '.profilist'); // link787575758
+						}
+						
+						// step5 - verify/update exePath (the build it launches into)
+						if (eLauncherExePath != aLauncherExePath) {
+							console.log('have to update exePath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+							cLauncherContents = cLauncherContents.replace(eLauncherExePath_patt, 'Exec=' + aLauncherExePath + ' -profile "');
+						}
+						
+						// final step
+						if (eLauncherContents != cLauncherContents) {
+							console.log('cLauncherContents is modded:', cLauncherContents);
+							// means i updated it, so lets write it to file now
+							var eLauncherFD = OS.File.open(eLauncherPath, {truncate:true}); // FD stands for file descriptor
+							eLauncherFD.write(getTxtEncodr().encode(cLauncherContents));
+							eLauncherFD.close();
+						}
+						
+						// step3-continued
+						if (eLauncherName != aLauncherName) {
+							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+							OS.File.move(eLauncherPath, cLauncherPath);
+						}
 						
 					break;
 				case 'darwin':
@@ -1730,7 +1779,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					
 					var cmdArr = [
 						'[Desktop Entry]',
-						'Name=' + aLauncherName,
+						'Name=' + aLauncherName, //link3771919171700
 						'Type=Application',
 						'Icon=' + aLauncherIconPath + '.profilist', // link787575758
 						'Exec=' + aLauncherExePath + ' -profile "' + aFullPathToProfileDir + '" -no-remote'
