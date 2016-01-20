@@ -835,7 +835,9 @@ var winInit = function() {
 		
 		SYSTEMPROCESSINFORMATION: 5,
 		
-		SW_RESTORE: 9
+		SW_RESTORE: 9,
+		
+		SLGP_RAWPATH: 0x4
 	};
 	
 	var _lib = {}; // cache for lib

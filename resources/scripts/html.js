@@ -24,11 +24,16 @@ var gCFMM; // needed for contentMMFromContentWindow_Method2
 var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'html.properties?' + core.addon.cache_key); });
 
-
+/*
+:TODO:
+1. When rename profile, consider updating launcher right away
+2. When createLauncher figures out it needs to rename, consider also testing if desktop has a link to it, and if it does, then rename that as well
+*/
 /*
 GEN_RULEs - stands for GENERAL_RULES
 1. Icon Slug
 	* platform safed phrase. this phrase is found at ```OS.Path.join(core.profilist.path.icons, PHRASE, PHRASE + '_##.png')``` OR ```core.addon.path.images + 'channel-iconsets/' + PHRASE + '_##.png'```
+	* IMPORTANT - iconSlug is different from imgSlug, as for imgSlug I have to append _##.png to it where the ## is variable. while with iconSlug it is just append .ico or .icns or no extension for linux style
 2. Reason for using [TempProfile##] is so that regular Firefox profile manager doesn't pick these up and show them
 3. The ## in [Profile##] or [TempProfile##] is not guranteed in properly numbered. It is only gurnateed on initial read. If do delete or create profile, it doesnt properly number it. It is properly numbered on write though. However it is guranteed that they are in chronological order. So on create it will take and use the max number + 1 that was found.
 4. To create a profile with a non-relative path. Only way is to set "Launch on Create" option to disabled.

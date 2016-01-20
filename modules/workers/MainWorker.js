@@ -1442,6 +1442,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			});
 	}
 	
+	var cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.' + cLauncherExtension);
+	
 	// get EXISTING launcher entry - so this is different from getLauncherDirPathFromParams - the dir will be the same, but the existing name may be different
 	var eLauncherEntry;
 	var eLauncherDirIterator = new OS.File.DirectoryIterator(aLauncherDirPath);
@@ -1466,13 +1468,12 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 		} // else, if it was found i already closed it link3742848743
 	}
 
-	var cLauncherPath;
 	// assume if eLauncherEntry is undefined then assume eLauncher does not exist, so need to make it
 	if (eLauncherEntry) {
 		// assume eLauncher exists, as the dir exists :assumption: :todo: maybe i should not assume this, we'll see as i use it
 		// get EXISTING eLauncherPath
 			var eLauncherPath = eLauncherEntry.path; // this does not need test/verification, but it is used for the rename process if needed
-			var eLauncherName = eLauncherEntry.name;
+			var eLauncherName = eLauncherEntry.name.substr(0, eLauncherEntry.name.lastIndexOf('.'));
 			
 			console.info('eLauncherPath:', eLauncherPath);
 			console.info('eLauncherName:', eLauncherName);
@@ -1500,6 +1501,101 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step4 - verify/update icon
 						// step5 - verify/update exePath (the build it launches into)
 						// step6 - return full path (with extension)
+						var shellLinkPtr;
+						var shellLink;
+						var persistFile;
+						var persistFilePtr;
+						// no need for propertyStore because you cant edit the AppUserModelId once it has already been set, so I only do this on creation
+						// var propertyStore;
+						// var propertyStorePtr;
+						try {
+							var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
+							console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+							if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx)) {
+								console.log('CoInitializeEx says successfully initialized');
+								//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
+							} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
+								console.error('CoInitializeEx says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
+							} else {
+								console.error('Unexpected return value from CoInitializeEx: ' + hr);
+								throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
+							}
+							
+							shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
+							var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_SHELLLINK.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_ISHELLLINK.address(), shellLinkPtr.address());
+							ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'createLauncher -> CoCreateInstance');
+							shellLink = shellLinkPtr.contents.lpVtbl.contents;
+
+							persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
+							var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPERSISTFILE.address(), persistFilePtr.address());
+							ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'createLauncher -> QueryInterface (IShellLink->IPersistFile)');
+							persistFile = persistFilePtr.contents.lpVtbl.contents;
+							
+							var hr_Load = persistFile.Load(persistFilePtr, eLauncherPath, 0);
+							ostypes.HELPER.checkHRESULT(hr_Load, 'createLauncher -> Load');
+
+							// step1 - get eLauncherIconSlug
+							// :note: iconSlug is different from imgSlug, as for imgSlug I have to append _##.png to it where the ## is variable. while with iconSlug it is just append .ico or .icns or no extension for linux style
+							
+							var buffer_eLauncherIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+							var c_eIconIndex = ostypes.TYPE.INT();
+							var hr_GetIconLocation = shellLink.GetIconLocation(shellLinkPtr, buffer_eLauncherIconPath/*.address()*/, buffer_eLauncherIconPath.length, c_eIconIndex.address());
+							ostypes.HELPER.checkHRESULT(hr_GetIconLocation, 'createLauncher -> GetIconLocation');
+							
+							var eLauncherIconPath = buffer_eLauncherIconPath.readString();
+							var eIconIndex = c_eIconIndex.value;
+							// var eLauncherIconSlug = OS.Path.basename(eLauncherIconPath).replace('.ico', '');
+							console.log('eLauncherIconPath:', eLauncherIconPath, 'eIconIndex:', eIconIndex);
+							
+							// step2 - get eLauncherExePath
+							var buffer_eLauncherExePath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+							var hr_GetPath = shellLink.GetPath(shellLinkPtr, buffer_eLauncherExePath/*.address()*/, buffer_eLauncherExePath.length, null, ostypes.CONST.SLGP_RAWPATH);
+							ostypes.HELPER.checkHRESULT(hr_Load, 'createLauncher -> GetPath');
+							
+							var eLauncherExePath = buffer_eLauncherExePath.readString();
+							console.log('eLauncherExePath:', '"' + eLauncherExePath + '"');
+							
+							// step3 - verify/update name
+							// moved to step3-continued because have to do the rename after the persistFile.Save
+							
+							// step4 - verify/update icon
+							if (eLauncherIconPath != aLauncherIconPath) {
+								console.log('have to SetIconLocation because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+								var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, core.os.version > 5.2 ? 1 : 2); // 'iconIndex' in cObj ? cObj.iconIndex : 0
+								ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
+							}
+							
+							// step5 - verify/update exePath (the build it launches into)
+							if (eLauncherExePath != aLauncherExePath) {
+								console.log('have to SetPath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+								var hr_SetPath = shellLink.SetPath(shellLinkPtr, aLauncherExePath);
+								ostypes.HELPER.checkHRESULT(hr_SetPath, 'createLauncher -> SetPath');
+							}
+							
+							var hr_Save = persistFile.Save(persistFilePtr, cLauncherPath, false);
+							ostypes.HELPER.checkHRESULT(hr_Save, 'createLauncher -> Save');
+							
+							// step3-continued - becase have to do the rename after the persistFile.Save
+							if (eLauncherName != aLauncherName) {
+								console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+								OS.File.move(eLauncherPath, cLauncherPath);
+							}
+							
+						} finally {
+							if (persistFile) {
+								var rez_refCntPFile = persistFile.Release(persistFilePtr);
+								console.log('rez_refCntPFile:', rez_refCntPFile);
+							}
+
+							if (shellLink) {
+								var rez_refCntShelLink = shellLink.Release(shellLinkPtr);
+								console.log('rez_refCntShelLink:', rez_refCntShelLink);
+							}
+							
+							//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
+								ostypes.API('CoUninitialize')(); // return void
+							//}
+						}
 						
 					break;
 				case 'gtk':
@@ -1511,6 +1607,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step5 - verify/update exePath (the build it launches into)
 						// step6 - return full path (with extension)
 						
+						cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
+						
 					break;
 				case 'darwin':
 				
@@ -1520,7 +1618,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step4 - verify/update icon
 						// step5 - verify/update exePath (the build it launches into)
 						// step6 - return full path (with extension)
-						
+						cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
+
 					break;
 				default:
 					throw new MainWorkerError({
@@ -1528,9 +1627,6 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 					});
 			}
-
-			cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
-			console.error('ok found lancher path is:', eLauncherPath);
 
 	} else {
 		// assume eLauncher does not exist - so need to make it
@@ -1549,8 +1645,6 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					// create .lnk
 					console.info('aLauncherDirPath:', aLauncherDirPath);
 					console.info('aLauncherName:', aLauncherName);
-					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.lnk');
-					console.info('cLauncherPath:', cLauncherPath);
 					
 					var shellLinkPtr;
 					var shellLink;
@@ -1633,7 +1727,6 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			case 'gtk':
 
 					// create .desktop
-					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.desktop');
 					
 					var cmdArr = [
 						'[Desktop Entry]',
@@ -1656,7 +1749,6 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			case 'darwin':
 
 					// create .app
-					cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.app');
 					
 					var cLauncherAppPath = cLauncherPath;
 					console.info('cLauncherAppPath:', cLauncherAppPath);
