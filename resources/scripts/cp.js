@@ -433,6 +433,7 @@ var Row = React.createClass({
 			case 'select':
 				
 					var options = [];
+					var aSelectProps;
 					if (this.props.gRowInfo.id == 'desktop-shortcut') {
 						// :todo: clean this up, im using globals and recalculating stuff here, not good
 						options.push(React.createElement('option', {value:'', selected:''},
@@ -470,6 +471,28 @@ var Row = React.createClass({
 								}
 							// }
 						}
+						
+						// attach on change listener
+						aSelectProps = {};
+						aSelectProps.onChange = function(e) {
+							var refsSelect = e.target;
+							var refsLoader = this.refs.loader;
+							refsLoader.setAttribute('src', core.addon.path.images + 'cp/loading.gif');
+							refsLoader.style.opacity = 1;
+							refsSelect.setAttribute('disabled', 'disabled');
+							// alert(refsSelect.value);
+							
+							sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['createDesktopShortcut', refsSelect.value], bootstrapMsgListener.funcScope, function() {
+								// this callback doesnt handle errors, errors notification comes from mainworker doing showNotification
+								refsLoader.setAttribute('src', core.addon.path.images + 'cp/loading-done.gif');
+								
+								setTimeout(function() {
+									refsLoader.style.opacity = 0;
+									refsSelect.removeAttribute('disabled');
+									refsSelect.selectedIndex = '0'; // this does not trigger the aSelectProps.onChange event
+								}, 500);
+							});
+						}.bind(this);
 					} else {
 						for (var o in this.props.gRowInfo.values) {
 							options.push(
@@ -479,11 +502,11 @@ var Row = React.createClass({
 							);
 						}
 					}
-					var aSelectProps = {};
 					if (this.props.gRowInfo.key) {
+						aSelectProps = {};
 						// console.log('fetching pref val for key:', this.props.gRowInfo.key);
 						aSelectProps.value = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
-					
+						
 						aSelectProps.onChange = this.onChange;
 					}
 					children.push(React.createElement('div', {},
@@ -511,6 +534,12 @@ var Row = React.createClass({
 			default:
 			
 					////
+		}
+		
+		if (this.props.gRowInfo.id == 'desktop-shortcut') {
+			// add in the loader image
+			aProps.style = {position:'relative'};
+			children.push(React.createElement('img', {ref:'loader', src:core.addon.path.images + 'cp/loading.gif', style:{position:'absolute',top:'50%',height:'7px',marginTop:'-3px', right:'-34px', opacity:0, transition:'opacity 500ms'}}));
 		}
 		
 		return React.createElement('div', aProps,

@@ -294,6 +294,7 @@ var winTypes = function() {
 		{ 'dmPanningHeight': this.DWORD }
 	]);
 	this.IID = this.GUID;
+	this.LPSECURITY_ATTRIBUTES = this.SECURITY_ATTRIBUTES.ptr;
 	this.MONITORINFOEX = ctypes.StructType('tagMONITORINFOEX', [
 		{ cbSize:		this.DWORD },
 		{ rcMonitor:	this.RECT },
@@ -969,6 +970,21 @@ var winInit = function() {
 			 */
 			return lib('ole32').declare('CoUninitialize', self.TYPE.ABI,
 				self.TYPE.VOID	// return
+			);
+		},
+		CreateHardLink: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa363860%28v=vs.85%29.aspx
+			 * BOOL WINAPI CreateHardLink(
+			 *   __in_        LPCTSTR lpFileName,
+			 *   __in_        LPCTSTR lpExistingFileName,
+			 *   __reserved_  LPSECURITY_ATTRIBUTES lpSecurityAttributes
+			 * );
+			 */
+			return lib('kernel32').declare('CreateHardLinkW', self.TYPE.ABI,
+				self.TYPE.BOOL,					// return
+				self.TYPE.LPCTSTR,				// lpFileName
+				self.TYPE.LPCTSTR,				// lpExistingFileName
+				self.TYPE.LPSECURITY_ATTRIBUTES	// lpSecurityAttributes
 			);
 		},
 		CreateCompatibleBitmap: function() {

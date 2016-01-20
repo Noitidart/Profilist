@@ -1730,8 +1730,9 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 }
 
 var debugVar = false;
-function launchOrFocusProfile(aProfPath, aOptions={}) {
+function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopShortcutToResolve) {
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
+	// aDeferredForCreateDesktopShortcutToResolve is a deferred that is resolved after all things are done. setting this, will not focus or launch, it will just create the launcher as if it were launching. resolves with path to the launcher.
 	
 	// aOptions
 	var cOptionsDefaults = {
@@ -1750,141 +1751,143 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	}
 	*/
 	
-	if (cIniEntry.noWriteObj.status) { // link6847494493
-		// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams - it will not launch as .status is existing
-		// no need to continue to create launcher, just focus it, i changed my desciion to this on 011016, before this i was thinking launch it, and in the bg adjust the launcher to match, maybe should do this not sure, :todo: consider
-		
-		// focus all windows of that pid
-		switch (core.os.mname) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
+	if (!aDeferredForCreateDesktopShortcutToResolve) {
+		if (cIniEntry.noWriteObj.status) { // link6847494493
+			// :todo: if its running, then run code to focus, then carry on to the createIconForParamsFromFS and createLauncherForParams - it will not launch as .status is existing
+			// no need to continue to create launcher, just focus it, i changed my desciion to this on 011016, before this i was thinking launch it, and in the bg adjust the launcher to match, maybe should do this not sure, :todo: consider
 			
-					var allWinInfos = getAllWin({
-						filterVisible: true,
-						getPid: true
-					});
-					console.log('allWinInfos:', allWinInfos);
-					
-					var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
-						if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
-							aWinInfo.hwndPtr = ctypes.voidptr_t(ctypes.UInt64(aWinInfo.hwnd));
-							aWinInfo.isMinimized = ostypes.API('IsIconic')(aWinInfo.hwndPtr);
-							return true;
+			// focus all windows of that pid
+			switch (core.os.mname) {
+				case 'winnt':
+				case 'winmo':
+				case 'wince':
+				
+						var allWinInfos = getAllWin({
+							filterVisible: true,
+							getPid: true
+						});
+						console.log('allWinInfos:', allWinInfos);
+						
+						var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
+							if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
+								aWinInfo.hwndPtr = ctypes.voidptr_t(ctypes.UInt64(aWinInfo.hwnd));
+								aWinInfo.isMinimized = ostypes.API('IsIconic')(aWinInfo.hwndPtr);
+								return true;
+							}
+						});
+						
+						// :todo: maybe consider, instead of focusing all in order - find all minimized. if all minimized, then focus in order such that last one is top most. if all non-minimized then focus such that first one is top most focus. if mixed, then focus all windows but make the second to top be the last most minimized, and then the top most is the one that was first non-minimized
+						// :todo: test and figure out how to get the right order such that it is "last used" order
+						// for now just focusing them in the order that they come up
+
+						for (var i=matchingWinInfos.length-1; i>=0; i--) {
+							if (matchingWinInfos[i].isMinimized) {
+								var rez_unMinimize = ostypes.API('ShowWindow')(matchingWinInfos[i].hwndPtr, ostypes.CONST.SW_RESTORE);
+								console.log('rez_unMinimize:', rez_unMinimize);
+							}
+							var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
+							console.log('rez_focus:', rez_focus);
 						}
-					});
-					
-					// :todo: maybe consider, instead of focusing all in order - find all minimized. if all minimized, then focus in order such that last one is top most. if all non-minimized then focus such that first one is top most focus. if mixed, then focus all windows but make the second to top be the last most minimized, and then the top most is the one that was first non-minimized
-					// :todo: test and figure out how to get the right order such that it is "last used" order
-					// for now just focusing them in the order that they come up
+						
+					break;
+				case 'gtk':
 
-					for (var i=matchingWinInfos.length-1; i>=0; i--) {
-						if (matchingWinInfos[i].isMinimized) {
-							var rez_unMinimize = ostypes.API('ShowWindow')(matchingWinInfos[i].hwndPtr, ostypes.CONST.SW_RESTORE);
-							console.log('rez_unMinimize:', rez_unMinimize);
+						var allWinInfos = getAllWin({
+							filterVisible: true,
+							getPid: true,
+							getTitle: true,
+							getBounds: true // this is force set to true if i dont specify this or set it to false for gtk
+						});
+						
+						console.log('allWinInfos:', allWinInfos);
+						
+						var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
+							if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
+								return true;
+							}
+						});
+						
+						console.log('matchingWinInfos:', matchingWinInfos);
+						
+						// focus the matching windows
+						var xevent = ostypes.TYPE.XEvent();
+
+						xevent.xclient.type = ostypes.CONST.ClientMessage;
+						xevent.xclient.serial = 0;
+						xevent.xclient.send_event = ostypes.CONST.True;
+						xevent.xclient.display = ostypes.HELPER.cachedXOpenDisplay();
+						// xevent.xclient.window = ostypes.HELPER.gdkWinPtrToXID(hwndPtr); // gdkWinPtrToXID returns ostypes.TYPE.XID, but XClientMessageEvent.window field wants ostypes.TYPE.Window..... but XID and Window are same type so its ok no need to cast
+						xevent.xclient.message_type = ostypes.HELPER.cachedAtom('_NET_ACTIVE_WINDOW');
+						xevent.xclient.format = 32; // because xclient.data is long, i defined that in the struct union
+						xevent.xclient.data = ostypes.TYPE.long.array(5)([ostypes.CONST._NET_WM_STATE_TOGGLE /* requestor type; we're a tool */, ostypes.CONST.CurrentTime /* timestamp, the tv_sec of timeval struct */, ostypes.CONST.None /* currently active window */, 0, 0]); // im not sure if i set this right // i got this idea because this is how this guy did it - https://github.com/vovochka404/deadbeef-statusnotifier-plugin/blob/8d72fffc0fb98ed0efb3ca86e4abf6e8b5c749ba/src/x11-force-focus.c#L67-L69
+						
+						// ubuntu is cool in that even if minimized, the order is proper z order, unlike windows
+						
+						for (var i=matchingWinInfos.length-1; i>=0; i--) {
+							console.log('setting xclient.window to:', matchingWinInfos[i].hwndXid);
+							xevent.xclient.window = matchingWinInfos[i].hwndXid;
+							var rez_focus = ostypes.API('XSendEvent')(ostypes.HELPER.cachedXOpenDisplay(), ostypes.HELPER.cachedDefaultRootWindow(), ostypes.CONST.False, ostypes.CONST.SubstructureRedirectMask | ostypes.CONST.SubstructureNotifyMask, xevent.address()); // need for SubstructureRedirectMask is because i think this topic - http://stackoverflow.com/q/650223/1828637 - he says "I've read that Window Managers try to stop this behaviour, so tried to disable configure redirection"
+							console.log('rez_focus:', rez_focus);
+							// the zotero guy tests if rez_focus is 1, and if so then he does XMapRaised, i dont know why, as simply doing a flush after this focuses. this is zotero - https://github.com/zotero/zotero/blob/7d404e8d4ad636987acfe33d0b8620263004d6d0/chrome/content/zotero/xpcom/integration.js#L619
+							// i suspect zotero does that for cross window manager abilty, as just simply flushing worked for me on ubuntu
+							ostypes.API('XFlush')(ostypes.HELPER.cachedXOpenDisplay()); // will not set on top if you dont do this, wont even change window title name which was done via XChangeProperty, MUST FLUSH
 						}
-						var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
-						console.log('rez_focus:', rez_focus);
-					}
-					
-				break;
-			case 'gtk':
 
-					var allWinInfos = getAllWin({
-						filterVisible: true,
-						getPid: true,
-						getTitle: true,
-						getBounds: true // this is force set to true if i dont specify this or set it to false for gtk
-					});
-					
-					console.log('allWinInfos:', allWinInfos);
-					
-					var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
-						if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
-							return true;
+					break;
+				case 'darwin':
+
+						// app = [NSRuningApplication runningApplicationWithProcessIdentifier: pid];
+						var NSRunningApplication = ostypes.API('objc_getClass')('NSRunningApplication');
+						var runningApplicationWithProcessIdentifier = ostypes.API('sel_registerName')('runningApplicationWithProcessIdentifier:');
+						var app = ostypes.API('objc_msgSend')(NSRunningApplication, runningApplicationWithProcessIdentifier, ostypes.TYPE.pid_t(cIniEntry.noWriteObj.status));
+						console.info('app:', app, app.toString(), uneval(app));
+						
+						// [app activateWithOptions: NSApplicationActivateAllWindows]
+						var activateWithOptions = ostypes.API('sel_registerName')('activateWithOptions:');
+						var rez_focus = ostypes.API('objc_msgSend')(app, activateWithOptions, ostypes.TYPE.NSUInteger(3));
+						
+						// C:\Users\Mercurius\OneDrive\Documents\jscGetDepeest with args.png
+						//// console.info('rez_focus:', rez_focus, rez_focus.toString(), uneval(rez_focus));
+						//// 
+						//// console.info('rez_focus jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
+						//// console.info('rez_focus jscGetDeepest 16:', cutils.jscGetDeepest(rez_focus, 16));
+						//// console.info('rez_focus jscGetDeepest 10:', cutils.jscGetDeepest(rez_focus, 10));
+						//// 
+						//// rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
+						//// console.info('rez_focus casted:', rez_focus);
+						//// console.info('rez_focus casted jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
+						//// 
+						//// console.info('YES jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.YES));
+						
+						rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
+						
+						if (cutils.jscEqual(rez_focus, ostypes.CONST.YES)) {
+							console.log('App was focused!');
+						} else {
+							console.log('Failed to focus app :(');
 						}
+						
+						debugVar = !debugVar;
+						// if (!debugVar) {
+						// 	var unhide = ostypes.API('sel_registerName')('unhide');
+						// 	var rez_unhide = ostypes.API('objc_msgSend')(app, unhide);
+						// 	console.log('rez_unhide:', rez_unhide);
+						// } else {
+						// 	var hide = ostypes.API('sel_registerName')('hide');
+						// 	var rez_hide = ostypes.API('objc_msgSend')(app, hide);
+						// 	console.log('rez_hide:', rez_hide);
+						// }
+						
+					break;
+				default:
+					throw new MainWorkerError({
+						name: 'addon-error',
+						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 					});
-					
-					console.log('matchingWinInfos:', matchingWinInfos);
-					
-					// focus the matching windows
-					var xevent = ostypes.TYPE.XEvent();
-
-					xevent.xclient.type = ostypes.CONST.ClientMessage;
-					xevent.xclient.serial = 0;
-					xevent.xclient.send_event = ostypes.CONST.True;
-					xevent.xclient.display = ostypes.HELPER.cachedXOpenDisplay();
-					// xevent.xclient.window = ostypes.HELPER.gdkWinPtrToXID(hwndPtr); // gdkWinPtrToXID returns ostypes.TYPE.XID, but XClientMessageEvent.window field wants ostypes.TYPE.Window..... but XID and Window are same type so its ok no need to cast
-					xevent.xclient.message_type = ostypes.HELPER.cachedAtom('_NET_ACTIVE_WINDOW');
-					xevent.xclient.format = 32; // because xclient.data is long, i defined that in the struct union
-					xevent.xclient.data = ostypes.TYPE.long.array(5)([ostypes.CONST._NET_WM_STATE_TOGGLE /* requestor type; we're a tool */, ostypes.CONST.CurrentTime /* timestamp, the tv_sec of timeval struct */, ostypes.CONST.None /* currently active window */, 0, 0]); // im not sure if i set this right // i got this idea because this is how this guy did it - https://github.com/vovochka404/deadbeef-statusnotifier-plugin/blob/8d72fffc0fb98ed0efb3ca86e4abf6e8b5c749ba/src/x11-force-focus.c#L67-L69
-					
-					// ubuntu is cool in that even if minimized, the order is proper z order, unlike windows
-					
-					for (var i=matchingWinInfos.length-1; i>=0; i--) {
-						console.log('setting xclient.window to:', matchingWinInfos[i].hwndXid);
-						xevent.xclient.window = matchingWinInfos[i].hwndXid;
-						var rez_focus = ostypes.API('XSendEvent')(ostypes.HELPER.cachedXOpenDisplay(), ostypes.HELPER.cachedDefaultRootWindow(), ostypes.CONST.False, ostypes.CONST.SubstructureRedirectMask | ostypes.CONST.SubstructureNotifyMask, xevent.address()); // need for SubstructureRedirectMask is because i think this topic - http://stackoverflow.com/q/650223/1828637 - he says "I've read that Window Managers try to stop this behaviour, so tried to disable configure redirection"
-						console.log('rez_focus:', rez_focus);
-						// the zotero guy tests if rez_focus is 1, and if so then he does XMapRaised, i dont know why, as simply doing a flush after this focuses. this is zotero - https://github.com/zotero/zotero/blob/7d404e8d4ad636987acfe33d0b8620263004d6d0/chrome/content/zotero/xpcom/integration.js#L619
-						// i suspect zotero does that for cross window manager abilty, as just simply flushing worked for me on ubuntu
-						ostypes.API('XFlush')(ostypes.HELPER.cachedXOpenDisplay()); // will not set on top if you dont do this, wont even change window title name which was done via XChangeProperty, MUST FLUSH
-					}
-
-				break;
-			case 'darwin':
-
-					// app = [NSRuningApplication runningApplicationWithProcessIdentifier: pid];
-					var NSRunningApplication = ostypes.API('objc_getClass')('NSRunningApplication');
-					var runningApplicationWithProcessIdentifier = ostypes.API('sel_registerName')('runningApplicationWithProcessIdentifier:');
-					var app = ostypes.API('objc_msgSend')(NSRunningApplication, runningApplicationWithProcessIdentifier, ostypes.TYPE.pid_t(cIniEntry.noWriteObj.status));
-					console.info('app:', app, app.toString(), uneval(app));
-                    
-					// [app activateWithOptions: NSApplicationActivateAllWindows]
-					var activateWithOptions = ostypes.API('sel_registerName')('activateWithOptions:');
-					var rez_focus = ostypes.API('objc_msgSend')(app, activateWithOptions, ostypes.TYPE.NSUInteger(3));
-					
-					// C:\Users\Mercurius\OneDrive\Documents\jscGetDepeest with args.png
-					//// console.info('rez_focus:', rez_focus, rez_focus.toString(), uneval(rez_focus));
-					//// 
-					//// console.info('rez_focus jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
-					//// console.info('rez_focus jscGetDeepest 16:', cutils.jscGetDeepest(rez_focus, 16));
-					//// console.info('rez_focus jscGetDeepest 10:', cutils.jscGetDeepest(rez_focus, 10));
-                    //// 
-					//// rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
-					//// console.info('rez_focus casted:', rez_focus);
-					//// console.info('rez_focus casted jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
-					//// 
-					//// console.info('YES jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.YES));
-					
-					rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
-					
-					if (cutils.jscEqual(rez_focus, ostypes.CONST.YES)) {
-						console.log('App was focused!');
-					} else {
-						console.log('Failed to focus app :(');
-					}
-					
-					debugVar = !debugVar;
-					// if (!debugVar) {
-					// 	var unhide = ostypes.API('sel_registerName')('unhide');
-					// 	var rez_unhide = ostypes.API('objc_msgSend')(app, unhide);
-					// 	console.log('rez_unhide:', rez_unhide);
-					// } else {
-					// 	var hide = ostypes.API('sel_registerName')('hide');
-					// 	var rez_hide = ostypes.API('objc_msgSend')(app, hide);
-					// 	console.log('rez_hide:', rez_hide);
-					// }
-					
-				break;
-			default:
-				throw new MainWorkerError({
-					name: 'addon-error',
-					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-				});
+			}
+			
+			return;
 		}
-		
-		return;
 	}
 	
 	// these vars, are all the things it should SET-TO/NOW be - on launching
@@ -1910,12 +1913,22 @@ function launchOrFocusProfile(aProfPath, aOptions={}) {
 	var postCreateIcon = function() {
 		var didCreateLauncher = createLauncherForParams(cLauncherDirPath, cLauncherName, cIconInfosObj.path, cExePath, cFullPathToProfileDir); // on success it is the launcher full path
 		
-		if (!cIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
-			// i do this test, because even if just have to focus, i should create launcher in background
+		if (aDeferredForCreateDesktopShortcutToResolve) {
 			if (didCreateLauncher) {
-				launchFile(didCreateLauncher);
+				aDeferredForCreateDesktopShortcutToResolve.resolve(didCreateLauncher);
 			} else {
-				throw new Error('launcher did not create so cannot launch');
+				aDeferredForCreateDesktopShortcutToResolve.reject();
+			}
+		}
+		
+		if (!aDeferredForCreateDesktopShortcutToResolve) {
+			if (!cIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
+				// i do this test, because even if just have to focus, i should create launcher in background
+				if (didCreateLauncher) {
+					launchFile(didCreateLauncher);
+				} else {
+					throw new Error('launcher did not create so cannot launch');
+				}
 			}
 		}
 	};
@@ -2331,6 +2344,55 @@ function toggleDefaultProfile(aProfPath) {
 		});
 	}
 }
+
+function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
+	
+	var deferred_ensureLauncher = new Deferred();
+	
+	self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'creating deskcut', 'for aProfPath of ' + aProfPath]);
+	
+	deferred_ensureLauncher.promise.then(
+		function(aPathToLauncher) {
+			console.log('ok launcher ensured, now make desktop shortcut, then call. aPathToLauncher:', aPathToLauncher);
+			
+			var cPathToDeskcut = OS.Path.join(OS.Constants.Path.desktopDir, OS.Path.basename(aPathToLauncher));
+			
+			switch (core.os.mname) {
+				case 'winnt':
+				case 'wince':
+				case 'winmo':
+				case 'darwin':
+					
+						// create hard link
+						createHardLink(cPathToDeskcut, aPathToLauncher);
+					
+					break;
+				default:
+					// make symlink
+					
+						OS.File.unixSymLink(aPathToLauncher, cPathToDeskcut);
+			}
+			
+			self.postMessage([aCbIdToResolveToFramescript]);
+			
+			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+			var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+			var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
+			if (keyValNotif) {
+				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'created desktop shortcut', 'ok destop shortcut was successfully made']);
+			}
+		},
+		function() {
+			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'creating deskcut failed', 'failed ensuring launcher']);
+			self.postMessage([aCbIdToResolveToFramescript]);
+		}
+	);
+	
+	console.log('calling launchOrFocusProfile with deferred_ensureLauncher');
+	launchOrFocusProfile(aProfPath, {}, deferred_ensureLauncher);
+	
+	// will not return anything here, because this calls launchOrFocusProfile with params to not launch and not focus, just to createLauncher as if it were laucnhing or focusing though and that might call async function of createIcon
+}
 // End - Launching profile and other profile functionality
 
 // platform helpers
@@ -2353,7 +2415,7 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 				
 				// cannot make hard link of a directory, files only
 				
-				var rez_CreateHardLink = ostypes.API('CreateHardLink')(path_create, path_target, null);
+				var rez_CreateHardLink = ostypes.API('CreateHardLink')(aCreatePlatformPath, aTargetPlatformPath, null);
 				console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
 				if (ctypes.winLastError != 0) {
 					if (ctypes.winLastError == OS.Constants.Win.ERROR_ALREADY_EXISTS) {

@@ -607,8 +607,33 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
 			}
 		).catch(genericCatch.bind(null, 'promise_workerTogDefault', 0));
+	},
+	createDesktopShortcut: function(aProfPath) {
+
+		
+		var deferredMain_createDesktopShortcut = new Deferred();
+		
+		gCreateDesktopShortcutId++;
+		var thisCreateDesktopShortcutId = 'createDesktopShortcut_callback_' + gCreateDesktopShortcutId;
+		MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] = function() {
+			console.error('ok in mainthread callback for createDesktopShortcut');
+			delete MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId];
+			deferredMain_createDesktopShortcut.resolve();
+		};
+		
+		var promise_workerCreateDeskCut = MainWorker.post('createDesktopShortcut', [aProfPath, thisCreateDesktopShortcutId]);
+		promise_workerCreateDeskCut.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_workerCreateDeskCut - ', aVal);
+				// dont do anything, as this calls in mainworker launchOrFocusProfile which does async stuff, that will call MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] when it finishes
+			},
+			genericReject.bind(null, 'promise_workerCreateDeskCut', 0)
+		).catch(genericCatch.bind(null, 'promise_workerCreateDeskCut', 0));
+		
+		return deferredMain_createDesktopShortcut.promise;
 	}
 };
+var gCreateDesktopShortcutId = -1;
 var fsMsgListener = {
 	funcScope: fsFuncs,
 	receiveMessage: function(aMsgEvent) {
