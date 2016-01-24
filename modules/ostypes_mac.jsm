@@ -27,6 +27,7 @@ var macTypes = function() {
 	this.long = ctypes.long;
 	this.short = ctypes.short;
 	this.size_t = ctypes.size_t;
+	this.ssize_t = ctypes.ssize_t;
 	this.uint16_t = ctypes.uint16_t;
 	this.uint32_t = ctypes.uint32_t;
 	this.uintptr_t = ctypes.uintptr_t;
@@ -1266,6 +1267,21 @@ var macInit = function() {
 			return lib('libc').declare('pclose', self.TYPE.ABI,
 				self.TYPE.int,			// return
 				self.TYPE.FILE.ptr		// *stream
+			);
+		},
+		readlink: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/readlink.2.html
+			 * ssize_t readlink(
+			 *   const char *restrict path,
+			 *   char *restrict buf,
+			 *   size_t bufsize
+			 * );
+			 */
+			return lib('libc').declare('readlink', self.TYPE.ABI,
+				self.TYPE.ssize_t,		// return
+				self.TYPE.char.ptr,		// *restrict path
+				self.TYPE.char.ptr,		// *restrict buf
+				self.TYPE.size_t		// bufsize
 			);
 		}
 	};

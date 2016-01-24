@@ -149,6 +149,16 @@ function init(objCore) { // function name init required for SIPWorker
 		// 		OSStuff.hiiii = true;
 		// 		
 		// 	break;
+		case 'darwin':
+				
+				if (core.profilist.path.XREExeF.indexOf(core.profilist.path.root) === 0) {
+					console.warn('XREExeF is a symlink path!:', core.profilist.path.XREExeF);
+					var XREExeF_filename = OS.Path.basename(core.profilist.path.XREExeF); // i have never seen it be anything other then "firefox" but just to be safe. i do assume "firefox" in other places in my code, i should make that code be not assumption based
+					core.profilist.path.XREExeF = OS.Path.join(resolveSymlinkPath(OS.Path.dirname(core.profilist.path.XREExeF)), XREExeF_filename); // I do OS.Path.dirname(core.profilist.path.XREExeF) because `/Users/noida/Library/Application Support/Firefox/profilist_data/exes/1756982928/Firefox Developer Edition - Unnamed Profile 1.app/Contents/MacOS/firefox` is NOT a symlink, so it readlink will give rez of -1 and errno of EINVAL which is 22 meaning file is not a symlink or buffer size is negative. MacOS folder is a symlink though so thats why i do it
+					console.log('XREExeF UN-linkd path:', core.profilist.path.XREExeF);
+				}
+				
+			break;
 		default:
 			// do nothing special
 	}
@@ -455,7 +465,10 @@ function formatNoWriteObjs() {
 		for (var i=0; i<gIniObj.length; i++) {
 			if (gIniObj[i].noWriteObj.status) {
 				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
-				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath));// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
+				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
+				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath);
+				console.log('cExePathChan:', cExePathChan);
+				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, cExePathChan);// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
 			}
 		}
 
@@ -982,7 +995,13 @@ function getLastExePathForProfFromFS(aProfPath) {
 
 			break;
 		case 'darwin':
-
+				
+				if (cLastPlatformDir.indexOf(core.profilist.path.root) === 0) {
+					console.warn('cLastPlatformDir is a symlinked path:', cLastPlatformDir);
+					cLastPlatformDir = resolveSymlinkPath(cLastPlatformDir); // works because LastPlatformDir is to the Contents/Resources/ dir, which i do copy as symlink
+					console.log('cLastPlatformDir was resolved from symlink path, it is actually:', cLastPlatformDir);
+					// I do not cache this, as if user changes tie or something of this profile then it will change the exe path it points to
+				}
 				cLastExePath = OS.Path.join(OS.Path.dirname(cLastPlatformDir), 'MacOS', 'firefox');
 
 			break;
@@ -2663,6 +2682,51 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 // End - Launching profile and other profile functionality
 
 // platform helpers
+function resolveSymlinkPath(aSymlinkPlatPath) {
+	// aSymlinkPlatPath is a path that you know for sure is a symlinked path. if a parent dir is symlinked, and not the final child, then it will throw EINVAL
+		// if its not, then the platform functiosn will through, so ill throw a OSFile.Error
+	
+	switch (core.os.name) {
+		case 'darwin':
+		case 'linux':
+		case 'android':
+		case 'sunos':
+		case 'netbsd':
+		case 'dragonfly':
+		case 'openbsd':
+		case 'freebsd':
+		case 'gnu/kfreebsd':
+			
+				// i havent tested this on anything else other then mac yet, but it should be true for all linux
+				var rlBuffer = ostypes.TYPE.char.array(OS.Constants.libc.PATH_MAX)();
+				var rez_rl = ostypes.API('readlink')(aSymlinkPlatPath, rlBuffer, rlBuffer.length); // works because LastPlatformDir is to the Contents/Resources/ dir, which i do copy as symlink
+				// console.log('rez_rl:', rez_rl);
+				
+				if (cutils.jscEqual(rez_rl, -1)) {
+					switch(ctypes.errno) {
+						case OS.Constants.libc.ENOENT:
+								throw new OS.File.Error('Failed to resolve path because no file exists at path', ctypes.errno, aSymlinkPlatPath);
+							break;
+						case OS.Constants.libc.EINVAL:
+								if (buffer.length <= 0) {
+									throw new OS.File.Error('Failed to resolve path because buffer size is not positive. Buffer size was set to OS.Constants.libc.PATH_MAX which is: "' + OS.Constants.libc.PATH_MAX + '"', ctypes.errno, aSymlinkPlatPath);
+								} else {
+									throw new OS.File.Error('Failed to resolve path because no file exists at path because file at path is NOT a symbolic link', ctypes.errno, aSymlinkPlatPath);
+								}
+							break;
+						default:
+							throw new OS.File.Error('Failed to resolve path for some unknown reason, see errno', ctypes.errno, aSymlinkPlatPath);
+					}
+				} else {
+					return rlBuffer.readString();
+				}				
+			
+			break;
+		default:
+			throw new Error('os-unsupported');
+	}
+
+}
 function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 	// returns true/false
 	
