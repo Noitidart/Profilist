@@ -841,6 +841,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 		case 'darwin':
 
 				var cParentLockPath = OS.Path.join(cProfRootDir, '.parentlock');
+				console.log('cParentLockPath:', cParentLockPath);
 				
 				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR | OS.Constants.libc.O_CREAT); //setting this to O_RDWR fixes errno of 9 on fcntl
 				console.log('rez_lockFd:', rez_lockFd);
@@ -1248,7 +1249,7 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 		var cCreateName = aIconInfosObj.name; // plat specific only for linux link787575758
 		var cCreatePathDir = core.profilist.path.icons;
 		var cOptions = {
-			aBadge: aBadgeLoc, // bottom right
+			// aBadge: aBadgeLoc, // set this only if there are badges, as if there are no badges then this must be 0 otherwise the function throws "must provide at least one BADGE image as devuser specified aBadge not to be 0, meaning he wants a badge"
 			aScalingAlgo: 0 // jagged first
 		};
 		var cCreateType;
@@ -1309,6 +1310,8 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 			for (var i=0; i<cOutputSizesArr.length; i++) {
 				cOptions.aBadgeSrcImgPathArr.push(aIconInfosObj.badge.prefix + '_' + cOutputSizesArr[i] + '.png');
 			}
+			
+			cOptions.aBadge = aBadgeLoc;
 		}
 		
 		console.time('promiseWorker-createIcon');
@@ -1667,8 +1670,131 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step4 - verify/update icon
 						// step5 - verify/update exePath (the build it launches into)
 						// step6 - return full path (with extension)
-						cLauncherPath = eLauncherPath; // :debug: by the end of this section, cLauncherPath should be === aLauncherPath, but for now im in debug mode, working on launching it
 
+						// initial step - get current 
+						// step1 - get eLauncherIconPath (for gtk only the icon slug is stored as path with .profilist appended) (meaning aLauncherIconPath is also just iconSlug) // link787575758
+						// step2 - get eLauncherExePath
+						// step3 - verify/update name
+						// step4 - verify/update icon
+						// step5 - verify/update exePath (the build it launches into)
+						// final step - write modified contents
+						// step3-continued - rename file on disk
+
+						// initial step - get current contents
+						var eLauncherExecPath = OS.Path.join(eLauncherPath, 'Contents', 'MacOS', 'profilist-' + cLauncherDirName) // LauncherExePath is different from LauncherExecPath. Exec is that shell script
+						
+						var eLauncherContents = OS.File.read(eLauncherExecPath, {encoding:'utf-8'});
+						console.log('eLauncherContents:', eLauncherContents);
+						
+						// mac only get json line
+						eLauncherJsonLine_patt = /^##(\{.*?\})##$/m;
+						var eLauncherJsonLine_match = eLauncherJsonLine_patt.exec(eLauncherContents);
+						console.log('eLauncherJsonLine_match:', eLauncherJsonLine_match);
+						
+						var eLauncherJsonLine = JSON.parse(eLauncherJsonLine_match[1]);
+						console.log('eLauncherJsonLine:', eLauncherJsonLine, 'stringified:', eLauncherJsonLine_match[1]);
+						var cLauncherJsonLine = JSON.parse(eLauncherJsonLine_match[1]);
+						
+						// mac only defined target app path
+						var cTargetAppPath = aLauncherExePath.substr(0, aLauncherExePath.indexOf('.app') + 4); // link009838393
+						var cTargetContentsPath = OS.Path.join(cTargetAppPath, 'Contents');
+						
+						// step1 - get eLauncherIconPath (for darwin only the icon slug is stored as path) (meaning aLauncherIconPath is also just iconSlug) // link9900001
+						var eLauncherIconPath = OS.Path.join(core.profilist.path.icons, eLauncherJsonLine.LauncherIconPathName + '.icns'); // LauncherIconPathName is really iconSlug
+						
+						// step2 - get eLauncherExePath
+						var eLauncherExePath = OS.Path.join(eLauncherJsonLine.XREExeF_APP, 'Contents', 'MacOS', 'firefox');
+						
+						// step3 - verify/update name
+						// if (eLauncherName != aLauncherName) {
+						// 	console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+						// }
+						
+						// step4 - verify/update icon
+						if (eLauncherIconPath != aLauncherIconPath) {
+							console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+							var rez_copyIcon = OS.File.copy(aLauncherIconPath, OS.Path.join(cTargetContentsPath, 'Resources', 'profilist-' + cLauncherDirName + '.icns'), {noOverwrite:false}); // i copy the icon into the main folder, because i alias the folders
+							cLauncherJsonLine.LauncherIconPathName = aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5);
+						}
+						
+						// step5 - verify/update exePath (the build it launches into)
+						if (eLauncherExePath != aLauncherExePath) {
+							console.log('have to update exePath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+							
+							cLauncherJsonLine.XREExeF_APP = cTargetAppPath;
+							
+							// :todo: redo symlinks - if already exists unixSymLink throws errno 17
+							
+							var eLauncherAppPath = eLauncherPath;
+							var eLauncherContentsPath = OS.Path.join(eLauncherAppPath, 'Contents');
+							
+							// OS.File.remove deletes all unixSymLink, even if it was a folder that was linked
+							var rez_delHardLinkCodeSig = OS.File.remove(OS.Path.join(eLauncherContentsPath, '_CodeSignature'));
+							var rez_delhardLinkMacOs = OS.File.remove(OS.Path.join(eLauncherContentsPath, 'MacOS'));
+							var rez_delhardLinkPkgInfo = OS.File.remove(OS.Path.join(eLauncherContentsPath, 'PkgInfo'));
+							var rez_delhardResources = OS.File.remove(OS.Path.join(eLauncherContentsPath, 'Resources'));
+							
+							// have to delete first, as unixSymLink has no overwrite feature, so if it already exists it throws errno 17
+							var rez_hardLinkCodeSig = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, '_CodeSignature'), OS.Path.join(eLauncherContentsPath, '_CodeSignature'));
+							var rez_hardLinkMacOs = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'MacOS'), OS.Path.join(eLauncherContentsPath, 'MacOS'));
+							var rez_hardLinkPkgInfo = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'PkgInfo'), OS.Path.join(eLauncherContentsPath, 'PkgInfo'));
+							var rez_hardResources = OS.File.unixSymLink(OS.Path.join(cTargetContentsPath, 'Resources'), OS.Path.join(eLauncherContentsPath, 'Resources'));
+							
+							var rez_readPlistInfo = OS.File.read(OS.Path.join(cTargetContentsPath, 'Info.plist'), {encoding:'utf-8'});
+							var launcherPlistInfo = rez_readPlistInfo;
+							launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleExecutable<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b) {
+								// this function gets the original executable name (i cant assume its firefox, it might nightly etc)
+								// it also replaces it with profilist-exec
+								return a.replace(b, 'profilist-' + cLauncherDirName);
+							});
+							launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleIconFile<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
+								// this function replaces icon with profilist-badged.icns, so in future i can easily replace it without having to know name first, like i dont know if its firefox.icns for nightly etc
+								return a.replace(b, 'profilist-' + cLauncherDirName);
+							});
+							launcherPlistInfo = launcherPlistInfo.replace(/<key>CFBundleIdentifier<\/key>[\s\S]*?<string>(.*?)<\/string>/, function(a, b, c) {
+								// this function replaces the bundle identifier
+								// on macs the Profilist.launcher key holds the bundle identifier
+								return a.replace(b, cLauncherDirName/*.replace(/[^a-z\.0-9]/ig, '-')*/); //no need for the replace as its all numbers, but i left it here so i know whats allowed in a bundle-identifier
+								//The bundle identifier string identifies your application to the system. This string must be a uniform type identifier (UTI) that contains only alphanumeric (A-Z,a-z,0-9), hyphen (-), and period (.) characters. The string should also be in reverse-DNS format. For example, if your companyâ€™s domain is Ajax.com and you create an application named Hello, you could assign the string com.Ajax.Hello as your applicationâ€™s bundle identifier. The bundle identifier is used in validating the application signature. source (apple developer: https://developer.apple.com/library/ios/#documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html#//apple_ref/doc/uid/10000123i-CH101-SW1)
+								//An identifier used by iOS and Mac OS X to recognize any future updates to your app. Your Bundle ID must be registered with Apple and unique to your app. Bundle IDs are app-type specific (either iOS or Mac OS X). The same Bundle ID cannot be used for both iOS and Mac OS X apps. source https://itunesconnect.apple.com/docs/iTunesConnect_DeveloperGuide.pdf
+							});
+							var rez_writePlistInfo = OS.File.writeAtomic(OS.Path.join(eLauncherContentsPath, 'Info.plist'), launcherPlistInfo, {encoding:'utf-8', noOverwrite:false});
+							
+							
+						}
+						
+						// final step - write modified contents
+						if (eLauncherName != aLauncherName || eLauncherJsonLine.XREExeF_APP != cLauncherJsonLine.XREExeF_APP || eLauncherJsonLine.LauncherIconPathName != cLauncherJsonLine.LauncherIconPathName) {
+							// eLauncherName != aLauncherName because that changes cLauncherAppPath
+							console.log('cLauncherContents is modded:', cLauncherJsonLine, JSON.stringify(cLauncherJsonLine));
+							// means i updated it, so lets write it to file now
+							var cLauncherAppPath = cLauncherPath;
+							var execContents = [
+								'#!/bin/sh',
+								'##' + JSON.stringify(cLauncherJsonLine) + '##', // link9900001
+								'exec "' + OS.Path.join(cLauncherAppPath, 'Contents', 'MacOS', 'firefox') + '" -profile "' + aFullPathToProfileDir + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
+							];
+							
+							//if (eLauncherExePath != aLauncherExePath) {
+								console.log('replacing it with writeAtomic');
+								// it may not be there, if this .app is being used for first time
+								var rez_writeExec = OS.File.writeAtomic(eLauncherExecPath, execContents.join('\n'));// i write the exec into the main folder, because i alias the folders)
+								var rez_permExec = OS.File.setPermissions(eLauncherExecPath, {unixMode: core.FileUtils.PERMS_DIRECTORY});
+								// i dont think i need to xattr this, i just had to xattr the cLauncherPath (which is cLauncherAppPath) on first creation
+							// } else {
+							// 	console.log('trying to open it');
+							// 	var eLauncherFD = OS.File.open(eLauncherExecPath, {truncate:true}); // FD stands for file descriptor
+							// 	eLauncherFD.write(getTxtEncodr().encode(execContents.join('\n')));
+							// 	eLauncherFD.close();
+							// }
+						}
+						
+						// step3-continued - rename file on disk
+						if (eLauncherName != aLauncherName) {
+							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+							OS.File.move(eLauncherPath, cLauncherPath);
+						}
+						
 					break;
 				default:
 					throw new MainWorkerError({
@@ -1809,7 +1935,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					
 					
 					// C:\Users\Mercurius\Pictures\osx firefox.app contents dir entries.png
-					var cTargetAppPath = core.profilist.path.XREExeF.substr(0, core.profilist.path.XREExeF.indexOf('.app') + 4); // link009838393
+					var cTargetAppPath = aLauncherExePath.substr(0, aLauncherExePath.indexOf('.app') + 4); // link009838393
 					console.info('cTargetAppPath:', cTargetAppPath);
 					var cTargetContentsPath = OS.Path.join(cTargetAppPath, 'Contents');
 					// var rez_hardLinkCodeSig = createAlias(OS.Path.join(cLauncherContentsPath, '_CodeSignature'), OS.Path.join(cTargetContentsPath, '_CodeSignature'));
@@ -1825,7 +1951,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					
 					var execContents = [
 						'#!/bin/sh',
-						'##' + JSON.stringify({XREExeF_APP:cTargetAppPath, LauncherIconPathName:aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5)}) + '##',
+						'##' + JSON.stringify({XREExeF_APP:cTargetAppPath, LauncherIconPathName:aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5)}) + '##', // link9900001
 						'exec "' + OS.Path.join(cLauncherAppPath, 'Contents', 'MacOS', 'firefox') + '" -profile "' + aFullPathToProfileDir + '" -no-remote "$@"' // i think i have to use path to launcher so it gets icon even on killall Dock etc
 					];
 					var cLauncherExecPath = OS.Path.join(cTargetContentsPath, 'MacOS', 'profilist-' + cLauncherDirName); // we place it into the target folder because i alias the folders

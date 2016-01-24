@@ -6,6 +6,10 @@ Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 
+if (!Ci.nsIDOMFileReader) {
+	Cu.importGlobalProperties(['FileReader']);
+}
+
 // Globals
 const core = {
 	addon: {
@@ -92,7 +96,7 @@ var bootstrapCallbacks = {
 		}
 		
 		(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlobHD || imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlob).call(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can, function(blob) {
-			var reader = Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader); //new FileReader();
+			var reader = Ci.nsIDOMFileReader ? Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader) : new FileReader();
 			reader.onloadend = function() {
 				// reader.result contains the ArrayBuffer.
 				deferredMain_drawScaled.resolve([{
@@ -281,7 +285,7 @@ var bootstrapCallbacks = {
 function blobCb(aProvidedPath, aDeferred_blobCb, blob) {
 	// gets arrbuf
 	
-	var reader = Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader); //new FileReader();
+	var reader = Ci.nsIDOMFileReader ? Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader) : new FileReader();
 	reader.onloadend = function() {
 		// reader.result contains the ArrayBuffer.
 		aDeferred_blobCb.resolve(reader.result);
@@ -421,6 +425,11 @@ function onPageReady(aEvent) {
 
 addEventListener('unload', fsUnloaded, false);
 var timeStart1 = new Date();
-addEventListener('DOMContentLoaded', onPageReady, false);
-console.log('added DOMContentLoaded event, current location is:', content.location.href);
+if (content.location.href == 'chrome://profilist/content/content_remote/frameworker.htm') {
+	console.log('no need for DOMContentLoaded event, as current location is already of frameworker.htm:', content.location.href);
+	onPageReady({target:{defaultView:content}});
+} else {
+	addEventListener('DOMContentLoaded', onPageReady, false);
+	console.log('added DOMContentLoaded event, as frameworker.htm not yet loaded, current location is:', content.location.href);
+}
 // end - load unload stuff

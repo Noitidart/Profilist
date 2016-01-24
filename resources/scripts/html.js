@@ -182,6 +182,7 @@ function fetchJustIniObj() {
 		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
 		// alert('ok got new ini obj, will now set global nad update react component');
 		gIniObj = aIniObj;
+		console.error('ok setting up new gIniObj to this:', aIniObj);
 		
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
