@@ -68,6 +68,9 @@
 	bottom: 0px;
 	pointer-events: auto;
 	transform: rotate(45deg);
+	border-radius: 0 0 1px 0;
+	border-right: 1px solid #ccc;
+	border-bottom: 1px solid #ccc;
 }
 .iconsetpicker-arrow:before {
 	content: '';
@@ -78,6 +81,8 @@
 	position: absolute;
 	left: -10px;
 	top: -10px;
+	box-shadow: 6px 1px #ccc;
+	z-index: -1;
 }
 .iconsetpicker-arrow:after {
 	content: '';
@@ -88,6 +93,16 @@
 	position: absolute;
 	top: -10px;
 	left: -10px;
+	box-shadow: 1px 6px #ccc;
+	z-index: -1;
+}
+.iconsetpicker-arrow-filler {
+	background-color: #f6f5f6;
+	display: block;
+	width: 19px;
+	height: 10px;
+	position: relative;
+	left: -9px;
 }
 /* end - iconsetpicker_arrow */
 
@@ -98,5 +113,7 @@
 	box-shadow: 0 1px 9px 0px rgba(0,0,0,0.3);
 	height: 200px;
 	pointer-events: auto;
+	border-radius: 3px;
+	border: 1px solid #ccc;
 }
 /* end - iconsetpicker_content */

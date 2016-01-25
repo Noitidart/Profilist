@@ -959,7 +959,9 @@ var IPStore = {
 		IPArrow: React.createClass({
 			displayName: 'IPArrow',
 			render: function() {
-				return React.createElement('div', {className:'iconsetpicker-arrow'});
+				return React.createElement('div', {className:'iconsetpicker-arrow'},
+					React.createElement('div', {className:'iconsetpicker-arrow-filler'})
+				);
 			}
 		}),
 		IPContent: React.createClass({
