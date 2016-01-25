@@ -780,13 +780,16 @@ var BuildsWidget = React.createClass({
 });
 var BuildsWidgetRow = React.createClass({ // this is the non header row
     displayName: 'BuildsWidgetRow',
-	clickIcon: function() {
+	clickIcon: function(e) {
+		/*
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['browseiconRequest'], bootstrapMsgListener.funcScope, function(aAction, aImgObj) {
 			console.log('browseicon dialog action == ', aAction);
 			if (aAction == 'accept') {
 				console.log('because accepted there is aImgObj:', aImgObj);
 			}
 		}.bind(this));
+		*/
+		IPStore.init(e.target);
 	},
 	clickPath: function() {
 		alert('clicked path');
@@ -889,6 +892,90 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		}
 	}
 });
+
+var IPStore = {
+	init: function(aTargetElement) {
+		// aTargetElement is where the arrow of the dialog will point to
+		// must have iconsetpicker.css loaded in the html
+		console.log('aTargetElement:', aTargetElement);
+		
+		var wrap = document.createElement('div');
+		wrap.setAttribute('class', 'iconsetpicker-wrap');
+
+		var cover = document.createElement('div');
+		cover.setAttribute('class', 'iconsetpicker-cover');
+		document.body.appendChild(cover);
+		
+		aTargetElement.parentNode.appendChild(wrap);
+		
+		var uninitKeypress = function(e) {
+			if (e.key == 'Escape') {
+				uninit();
+			}
+		};
+		
+		var uninit = function() {
+			document.removeEventListener('keypress', uninitKeypress, false);
+			IPStore.setState({sInit:false});
+			cover.parentNode.removeChild(cover);
+			setTimeout(function() {
+				ReactDOM.unmountComponentAtNode(wrap);
+				wrap.parentNode.removeChild(wrap);
+			}, 200);
+		};
+		
+		cover.addEventListener('mousedown', uninit, false);
+		document.addEventListener('keypress', uninitKeypress, false);
+		
+		wrap.style.left = (aTargetElement.offsetLeft - (200 / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
+		wrap.style.bottom = (aTargetElement.offsetTop + aTargetElement.offsetHeight + 2) + 'px';
+		
+		var myIP = React.createElement(IPStore.component.IconsetPicker);
+		ReactDOM.render(myIP, wrap);
+	},
+	component: {
+		IconsetPicker: React.createClass({
+			displayName: 'IconsetPicker',
+			getInitialState: function() {
+				return {
+					sInit: false
+				}
+			},
+			componentDidMount: function() {
+				IPStore.setState = this.setState.bind(this); // need bind here otherwise it doesnt work
+				setTimeout(function() {
+					this.setState({sInit:true});
+				}.bind(this), 0);
+			},
+			render: function() {
+				return React.createElement(React.addons.CSSTransitionGroup, {transitionName:'iconsetpicker-initanim', transitionEnterTimeout:200, transitionLeaveTimeout:200, className:'iconsetpicker-animwrap'},
+					!this.state.sInit ? undefined : React.createElement('div', {className:'iconsetpicker-subwrap'},
+						React.createElement(IPStore.component.IPArrow),
+						React.createElement(IPStore.component.IPContent)
+					)
+				);
+			}
+		}),
+		IPArrow: React.createClass({
+			displayName: 'IPArrow',
+			render: function() {
+				return React.createElement('div', {className:'iconsetpicker-arrow'});
+			}
+		}),
+		IPContent: React.createClass({
+			displayName: 'IPContent',
+			render: function() {
+				return React.createElement('div', {className:'iconsetpicker-content'});
+			}
+		}),
+		IPCover: React.createClass({
+			displayName: 'IPCover',
+			render: function() {
+				
+			}
+		})
+	}
+};
 // START - COMMON PROFILIST HELPER FUNCTIONS
 // start - xIniObj helper functions
 
