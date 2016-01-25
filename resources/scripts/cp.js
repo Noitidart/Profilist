@@ -781,7 +781,12 @@ var BuildsWidget = React.createClass({
 var BuildsWidgetRow = React.createClass({ // this is the non header row
     displayName: 'BuildsWidgetRow',
 	clickIcon: function() {
-		alert('clicked icon');
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['browseiconRequest'], bootstrapMsgListener.funcScope, function(aAction, aImgObj) {
+			console.log('browseicon dialog action == ', aAction);
+			if (aAction == 'accept') {
+				console.log('because accepted there is aImgObj:', aImgObj);
+			}
+		}.bind(this));
 	},
 	clickPath: function() {
 		alert('clicked path');

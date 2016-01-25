@@ -49,9 +49,10 @@ const OSPath_simpleStorage = OS.Path.join(OS.Constants.Path.profileDir, JETPACK_
 const OSPath_config = OS.Path.join(OSPath_simpleStorage, 'config.json');
 const myPrefBranch = 'extensions.' + core.addon.id + '.';
 
+const NS_HTML = 'http://www.w3.org/1999/xhtml';
+const NS_XUL = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
+
 var bootstrap = this;
-var RC = {}; // holds my react components
-var RE = {}; // holds my react elements
 
 var ADDON_MANAGER_ENTRY;
 
@@ -665,7 +666,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 			case 'wince':
 			case 'winmo':
 				
-					// fp.appendFilter('Firefox Executeable (application/exe)', 'firefox.exe');
+					// fp.appendFilter('Firefox Executeable (application/exe)', 'firefoxg.exe');
 					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-win'), 'firefox.exe');
 					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent;
 					
@@ -698,7 +699,82 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		}// else { // cancelled	}
 		
 		return [undefined]; // cancelled
+	},
+	// start - browse icon stuff
+	gBIWin: null,
+	gBIPanel: null,
+	gBIDeferred: null,
+	browseiconRequest: function() {
+		// framescript messages fsFuncs, telling it wants to do a browse, so fsFuncs is entry point
+		if (fsFuncs.gBIPanel) {
+			throw new Error('browse icon dialog already there and in progress');
+		}
+		fsFuncs.gBIDeferred = new Deferred();
+		
+		fsFuncs.gBIWin = Services.wm.getMostRecentWindow('navigator:browser');
+		fsFuncs.gBIPanel = fsFuncs.gBIWin.document.createElementNS(NS_XUL, 'panel');
+
+		var props = {
+			id: 'profilist-browseicon-panel',
+			noautohide: false,
+			noautofocus: false,
+			level: 'parent',
+			style: 'padding:0; margin:0; width:100px; height:100px; background-color:steelblue;',
+			type: 'arrow'
+		}
+		for (var p in props) {
+			fsFuncs.gBIPanel.setAttribute(p, props[p]);
+		}
+
+		var cIframe = fsFuncs.gBIWin.document.createElementNS(NS_XUL, 'iframe');
+		cIframe.setAttribute('type', 'chrome');
+		cIframe.setAttribute('src', core.addon.path.content_remote + 'browseicon.htm');
+		fsFuncs.gBIPanel.appendChild(cIframe);
+		
+		fsFuncs.gBIWin.document.getElementById('mainPopupSet').appendChild(fsFuncs.gBIPanel);
+
+
+		fsFuncs.gBIPanel.addEventListener('popuphiding', function () {
+			fsFuncs.gBIPanel.parentNode.removeChild(fsFuncs.gBIPanel);
+			console.log('fsFuncs:', fsFuncs);
+			fsFuncs.biFinalize();
+		}, false);
+		
+		return fsFuncs.gBIDeferred.promise;
+	},
+	biShow: function() {
+		// after browseicon.htm loads it will call fsFuncs
+		fsFuncs.gBIPanel.openPopup(fsFuncs.gBIWin.gBrowser, 'overlap', 10, 10);
+	},
+	biFinalize: function() {
+		fsFuncs.gBIPanel = null;
+		fsFuncs.gBIWin = null;
+		fsFuncs.gBIDeferred = null;
+	},
+	biCancel: function() {
+		fsFuncs.gBIDeferred.resolve(['cancel']);
+		fsFuncs.gBIPanel.hide();
+	},
+	biAccept: function(aImgObj) {
+		fsFuncs.gBIDeferred.resolve(['accept', aImgObj]);
+		fsFuncs.gBIPanel.hide();
+	},
+	biInit: function() {
+		var deferredMain_biInit = new Deferred();
+		
+		var promise_fetch = MainWorker.post('browseiconInit');
+		promise_fetch.then(
+			function(aObjs) {
+				console.log('Fullfilled - promise_fetch - ', aObjs);
+				// start - do stuff here - promise_fetch
+				deferredMain_biInit.resolve([aObjs]);
+				// end - do stuff here - promise_fetch
+			}
+		);
+		
+		return deferredMain_biInit.promise;		
 	}
+	// end - browse icon stuff
 };
 var gCreateDesktopShortcutId = -1;
 var fsMsgListener = {

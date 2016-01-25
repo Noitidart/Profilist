@@ -2807,6 +2807,14 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 }
 // End - Launching profile and other profile functionality
 
+// Start - Icon browse picker dialog
+function browseiconInit() {
+	return {
+		iconConfig: 'rawr'
+	};
+}
+// End - Icon browse picker dialog
+
 // platform helpers
 function resolveSymlinkPath(aSymlinkPlatPath) {
 	// aSymlinkPlatPath is a path that you know for sure is a symlinked path. if a parent dir is symlinked, and not the final child, then it will throw EINVAL
