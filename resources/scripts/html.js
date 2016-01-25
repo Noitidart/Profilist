@@ -37,6 +37,7 @@ GEN_RULEs - stands for GENERAL_RULES
 2. Reason for using [TempProfile##] is so that regular Firefox profile manager doesn't pick these up and show them
 3. The ## in [Profile##] or [TempProfile##] is not guranteed in properly numbered. It is only gurnateed on initial read. If do delete or create profile, it doesnt properly number it. It is properly numbered on write though. However it is guranteed that they are in chronological order. So on create it will take and use the max number + 1 that was found.
 4. To create a profile with a non-relative path. Only way is to set "Launch on Create" option to disabled.
+5. :TODO: If dev mode is on, then in General.noWriteObj i should put in the imgSrc path for the one closest to 16, tell if i should resize
 INIOBJ_RULEs
 1. groupName
 	* This is the text between the square brackets [] in the ini group title
@@ -347,35 +348,6 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 				return null;
 			}
 		}
-	}
-}
-function getImgPathOfSlug(aSlug) {
-	//*******************************************
-	// DESC
-	// 	Provided aSlug, such as "esr", "release", "beta", "dev", "nightly", or any user defined one, this will return the full path to that image
-	// RETURNS
-	//	null
-	//	string
-	// ARGS
-	//	aSlug - icon short name
-	//*******************************************
-
-	console.info('getImgPathOfSlug, aSlug:', aSlug);
-	
-	switch (aSlug) {
-		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
-		case 'release':
-		case 'beta':
-		case 'dev':
-		case 'aurora':
-		case 'nightly':
-				
-				return core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_16.png';
-				
-			break;
-		default:
-			
-				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
 	}
 }
 // end - xIniObj functions with no options
@@ -944,6 +916,19 @@ var ToolbarButton = React.createClass({
 			} // else no search is in progress
 		}
 		
+		var buildHintImg16Obj;
+		if (this.props.tbbIniEntry && this.props.jProfilistDev) {
+			if (this.props.tbbIniEntry.noWriteObj.status || this.props.tbbIniEntry.ProfilistTie) { // link884746111
+				if (this.props.tbbIniEntry.noWriteObj.status) {
+					// means its running so show the running exeIcon
+					buildHintImg16Obj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.tbbIniEntry.noWriteObj.exeIconSlug];
+				} else {
+					// means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never pass the if link884746111)
+					buildHintImg16Obj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i')];
+				}
+			} // else is not running AND is not tied, so dont show this
+		}
+		
 		var cClassList = ['profilist-tbb'];
 		// if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
 			// cClassList.push('profilist-tbb-show-msg');
@@ -951,15 +936,15 @@ var ToolbarButton = React.createClass({
 		return React.createElement('div', {className: cClassList.join(' '), 'data-tbb-type': (!this.props.tbbIniEntry ? this.props.sKey : (this.props.tbbIniEntry.noWriteObj.status ? 'active' : 'inactive')), style: (!hideDueToSearch ? undefined : {display:'none'}), onClick: this.click},
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
-				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
+				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage, sGenIniEntry:(!this.props.tbbIniEntry ? undefined : this.props.sGenIniEntry)}),
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
 			),
 			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
 				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage}),
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev || (!this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.ProfilistTie /*is not running and is not tied, so dont show this*/) ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage: 'url("' + (this.props.tbbIniEntry.noWriteObj.status ? /*means its running so show the running exeIcon*/ getImgPathOfSlug(this.props.tbbIniEntry.noWriteObj.exeIconSlug) : /*means its NOT RUNNING and is tied (if it wasnt running and NOT tied it would never render this element)*/ getImgPathOfSlug(getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i'))) + '")'} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
+				!buildHintImg16Obj ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage:'url("' + buildHintImg16Obj.src + '")', backgroundSize:(!buildHintImg16Obj.resize ? undefined : '16px 16px')} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry}),
+				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry, sGenIniEntry:this.props.sGenIniEntry}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
@@ -1153,7 +1138,8 @@ var PrimaryIcon = React.createClass({
 		//	tbbIniEntry - if profile type
 		//	sKey
 		//	sMessage
-
+		//	sGenIniEntry - if profile type
+		
 		var aProps = {
 			className: 'profilist-tbb-icon',
 			onClick: this.click
@@ -1169,8 +1155,25 @@ var PrimaryIcon = React.createClass({
 			delete aProps.onClick;
 		}
 		
+		var badgeImgSrc;
+		var badgeImgWidth;
+		var badgeImgHeight;
+		if (this.props.tbbIniEntry && this.props.tbbIniEntry.ProfilistBadge) {
+			// is profile type tbb, and it has a badge
+			console.log('yes ProfilistBadge exists on this tbbIniEntry:', this.props.tbbIniEntry.ProfilistBadge, 'tbbIniEntry:', this.props.tbbIniEntry)
+			var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.tbbIniEntry.ProfilistBadge];
+			badgeImgSrc = img16SrcObj.src;
+			
+			if (img16SrcObj.resize) {
+				badgeImgWidth = '16';
+				badgeImgHeight = '16';
+			}
+		} else {
+			badgeImgSrc =  core.addon.path.images + 'missing.png';
+		}
+		
 		var aRendered = React.createElement('div', aProps,
-			!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: this.props.tbbIniEntry.ProfilistBadge ? getImgPathOfSlug(this.props.tbbIniEntry.ProfilistBadge) : core.addon.path.images + 'missing.png' }),
+			!this.props.tbbIniEntry ? undefined : React.createElement('img', {className: 'profilist-tbb-badge', src: badgeImgSrc, width:badgeImgWidth, height:badgeImgHeight}),
 			React.createElement('img', {className: 'profilist-tbb-status'})
 		)
 		return aRendered;
@@ -1523,9 +1526,10 @@ var SubiconTie = React.createClass({
 	render: function() {
 		// props
 		//		jProfilistBuilds
-		//		sCurProfIniEntry
+		//		sCurProfIniEntry - need this because of this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug]
 		//		tbbIniEntry
-		// getImgPathOfSlug(this.props.sCurProfIniEntry.noWriteObj.exeIconSlug)
+		//		sGenIniEntry
+		
 		console.info('this.props:', this.props);
 		console.log('parsedBuilds:', this.props.jProfilistBuilds);
 		// if current is not in ProfilistBuilds then add it in
@@ -1559,7 +1563,7 @@ var SubiconTie = React.createClass({
 		if (this.state.bi > -1) {
 			// its tied to something other then current
 			aProps.style.filter = 'grayscale(0%)';
-			aProps.style.backgroundImage = 'url("' + getImgPathOfSlug(this.props.jProfilistBuilds[this.state.bi].i) + '")';
+			aProps.style.backgroundImage = 'url("' + this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.jProfilistBuilds[this.state.bi].i].src + '")';
 		} else {
 			if (this.state.bi == -1) {
 				// its tied to current
@@ -1567,7 +1571,10 @@ var SubiconTie = React.createClass({
 			} else { // its untied (this.state.bi should be -2), so show current
 				aProps.style.filter = 'grayscale(100%)';
 			}
-			aProps.style.backgroundImage = 'url("' + getImgPathOfSlug(this.props.sCurProfIniEntry.noWriteObj.exeIconSlug) + '")';
+			aProps.style.backgroundImage = 'url("' + this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug].src + '")';
+			if (this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug].resize) {
+				aProps.style.backgroundSize = '16px 16px';
+			}
 		}
 		
 		var aRendered = React.createElement('div', aProps); // , this.state.bi, ' ', this.state.onent

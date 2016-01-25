@@ -225,7 +225,8 @@ var ControlPanel = React.createClass({
     displayName: 'ControlPanel',
 	getInitialState: function() {
 		return {
-			sIniObj: []
+			sIniObj: [],
+			sBuildsLastRow: {}
 		};
 	},
 	onComponentChange: function(aNewIniObj, aDelaySetState) {
@@ -289,7 +290,7 @@ var ControlPanel = React.createClass({
 		
 		for (var i=0; i<gDOMInfo.length; i++) {
 			console.log('gDOMInfo[i]:', gDOMInfo[i]);
-			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry}));
+			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != myServices.sb.GetStringFromName('profilist.cp.developer') ? undefined : this.state.sBuildsLastRow) }));
 		}
 		
 		return React.createElement('div', aProps,
@@ -305,6 +306,7 @@ var Section = React.createClass({
 		//	sIniObj
 		//	sCurProfIniEntry
 		//	sGenIniEntry
+		//	sBuildsLastRow - only if this is gSectionInfo.section == myServices.sb.GetStringFromName('profilist.cp.developer')
 		
 		var aProps = {
 			className: 'section'
@@ -318,7 +320,7 @@ var Section = React.createClass({
 		));
 		
 		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
-			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry}));
+			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != myServices.sb.GetStringFromName('profilist.cp.builds') ? undefined : this.props.sBuildsLastRow) }));
 		}
 		
 		return React.createElement('div', aProps,
@@ -355,6 +357,7 @@ var Row = React.createClass({
 		//	sIniObj
 		//	sCurProfIniEntry
 		//	sGenIniEntry
+		// sBuildsLastRow - only if  this is gRowInfo.label == myServices.sb.GetStringFromName('profilist.cp.builds')
 		
 		var aProps = {
 			className: 'row'
@@ -523,7 +526,7 @@ var Row = React.createClass({
 						case 'ProfilistBuilds':
 						
 								aProps.className += ' row-builds-widget'
-								children.push(React.createElement(BuildsWidget, {gRowInfo: this.props.gRowInfo, sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry}));
+								children.push(React.createElement(BuildsWidget, {gRowInfo: this.props.gRowInfo, sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow: this.props.sBuildsLastRow}));
 						
 							break;
 						default:
@@ -755,10 +758,10 @@ var BuildsWidget = React.createClass({
 		//	gRowInfo
 		//	sCurProfIniEntry
 		//	sGenIniEntry
-		
+		//	sBuildsLastRow
 		var children = [];
 
-		children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:'head', sCurProfIniEntry: this.props.sCurProfIniEntry}));
+		children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:'head', sCurProfIniEntry: this.props.sCurProfIniEntrym}));
 
 		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
 		var jProfilistBuilds = JSON.parse(keyValBuilds);
@@ -768,7 +771,7 @@ var BuildsWidget = React.createClass({
 			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + i, dragStart:this.dragStart.bind(this, 'row' + i)}));
 		}
 		
-		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry}));
+		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow: this.props.sBuildsLastRow})); // last row
 		
 		return React.createElement('div', {className:'builds-widget', onClick:this.click, ref:'widget'},
 			children
@@ -784,16 +787,38 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		alert('clicked path');
 	},
 	clickDel: function() {
+		if (!this.props.jProfilistBuildsEntry) {
+			// its last row
+			alert('ok clearing sBuildsLastRow');
+			MyStore.setState({sBuildsLastRow:{}});
+		}
 		alert('clicked del');
 	},
 	clickCurProfPath: function() {
 		alert('clicked user current profile path');
 	},
+	clickBrowse: function() {
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['browseExe'], bootstrapMsgListener.funcScope, function(aBrowsedPlatPath) {
+			if (aBrowsedPlatPath) {
+				if (this.props.sBuildsLastRow.imgSlug) { // :note: if imgSlug is there then imgObj is there for sure. opposite also true link8888331
+					// imgSlug already provided, and now has provided exePath, so clear sBuildsLastRow and push to ProfilistBuilds as well as put into General.noWriteObj the imgsrc of this imgSlug
+				} else {
+					MyStore.setState({
+						sBuildsLastRow: {exePath:aBrowsedPlatPath}
+					});
+				}
+			} // else cancelled
+		}.bind(this));
+	},
+	contextMenuBrowse: function() {
+		console.log('make if copy it should copy all');
+	},
 	render: function render() {
 		// props
-		//	jProfilistBuildsEntry
+		//	jProfilistBuildsEntry - for title this is 'head' for last row this is absent meaning undefined
 		//	sCurProfIniEntry
 		//	dragStart
+		//	sBuildsLastRow - only if this is last row
 		if (this.props.jProfilistBuildsEntry == 'head') {
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.icon')),
@@ -804,22 +829,51 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			);
 		} else {
 			
+			var imgSrc;
+			var textVal;
+			var imgSize;
 			if (!this.props.jProfilistBuildsEntry) {
 				// its last one
-				var imgSrc = core.addon.path.images + 'search.png';
-				var textVal = '';
+				if (this.props.sBuildsLastRow.imgSlug) { // :note: if imgSlug is there then imgObj is there for sure. opposite also true. and IF imgSlug is there, then there is no way there is exePath. if both are filled then it should have added a new jProfilistBuilds entry. link8888331
+					var img16SrcObj = getImgSrcForSize(this.props.sBuildsLastRow.imgObj, 16);
+					imgSrc = img16SrcObj.src;
+					if (img16SrcObj.resize) {
+						imgSize = '16';
+					}
+					// impossible for textVal to be set
+				} else {
+					imgSrc = core.addon.path.images + 'search.png'
+				}
+				
+				if (this.props.sBuildsLastRow.exePath) {
+					// this means that imgSlug/imgObj were not set!
+					textVal = this.props.sBuildsLastRow.exePath;
+				} // else no textVal
 			} else {
 				// its content
-				var imgSrc = core.addon.path.images + 'channel-iconsets/' + this.props.jProfilistBuildsEntry.i + '/' + this.props.jProfilistBuildsEntry.i + '_16.png';
-				var textVal = this.props.jProfilistBuildsEntry.p;
+				var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.jProfilistBuildsEntry.i];
+				
+				imgSrc = img16SrcObj.src;
+				textVal = this.props.jProfilistBuildsEntry.p;
+				if (img16SrcObj.resize) {
+					imgSize = '16';
+				}
+			}
+			
+			var cTextboxClass = ['builds-widget-textbox'];
+			if (!textVal) {
+				cTextboxClass.push('builds-widget-textbox-placeholder');
 			}
 			
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {},
-					React.createElement('img', {onClick:this.clickIcon, src: imgSrc})
+					React.createElement('img', {onClick:this.clickIcon, src: imgSrc, width:imgSize, height:imgSize})
 				),
 				React.createElement('span', {},
-					React.createElement('input', {type:'text', value:textVal})
+					// React.createElement('input', {type:'text', value:textVal, onClick:this.clickBrowseExe, placeholder:myServices.sb.GetStringFromName('profilist.cp.click-to-browse')})
+					React.createElement('div', {className:cTextboxClass.join(' '), onClick:this.clickBrowse, onContextMenu:this.contextMenuBrowse},
+						textVal ? textVal : myServices.sb.GetStringFromName('profilist.cp.click-to-browse')
+					)
 				),
 				React.createElement('span', {},
 					React.createElement('span', {className:'fontello-icon icon-del', onClick:this.clickDel}),
@@ -1038,35 +1092,6 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 		}
 	}
 }
-function getImgPathOfSlug(aSlug) {
-	//*******************************************
-	// DESC
-	// 	Provided aSlug, such as "esr", "release", "beta", "dev", "nightly", or any user defined one, this will return the full path to that image
-	// RETURNS
-	//	null
-	//	string
-	// ARGS
-	//	aSlug - icon short name
-	//*******************************************
-
-	console.info('getImgPathOfSlug, aSlug:', aSlug);
-	
-	switch (aSlug) {
-		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
-		case 'release':
-		case 'beta':
-		case 'dev':
-		case 'aurora':
-		case 'nightly':
-				
-				return core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_16.png';
-				
-			break;
-		default:
-			
-				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
-	}
-}
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 // End - Page Functionalities
@@ -1210,5 +1235,21 @@ function isFocused(window) {
     }
 
     return (focusedChildWindow === childTargetWindow);
+}
+function validateOptionsObj(aOptions, aOptionsDefaults) {
+	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
+	for (var aOptKey in aOptions) {
+		if (!(aOptKey in aOptionsDefaults)) {
+			console.error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value, aOptionsDefaults:', aOptionsDefaults, 'aOptions:', aOptions);
+			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
+		}
+	}
+	
+	// if a key is not found in aOptions, but is found in aOptionsDefaults, it sets the key in aOptions to the default value
+	for (var aOptKey in aOptionsDefaults) {
+		if (!(aOptKey in aOptions)) {
+			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
+		}
+	}
 }
 // end - common helper functions

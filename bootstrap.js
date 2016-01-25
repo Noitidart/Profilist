@@ -631,6 +631,73 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		).catch(genericCatch.bind(null, 'promise_workerCreateDeskCut', 0));
 		
 		return deferredMain_createDesktopShortcut.promise;
+	},
+	browseExe: function() {
+
+		var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
+		
+		var browseExeDialogTitle;
+		
+		switch (OS.Constants.Sys.Name.toLowerCase()) {
+			case 'winnt':
+			case 'wince':
+			case 'winmo':
+				
+					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-win');
+				
+				break;
+			case 'darwin':
+				
+					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-mac');
+				
+				break;
+			default:
+			
+					// assume unix, it has no extension apparently
+					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-nix');
+
+		}
+		
+		fp.init(Services.wm.getMostRecentWindow(null), browseExeDialogTitle, Ci.nsIFilePicker.modeOpen);
+		
+		switch (OS.Constants.Sys.Name.toLowerCase()) {
+			case 'winnt':
+			case 'wince':
+			case 'winmo':
+				
+					// fp.appendFilter('Firefox Executeable (application/exe)', 'firefox.exe');
+					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-win'), 'firefox.exe');
+					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent;
+					
+				break;
+			case 'darwin':
+				
+					// fp.appendFilter('Firefox Application Bundle', '*.app');
+					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-mac'), '*.app');
+					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent;
+					// .parent = MacOs
+					// .parent.parent = Contents
+					// .parent.parent.parent = .app
+					// .parent.parent.parent.parent = parent of .app
+					
+				break;
+			default:
+			
+					// assume unix, it has no extension apparently
+					// fp.appendFilter('Firefox Binary (application/x-sharedlib)', 'firefox');
+					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-nix'), 'firefox');
+					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent;
+
+		}
+
+		var rv = fp.show();
+		if (rv == Ci.nsIFilePicker.returnOK) {
+			
+			return [fp.file.path];
+
+		}// else { // cancelled	}
+		
+		return [undefined]; // cancelled
 	}
 };
 var gCreateDesktopShortcutId = -1;

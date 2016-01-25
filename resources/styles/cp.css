@@ -287,6 +287,40 @@ div.builds-widget-row input[type=text] {
 	width: 90%;
 	font-size: inherit;
 	font-family: inherit;
+	text-overflow: '...'; /* can use text-indent with negative values to show the right side and remove ellipsis - i didnt use ellipsis here as that is ' ...' has that prefix space which makes it weird looking */
+	cursor: pointer;
+	/* fight off disbabled style */
+	-moz-user-input: enabled !important;
+	user-input: enabled;
+	background-color: #fff;
+	color: #000;
+	border: 0.6666667px solid #666;
+	padding-left: 1.6666667px;
+	padding-bottom: 1.6666667px;
+	margin-left: -0.6666667px;
+	/* end fight off disbabled style */
+}
+/* end - builds_widget_textbox */
+
+/* start - builds_widget_textbox */
+/* state:innate */
+div.builds-widget-row .builds-widget-textbox {
+	background-color: #fff;
+	border: 0.6666667px solid #666;
+	color: #000;
+	width: 260px;
+	text-align: left;
+	margin: 0 auto;
+	padding: 1px;
+	cursor: pointer;
+	
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* state:placeholder */
+div.builds-widget-row .builds-widget-textbox.builds-widget-textbox-placeholder {
+	color: graytext;
 }
 /* end - builds_widget_textbox */
 

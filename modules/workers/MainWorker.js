@@ -25,6 +25,7 @@ var gJProfilistDev;
 // imported scripts have access to global vars on MainWorker.js
 importScripts(core.addon.path.modules + 'cutils.jsm');
 // importScripts(core.addon.path.modules + 'ctypes_math.jsm');
+importScripts(core.addon.path.modules + 'commonProfilistFuncs.js');
 
 // Setup PromiseWorker
 // SIPWorker - rev2 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
@@ -458,26 +459,63 @@ function formatNoWriteObjs() {
 		/////// debug
 
 		// set gJProfilistBuilds
-		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
-
-		// for all that are running set exeIconSlug
+		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));		
+		
+		// for all that are running set exeIconSlug and exePath
 		// in order to set exeIconSlug I need exePath (since i need exePath anyways i set it - this is INIOBJ_RULE#7)
 		for (var i=0; i<gIniObj.length; i++) {
-			if (gIniObj[i].noWriteObj.status) {
+			if (gIniObj[i].noWriteObj.status) { // this loop will for sure hit the curProfIniEntry.noWriteObj.currentProfile entry as it has obviously status
+				// its profile type tbb with exe needed
 				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
 				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
 				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath);
-				console.log('cExePathChan:', cExePathChan);
-				gIniObj[i].noWriteObj.exeIconSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, cExePathChan);// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
+				// console.log('cExePathChan:', cExePathChan);
+				var cExeImgSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, cExePathChan);// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
+				gIniObj[i].noWriteObj.exeIconSlug = cExeImgSlug
 			}
 		}
-
+		
 	} else {
 		gJProfilistBuilds = [];
 	}
 	
+	// for all imgSlug's in iniObj lets get the img src path for the size nearest to 16
+		// must go after the dev block where I get all exeIconSlug's, because in case dev mode is on then i will be populating those img srcs for those slugs
+		// set imgsrc rez objs for all exePath slugs - because all, i ahve to do this after get all exePaths
+		// set imgsrc rez objs for all ProfilistBadge slugs
+	gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug = {}; // not just forExeImgSlug but also forBadgeImgSlug
+	if (gJProfilistDev) {
+		for (var i=0; i<gJProfilistBuilds.length; i++) {
+			var exeImgSlug = gJProfilistBuilds[i].i;
+			gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[exeImgSlug] = 'todo';
+		}
+	}
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path) {
+			// its profile type tbb
+			
+			if (gJProfilistDev) {
+				var profExeImgSlug = gIniObj[i].noWriteObj.exeIconSlug;
+				
+				if (profExeImgSlug) {
+					gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[profExeImgSlug] = 'todo';
+				}
+			}
+			
+			var profBadgeSlug = gIniObj[i].ProfilistBadge;
+			if (profBadgeSlug) {
+				gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[profBadgeSlug] = 'todo';
+			}
+		}
+	}
+	
+		// now go through and fetch all the nearest 16 img srcs
+	for (var aImgSlug in gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug) {
+		gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[aImgSlug] = getImgSrcForSize(getImgSrcsForImgSlug(aImgSlug), 16);
+	}
+	
 	// figure out if need to touch ini for currentProfile, and if have to, then touch it, then write it to ini and inibkp
-if (!('ProfilistStatus' in curProfIniEntry) || curProfIniEntry.ProfilistStatus !== '1') { // INIOBJ_RULE#3 // even though i store as string, i am doing ```key in``` check instead of !curProfIniEntry.ProfilistStatus - just in case somehow in future ProfilistStatus = "0" gets parsed as int, it should never though
+	if (!('ProfilistStatus' in curProfIniEntry) || curProfIniEntry.ProfilistStatus !== '1') { // INIOBJ_RULE#3 // even though i store as string, i am doing ```key in``` check instead of !curProfIniEntry.ProfilistStatus - just in case somehow in future ProfilistStatus = "0" gets parsed as int, it should never though
 		// need to touch
 		curProfIniEntry.ProfilistStatus = '1';
 		writeIni();
@@ -729,6 +767,94 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 			}
 		}
 	}
+}
+var gCache_getImgSrcsForImgSlug = {}; // used to store paths for custom slugs, until this is invalidated
+function invalidateCache_getImgSrcsFormImgSlug(aImgSlug) {
+	delete gCache_getImgSrcsForImgSlug[aImgSlug];
+}
+function getImgSrcsForImgSlug(aImgSlug) {
+	// returns an object, with key being the size, of all the strings you would put in <img src="HEREEEE" /> for all available sizes for this aImgSlug
+	// :note: the size is square, as i dont accept icons thare not square in size
+	// a size can be 'svg'
+	
+	var rezObj = {};
+	
+	switch (aImgSlug) {
+		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
+		case 'release':
+		case 'beta':
+		case 'dev':
+		case 'aurora':
+		case 'nightly':
+				
+				// return core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_16.png';
+				var availSizes = [16, 24, 32, 48, 64, 96, 128, 256, 512, 1024];
+				for (var i=0; i<availSizes.length; i++) {
+					rezObj[availSizes[i]] = core.addon.path.images + 'channel-iconsets/' + aImgSlug + '/' + aImgSlug + '_' + availSizes[i] + '.png';;
+				}
+				
+			break;
+		default:
+			
+				if (aImgSlug in gCache_getImgSrcsForImgSlug) {
+					rezObj = gCache_getImgSrcsForImgSlug[aImgSlug];
+				} else {
+					var cImgEntry;
+					var cImgDirPath = OS.Path.join(core.profilist.path.icons, aImgSlug);
+					
+					// :note: each entry MUST be in format OS.Path.join(core.profilist.path.icons, aImgSlug, aImgSlug + '_##.ext'); where ## is size here!! ext can be png gif jpeg jpg svg etc etc
+					
+					var cImgNamePatt = /^(.+)_(\d+)\.(.+)$/;
+					
+					var cImgDirIterator = new OS.File.DirectoryIterator(cImgDirPath);
+					try {
+						cImgDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+							
+							// this block tests if the format is valid of the image filename, it also gets details of cImgSize, cImgExt, and sImgSlug
+							var cImgSlug;
+							var cImgSize;
+							var cImgExt;
+							// test if svg
+							if (aEntry.name == aImgSlug + '.svg' || aEntry.name == aImgSlug + '.SVG') {
+								cImgExt = 'svg';
+								cImgSize = 'svg';
+								cImgSlug = aImgSlug;
+								// ok good dont skip this one
+							} else {
+								var cImgNameMatch = cImgNamePatt.exec(aEntry.name);
+								
+								if (!cImgNameMatch) {
+									console.warn('invalid format on filename of this icon, filename:', aEntry.name);
+									return;
+								}
+								
+								cImgSlug = cImgNameMatch[1];
+								cImgSize = cImgNameMatch[2];
+								cImgExt = cImgNameMatch[3];
+								
+								if (cImgSlug != aImgSlug) {
+									console.warn('invalid format on file in this directory, filename:', aEntry.name);
+									return;
+								}
+								
+								// ok good dont skip this one
+							}
+							
+							rezObj[cImgSize] = aEntry.path;
+						});
+					} catch(OSFileError) {
+						// console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+						throw new MainWorkerError('getImgSrcsForImgSlug', OSFileError);
+					} finally {
+						cImgDirIterator.close();
+					}
+					// return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
+					
+					gCache_getImgSrcsForImgSlug[aImgSlug] = rezObj;
+				}
+	}
+	
+	return rezObj;
 }
 function getImgPathOfSlug(aSlug) {
 	//*******************************************
