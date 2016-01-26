@@ -232,7 +232,8 @@
 	justify-content: flex-start;
 	align-items: flex-start;
 	flex-direction: column;
-	padding: 10px 10px 5px 10px;
+	padding-top: 3px;
+	overflow: hidden;
 }
 /* end - iconsetpicker_dirlist */
 
@@ -253,22 +254,40 @@
 	align-items: flex-start;
 	flex: 0 1 auto;
 	width: 100%;
-	padding: 2px 0;
-	background: transparent url("chrome://profilist/content/resources/images/cp/folder_blue.png") no-repeat scroll 0 center;
+	padding: 3px 10px 3px 10px;
+	background: transparent url("chrome://profilist/content/resources/images/cp/folder_blue.png") no-repeat scroll 10px center;
 	text-indent: 20px;
 	cursor: pointer;
 	white-space: nowrap;
 	text-overflow: '...';
 	overflow: hidden;
 }
+/* state:selected */
+.iconsetpicker-direntry.iconsetpicker-selected {
+	background-color: #02adf3;
+}
 /* end - iconsetpicker_dirlist_entry */
 
 
 
-/* start - iconsetpicker_imageset */
+/* start - iconsetpicker_preview */
 /* state:innate */
-.iconsetpicker-imageset {
+.iconsetpicker-preview {
     /* background-color: yellow; */
 	flex: 1 0 auto;
+	display: flex;
+	justify-content: flex-start;
+	align-items: flex-start;
+	flex-direction: column;
+	padding-top: 3px;
 }
-/* end - iconsetpicker_imageset */
+/* end - iconsetpicker_preview */
+
+/* start - iconsetpicker_preview_loading */
+/* state:innate */
+.iconsetpicker-preview > img,
+.iconsetpicker-preview > span { /* if immediate is span, then its the error span */
+	align-self: center;
+	margin: auto 0; /* because there is no justify-self center - http://stackoverflow.com/questions/32551291/in-css-flexbox-why-are-there-no-justify-items-and-justify-self-properties */
+}
+/* end - iconsetpicker_preview_loading */
