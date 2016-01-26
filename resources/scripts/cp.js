@@ -36,6 +36,7 @@ var gCFMM; // needed for contentMMFromContentWindow_Method2
 // Lazy imports
 var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'cp.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
+XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 
 // Start - DOM Event Attachments
 function doOnBeforeUnload() {
@@ -938,20 +939,36 @@ var IPStore = {
 			displayName: 'IconsetPicker',
 			getInitialState: function() {
 				return {
-					sInit: false
+					sInit: false,
+					sNavSelected: 'saved', // null/undefined means nothing, this is string, saved, browse, download
+					sNavItems: ['saved', 'browse', 'download'], // array of strings
+					sDirPlatPath: null, // current dir displaying in .iconsetpicker-dirlist
+					sDirSubdirs: null, // if null a loading image is shown, else it is an array
 				}
 			},
 			componentDidMount: function() {
 				IPStore.setState = this.setState.bind(this); // need bind here otherwise it doesnt work
 				setTimeout(function() {
 					this.setState({sInit:true});
+					
+					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readSubdirsInDir', core.profilist.path.images]], bootstrapMsgListener.funcScope, function(aSubdirsArr) {
+						console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
+						if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
+							// errored
+							throw new Error('readSubdirsInDir failed!!');
+						} else {
+							IPStore.setState({
+								sDirSubdirs: aSubdirsArr
+							});
+						}
+					});
 				}.bind(this), 0);
 			},
 			render: function() {
 				return React.createElement(React.addons.CSSTransitionGroup, {transitionName:'iconsetpicker-initanim', transitionEnterTimeout:200, transitionLeaveTimeout:200, className:'iconsetpicker-animwrap'},
 					!this.state.sInit ? undefined : React.createElement('div', {className:'iconsetpicker-subwrap'},
 						React.createElement(IPStore.component.IPArrow),
-						React.createElement(IPStore.component.IPContent)
+						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs})
 					)
 				);
 			}
@@ -967,38 +984,77 @@ var IPStore = {
 		IPContent: React.createClass({
 			displayName: 'IPContent',
 			render: function() {
+				// props
+				//	sNavSelected
+				//	sNavItems
+				//	sDirSubdirs
+				
 				return React.createElement('div', {className:'iconsetpicker-content'},
-					React.createElement(IPStore.component.IPNav, {}),
-					React.createElement(IPStore.component.IPRight, {})
+					React.createElement(IPStore.component.IPNav, {sNavSelected:this.props.sNavSelected, sNavItems:this.props.sNavItems}),
+					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs})
 				);
 			}
 		}),
 		IPNav: React.createClass({
 			displayName: 'IPNav',
 			render: function() {
+				// props
+				//	sNavSelected
+				//	sNavItems
+				
+				var cChildren = []
+				for (var i=0; i<this.props.sNavItems.length; i++) {
+					var cChildProps = {
+						sNavItem: this.props.sNavItems[i],
+					};
+					if (this.props.sNavSelected == this.props.sNavItems[i]) {
+						cChildProps.selected = true;
+					}
+					cChildren.push(React.createElement(IPStore.component.IPNavRow, cChildProps));
+					
+					// if this is browse and it is selected, show the quicklist
+					cChildren.push(React.createElement(React.addons.CSSTransitionGroup, {component:'div', className:'iconsetpicker-browsequicklist-animwrap', transitionName:'iconsetpicker-quicklist', transitionEnterTimeout:200, transitionLeaveTimeout:200},
+						!(cChildProps.sNavItem == 'browse' && cChildProps.selected) ? undefined : React.createElement('div', {className:'iconsetpicker-browsequicklist'},
+							React.createElement('div', {},
+								myServices.sb_ip.GetStringFromName('desktop')
+							),
+							React.createElement('div', {},
+								myServices.sb_ip.GetStringFromName('documents')
+							),
+							React.createElement('div', {},
+								myServices.sb_ip.GetStringFromName('pictures')
+							)
+						)
+					));
+				}
+				
 				return React.createElement('div', {className:'iconsetpicker-nav'},
-					React.createElement(IPStore.component.IPNavRow, {label:'Saved', sNavSelected:'Saved'}),
-					React.createElement(IPStore.component.IPNavRow, {label:'Browse'}),
-					React.createElement(IPStore.component.IPNavRow, {label:'Download'})
+					cChildren
 				);
 			}
 		}),
 		IPNavRow: React.createClass({
 			displayName: 'IPNavRow',
+			click: function() {
+				IPStore.setState({
+					sNavSelected: this.props.sNavItem
+				})
+			},
 			render: function() {
 				// props
-				//	label
-				//	sNavSelected
+				//	sNavItem
+				//	selected - availble only if this is currently selected, if it is then this is true
 				
 				var cProps = {
-					className: 'iconsetpicker-navrow'
+					className: 'iconsetpicker-navrow',
+					onClick: this.click
 				};
-				if (this.props.sNavSelected == this.props.label) {
+				if (this.props.selected) {
 					cProps.className += ' iconsetpicker-selected';
 				}
 				
 				return React.createElement('div', cProps,
-					this.props.label
+					myServices.sb_ip.GetStringFromName(this.props.sNavItem)
 				);
 			}
 		}),
@@ -1007,14 +1063,15 @@ var IPStore = {
 			render: function() {
 				// props
 				//	sNavSelected
+				//	sDirSubdirs
 				
 				var cProps = {
 					className: 'iconsetpicker-right'
 				};
 				
 				return React.createElement('div', cProps,
-					React.createElement(IPStore.component.IPRightTop, {}),
-					React.createElement(IPStore.component.IPControls, {},
+					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs}),
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected},
 						'controls'
 					)
 				);
@@ -1030,8 +1087,38 @@ var IPStore = {
 					className: 'iconsetpicker-controls'
 				};
 				
+				var cChildren = [];
+				switch (this.props.sNavSelected) {
+					case 'saved':
+						
+							// saved
+							cChildren.push(React.createElement('input', {type:'button', value:'Select'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Rename'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Delete'}));
+						
+						break;
+					case 'browse':
+						
+							// browse
+							cChildren.push(React.createElement('input', {type:'button', value:'Select'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Back'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Forward'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Up'}));
+						
+						break;
+					case 'download':
+						
+							// download
+							cChildren.push(React.createElement('input', {type:'button', value:'Select'}));
+						
+						break;
+					default:
+						// assume nothing is selected
+				}
+				
+				// return React.createElement.apply(this, ['div', cProps].concat(inner));
 				return React.createElement('div', cProps,
-					'controls'
+					cChildren
 				);
 			}
 		}),
@@ -1039,14 +1126,14 @@ var IPStore = {
 			displayName: 'IPRightTop',
 			render: function() {
 				// props
-				//	sNavSelected
+				//	sDirSubdirs
 				
 				var cProps = {
 					className: 'iconsetpicker-righttop'
 				};
 				
 				return React.createElement('div', cProps,
-					React.createElement(IPStore.component.IPDirList, {}),
+					React.createElement(IPStore.component.IPDirList, {sDirSubdirs:this.props.sDirSubdirs}),
 					React.createElement(IPStore.component.IPImageSet, {})
 				);
 			}
@@ -1055,13 +1142,25 @@ var IPStore = {
 			displayName: 'IPDirList',
 			render: function() {
 				// props
-				//	sNavSelected
+				//	sDirSubdirs
 				
 				var cProps = {
 					className: 'iconsetpicker-dirlist'
 				};
 				
-				return React.createElement('div', cProps);
+				var cChildren = [];
+				
+				if (!this.props.sDirSubdirs) {
+					cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
+				} else {
+					for (var i=0; i<this.props.sDirSubdirs.length; i++) {
+						cChildren.push(React.createElement(IPStore.component.IPDirEntry, {name:this.props.sDirSubdirs[i].name, path:this.props.sDirSubdirs[i].path}));
+					}
+				}
+				
+				return React.createElement('div', cProps,
+					cChildren
+				);
 			}
 		}),
 		IPImageSet: React.createClass({
@@ -1076,6 +1175,21 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					'imageset'
+				);
+			}
+		}),
+		IPDirEntry: React.createClass({
+			displayName: 'IPDirEntry',
+			render: function() {
+				// props
+				//	name
+				//	path
+				var cProps = {
+					className: 'iconsetpicker-direntry'
+				};
+				
+				return React.createElement('div', cProps,
+					this.props.name
 				);
 			}
 		})

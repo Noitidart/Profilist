@@ -773,8 +773,46 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_biInit.promise;		
-	}
+	},
 	// end - browse icon stuff
+	// start - iconpicker set
+	callInPromiseWorker: function(aArrOfFuncnameThenArgs) {
+		// for use with sendAsyncMessageWithCallback from framescripts
+		
+		var mainDeferred_callInPromiseWorker = new Deferred();
+		
+		var rez_pwcall = MainWorker.post(aArrOfFuncnameThenArgs.shift(), aArrOfFuncnameThenArgs);
+		rez_pwcall.then(
+			function(aVal) {
+				console.log('Fullfilled - rez_pwcall - ', aVal);
+				if (Array.isArray(aVal)) {
+					mainDeferred_callInPromiseWorker.resolve(aVal);
+				} else {
+					mainDeferred_callInPromiseWorker.resolve([aVal]);
+				}
+			},
+			function(aReason) {
+				var rejObj = {
+					name: 'rez_pwcall',
+					aReason: aReason
+				};
+				console.error('Rejected - rez_pwcall - ', rejObj);
+				mainDeferred_callInPromiseWorker.resolve([rejObj]);
+			}
+		).catch(
+			function(aCaught) {
+				var rejObj = {
+					name: 'rez_pwcall',
+					aCaught: aCaught
+				};
+				console.error('Caught - rez_pwcall - ', rejObj);
+				mainDeferred_callInPromiseWorkerr.resolve([rejObj]);
+			}
+		);
+		
+		return mainDeferred_callInPromiseWorker.promise;
+	}
+	// end - iconpicker set
 };
 var gCreateDesktopShortcutId = -1;
 var fsMsgListener = {

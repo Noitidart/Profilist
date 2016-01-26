@@ -112,7 +112,7 @@ function init(objCore) { // function name init required for SIPWorker
 
 	core.profilist.path.root = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data');
 	core.profilist.path.icons = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons');
-	core.profilist.path.images = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons'); // :note: this directory should hold all the original sizes provided by the user
+	core.profilist.path.images = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'images'); // :note: this directory should hold all the original sizes provided by the user
 	core.profilist.path.exes = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'exes');
 	core.profilist.path.ini = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profiles.ini');
 	core.profilist.path.inibkp = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'profiles.ini.bkp');
@@ -2814,6 +2814,56 @@ function browseiconInit() {
 	};
 }
 // End - Icon browse picker dialog
+
+// Start - Iconset Picker
+function readSubdirsInDir(aDirPlatPath) {
+	// returns
+		// array all of objects
+			/*
+			{
+				name: folder name
+				path: full plat path to folder
+			}
+			*/
+	
+	var rezArr = [];
+	
+	var cDirIterator = new OS.File.DirectoryIterator(aDirPlatPath);
+	try {
+		cDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+			if (aEntry.isDir) {
+				rezArr.push({
+					name: aEntry.name,
+					path: aEntry.path
+				});
+			}
+		});
+	} catch(OSFileError) {
+		if (!OSFileError.becauseNoSuchFile) {
+			throw new MainWorkerError('readSubdirsInDir', OSFileError);
+		} // its ok if it doesnt exist, then just report back no files. for instance core.profilist.path.images doesnt exist and so will get here
+	} finally {
+		cDirIterator.close();
+	}
+
+	rezArr.sort(function(a, b) {
+		return a.name > b.name;
+	});
+	
+	if (aDirPlatPath == core.profilist.path.images) {
+		console.log('splicing in');
+		rezArr.splice(0, 0,
+			{name:'aurora', path:core.addon.path.images + 'channel-iconsets/aurora'},
+			{name:'beta', path:core.addon.path.images + 'channel-iconsets/beta'},
+			{name:'dev', path:core.addon.path.images + 'channel-iconsets/dev'},
+			{name:'nightly', path:core.addon.path.images + 'channel-iconsets/nightly'},
+			{name:'release', path:core.addon.path.images + 'channel-iconsets/release'}
+		);
+	}
+	
+	return [rezArr]; // because this goes through callInPromiseWorker
+}
+// End - Iconset Picker
 
 // platform helpers
 function resolveSymlinkPath(aSymlinkPlatPath) {

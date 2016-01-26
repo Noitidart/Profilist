@@ -49,9 +49,9 @@
 /* start - iconsetpicker_subwrap */
 /* state:innate */
 .iconsetpicker-subwrap {
-	/* must set width on subwrap, as that dictates the width of everything. if dont set width here then if no contents in iconsetpicker-dirlist then it goes to 0 width */
+	/* must set width on subwrap, as that dictates the width of everything. if dont set width here then if no contents in iconsetpicker-dirlist then it goes to 0 width. well it takes the with of he contents in that case */
 	position: relative;
-	width: 200px;
+	/* width: 200px; */
 	pointer-events: none;
 	padding-bottom: 8px; /* to accomdte for height of arrow */
 }
@@ -110,6 +110,7 @@
 /* start - iconsetpicker_content */
 /* state:innate */
 .iconsetpicker-content {
+	/* can set height here, if you want overflows in iconsetpicker-dirlist to be scrollable, otherwise the whole thing takes height of longest contents */
 	background-color: #f6f5f6;
 	box-shadow: 0 1px 9px 0px rgba(0,0,0,0.3);
 	pointer-events: auto;
@@ -154,10 +155,49 @@
 }
 /* end - iconsetpicker_nav_row */
 
+/* start - iconsetpicker_browsequicklist_animwrap */
+.iconsetpicker-browsequicklist-animwrap {
+	
+}
+/* state:react_animation */
+.iconsetpicker-quicklist-enter {
+	height: 0;
+	overflow: hidden;
+}
+.iconsetpicker-quicklist-enter.iconsetpicker-quicklist-enter-active {
+	height: 58px;
+	transition: height 200ms;
+}
+.iconsetpicker-quicklist-leave {
+	height: 58px;
+	overflow: hidden;
+}
+.iconsetpicker-quicklist-leave.iconsetpicker-quicklist-leave-active {
+	height: 0;
+	transition: height 200ms;
+}
+/* end - iconsetpicker_browsequicklist_animwrap */
+
+/* start - iconsetpicker_browsequicklist */
+.iconsetpicker-browsequicklist {
+	padding-left: 15px;
+	padding-top: 1px;
+	font-size: .8em;
+	position: relative;
+}
+/* end - iconsetpicker_browsequicklist */
+
+/* start - iconsetpicker_browsequicklist_children */
+.iconsetpicker-browsequicklist > div {
+	padding: 3px 0;
+	cursor: pointer;
+}
+/* end - iconsetpicker_browsequicklist_children */
+
 /* start - iconsetpicker_right */
 /* state:innate */
 .iconsetpicker-right {
-	background-color: steelblue;
+	/* background-color: steelblue; */
 	display: flex;
 	flex: 1 0 auto;
 	flex-direction: column;
@@ -168,14 +208,15 @@
 /* state:innate */
 .iconsetpicker-controls {
 	/* takes the height of the contents, width is 100% as flex */
-	background-color: skyblue;
+	/* background-color: skyblue; */
+	padding: 5px;
 }
 /* end - iconsetpicker_controls */
 
 /* start - iconsetpicker_rightop */
 /* state:innate */
 .iconsetpicker-righttop {
-    background-color: midnightblue;
+    /* background-color: midnightblue; */
     flex: 1 0 auto;
     display: flex;
 }
@@ -185,15 +226,45 @@
 /* state:innate */
 .iconsetpicker-dirlist {
 	/* takes width of contents, or set a width, i prefer to set a width because the contents of this changes, so we should keep constant width */
-    background-color: gray;
+    /* background-color: gray; */
 	width: 50%;
+	display: flex;
+	justify-content: flex-start;
+	align-items: flex-start;
+	flex-direction: column;
+	padding: 10px 10px 5px 10px;
 }
 /* end - iconsetpicker_dirlist */
+
+/* start - iconsetpicker_dirlist_loading */
+/* state:innate */
+.iconsetpicker-dirlist > img {
+	align-self: center;
+	margin: auto 0; /* because there is no justify-self center - http://stackoverflow.com/questions/32551291/in-css-flexbox-why-are-there-no-justify-items-and-justify-self-properties */
+}
+/* end - iconsetpicker_dirlist_loading */
+
+/* start - iconsetpicker_dirlist_entry */
+/* state:innate */
+.iconsetpicker-direntry {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	flex: 0 1 auto;
+	width: 100%;
+	padding: 2px 0;
+	background: transparent url("chrome://profilist/content/resources/images/cp/folder_blue.png") no-repeat scroll 0 center;
+	text-indent: 20px;
+	cursor: pointer;
+}
+/* end - iconsetpicker_dirlist_entry */
+
+
 
 /* start - iconsetpicker_imageset */
 /* state:innate */
 .iconsetpicker-imageset {
-    background-color: yellow;
+    /* background-color: yellow; */
 	flex: 1 0 auto;
 }
 /* end - iconsetpicker_imageset */
