@@ -967,13 +967,116 @@ var IPStore = {
 		IPContent: React.createClass({
 			displayName: 'IPContent',
 			render: function() {
-				return React.createElement('div', {className:'iconsetpicker-content'});
+				return React.createElement('div', {className:'iconsetpicker-content'},
+					React.createElement(IPStore.component.IPNav, {}),
+					React.createElement(IPStore.component.IPRight, {})
+				);
 			}
 		}),
-		IPCover: React.createClass({
-			displayName: 'IPCover',
+		IPNav: React.createClass({
+			displayName: 'IPNav',
 			render: function() {
+				return React.createElement('div', {className:'iconsetpicker-nav'},
+					React.createElement(IPStore.component.IPNavRow, {label:'Saved', sNavSelected:'Saved'}),
+					React.createElement(IPStore.component.IPNavRow, {label:'Browse'}),
+					React.createElement(IPStore.component.IPNavRow, {label:'Download'})
+				);
+			}
+		}),
+		IPNavRow: React.createClass({
+			displayName: 'IPNavRow',
+			render: function() {
+				// props
+				//	label
+				//	sNavSelected
 				
+				var cProps = {
+					className: 'iconsetpicker-navrow'
+				};
+				if (this.props.sNavSelected == this.props.label) {
+					cProps.className += ' iconsetpicker-selected';
+				}
+				
+				return React.createElement('div', cProps,
+					this.props.label
+				);
+			}
+		}),
+		IPRight: React.createClass({
+			displayName: 'IPRight',
+			render: function() {
+				// props
+				//	sNavSelected
+				
+				var cProps = {
+					className: 'iconsetpicker-right'
+				};
+				
+				return React.createElement('div', cProps,
+					React.createElement(IPStore.component.IPRightTop, {}),
+					React.createElement(IPStore.component.IPControls, {},
+						'controls'
+					)
+				);
+			}
+		}),
+		IPControls: React.createClass({
+			displayName: 'IPControls',
+			render: function() {
+				// props
+				//	sNavSelected
+				
+				var cProps = {
+					className: 'iconsetpicker-controls'
+				};
+				
+				return React.createElement('div', cProps,
+					'controls'
+				);
+			}
+		}),
+		IPRightTop: React.createClass({
+			displayName: 'IPRightTop',
+			render: function() {
+				// props
+				//	sNavSelected
+				
+				var cProps = {
+					className: 'iconsetpicker-righttop'
+				};
+				
+				return React.createElement('div', cProps,
+					React.createElement(IPStore.component.IPDirList, {}),
+					React.createElement(IPStore.component.IPImageSet, {})
+				);
+			}
+		}),
+		IPDirList: React.createClass({
+			displayName: 'IPDirList',
+			render: function() {
+				// props
+				//	sNavSelected
+				
+				var cProps = {
+					className: 'iconsetpicker-dirlist'
+				};
+				
+				return React.createElement('div', cProps);
+			}
+		}),
+		IPImageSet: React.createClass({
+			displayName: 'IPDirList',
+			render: function() {
+				// props
+				//	sNavSelected
+				
+				var cProps = {
+					className: 'iconsetpicker-imageset'
+				};
+				
+				return React.createElement('div', cProps,
+					'imageset'
+				);
 			}
 		})
 	}

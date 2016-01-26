@@ -44,15 +44,16 @@
 	margin-bottom: 30px;
 	transition: opacity 200ms, margin-bottom 200ms;
 }
-/* end - iconsetpicker-content */
+/* end - iconsetpicker-animwrap */
 
 /* start - iconsetpicker_subwrap */
 /* state:innate */
 .iconsetpicker-subwrap {
+	/* must set width on subwrap, as that dictates the width of everything. if dont set width here then if no contents in iconsetpicker-dirlist then it goes to 0 width */
 	position: relative;
 	width: 200px;
-	height: calc(200px + 10px); /* 200 is height of content and 21.215 is the length of half the diagnol of square with size 30 from http://mathopenref.com/squarediagonals.html but 15 puts the diagnol at exactly half*/
 	pointer-events: none;
+	padding-bottom: 8px; /* to accomdte for height of arrow */
 }
 /* end - iconsetpicker_subwrap */
 
@@ -69,8 +70,8 @@
 	pointer-events: auto;
 	transform: rotate(45deg);
 	border-radius: 0 0 1px 0;
-	border-right: 1px solid #ccc;
-	border-bottom: 1px solid #ccc;
+	border-right: 1px solid #d3d2d3;
+	border-bottom: 1px solid #d3d2d3;
 }
 .iconsetpicker-arrow:before {
 	content: '';
@@ -81,7 +82,7 @@
 	position: absolute;
 	left: -10px;
 	top: -10px;
-	box-shadow: 6px 1px #ccc;
+	box-shadow: 6px 1px #d3d2d3;
 	z-index: -1;
 }
 .iconsetpicker-arrow:after {
@@ -93,7 +94,7 @@
 	position: absolute;
 	top: -10px;
 	left: -10px;
-	box-shadow: 1px 6px #ccc;
+	box-shadow: 1px 6px #d3d2d3;
 	z-index: -1;
 }
 .iconsetpicker-arrow-filler {
@@ -111,9 +112,88 @@
 .iconsetpicker-content {
 	background-color: #f6f5f6;
 	box-shadow: 0 1px 9px 0px rgba(0,0,0,0.3);
-	height: 200px;
 	pointer-events: auto;
 	border-radius: 3px;
-	border: 1px solid #ccc;
+	border: 1px solid #d3d2d3;
+	overflow: hidden;
+	display: flex;
+	flex-direction: row;
 }
 /* end - iconsetpicker_content */
+
+/* start - iconsetpicker_content_content_so_it_is_over_arrow_box */
+/* state:innate */
+.iconsetpicker-content > * {
+	z-index: 1;
+}
+/* end - iconsetpicker_content_content_so_it_is_over_arrow_box */
+
+/* start - iconsetpicker_nav */
+/* state:innate */
+.iconsetpicker-nav {
+	/* takes the width of the contents, height is 100% as flex */
+	background-color: #e4e3e4;
+	border-right: 1px solid #d3d2d3;
+	padding-top: 15px;
+	text-align: left;
+}
+/* end - iconsetpicker_nav */
+
+/* start - iconsetpicker_nav_row */
+/* state:innate */
+.iconsetpicker-navrow {
+	color: #000;
+	padding: 5px 10px 5px 10px;
+	cursor: pointer;
+	
+}
+/* state:selected */
+.iconsetpicker-navrow.iconsetpicker-selected {
+	color: #fff;
+	background-color: #0863d9;
+}
+/* end - iconsetpicker_nav_row */
+
+/* start - iconsetpicker_right */
+/* state:innate */
+.iconsetpicker-right {
+	background-color: steelblue;
+	display: flex;
+	flex: 1 0 auto;
+	flex-direction: column;
+}
+/* end - iconsetpicker_right */
+
+/* start - iconsetpicker_controls */
+/* state:innate */
+.iconsetpicker-controls {
+	/* takes the height of the contents, width is 100% as flex */
+	background-color: skyblue;
+}
+/* end - iconsetpicker_controls */
+
+/* start - iconsetpicker_rightop */
+/* state:innate */
+.iconsetpicker-righttop {
+    background-color: midnightblue;
+    flex: 1 0 auto;
+    display: flex;
+}
+/* end - iconsetpicker_rightop */
+
+/* start - iconsetpicker_dirlist */
+/* state:innate */
+.iconsetpicker-dirlist {
+	/* takes width of contents, or set a width, i prefer to set a width because the contents of this changes, so we should keep constant width */
+    background-color: gray;
+	width: 50%;
+}
+/* end - iconsetpicker_dirlist */
+
+/* start - iconsetpicker_imageset */
+/* state:innate */
+.iconsetpicker-imageset {
+    background-color: yellow;
+	flex: 1 0 auto;
+}
+/* end - iconsetpicker_imageset */
