@@ -2817,6 +2817,7 @@ function browseiconInit() {
 
 // Start - Iconset Picker
 function readSubdirsInDir(aDirPlatPath) {
+	// aDirPlatPath - string, either platform dir path or specials: "desktop", "documents", "pictures", "home", "downloads", "profilist_user_images"
 	// returns
 		// array all of objects
 			/*
@@ -2826,8 +2827,43 @@ function readSubdirsInDir(aDirPlatPath) {
 			}
 			*/
 	
-	var rezArr = [];
+	switch(aDirPlatPath) {
+		case 'profilist_user_images':
+			
+				aDirPlatPath = core.profilist.path.images;
+			
+			break;
+		case 'home':
+		
+				aDirPlatPath = OS.Constants.Path.homeDir;
+				
+			break;
+		case 'desktop':
+		
+				aDirPlatPath = OS.Constants.Path.desktopDir;
+				
+			break;
+		case 'documents':
+		
+				aDirPlatPath = core.profilist.path.documents;
+				
+			break;
+		case 'pictures':
+		
+				aDirPlatPath = core.profilist.path.pictures
+				
+			break;
+		case 'downloads':
+		
+				aDirPlatPath = core.profilist.path.downloads
+				
+			break;
+		default:
+			// do nothing - assume its a platpath
+	}
 	
+	var rezArr = [];
+
 	var cDirIterator = new OS.File.DirectoryIterator(aDirPlatPath);
 	try {
 		cDirIterator.forEach(function(aEntry, aIndex, aIterator) {
@@ -2851,7 +2887,6 @@ function readSubdirsInDir(aDirPlatPath) {
 	});
 	
 	if (aDirPlatPath == core.profilist.path.images) {
-		console.log('splicing in');
 		rezArr.splice(0, 0,
 			{name:'aurora', path:core.addon.path.images + 'channel-iconsets/aurora'},
 			{name:'beta', path:core.addon.path.images + 'channel-iconsets/beta'},

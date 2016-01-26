@@ -165,11 +165,11 @@
 	overflow: hidden;
 }
 .iconsetpicker-quicklist-enter.iconsetpicker-quicklist-enter-active {
-	height: 58px;
+	height: 77px;
 	transition: height 200ms;
 }
 .iconsetpicker-quicklist-leave {
-	height: 58px;
+	height: 77px;
 	overflow: hidden;
 }
 .iconsetpicker-quicklist-leave.iconsetpicker-quicklist-leave-active {
@@ -238,7 +238,8 @@
 
 /* start - iconsetpicker_dirlist_loading */
 /* state:innate */
-.iconsetpicker-dirlist > img {
+.iconsetpicker-dirlist > img,
+.iconsetpicker-dirlist > span { /* if immediate is span, then its the error span */
 	align-self: center;
 	margin: auto 0; /* because there is no justify-self center - http://stackoverflow.com/questions/32551291/in-css-flexbox-why-are-there-no-justify-items-and-justify-self-properties */
 }
@@ -256,6 +257,9 @@
 	background: transparent url("chrome://profilist/content/resources/images/cp/folder_blue.png") no-repeat scroll 0 center;
 	text-indent: 20px;
 	cursor: pointer;
+	white-space: nowrap;
+	text-overflow: '...';
+	overflow: hidden;
 }
 /* end - iconsetpicker_dirlist_entry */
 

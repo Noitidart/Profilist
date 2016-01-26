@@ -356,6 +356,39 @@ function startup(aData, aReason) {
 		defProfLRt: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path,
 		XREExeF: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
 	};
+	
+	// get pictures folder, used by iconsetpicker readSubdirsInDir
+	try {
+		core.profilist.path.pictures = Services.dirsvc.get('XDGPict', Ci.nsIFile).path; // works on linux
+	} catch (ex) {
+		try {
+			core.profilist.path.pictures = Services.dirsvc.get('Pict', Ci.nsIFile).path; // works on windows
+		} catch (ex) {
+			try {
+				core.profilist.path.pictures = Services.dirsvc.get('Pct', Ci.nsIFile).path; // works on mac
+			} catch (ex) {
+				core.profilist.path.pictures = OS.Constants.Path.desktopDir; // as a fall back
+			}
+		}
+	}
+	
+	// get documents folder
+	try {
+		core.profilist.path.documents = Services.dirsvc.get('XDGDocs', Ci.nsIFile).path; // works on linux
+	} catch (ex) {
+		try {
+			core.profilist.path.documents = Services.dirsvc.get('Docs', Ci.nsIFile).path; // works on windows
+		} catch (ex) {
+			try {
+				core.profilist.path.documents = Services.dirsvc.get('UsrDocs', Ci.nsIFile).path; // works on mac
+			} catch (ex) {
+				core.profilist.path.documents = OS.Constants.Path.desktopDir; // as a fall back
+			}
+		}
+	}
+	
+	core.profilist.path.downloads = Services.dirsvc.get('DfltDwnld', Ci.nsIFile).path;
+	
 	core.FileUtils = {
 		PERMS_DIRECTORY: FileUtils.PERMS_DIRECTORY
 	};
