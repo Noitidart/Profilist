@@ -2921,10 +2921,12 @@ function readSubdirsInDir(aDirPlatPath) {
 				path: full plat path to folder
 			}
 			*/
-	
 	if (aDirPlatPath == 'profilist_github') {
+		aDirPlatPath = 'https://github.com/Noitidart/Firefox-PNG-Icon-Collections';
+	}
+	if (aDirPlatPath.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') > -1) { // second part of if is to detect subcollections
 		var rezGithub = [];
-		var githubHtml = xhr('https://github.com/Noitidart/Firefox-PNG-Icon-Collections');
+		var githubHtml = xhr(aDirPlatPath);
 		
 		var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/tree\/master\/([^ "']+)[^>]+>([^<]+)/g
 		var githubMatch;

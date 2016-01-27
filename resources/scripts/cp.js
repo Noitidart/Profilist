@@ -1114,7 +1114,7 @@ var IPStore = {
 				};
 				
 				return React.createElement('div', cProps,
-					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview}),
+					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected}),
 					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected},
 						'controls'
 					)
@@ -1173,12 +1173,14 @@ var IPStore = {
 				//	sDirSubdirs
 				//	sDirSelected
 				//	sPreview
+				//	sNavSelected
+
 				var cProps = {
 					className: 'iconsetpicker-righttop'
 				};
 				
 				return React.createElement('div', cProps,
-					React.createElement(IPStore.component.IPDirList, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected}),
+					React.createElement(IPStore.component.IPDirList, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sNavSelected:this.props.sNavSelected}),
 					React.createElement(IPStore.component.IPPreview, {sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview})
 				);
 			}
@@ -1189,6 +1191,8 @@ var IPStore = {
 				// props
 				//	sDirSubdirs
 				//	sDirSelected
+				//	sNavSelected
+
 				var cProps = {
 					className: 'iconsetpicker-dirlist'
 				};
@@ -1208,7 +1212,7 @@ var IPStore = {
 						));
 					} else {
 						for (var i=0; i<this.props.sDirSubdirs.length; i++) {
-							cChildren.push(React.createElement(IPStore.component.IPDirEntry, {name:this.props.sDirSubdirs[i].name, path:this.props.sDirSubdirs[i].path, selected:(this.props.sDirSelected != this.props.sDirSubdirs[i].path ? undefined : true) }));
+							cChildren.push(React.createElement(IPStore.component.IPDirEntry, {name:this.props.sDirSubdirs[i].name, path:this.props.sDirSubdirs[i].path, selected:(this.props.sDirSelected != this.props.sDirSubdirs[i].path ? undefined : true), sNavSelected:this.props.sNavSelected}));
 						}
 					}
 				}
@@ -1291,63 +1295,81 @@ var IPStore = {
 		IPDirEntry: React.createClass({
 			displayName: 'IPDirEntry',
 			click: function() {
-				if (!this.props.selected) {
-					IPStore.setState({
-						sDirSelected: this.props.path,
-						sPreview: null
+				
+				if (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length) {
+					console.log('this.props of dbl clickable:', this.props);
+					if (!this.props.selected) {
+						IPStore.setState({
+							sDirSelected: this.props.path,
+							sPreview: 'error-noimgs'
+						});
+					}
+				} else {
+					if (!this.props.selected) {
+						IPStore.setState({
+							sDirSelected: this.props.path,
+							sPreview: null
+						});
+					}
+					
+					var cDirSelected = this.props.path;
+					var readImgsInDirArg;
+					if (this.props.path.indexOf('chrome:') === 0 || this.props.path.indexOf(core.profilist.path.images) === 0) {
+						readImgsInDirArg = {profilist_imgslug:this.props.name};
+					} else {
+						readImgsInDirArg = this.props.path;
+					}
+					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', readImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+						if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
+							IPStore.setState({
+								sPreview: 'failed-read'
+							});
+							throw new Error('readImgsInDir failed with OSFileError!!');
+						} else if (typeof(aErrorOrImgObj) == 'string') {
+							IPStore.setState({
+								sPreview: aErrorOrImgObj
+							});
+							throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
+						} else {
+							if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
+								var aPartialImgObj = aErrorOrImgObj;
+								console.log('got aPartialImgObj:', aPartialImgObj);
+							} else {
+								// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
+								var aImgObj = aErrorOrImgObj;
+								console.log('got aImgObj:', aImgObj);
+								IPStore.setState({
+									sPreview: {
+										path: cDirSelected,
+										imgObj: aImgObj
+									}
+								});
+							}
+						}
 					});
 				}
-				
-				var cDirSelected = this.props.path;
-				var readImgsInDirArg;
-				if (this.props.path.indexOf('chrome:') === 0 || this.props.path.indexOf(core.profilist.path.images) === 0) {
-					readImgsInDirArg = {profilist_imgslug:this.props.name};
-				} else {
-					readImgsInDirArg = this.props.path;
-				}
-				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', readImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
-					if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
-						IPStore.setState({
-							sPreview: 'failed-read'
-						});
-						throw new Error('readImgsInDir failed with OSFileError!!');
-					} else if (typeof(aErrorOrImgObj) == 'string') {
-						IPStore.setState({
-							sPreview: aErrorOrImgObj
-						});
-						throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
-					} else {
-						if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
-							var aPartialImgObj = aErrorOrImgObj;
-							console.log('got aPartialImgObj:', aPartialImgObj);
-						} else {
-							// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
-							var aImgObj = aErrorOrImgObj;
-							console.log('got aImgObj:', aImgObj);
-							IPStore.setState({
-								sPreview: {
-									path: cDirSelected,
-									imgObj: aImgObj
-								}
-							});
-						}
-					}
-				});
 			},
 			dblclick: function() {
 				// :todo: highlight this entry if this is in "saved" --- what the hell does this mean? i dont know i wrote it here before
 				
 				// if its not a chrome path, then open the dir
-				if (this.props.path.indexOf('chrome:') == -1) {
+				// if (this.props.path.indexOf('chrome:') == -1 && ) {
+					
+				// is it double clickable?
+				if (this.props.sNavSelected == 'browse' || (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length)) {
+					// yes its double clickable
 					IPStore.readSubdirsInDir(this.props.path, true);
-				}				
+				} else {
+					// no its not
+				}
 			},
 			render: function() {
 				// props
 				//	name
 				//	path
 				//	selected - only if this is selected
-				
+				//	sNavSelected
+
 				var cProps = {
 					className: 'iconsetpicker-direntry',
 					onClick: this.click,
@@ -1356,6 +1378,14 @@ var IPStore = {
 				
 				if (this.props.selected) {
 					cProps.className += ' iconsetpicker-selected';
+				}
+				
+				// is it double clickable?				
+				if (this.props.sNavSelected == 'browse' || (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length)) {
+					// yes its double clickable
+				} else {
+					// no its not
+					cProps.className += ' iconsetpicker-iconsetentry';
 				}
 				
 				return React.createElement('div', cProps,
