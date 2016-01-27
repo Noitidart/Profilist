@@ -2832,44 +2832,75 @@ function readImgsInDir(aDirPlatPath) {
 		var validImgExts = ['gif', 'jpg', 'jpeg', 'png'];
 		var tooManyImgs = 20;
 		
-		rezObj = [];
-		var cDirIterator = new OS.File.DirectoryIterator(aDirPlatPath);
-		try {
-			cDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+		if (aDirPlatPath.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') > -1) {
+			// proflist_github
+			console.log('profilist_github:', aDirPlatPath);
+			rezObj = {};
+			
+			var githubHtml = xhr(aDirPlatPath);
+			// console.log('githubHtml:', githubHtml);
+			var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/blob\/master\/([^ "']+)[^>]+>([^<]+)/g
+			var githubMatch;
+			
+			while(githubMatch = githubPatt.exec(githubHtml)) {
+				var name = githubMatch[2];
+				var path = githubMatch[1];
+				// console.log(name, path);
 				
-				// this block tests if the format is valid of the image filename, it also gets details of cImgSize, cImgExt, and sImgSlug
-				// get extension
-				var cDotIndex = aEntry.name.lastIndexOf('.');
-				if (cDotIndex == -1) {
-					// no extension
-					return;
+				var dotIndex = name.lastIndexOf('.');
+				if (dotIndex == -1) {
+					continue;
 				}
-				
-				var cExt = aEntry.name.substr(cDotIndex + 1);
-				if (validImgExts.indexOf(cExt.toLowerCase()) == -1) {
+				var ext = name.substr(dotIndex + 1);
+				if (validImgExts.indexOf(ext.toLowerCase()) == -1) {
 					// not an image or not an acceptable image
-					return;
+					continue;
 				}
 				
-				rezObj.push(aEntry.path);
-				
-				if (rezObj.length == tooManyImgs) {
-					rezObj = 'error-toomanyimgs';
+				var size = name.substr(0, dotIndex);
+				rezObj[size] = 'https://raw.githubusercontent.com/Noitidart/Firefox-PNG-Icon-Collections/master/' + path;
+			}
+			
+		} else {
+			rezObj = [];
+			var cDirIterator = new OS.File.DirectoryIterator(aDirPlatPath);
+			try {
+				cDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+					
+					// this block tests if the format is valid of the image filename, it also gets details of cImgSize, cImgExt, and sImgSlug
+					// get extension
+					var cDotIndex = aEntry.name.lastIndexOf('.');
+					if (cDotIndex == -1) {
+						// no extension
+						return;
+					}
+					
+					var cExt = aEntry.name.substr(cDotIndex + 1);
+					if (validImgExts.indexOf(cExt.toLowerCase()) == -1) {
+						// not an image or not an acceptable image
+						return;
+					}
+					
+					rezObj.push(aEntry.path);
+					
+					if (rezObj.length == tooManyImgs) {
+						rezObj = 'error-toomanyimgs';
+						cDirIterator.close();
+					}
+
+				});
+			} catch(OSFileError) {
+				throw new MainWorkerError('readImgsInDir', OSFileError);
+			} finally {
+				if (rezObj != 'error-toomanyimgs') {
+					// cuz if too many images reached it closes it already to break the iteration
 					cDirIterator.close();
 				}
-
-			});
-		} catch(OSFileError) {
-			throw new MainWorkerError('readImgsInDir', OSFileError);
-		} finally {
-			if (rezObj != 'error-toomanyimgs') {
-				// cuz if too many images reached it closes it already to break the iteration
-				cDirIterator.close();
 			}
-		}
-		
-		if (Array.isArray(rezObj) && rezObj.length == 0) {
-			rezObj = 'error-noimgs';
+			
+			if (Array.isArray(rezObj) && rezObj.length == 0) {
+				rezObj = 'error-noimgs';
+			}
 		}
 	
 	} else {
@@ -2881,7 +2912,7 @@ function readImgsInDir(aDirPlatPath) {
 }
 
 function readSubdirsInDir(aDirPlatPath) {
-	// aDirPlatPath - string, either platform dir path or specials: "desktop", "documents", "pictures", "home", "downloads", "profilist_user_images"
+	// aDirPlatPath - string, either platform dir path or specials: "desktop", "documents", "pictures", "home", "downloads", "profilist_user_images", "profilist_github"
 	// returns
 		// array all of objects
 			/*
@@ -2891,6 +2922,22 @@ function readSubdirsInDir(aDirPlatPath) {
 			}
 			*/
 	
+	if (aDirPlatPath == 'profilist_github') {
+		var rezGithub = [];
+		var githubHtml = xhr('https://github.com/Noitidart/Firefox-PNG-Icon-Collections');
+		
+		var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/tree\/master\/([^ "']+)[^>]+>([^<]+)/g
+		var githubMatch;
+		
+		while(githubMatch = githubPatt.exec(githubHtml)) {
+			rezGithub.push({
+				name: githubMatch[2],
+				path: 'https://github.com/Noitidart/Firefox-PNG-Icon-Collections/tree/master/' + githubMatch[1]
+			});
+		}
+		
+		return [rezGithub];
+	}
 	switch(aDirPlatPath) {
 		case 'profilist_user_images':
 			

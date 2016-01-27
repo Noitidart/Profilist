@@ -1073,6 +1073,11 @@ var IPStore = {
 							IPStore.readSubdirsInDir('home');
 						
 						break;
+					case 'download':
+					
+							IPStore.readSubdirsInDir('profilist_github');
+						
+						break;
 					default:
 						throw new Error('unknown sNavItem dont know what to readSubdirsInDir on');
 				}
@@ -1278,7 +1283,7 @@ var IPStore = {
 					cImgProps.width = cssVal['.iconsetpicker-preview-img'];
 				}
 				
-				return React.createElement('div', {className:'iconsetpicker-preview-img'},
+				return React.createElement('div', {className:'iconsetpicker-preview-img', 'data-size':this.props.size + ' x ' + this.props.size},
 					React.createElement('img', cImgProps)
 				);
 			}
@@ -1312,10 +1317,11 @@ var IPStore = {
 						});
 						throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
 					} else {
-						if (typeof(readImgsInDirArg) == 'string') {
+						if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
 							var aPartialImgObj = aErrorOrImgObj;
 							console.log('got aPartialImgObj:', aPartialImgObj);
 						} else {
+							// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
 							var aImgObj = aErrorOrImgObj;
 							console.log('got aImgObj:', aImgObj);
 							IPStore.setState({
