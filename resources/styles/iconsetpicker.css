@@ -65,7 +65,7 @@
 	width: 10px;
 	background-color: #f6f5f6;
 	box-shadow: 0 1px 9px 0px rgba(0,0,0,0.3);
-	left: 100px;
+	left: 225px;
 	bottom: 0px;
 	pointer-events: auto;
 	transform: rotate(45deg);
@@ -137,6 +137,7 @@
 	border-right: 1px solid #d3d2d3;
 	padding-top: 15px;
 	text-align: left;
+	width: 100px;
 }
 /* end - iconsetpicker_nav */
 
@@ -227,13 +228,15 @@
 .iconsetpicker-dirlist {
 	/* takes width of contents, or set a width, i prefer to set a width because the contents of this changes, so we should keep constant width */
     /* background-color: gray; */
-	width: 50%;
+	width: 150px;
 	display: flex;
 	justify-content: flex-start;
 	align-items: flex-start;
 	flex-direction: column;
 	padding-top: 3px;
-	overflow: hidden;
+	overflow-x: hidden;
+	overflow-y: scroll;
+	height: 200px;
 }
 /* end - iconsetpicker_dirlist */
 
@@ -252,14 +255,14 @@
 	display: flex;
 	flex-direction: row;
 	align-items: flex-start;
-	flex: 0 1 auto;
-	width: 100%;
+	flex: 0 0 auto;
+	width: 110px;
 	padding: 3px 10px 3px 10px;
 	background: transparent url("chrome://profilist/content/resources/images/cp/folder_blue.png") no-repeat scroll 10px center;
 	text-indent: 20px;
 	cursor: pointer;
 	white-space: nowrap;
-	text-overflow: '...';
+	text-overflow: ellipsis;
 	overflow: hidden;
 }
 /* state:selected */
@@ -278,8 +281,13 @@
 	display: flex;
 	justify-content: flex-start;
 	align-items: flex-start;
-	flex-direction: column;
+	flex-direction: row;
 	padding-top: 3px;
+	flex-wrap: wrap;
+	width: 220px;
+	height: 200px;
+	overflow-y: scroll;
+	overflow-x: hidden;
 }
 /* end - iconsetpicker_preview */
 
@@ -288,6 +296,17 @@
 .iconsetpicker-preview > img,
 .iconsetpicker-preview > span { /* if immediate is span, then its the error span */
 	align-self: center;
-	margin: auto 0; /* because there is no justify-self center - http://stackoverflow.com/questions/32551291/in-css-flexbox-why-are-there-no-justify-items-and-justify-self-properties */
+	margin: 0 auto; /* because there is no justify-self center - http://stackoverflow.com/questions/32551291/in-css-flexbox-why-are-there-no-justify-items-and-justify-self-properties */
 }
 /* end - iconsetpicker_preview_loading */
+
+/* start - iconsetpicker_preview_image */
+/* state:innate */
+.iconsetpicker-preview-img {
+	width: 64px; /* cross-file-link881711729404 */
+	height: 64px; /* height must be same as width */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+/* end - iconsetpicker_preview_image */

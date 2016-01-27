@@ -773,7 +773,7 @@ function invalidateCache_getImgSrcsFormImgSlug(aImgSlug) {
 	delete gCache_getImgSrcsForImgSlug[aImgSlug];
 }
 function getImgSrcsForImgSlug(aImgSlug) {
-	// returns an object, with key being the size, of all the strings you would put in <img src="HEREEEE" /> for all available sizes for this aImgSlug
+	// returns an imgObj, which is key being the size, of all the strings you would put in <img src="HEREEEE" /> for all available sizes for this aImgSlug
 	// :note: the size is square, as i dont accept icons thare not square in size
 	// a size can be 'svg'
 	
@@ -2816,6 +2816,70 @@ function browseiconInit() {
 // End - Icon browse picker dialog
 
 // Start - Iconset Picker
+function readImgsInDir(aDirPlatPath) {
+	// aDirPlatPath is either a plat path OR object {profilist_imgslug:aImgSlug} - gurantted aImgSlug must exist, as i dont handle errors in here if it doesnt
+	// returns
+		// if profilist_slug then aImgObj (which is keys size and value is string you would put in img src="HERE")
+		// else it is aPartialImgObj which is an array of images found. only gif, jpeg, jpg, and png are supported
+			// if no images found it is a string saying "error-noimgs"
+			// if no cannot read directory contents "error-read"
+			// if more than 20 images "error-toomanyimgs"
+		
+	var rezObj;
+	
+	if(typeof(aDirPlatPath) == 'string') {
+
+		var validImgExts = ['gif', 'jpg', 'jpeg', 'png'];
+		var tooManyImgs = 20;
+		
+		rezObj = [];
+		var cDirIterator = new OS.File.DirectoryIterator(aDirPlatPath);
+		try {
+			cDirIterator.forEach(function(aEntry, aIndex, aIterator) {
+				
+				// this block tests if the format is valid of the image filename, it also gets details of cImgSize, cImgExt, and sImgSlug
+				// get extension
+				var cDotIndex = aEntry.name.lastIndexOf('.');
+				if (cDotIndex == -1) {
+					// no extension
+					return;
+				}
+				
+				var cExt = aEntry.name.substr(cDotIndex + 1);
+				if (validImgExts.indexOf(cExt.toLowerCase()) == -1) {
+					// not an image or not an acceptable image
+					return;
+				}
+				
+				rezObj.push(aEntry.path);
+				
+				if (rezObj.length == tooManyImgs) {
+					rezObj = 'error-toomanyimgs';
+					cDirIterator.close();
+				}
+
+			});
+		} catch(OSFileError) {
+			throw new MainWorkerError('readImgsInDir', OSFileError);
+		} finally {
+			if (rezObj != 'error-toomanyimgs') {
+				// cuz if too many images reached it closes it already to break the iteration
+				cDirIterator.close();
+			}
+		}
+		
+		if (Array.isArray(rezObj) && rezObj.length == 0) {
+			rezObj = 'error-noimgs';
+		}
+	
+	} else {
+		// its a imgSlug
+		rezObj = getImgSrcsForImgSlug(aDirPlatPath.profilist_imgslug);
+	}
+	
+	return [rezObj]; // need to return array because am going through my custom communication stuff
+}
+
 function readSubdirsInDir(aDirPlatPath) {
 	// aDirPlatPath - string, either platform dir path or specials: "desktop", "documents", "pictures", "home", "downloads", "profilist_user_images"
 	// returns

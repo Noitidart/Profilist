@@ -928,7 +928,7 @@ var IPStore = {
 		cover.addEventListener('mousedown', uninit, false);
 		document.addEventListener('keypress', uninitKeypress, false);
 		
-		wrap.style.left = (aTargetElement.offsetLeft - (200 / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
+		wrap.style.left = (aTargetElement.offsetLeft - ((100 + 150 + 200) / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
 		wrap.style.bottom = (aTargetElement.offsetTop + aTargetElement.offsetHeight + 2) + 'px';
 		
 		var myIP = React.createElement(IPStore.component.IconsetPicker);
@@ -1235,8 +1235,15 @@ var IPStore = {
 						// loading
 						cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
 					} else {
-						if (this.props.sPreview.path == this.props.sDirSelected) {
-							cChildren.push(React.createElement('span', {}, 'ok after imgs loaded check and validate'));
+						console.log('this.props.sPreview:', this.props.sPreview);
+						if (typeof(this.props.sPreview) == 'string') {
+							cChildren.push(React.createElement('span', {},
+								myServices.sb_ip.GetStringFromName(this.props.sPreview)
+							));
+						} else if (this.props.sPreview.path == this.props.sDirSelected) {
+							for (var aSize in this.props.sPreview.imgObj) {
+								cChildren.push(React.createElement(IPStore.component.IPPreviewImg, {size:aSize, src:this.props.sPreview.imgObj[aSize]}));
+							}
 						} else {
 							// sDirSelected differs
 							// show preview-desc
@@ -1253,14 +1260,73 @@ var IPStore = {
 				);
 			}
 		}),
+		IPPreviewImg: React.createClass({
+			displayName: 'IPPreviewImg',
+			render: function() {
+				// props
+				//	src
+				//	size
+				
+				var cImgProps = {
+					src: this.props.src
+				};
+				
+				var cssVal = {
+					'.iconsetpicker-preview-img': 64 // match to cross-file-link881711729404
+				};
+				if (this.props.size > cssVal['.iconsetpicker-preview-img']) {
+					cImgProps.width = cssVal['.iconsetpicker-preview-img'];
+				}
+				
+				return React.createElement('div', {className:'iconsetpicker-preview-img'},
+					React.createElement('img', cImgProps)
+				);
+			}
+		}),
 		IPDirEntry: React.createClass({
 			displayName: 'IPDirEntry',
 			click: function() {
 				if (!this.props.selected) {
 					IPStore.setState({
-						sDirSelected: this.props.path
+						sDirSelected: this.props.path,
+						sPreview: null
 					});
 				}
+				
+				var cDirSelected = this.props.path;
+				var readImgsInDirArg;
+				if (this.props.path.indexOf('chrome:') === 0 || this.props.path.indexOf(core.profilist.path.images) === 0) {
+					readImgsInDirArg = {profilist_imgslug:this.props.name};
+				} else {
+					readImgsInDirArg = this.props.path;
+				}
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', readImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+					if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
+						IPStore.setState({
+							sPreview: 'failed-read'
+						});
+						throw new Error('readImgsInDir failed with OSFileError!!');
+					} else if (typeof(aErrorOrImgObj) == 'string') {
+						IPStore.setState({
+							sPreview: aErrorOrImgObj
+						});
+						throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
+					} else {
+						if (typeof(readImgsInDirArg) == 'string') {
+							var aPartialImgObj = aErrorOrImgObj;
+							console.log('got aPartialImgObj:', aPartialImgObj);
+						} else {
+							var aImgObj = aErrorOrImgObj;
+							console.log('got aImgObj:', aImgObj);
+							IPStore.setState({
+								sPreview: {
+									path: cDirSelected,
+									imgObj: aImgObj
+								}
+							});
+						}
+					}
+				});
 			},
 			dblclick: function() {
 				// :todo: highlight this entry if this is in "saved" --- what the hell does this mean? i dont know i wrote it here before
