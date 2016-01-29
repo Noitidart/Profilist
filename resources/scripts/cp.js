@@ -1169,7 +1169,9 @@ var IPStore = {
 					sDirSelected: null,
 					sPreview: null
 				};
-				if (this.props.sNavSelected && this.props.sNavSelected != this.props.sNavItem) {
+				
+				if (!this.props.selected /* && this.props.sNavSelected != this.props.sNavItem*/) {
+					// user is switching categories so reset history
 					newState.sDirListHistory = [];
 				} else {
 					newState.sDirListHistory = this.props.sDirListHistory;
@@ -1230,7 +1232,7 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview},
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected},
 						'controls'
 					)
 				);
@@ -1250,27 +1252,29 @@ var IPStore = {
 				//	sNavSelected
 				//	sDirListHistory
 				//	sPreview
+				//	sDirSelected
 				
 				var cProps = {
 					className: 'iconsetpicker-controls'
 				};
 				
 				var cChildren = [];
+				
+				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
+				
 				switch (this.props.sNavSelected) {
 					case 'saved':
 						
 							// saved
-							cChildren.push(React.createElement('input', {type:'button', value:'Select', disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
-							cChildren.push(React.createElement('input', {type:'button', value:'Rename'}));
-							cChildren.push(React.createElement('input', {type:'button', value:'Delete'}));
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((this.props.sDirSelected) ? false : true)}));
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((this.props.sDirSelected) ? false : true)}));
 						
 						break;
 					case 'browse':
 						
 							// browse
-							cChildren.push(React.createElement('input', {type:'button', value:'Select', disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
 							if (this.props.sDirListHistory.length >= 2) {
-								cChildren.push(React.createElement('input', {type:'button', value:'Back', onClick:this.clickBack}));
+								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), onClick:this.clickBack}));
 							}
 							// cChildren.push(React.createElement('input', {type:'button', value:'Forward'}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Up'}));
@@ -1279,9 +1283,8 @@ var IPStore = {
 					case 'download':
 						
 							// download
-							cChildren.push(React.createElement('input', {type:'button', value:'Download'}));
 							if (this.props.sDirListHistory.length >= 2) {
-								cChildren.push(React.createElement('input', {type:'button', value:'Back', onClick:this.clickBack}));
+								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), onClick:this.clickBack}));
 							}
 						
 						break;
