@@ -2837,7 +2837,7 @@ function readImgsInDir(aDirPlatPath) {
 			console.log('profilist_github:', aDirPlatPath);
 			rezObj = {};
 			
-			var githubHtml = xhr(aDirPlatPath);
+			var githubHtml = xhr(aDirPlatPath).response;
 			// console.log('githubHtml:', githubHtml);
 			var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/blob\/master\/([^ "']+)[^>]+>([^<]+)/g
 			var githubMatch;
@@ -2926,7 +2926,7 @@ function readSubdirsInDir(aDirPlatPath) {
 	}
 	if (aDirPlatPath.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') > -1) { // second part of if is to detect subcollections
 		var rezGithub = [];
-		var githubHtml = xhr(aDirPlatPath);
+		var githubHtml = xhr(aDirPlatPath).response;
 		
 		var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/tree\/master\/([^ "']+)[^>]+>([^<]+)/g
 		var githubMatch;
@@ -4114,6 +4114,7 @@ function platformFilePathSeperator() {
 	return OS.Path.join(' ', ' ').replace(/ /g, '');
 }
 
+// rev1 - https://gist.github.com/Noitidart/ec1e6b9a593ec7e3efed
 function xhr(aUrlOrFileUri, aOptions={}) {
 	// console.error('in xhr!!! aUrlOrFileUri:', aUrlOrFileUri);
 	
@@ -4143,7 +4144,7 @@ function xhr(aUrlOrFileUri, aOptions={}) {
 	// console.log('response:', cRequest.response);
 	
 	// console.error('done xhr!!!');
-	return cRequest.response;
+	return cRequest;
 }
 
 var _cache_formatStringFromName_packages = {}; // holds imported packages
@@ -4155,7 +4156,7 @@ function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
 	// aReplacements - array of string
 	
 	if (!_cache_formatStringFromName_packages[aLocalizedPackageName]) {
-		var packageStr = xhr(core.addon.path.locale + aLocalizedPackageName + '.properties');
+		var packageStr = xhr(core.addon.path.locale + aLocalizedPackageName + '.properties').response;
 		var packageJson = {};
 		
 		var propPatt = /(.*?)=(.*?)$/gm;
