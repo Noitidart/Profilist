@@ -987,6 +987,73 @@ var IPStore = {
 			componentWillUnmount: function() {
 				document.removeEventListener('keypress', this.keypress, true);
 			},
+			componentDidUpdate: function(aPrevPropsObj, aPrevStateObj) {
+				console.error('componentDidUpdate! and prevAndNowStateObj:', {prev:aPrevStateObj, now:this.state});
+				// check if pref state sPreview had imgObj and if imgObj has blob urls. if true then -- check if sPreview is now changed, if it is then tell worker to revokeObjectURL on those blob urls
+				if (aPrevStateObj.sPreview && typeof(aPrevStateObj.sPreview) != 'string' && aPrevStateObj.sPreview.imgObj) {
+					var urlsInPrevState = [];
+					var urlsInPrevAreBlobs = false;
+					for (var aSize in aPrevStateObj.sPreview.imgObj) {
+						var cUrl = aPrevStateObj.sPreview.imgObj[aSize];
+						urlsInPrevState.push(cUrl);
+						if (cUrl.indexOf('blob:') === 0) {
+							urlsInPrevAreBlobs = true;
+						}
+					}
+					console.log('urlsInPrevState:', urlsInPrevState);
+					if (urlsInPrevAreBlobs) {
+						console.log('yes there are blobs in prev state, check if those urls are no longer being shown, if they are not then release from worker');
+						// i dont simply revoke the url here, because im holding onto to the blobs in global space over in worker
+						
+						var needToReleaseOldImgObj = false;
+						
+						// test if needToReleaseOldImgObj should be set to true
+						if (aPrevStateObj.sInit && !this.state.sInit) {
+							console.log('sInit was set to false, so is unmounting, so release them blobs');
+							needToReleaseOldImgObj = true;
+						} else if (!this.state.sPreview) {
+							console.log('now sPreview is null, so release those blobs');
+							needToReleaseOldImgObj = true;
+						} else if (typeof(this.state.sPreview) == 'string') {
+							console.log('now sPreview is a string, so no more imgObj so release those blobs');
+							needToReleaseOldImgObj = true;
+						} else if (typeof(this.state.sPreview) == 'object') {
+							if (!this.state.sPreview.imgObj) {
+								console.log('now sPreview has no imgObj anymore so release those blobs');
+								needToReleaseOldImgObj = true;
+							} else {
+								// check if new urls are same, if they are then do nothing
+
+								var urlsInNowState = [];
+								for (var aSize in this.state.sPreview.imgObj) {
+									var cUrl = this.state.sPreview.imgObj[aSize];
+									urlsInNowState.push(cUrl);
+								}
+								console.log('urlsInNowState:', urlsInNowState);
+								
+								for (var i=0; i<urlsInPrevState.length; i++) {
+									if (urlsInNowState.indexOf(urlsInPrevState[i]) == -1) {
+										console.log('old url not found in new urls, old url:', urlsInPrevState[i]);
+										needToReleaseOldImgObj = true;
+										break;
+									}
+								}
+							}
+						} else {
+							console.error('should never ever ever get here');
+						}
+						
+						if (needToReleaseOldImgObj) {
+							console.log('ok releeasing old obj urls');
+							sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['releaseBlobsAndUrls', urlsInPrevState]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+								console.error('ok back from releaseBlobsAndUrls. so now in framescript');
+							});
+						}
+					} else {
+						console.log('no blob urls in previous so no need to worry about checking if its time to release');
+					}
+				}
+			},
 			keypress: function(e) {
 				if (this.state.sInit) { // because i have react animation, it is not unmounted till after anim. but i want to not listen to keypresses as soon as sInit goes to false
 					switch (e.key) {
@@ -1102,7 +1169,7 @@ var IPStore = {
 					sDirSelected: null,
 					sPreview: null
 				};
-				if (this.props.sNavSelected != this.props.sNavItem) {
+				if (this.props.sNavSelected && this.props.sNavSelected != this.props.sNavItem) {
 					newState.sDirListHistory = [];
 				} else {
 					newState.sDirListHistory = this.props.sDirListHistory;
@@ -1163,7 +1230,7 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory},
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview},
 						'controls'
 					)
 				);
@@ -1182,6 +1249,7 @@ var IPStore = {
 				// props
 				//	sNavSelected
 				//	sDirListHistory
+				//	sPreview
 				
 				var cProps = {
 					className: 'iconsetpicker-controls'
@@ -1192,7 +1260,7 @@ var IPStore = {
 					case 'saved':
 						
 							// saved
-							cChildren.push(React.createElement('input', {type:'button', value:'Select'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Select', disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
 							cChildren.push(React.createElement('input', {type:'button', value:'Rename'}));
 							cChildren.push(React.createElement('input', {type:'button', value:'Delete'}));
 						
@@ -1200,7 +1268,7 @@ var IPStore = {
 					case 'browse':
 						
 							// browse
-							cChildren.push(React.createElement('input', {type:'button', value:'Select'}));
+							cChildren.push(React.createElement('input', {type:'button', value:'Select', disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
 							if (this.props.sDirListHistory.length >= 2) {
 								cChildren.push(React.createElement('input', {type:'button', value:'Back', onClick:this.clickBack}));
 							}

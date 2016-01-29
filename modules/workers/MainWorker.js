@@ -2816,6 +2816,18 @@ function browseiconInit() {
 // End - Icon browse picker dialog
 
 // Start - Iconset Picker
+var gBlobs = {}; // key is URL.createURL and value is blob
+function releaseBlobsAndUrls(aArrOfBlobUrls) {
+	console.log('in worker will release aArrOfBlobUrls:', aArrOfBlobUrls);
+	
+	for (var i=0; i<aArrOfBlobUrls.length; i++) {
+		console.log('releasing:', aArrOfBlobUrls[i]);
+		URL.revokeObjectURL(aArrOfBlobUrls[i]);
+		delete gBlobs[aArrOfBlobUrls[i]];
+	}
+	
+	return true;
+}
 function readImgsInDir(aDirPlatPath) {
 	// aDirPlatPath is either a plat path OR object {profilist_imgslug:aImgSlug} - gurantted aImgSlug must exist, as i dont handle errors in here if it doesnt
 	// returns
@@ -2859,6 +2871,14 @@ function readImgsInDir(aDirPlatPath) {
 				
 				var size = name.substr(0, dotIndex);
 				rezObj[size] = 'https://raw.githubusercontent.com/Noitidart/Firefox-PNG-Icon-Collections/master/' + path;
+			}
+			
+			for (var aSize in rezObj) {
+				var request_imgdata = xhr(rezObj[aSize], {
+					responseType: 'blob'
+				});
+				rezObj[aSize] = URL.createObjectURL(request_imgdata.response);
+				gBlobs[rezObj[size]] = request_imgdata.response;
 			}
 			
 		} else {
