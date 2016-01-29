@@ -2881,7 +2881,7 @@ function readImgsInDir(aDirPlatPath) {
 						return;
 					}
 					
-					rezObj.push(aEntry.path);
+					rezObj.push(OS.Path.toFileURI(aEntry.path));
 					
 					if (rezObj.length == tooManyImgs) {
 						rezObj = 'error-toomanyimgs';

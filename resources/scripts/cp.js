@@ -1309,12 +1309,90 @@ var IPStore = {
 					} else {
 						console.log('this.props.sPreview:', this.props.sPreview);
 						if (typeof(this.props.sPreview) == 'string') {
+							var previewTxt = myServices.sb_ip.GetStringFromName(this.props.sPreview);
 							cChildren.push(React.createElement('span', {},
-								myServices.sb_ip.GetStringFromName(this.props.sPreview)
+								previewTxt
 							));
 						} else if (this.props.sPreview.path == this.props.sDirSelected) {
-							for (var aSize in this.props.sPreview.imgObj) {
-								cChildren.push(React.createElement(IPStore.component.IPPreviewImg, {size:aSize, src:this.props.sPreview.imgObj[aSize]}));
+							if (this.props.sPreview.errObj) {
+								var errObj = this.props.sPreview.errObj;
+								var errChildren = [];
+								
+								errChildren.push(React.createElement('h4', {},
+									myServices.sb_ip.GetStringFromName('invalid-img-dir')
+								));
+								
+								if (errObj.dupeSize) {
+									var dupeSize = errObj.dupeSize;
+									var allSizesUls = [];
+									
+									for (var aSize in dupeSize) {
+										var sizeLis = [];
+										
+										for (var i=0; i<dupeSize[aSize].length; i++) {
+											sizeLis.push(React.createElement('li', {},
+												React.createElement('a', {href:dupeSize[aSize][i], target:'_blank'},
+													dupeSize[aSize][i].substr(dupeSize[aSize][i].lastIndexOf('/') + 1)
+												)
+											));
+										}
+										
+										var sizeUl = React.createElement('ul', {},
+											React.createElement('li', {},
+												justFormatStringFromName(myServices.sb_ip.GetStringFromName('dimensions-no-dash'), [aSize, aSize]),
+												React.createElement('ul', {},
+													sizeLis
+												)
+											)
+										);
+										
+										allSizesUls.push(sizeUl);
+									}
+									
+									var topUl = React.createElement('ul', {},
+										React.createElement('li', {},
+											justFormatStringFromName(myServices.sb_ip.GetStringFromName('dupe-sizes-err')),
+											allSizesUls
+										)
+									);
+									
+									errChildren.push(topUl);
+								}
+						
+								if (errObj.notSquare) {
+									var notSquare = errObj.notSquare;
+									
+									var sizeLis = [];
+									
+									for (var i=0; i<notSquare.length; i++) {
+										sizeLis.push(React.createElement('li', {},
+											justFormatStringFromName(myServices.sb_ip.GetStringFromName('dimensions'), [notSquare[i].w, notSquare[i].h]) + ' ',
+											React.createElement('a', {href:notSquare[i].src, target:'_blank'},
+												notSquare[i].src.substr(notSquare[i].src.lastIndexOf('/') + 1)
+											)
+										));
+									}
+									
+									var topUl = React.createElement('ul', {},
+										React.createElement('li', {},
+											justFormatStringFromName(myServices.sb_ip.GetStringFromName('not-square-err')),
+											React.createElement('ul', {},
+												sizeLis
+											)
+										)
+									);
+									
+									errChildren.push(topUl);
+								}
+								
+								cChildren.push(React.createElement('div', {className:'iconsetpicker-preview-errobj'},
+									errChildren
+								));
+								
+							} else {
+								for (var aSize in this.props.sPreview.imgObj) {
+									cChildren.push(React.createElement(IPStore.component.IPPreviewImg, {size:aSize, src:this.props.sPreview.imgObj[aSize]}));
+								}
 							}
 						} else {
 							// sDirSelected differs
@@ -1397,6 +1475,108 @@ var IPStore = {
 							if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
 								var aPartialImgObj = aErrorOrImgObj;
 								console.log('got aPartialImgObj:', aPartialImgObj);
+								var cPathKeyImgObj = {};
+								var promiseAllArr_loadImgs = [];
+								for (var i=0; i<aPartialImgObj.length; i++) {
+									cPathKeyImgObj[aPartialImgObj[i]] = {
+										img: new Image(),
+										size: 0,
+										deferred: new Deferred(), // img loading defer
+										imgloadreason: ''
+									};
+									cPathKeyImgObj[aPartialImgObj[i]].img.onload = function() {
+										if (this.img.naturalWidth == this.img.naturalHeight) {
+											this.size = this.img.naturalWidth;
+											this.imgloadreason = 'ok';
+											this.deferred.resolve('ok');
+										} else {
+											this.imgloadreason = 'not-square';
+											this.deferred.resolve('not-square');
+										}
+										console.log('loaded img:', this);
+									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+									cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
+										this.imgloadreason = 'abort';
+										console.log('abort img:', this);
+										this.deferred.resolve('abort');
+									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+									cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
+										this.imgloadreason = 'not-img';
+										console.log('error img:', this);
+										this.deferred.resolve('not-img');
+									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+									cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
+									promiseAllArr_loadImgs.push(cPathKeyImgObj[aPartialImgObj[i]].deferred.promise);
+								}
+								var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
+								promiseAll_loadImgs.then(
+									function(aVal) {
+										console.log('Fullfilled - promiseAll_loadImgs - ', aVal);
+										// check if duplicate sizes
+										
+										// create cImgObj
+										var dupeSize = {}; // key is size, value is array of img src's having same size
+										var notSquare = []; // array of paths not having square sizes
+										var cImgObj = {};
+										for (var imgSrcPath in cPathKeyImgObj) {
+											var cPKImgEntry = cPathKeyImgObj[imgSrcPath]
+											var cSize = cPKImgEntry.size;
+											if (cSize in cImgObj) {
+												if (!(cSize in dupeSize)) {
+													dupeSize[cSize] = [
+														cImgObj[cSize]
+													];
+												}
+												dupeSize[cSize].push(imgSrcPath);
+											}
+											if (cPKImgEntry.imgloadreason == 'not-square') {
+												notSquare.push({
+													src: imgSrcPath,
+													w: cPKImgEntry.img.naturalWidth,
+													h: cPKImgEntry.img.naturalHeight
+												});
+											}
+											if (cPKImgEntry.imgloadreason == 'not-img') {
+												// this doesnt happen right now
+											}
+											if (cPKImgEntry.imgloadreason == 'abort') {
+												// this should never happen
+											}
+											cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
+										}
+										
+										var errObj = {};
+										if (notSquare.length) {
+											errObj.notSquare = notSquare;
+										}
+										if (Object.keys(dupeSize).length) {
+											errObj.dupeSize = dupeSize;
+										}
+										if (Object.keys(errObj).length > 0) {
+											IPStore.setState({
+												sPreview: {
+													path: cDirSelected,
+													errObj: errObj
+												}
+											});
+										} else {
+											IPStore.setState({
+												sPreview: {
+													path: cDirSelected,
+													imgObj: cImgObj
+												}
+											});
+										}
+									} // no need for reject as i never reject any of the this.deferred
+								).catch(
+									function(aCaught) {
+										var rejObj = {
+											name: 'promiseAll_loadImgs',
+											aCaught: aCaught
+										};
+										console.error('Caught - promiseAll_loadImgs - ', rejObj);
+									}
+								);
 							} else {
 								// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
 								var aImgObj = aErrorOrImgObj;
@@ -1826,5 +2006,17 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
 		}
 	}
+}
+function justFormatStringFromName(aLocalizableStr, aReplacements) {
+	// justFormatStringFromName is formating only ersion of the worker version of formatStringFromName
+	
+	var cLocalizedStr = aLocalizableStr;
+	if (aReplacements) {
+		for (var i=0; i<aReplacements.length; i++) {
+			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+		}
+	}
+	
+	return cLocalizedStr;
 }
 // end - common helper functions

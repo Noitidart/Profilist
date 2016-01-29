@@ -295,6 +295,29 @@
 }
 /* end - iconsetpicker_preview */
 
+/* start - iconsetpicker_preview_erroboj */
+/* state:innate */
+.iconsetpicker-preview-errobj {
+    width: 100%;
+	overflow: hidden;
+}
+/* end - iconsetpicker_preview_erroboj */
+
+/* start - iconsetpicker_preview_erroboj_ul */
+/* state:innate */
+.iconsetpicker-preview-errobj ul {
+    text-align: left;
+	padding-left: 20px;
+}
+/* end - iconsetpicker_preview_erroboj_ul */
+
+/* start - iconsetpicker_preview_erroboj_li */
+/* state:innate */
+.iconsetpicker-preview-errobj li {
+    
+}
+/* end - iconsetpicker_preview_erroboj_li */
+
 /* start - iconsetpicker_preview_loading */
 /* state:innate */
 .iconsetpicker-preview > img,
