@@ -798,8 +798,10 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					imgObj: aImgObj
 				}
 			});
-		}, 'pixfox', function() {
-			alert('unapplied!');
+		}, ((this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) ? this.props.sBuildsLastRow.imgSlug : undefined), function() {
+			MyStore.setState({
+				sBuildsLastRow: {}
+			});
 		});
 	},
 	clickPath: function() {
@@ -1474,6 +1476,7 @@ var IPStore = {
 				
 				var cChildren = [];
 				
+				var disableApply = false; // only set this to true in the logic below. dont set it to true then somewhere else to false, because then only the last one to set it to a bool will apply
 				switch (this.props.sNavSelected) {
 					case 'saved':
 						
@@ -1489,6 +1492,7 @@ var IPStore = {
 							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
 							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false)}));
 							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
+								disableApply = true;
 								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
 							}
 							
@@ -1511,9 +1515,14 @@ var IPStore = {
 					default:
 						// assume nothing is selected
 				}
+				
+				if (!this.props.sPreview || !this.props.sPreview.imgObj) {
+					disableApply = true;
+				}
+				
 				cChildren.push(React.createElement('div', {style:{flex:'1 0 auto'}})); // spacer, to keep the cancel/ok buttons on far right
 				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('cancel'), onClick:this.props.uninit}));
-				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true), onClick:this.clickSelect}));
+				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:(disableApply ? true : false), onClick:this.clickSelect}));
 				
 				// return React.createElement.apply(this, ['div', cProps].concat(inner));
 				return React.createElement('div', cProps,
