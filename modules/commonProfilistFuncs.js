@@ -23,7 +23,7 @@ function getImgSrcForSize(aImgObj, aDesiredSize, aScalingAlgo) {
 					resize: false
 				};
 			}
-			aSizersArr.push(parseInt(aSize));
+			aSizesArr.push(parseInt(aSize));
 		}
 	}
 	aSizesArr.sort(function(a, b) {
@@ -36,7 +36,7 @@ function getImgSrcForSize(aImgObj, aDesiredSize, aScalingAlgo) {
 	for (var i=0; i<aSizesArr.length; i++) {
 		var aSize = aSizesArr[i];
 		// if (aSize == aDesiredSize) { // this wont happen because i return above, but in future when i update this for svg support i might need this
-		if (nSize === undefined) {
+		if (nSizeLarger === undefined && nSizeSmaller === undefined) {
 			nSizeLarger = aSize;
 			nSizeSmaller = aSize;
 		} else {
@@ -76,6 +76,30 @@ function getImgSrcForSize(aImgObj, aDesiredSize, aScalingAlgo) {
 				};
 			}
 		}
+	}
+}
+
+function getSlugOfSlugDirPath(aSlugDirPath) {
+	// aSlugDirPath is a chrome or plat path to the dir of the slug
+	if (aSlugDirPath.indexOf(core.profilist.path.images) === 0) {
+		return aSlugDirPath.substr(core.profilist.path.images.length + 1); // + 1 because core.profilist.path.images does not have the trailing slash
+	} else if (aSlugDirPath.indexOf(core.addon.path.images) === 0) {
+		return aSlugDirPath.substr((core.addon.path.images + '/channel-iconsets').length);
+	}
+	throw new Error('should never get here');
+}
+
+function isSlugInChromeChannelIconsets(aPossibleSlug) {
+	// if returns true, it means aPossibleSlug images dir is in ```core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_##.png'```
+	switch (aPossibleSlug) {
+		case 'release':
+		case 'beta':
+		case 'dev':
+		case 'aurora':
+		case 'nightly':
+			return true;
+		default:
+			return false;
 	}
 }
 // END - slug stuff

@@ -211,6 +211,7 @@
 	/* takes the height of the contents, width is 100% as flex */
 	/* background-color: skyblue; */
 	padding: 5px;
+	display: flex;
 }
 /* end - iconsetpicker_controls */
 

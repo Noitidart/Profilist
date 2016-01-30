@@ -790,7 +790,17 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			}
 		}.bind(this));
 		*/
-		IPStore.init(e.target);
+		IPStore.init(e.target, function(aImgSlug, aImgObj) {
+			console.error('ok applied icon, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+			MyStore.setState({
+				sBuildsLastRow: {
+					imgSlug: aImgSlug,
+					imgObj: aImgObj
+				}
+			});
+		}, 'pixfox', function() {
+			alert('unapplied!');
+		});
 	},
 	clickPath: function() {
 		alert('clicked path');
@@ -895,7 +905,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 });
 
 var IPStore = {
-	init: function(aTargetElement) {
+	init: function(aTargetElement, aSelectCallback, aAppliedSlug, aUnselectCallback) {
+		// aSelectCallback is called when an icon is applied, it is passed two arguments, aSelectCallback(aImgSlug, aImgObj)
 		// aTargetElement is where the arrow of the dialog will point to
 		// must have iconsetpicker.css loaded in the html
 		console.log('aTargetElement:', aTargetElement);
@@ -928,7 +939,21 @@ var IPStore = {
 		wrap.style.left = (aTargetElement.offsetLeft - ((100 + 150 + 200) / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
 		wrap.style.bottom = (aTargetElement.offsetTop + aTargetElement.offsetHeight + 2) + 'px';
 		
-		var myIP = React.createElement(IPStore.component.IconsetPicker, {uninit:uninit});
+		var myIPProps = {
+			uninit:uninit,
+			select_callback:aSelectCallback
+		};
+		
+		if (aAppliedSlug) {
+			if (isSlugInChromeChannelIconsets(aAppliedSlug)) {
+				myIPProps.pAppliedSlugDir = core.addon.path.images + 'channel-iconsets/' + aAppliedSlug;
+			} else {
+				myIPProps.pAppliedSlugDir = core.profilist.path.images + core.os.filesystem_seperator + aAppliedSlug;
+			}
+			myIPProps.pDirSelected = myIPProps.pAppliedSlugDir;
+			myIPProps.unselect_callback = aUnselectCallback;
+		}
+		var myIP = React.createElement(IPStore.component.IconsetPicker, myIPProps);
 		ReactDOM.render(myIP, wrap);
 	},
 	readSubdirsInDir: function(aDirPlatPath, setNull_sDirSubdirs, sDirListHistory) {
@@ -945,7 +970,7 @@ var IPStore = {
 			new_sDirListHistory.push(sDirListHistory[i]);
 		}
 		
-		if (sDirListHistory.length && sDirListHistory[i - 1] != aDirPlatPath) {
+		if (!sDirListHistory.length || sDirListHistory[i - 1] != aDirPlatPath) {
 			new_sDirListHistory.push(aDirPlatPath);
 		}
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], bootstrapMsgListener.funcScope, function(aSubdirsArr) {
@@ -966,6 +991,138 @@ var IPStore = {
 			}
 		});
 	},
+	readImgsInDir: function(aReadImgsInDirArg, a_cDirSelected) {
+		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', aReadImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+			if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
+				IPStore.setState({
+					sPreview: 'failed-read'
+				});
+				throw new Error('readImgsInDir failed with OSFileError!!');
+			} else if (typeof(aErrorOrImgObj) == 'string') {
+				IPStore.setState({
+					sPreview: aErrorOrImgObj
+				});
+				throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
+			} else {
+				if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
+					var aPartialImgObj = aErrorOrImgObj;
+					console.log('got aPartialImgObj:', aPartialImgObj);
+					var cPathKeyImgObj = {};
+					var promiseAllArr_loadImgs = [];
+					for (var i=0; i<aPartialImgObj.length; i++) {
+						cPathKeyImgObj[aPartialImgObj[i]] = {
+							img: new Image(),
+							size: 0,
+							deferred: new Deferred(), // img loading defer
+							imgloadreason: ''
+						};
+						cPathKeyImgObj[aPartialImgObj[i]].img.onload = function() {
+							if (this.img.naturalWidth == this.img.naturalHeight) {
+								this.size = this.img.naturalWidth;
+								this.imgloadreason = 'ok';
+								this.deferred.resolve('ok');
+							} else {
+								this.imgloadreason = 'not-square';
+								this.deferred.resolve('not-square');
+							}
+							console.log('loaded img:', this);
+						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+						cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
+							this.imgloadreason = 'abort';
+							console.log('abort img:', this);
+							this.deferred.resolve('abort');
+						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+						cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
+							this.imgloadreason = 'not-img';
+							console.log('error img:', this);
+							this.deferred.resolve('not-img');
+						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+						cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
+						promiseAllArr_loadImgs.push(cPathKeyImgObj[aPartialImgObj[i]].deferred.promise);
+					}
+					var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
+					promiseAll_loadImgs.then(
+						function(aVal) {
+							console.log('Fullfilled - promiseAll_loadImgs - ', aVal);
+							// check if duplicate sizes
+							
+							// create cImgObj
+							var dupeSize = {}; // key is size, value is array of img src's having same size
+							var notSquare = []; // array of paths not having square sizes
+							var cImgObj = {};
+							for (var imgSrcPath in cPathKeyImgObj) {
+								var cPKImgEntry = cPathKeyImgObj[imgSrcPath]
+								var cSize = cPKImgEntry.size;
+								if (cSize in cImgObj) {
+									if (!(cSize in dupeSize)) {
+										dupeSize[cSize] = [
+											cImgObj[cSize]
+										];
+									}
+									dupeSize[cSize].push(imgSrcPath);
+								}
+								if (cPKImgEntry.imgloadreason == 'not-square') {
+									notSquare.push({
+										src: imgSrcPath,
+										w: cPKImgEntry.img.naturalWidth,
+										h: cPKImgEntry.img.naturalHeight
+									});
+								}
+								if (cPKImgEntry.imgloadreason == 'not-img') {
+									// this doesnt happen right now
+								}
+								if (cPKImgEntry.imgloadreason == 'abort') {
+									// this should never happen
+								}
+								cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
+							}
+							
+							var errObj = {};
+							if (notSquare.length) {
+								errObj.notSquare = notSquare;
+							}
+							if (Object.keys(dupeSize).length) {
+								errObj.dupeSize = dupeSize;
+							}
+							if (Object.keys(errObj).length > 0) {
+								IPStore.setState({
+									sPreview: {
+										path: a_cDirSelected,
+										errObj: errObj
+									}
+								});
+							} else {
+								IPStore.setState({
+									sPreview: {
+										path: a_cDirSelected,
+										imgObj: cImgObj
+									}
+								});
+							}
+						} // no need for reject as i never reject any of the this.deferred
+					).catch(
+						function(aCaught) {
+							var rejObj = {
+								name: 'promiseAll_loadImgs',
+								aCaught: aCaught
+							};
+							console.error('Caught - promiseAll_loadImgs - ', rejObj);
+						}
+					);
+				} else {
+					// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
+					var aImgObj = aErrorOrImgObj;
+					console.log('got aImgObj:', aImgObj);
+					IPStore.setState({
+						sPreview: {
+							path: a_cDirSelected,
+							imgObj: aImgObj
+						}
+					});
+				}
+			}
+		});
+	},
 	component: {
 		IconsetPicker: React.createClass({
 			displayName: 'IconsetPicker',
@@ -977,9 +1134,10 @@ var IPStore = {
 					sNavItems: ['saved', 'browse', 'download'], // array of strings
 					sDirPlatPath: null, // current dir displaying in .iconsetpicker-dirlist
 					sDirSubdirs: null, // if null a loading image is shown, else it is an array
-					sDirSelected: null, // null means no selection. if not null, then it is full plat path of the dir selected
+					sDirSelected: this.props.pDirSelected, // null means no selection. if not null, then it is full plat path of the dir selected
 					sPreview: null, // if null and sDirSelected is not null, then its "loading". ELSE object, two keys, "path" which is plat path to directory, AND (imgobj OR partialimgobj. imgobj which is what you expect an imgobj to be, keys are sizes, and values are strings you can put in img src. partial is just array of strings, as sizes are unknown (guranteed to be gif, jpeg, jpg, or png though)
-					sDirListHistory: [] // array of visits for back and forward
+					sDirListHistory: [], // array of visits for back and forward
+					sAppliedSlugDir: this.props.pAppliedSlugDir // chrome or plat path to the slug dir, if thi is set then unselect_callback can be called
 				}
 			},
 			componentDidMount: function() {
@@ -1065,6 +1223,13 @@ var IPStore = {
 						console.log('no blob urls in previous so no need to worry about checking if its time to release');
 					}
 				}
+				
+
+				if (!aPrevStateObj.sInit && this.state.sInit == true && this.props.pAppliedSlugDir) {
+					// if pAppliedSlugDir is set, then pDirSelected has to be set its a given
+					var readImgsInDirArg = {profilist_imgslug:getSlugOfSlugDirPath(this.props.pAppliedSlugDir)}; // link999
+					IPStore.readImgsInDir(readImgsInDirArg, this.props.pDirSelected);
+				}
 			},
 			keypress: function(e) {
 				if (this.state.sInit) { // because i have react animation, it is not unmounted till after anim. but i want to not listen to keypresses as soon as sInit goes to false
@@ -1098,10 +1263,13 @@ var IPStore = {
 			render: function() {
 				// props
 				//	uninit
+				//	select_callback
+				//	pDirSelected
+				//	pAppliedSlugDir
 				return React.createElement(React.addons.CSSTransitionGroup, {transitionName:'iconsetpicker-initanim', transitionEnterTimeout:200, transitionLeaveTimeout:200, className:'iconsetpicker-animwrap'},
 					!this.state.sInit ? undefined : React.createElement('div', {className:'iconsetpicker-subwrap'},
 						React.createElement(IPStore.component.IPArrow),
-						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs, sDirSelected:this.state.sDirSelected, sPreview:this.state.sPreview, sDirListHistory:this.state.sDirListHistory, uninit:this.props.uninit})
+						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs, sDirSelected:this.state.sDirSelected, sPreview:this.state.sPreview, sDirListHistory:this.state.sDirListHistory, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.state.sAppliedSlugDir, unselect_callback:this.props.unselect_callback})
 					)
 				);
 			}
@@ -1125,10 +1293,13 @@ var IPStore = {
 				//	sPreview
 				//	sDirListHistory
 				//	uninit
+				//	select_callback
+				//	sAppliedSlugDir
+				//	unselect_callback
 				
 				return React.createElement('div', {className:'iconsetpicker-content'},
 					React.createElement(IPStore.component.IPNav, {sNavSelected:this.props.sNavSelected, sNavItems:this.props.sNavItems, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sDirListHistory:this.props.sDirListHistory, uninit:this.props.uninit})
+					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sDirListHistory:this.props.sDirListHistory, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback})
 				);
 			}
 		}),
@@ -1241,6 +1412,9 @@ var IPStore = {
 				//	sPreview
 				//	sDirListHistory
 				//	uninit
+				//	select_callback
+				//	sAppliedSlugDir
+				//	unselect_callback
 				
 				var cProps = {
 					className: 'iconsetpicker-right'
@@ -1248,7 +1422,7 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit},
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback},
 						'controls'
 					)
 				);
@@ -1265,10 +1439,23 @@ var IPStore = {
 			},
 			clickSelect: function() {
 					// this.state.sPreview.imgObj must be valid (gui disables button if it is not valid)
-					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
-						console.error('ok back from saveAsIconset. so now in framescript');
-					});
+					// setTimeout(function() { // :debug: wrapping in setTimeout to test if it will work after uninit has been called. im worried this.props might be dead, not sure ----- results of test, yes it worked, which makes wonder when does it get gc'ed, how does it know? interesting stuff. i would think on unmount this object is destroyed
+						sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], bootstrapMsgListener.funcScope, function(aImgSlug, aImgObj) {
+							console.error('ok back from saveAsIconset. so now in framescript');
+							if (this.props.select_callback) {
+								this.props.select_callback(aImgSlug, aImgObj);
+							}
+						}.bind(this));
+					// }.bind(this), 2000);
 				this.props.uninit(null, true);
+			},
+			clickUnselect: function() {
+				if (this.props.unselect_callback) {
+					IPStore.setState({
+						sAppliedSlugDir: null
+					});
+					this.props.unselect_callback();
+				}
 			},
 			render: function() {
 				// props
@@ -1277,14 +1464,15 @@ var IPStore = {
 				//	sPreview
 				//	sDirSelected
 				//	uninit
+				//	select_callback
+				//	sAppliedSlugDir
+				//	unselect_callback
 				
 				var cProps = {
 					className: 'iconsetpicker-controls'
 				};
 				
 				var cChildren = [];
-				
-				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true), onClick:this.clickSelect}));
 				
 				switch (this.props.sNavSelected) {
 					case 'saved':
@@ -1300,14 +1488,16 @@ var IPStore = {
 							
 							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
 							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false)}));
+							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
+								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
+							}
+							
 						
 						break;
 					case 'browse':
 						
 							// browse
-							if (this.props.sDirListHistory.length >= 2) {
-								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), onClick:this.clickBack}));
-							}
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Forward'}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Up'}));
 						
@@ -1315,14 +1505,15 @@ var IPStore = {
 					case 'download':
 						
 							// download
-							if (this.props.sDirListHistory.length >= 2) {
-								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), onClick:this.clickBack}));
-							}
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
 						
 						break;
 					default:
 						// assume nothing is selected
 				}
+				cChildren.push(React.createElement('div', {style:{flex:'1 0 auto'}})); // spacer, to keep the cancel/ok buttons on far right
+				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('cancel'), onClick:this.props.uninit}));
+				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true), onClick:this.clickSelect}));
 				
 				// return React.createElement.apply(this, ['div', cProps].concat(inner));
 				return React.createElement('div', cProps,
@@ -1563,140 +1754,11 @@ var IPStore = {
 					var cDirSelected = this.props.path;
 					var readImgsInDirArg;
 					if (this.props.path.indexOf('chrome:') === 0 || this.props.path.indexOf(core.profilist.path.images) === 0) {
-						readImgsInDirArg = {profilist_imgslug:this.props.name};
+						readImgsInDirArg = {profilist_imgslug:this.props.name}; // link999
 					} else {
 						readImgsInDirArg = this.props.path;
 					}
-					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', readImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
-						if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
-							IPStore.setState({
-								sPreview: 'failed-read'
-							});
-							throw new Error('readImgsInDir failed with OSFileError!!');
-						} else if (typeof(aErrorOrImgObj) == 'string') {
-							IPStore.setState({
-								sPreview: aErrorOrImgObj
-							});
-							throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
-						} else {
-							if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
-								var aPartialImgObj = aErrorOrImgObj;
-								console.log('got aPartialImgObj:', aPartialImgObj);
-								var cPathKeyImgObj = {};
-								var promiseAllArr_loadImgs = [];
-								for (var i=0; i<aPartialImgObj.length; i++) {
-									cPathKeyImgObj[aPartialImgObj[i]] = {
-										img: new Image(),
-										size: 0,
-										deferred: new Deferred(), // img loading defer
-										imgloadreason: ''
-									};
-									cPathKeyImgObj[aPartialImgObj[i]].img.onload = function() {
-										if (this.img.naturalWidth == this.img.naturalHeight) {
-											this.size = this.img.naturalWidth;
-											this.imgloadreason = 'ok';
-											this.deferred.resolve('ok');
-										} else {
-											this.imgloadreason = 'not-square';
-											this.deferred.resolve('not-square');
-										}
-										console.log('loaded img:', this);
-									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-									cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
-										this.imgloadreason = 'abort';
-										console.log('abort img:', this);
-										this.deferred.resolve('abort');
-									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-									cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
-										this.imgloadreason = 'not-img';
-										console.log('error img:', this);
-										this.deferred.resolve('not-img');
-									}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-									cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
-									promiseAllArr_loadImgs.push(cPathKeyImgObj[aPartialImgObj[i]].deferred.promise);
-								}
-								var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
-								promiseAll_loadImgs.then(
-									function(aVal) {
-										console.log('Fullfilled - promiseAll_loadImgs - ', aVal);
-										// check if duplicate sizes
-										
-										// create cImgObj
-										var dupeSize = {}; // key is size, value is array of img src's having same size
-										var notSquare = []; // array of paths not having square sizes
-										var cImgObj = {};
-										for (var imgSrcPath in cPathKeyImgObj) {
-											var cPKImgEntry = cPathKeyImgObj[imgSrcPath]
-											var cSize = cPKImgEntry.size;
-											if (cSize in cImgObj) {
-												if (!(cSize in dupeSize)) {
-													dupeSize[cSize] = [
-														cImgObj[cSize]
-													];
-												}
-												dupeSize[cSize].push(imgSrcPath);
-											}
-											if (cPKImgEntry.imgloadreason == 'not-square') {
-												notSquare.push({
-													src: imgSrcPath,
-													w: cPKImgEntry.img.naturalWidth,
-													h: cPKImgEntry.img.naturalHeight
-												});
-											}
-											if (cPKImgEntry.imgloadreason == 'not-img') {
-												// this doesnt happen right now
-											}
-											if (cPKImgEntry.imgloadreason == 'abort') {
-												// this should never happen
-											}
-											cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
-										}
-										
-										var errObj = {};
-										if (notSquare.length) {
-											errObj.notSquare = notSquare;
-										}
-										if (Object.keys(dupeSize).length) {
-											errObj.dupeSize = dupeSize;
-										}
-										if (Object.keys(errObj).length > 0) {
-											IPStore.setState({
-												sPreview: {
-													path: cDirSelected,
-													errObj: errObj
-												}
-											});
-										} else {
-											IPStore.setState({
-												sPreview: {
-													path: cDirSelected,
-													imgObj: cImgObj
-												}
-											});
-										}
-									} // no need for reject as i never reject any of the this.deferred
-								).catch(
-									function(aCaught) {
-										var rejObj = {
-											name: 'promiseAll_loadImgs',
-											aCaught: aCaught
-										};
-										console.error('Caught - promiseAll_loadImgs - ', rejObj);
-									}
-								);
-							} else {
-								// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
-								var aImgObj = aErrorOrImgObj;
-								console.log('got aImgObj:', aImgObj);
-								IPStore.setState({
-									sPreview: {
-										path: cDirSelected,
-										imgObj: aImgObj
-									}
-								});
-							}
-						}
-					});
+					IPStore.readImgsInDir(readImgsInDirArg, cDirSelected);
 				}
 			},
 			dblclick: function() {
@@ -1713,6 +1775,12 @@ var IPStore = {
 					// no its not
 				}
 			},
+			componentDidMount: function() {
+				if (this.props.selected) {
+					// because this is in mount, and only way for something to already be selected before mounting, is if sAppliedSlugDir was set to this.props.path.... meaning this only triggers once aH this is what i wanted
+					ReactDOM.findDOMNode(this).scrollIntoView();
+				}
+			},
 			render: function() {
 				// props
 				//	name
@@ -1720,7 +1788,6 @@ var IPStore = {
 				//	selected - only if this is selected
 				//	sNavSelected
 				//	sDirListHistory
-
 				var cProps = {
 					className: 'iconsetpicker-direntry',
 					onClick: this.click,

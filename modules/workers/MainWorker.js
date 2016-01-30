@@ -118,6 +118,7 @@ function init(objCore) { // function name init required for SIPWorker
 	core.profilist.path.inibkp = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'profiles.ini.bkp');
 	
 	core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // mname stands for modified-name	
+	core.os.filesystem_seperator = platformFilePathSeperator();
 	
 	// I import ostypes_*.jsm in init as they may use things like core.os.isWinXp etc
 	console.log('bringing in ostypes');
@@ -587,19 +588,6 @@ function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 }
 
 // start - profilist helper functions FOR WORKER ONLY
-function isSlugInChromeChannelIconsets(aPossibleSlug) {
-	// if returns true, it means aPossibleSlug images dir is in ```core.addon.path.images + 'channel-iconsets/' + aSlug + '/' + aSlug + '_##.png'```
-	switch (aPossibleSlug) {
-		case 'release':
-		case 'beta':
-		case 'dev':
-		case 'aurora':
-		case 'nightly':
-			return true;
-		default:
-			return false;
-	}
-}
 function getSlugForChannel(aChannel) {
 	// GEN_RULE#1 slug is a plat slafed string
 	// console.info('aChannel: -----' + aChannel + '------');
@@ -2829,6 +2817,7 @@ function releaseBlobsAndUrls(aArrOfBlobUrls) {
 	return true;
 }
 function saveAsIconset(aImgObj) {
+	// triggered when "Apply this Icon" is clicked so props.select_callback so onSelectCallback
 	// paths in aImgObj MUST have ext
 	// paths in aImgObj are url's or file uri strings
 	console.log('doing saveAsIconset, aImgObj:', aImgObj);
@@ -2909,6 +2898,7 @@ function saveAsIconset(aImgObj) {
 	
 	// get imgSlug (save to disk if necessary)
 	var cImgSlug;
+	var cImgObj;
 	var cImgSlugDirPath;
 	var coreProfilistPathImages_fileuri = OS.Path.toFileURI(core.profilist.path.images);
 	for (var aSize in aImgObj) {
@@ -2925,10 +2915,12 @@ function saveAsIconset(aImgObj) {
 					cImgSlug = OS.Path.basename(OS.Path.fromFileURI(cUrl));
 					cImgSlug = cImgSlug.substr(0, cImgSlug.lastIndexOf('_'));
 				}
+				cImgObj = getImgSrcsForImgSlug(cImgSlug);
 				console.error('cImgSlug:', '"' + cImgSlug + '"');
 			}
 			break;
 		} else {
+			cImgObj = {};
 			if (cUrl.indexOf('blob:') === 0) {
 				// take the blobs to arrbuff, save it, then delete the blobs
 				if (!cImgSlug) {
@@ -2940,8 +2932,9 @@ function saveAsIconset(aImgObj) {
 				var cUrlExt = gArrBufs[cUrl].github_url;
 				cUrlExt = cUrlExt.substr(cUrlExt.lastIndexOf('.') + 1);
 				
-
-				OS.File.writeAtomic(OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt), new Uint8Array(gArrBufs[cUrl].arrbuf)); // :note: i dont write as .png in case the image was non .png
+				var cWritePath = OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt);
+				OS.File.writeAtomic(cWritePath, new Uint8Array(gArrBufs[cUrl].arrbuf)); // :note: i dont write as .png in case the image was non .png
+				cImgObj[aSize] = OS.Path.toFileURI(cWritePath);
 				
 				URL.revokeObjectURL(cUrl);
 				delete gArrBufs[cUrl];
@@ -2955,14 +2948,16 @@ function saveAsIconset(aImgObj) {
 				
 				var cUrlExt = cUrl.substr(cUrl.lastIndexOf('.') + 1);
 				
-				OS.File.copy(OS.Path.fromFileURI(cUrl), OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt));
+				var cWritePath = OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt);
+				OS.File.copy(OS.Path.fromFileURI(cUrl), cWritePath);
+				cImgObj[aSize] = cWritePath;
 			}
 		}
 	}
 	
 	// apply imgSlug
 	
-	return true;
+	return [cImgSlug, cImgObj];
 }
 function readImgsInDir(aDirPlatPath) {
 	// aDirPlatPath is either a plat path OR object {profilist_imgslug:aImgSlug} - gurantted aImgSlug must exist, as i dont handle errors in here if it doesnt
