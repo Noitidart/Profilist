@@ -909,9 +909,12 @@ var IPStore = {
 		
 		aTargetElement.parentNode.appendChild(wrap);
 		
-		var uninit = function() {
+		var uninit = function(e, didSelect) {
 			// document.removeEventListener('keypress', uninitKeypress, false);
-			IPStore.setState({sInit:false});
+			IPStore.setState({
+				sInit:false,
+				sSelected:didSelect
+			});
 			cover.parentNode.removeChild(cover);
 			setTimeout(function() {
 				ReactDOM.unmountComponentAtNode(wrap);
@@ -941,7 +944,10 @@ var IPStore = {
 		for (var i=0; i<sDirListHistory.length; i++) {
 			new_sDirListHistory.push(sDirListHistory[i]);
 		}
-		new_sDirListHistory.push(aDirPlatPath);
+		
+		if (sDirListHistory.length && sDirListHistory[i - 1] != aDirPlatPath) {
+			new_sDirListHistory.push(aDirPlatPath);
+		}
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], bootstrapMsgListener.funcScope, function(aSubdirsArr) {
 			console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
 			if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
@@ -966,6 +972,7 @@ var IPStore = {
 			getInitialState: function() {
 				return {
 					sInit: false,
+					sSelected: false, // set to true when user clicks select
 					sNavSelected: 'saved', // null/undefined means nothing, this is string, saved, browse, download
 					sNavItems: ['saved', 'browse', 'download'], // array of strings
 					sDirPlatPath: null, // current dir displaying in .iconsetpicker-dirlist
@@ -1009,8 +1016,13 @@ var IPStore = {
 						
 						// test if needToReleaseOldImgObj should be set to true
 						if (aPrevStateObj.sInit && !this.state.sInit) {
-							console.log('sInit was set to false, so is unmounting, so release them blobs');
-							needToReleaseOldImgObj = true;
+							console.log('sInit was set to false, so is unmounting, so release them blobs if user DID NOT select');
+							if (!this.state.sSelected) {
+								console.error('did not do select so make sure to RELEASE');
+								needToReleaseOldImgObj = true;
+							} else {
+								console.error('did do select so DONT release');
+							}
 						} else if (!this.state.sPreview) {
 							console.log('now sPreview is null, so release those blobs');
 							needToReleaseOldImgObj = true;
@@ -1084,10 +1096,12 @@ var IPStore = {
 				}
 			},
 			render: function() {
+				// props
+				//	uninit
 				return React.createElement(React.addons.CSSTransitionGroup, {transitionName:'iconsetpicker-initanim', transitionEnterTimeout:200, transitionLeaveTimeout:200, className:'iconsetpicker-animwrap'},
 					!this.state.sInit ? undefined : React.createElement('div', {className:'iconsetpicker-subwrap'},
 						React.createElement(IPStore.component.IPArrow),
-						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs, sDirSelected:this.state.sDirSelected, sPreview:this.state.sPreview, sDirListHistory:this.state.sDirListHistory})
+						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs, sDirSelected:this.state.sDirSelected, sPreview:this.state.sPreview, sDirListHistory:this.state.sDirListHistory, uninit:this.props.uninit})
 					)
 				);
 			}
@@ -1110,10 +1124,11 @@ var IPStore = {
 				// 	sDirSelected
 				//	sPreview
 				//	sDirListHistory
+				//	uninit
 				
 				return React.createElement('div', {className:'iconsetpicker-content'},
 					React.createElement(IPStore.component.IPNav, {sNavSelected:this.props.sNavSelected, sNavItems:this.props.sNavItems, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sDirListHistory:this.props.sDirListHistory})
+					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sDirListHistory:this.props.sDirListHistory, uninit:this.props.uninit})
 				);
 			}
 		}),
@@ -1225,6 +1240,7 @@ var IPStore = {
 				//	sDirSelected
 				//	sPreview
 				//	sDirListHistory
+				//	uninit
 				
 				var cProps = {
 					className: 'iconsetpicker-right'
@@ -1232,7 +1248,7 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected},
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit},
 						'controls'
 					)
 				);
@@ -1247,12 +1263,20 @@ var IPStore = {
 					IPStore.readSubdirsInDir(this.props.sDirListHistory.pop(), true, this.props.sDirListHistory);
 				}
 			},
+			clickSelect: function() {
+					// this.state.sPreview.imgObj must be valid (gui disables button if it is not valid)
+					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+						console.error('ok back from saveAsIconset. so now in framescript');
+					});
+				this.props.uninit(null, true);
+			},
 			render: function() {
 				// props
 				//	sNavSelected
 				//	sDirListHistory
 				//	sPreview
 				//	sDirSelected
+				//	uninit
 				
 				var cProps = {
 					className: 'iconsetpicker-controls'
@@ -1260,14 +1284,22 @@ var IPStore = {
 				
 				var cChildren = [];
 				
-				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true)}));
+				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:((this.props.sPreview && this.props.sPreview.imgObj) ? false : true), onClick:this.clickSelect}));
 				
 				switch (this.props.sNavSelected) {
 					case 'saved':
 						
 							// saved
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((this.props.sDirSelected) ? false : true)}));
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((this.props.sDirSelected) ? false : true)}));
+							
+							var disbleRenameDelete = false;
+							if (!this.props.sDirSelected) {
+								disbleRenameDelete = true;
+							} else if (this.props.sDirSelected.indexOf('chrome://profilist/content/resources/images/channel-iconsets/') > -1) {
+								disbleRenameDelete = true;
+							}
+							
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false)}));
 						
 						break;
 					case 'browse':
@@ -1508,6 +1540,10 @@ var IPStore = {
 			displayName: 'IPDirEntry',
 			click: function() {
 				
+				if (this.props.selected) {
+					console.log('already selected, so dont do anything'); // on subdirs, clicking again should do nothing (currently i allow clicking again on main IPNavRow)
+					return;
+				}
 				if (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length) {
 					console.log('this.props of dbl clickable:', this.props);
 					if (!this.props.selected) {

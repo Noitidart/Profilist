@@ -800,9 +800,9 @@ function getImgSrcsForImgSlug(aImgSlug) {
 					rezObj = gCache_getImgSrcsForImgSlug[aImgSlug];
 				} else {
 					var cImgEntry;
-					var cImgDirPath = OS.Path.join(core.profilist.path.icons, aImgSlug);
+					var cImgDirPath = OS.Path.join(core.profilist.path.images, aImgSlug);
 					
-					// :note: each entry MUST be in format OS.Path.join(core.profilist.path.icons, aImgSlug, aImgSlug + '_##.ext'); where ## is size here!! ext can be png gif jpeg jpg svg etc etc
+					// :note: each entry MUST be in format OS.Path.join(core.profilist.path.images, aImgSlug, aImgSlug + '_##.ext'); where ## is size here!! ext can be png gif jpeg jpg svg etc etc
 					
 					var cImgNamePatt = /^(.+)_(\d+)\.(.+)$/;
 					
@@ -840,7 +840,7 @@ function getImgSrcsForImgSlug(aImgSlug) {
 								// ok good dont skip this one
 							}
 							
-							rezObj[cImgSize] = aEntry.path;
+							rezObj[cImgSize] = OS.Path.toFileURI(aEntry.path);
 						});
 					} catch(OSFileError) {
 						// console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
@@ -2816,15 +2816,151 @@ function browseiconInit() {
 // End - Icon browse picker dialog
 
 // Start - Iconset Picker
-var gBlobs = {}; // key is URL.createURL and value is blob
+var gArrBufs = {}; // key is URL.createURL and value is blob
 function releaseBlobsAndUrls(aArrOfBlobUrls) {
 	console.log('in worker will release aArrOfBlobUrls:', aArrOfBlobUrls);
 	
 	for (var i=0; i<aArrOfBlobUrls.length; i++) {
 		console.log('releasing:', aArrOfBlobUrls[i]);
 		URL.revokeObjectURL(aArrOfBlobUrls[i]);
-		delete gBlobs[aArrOfBlobUrls[i]];
+		delete gArrBufs[aArrOfBlobUrls[i]];
 	}
+	
+	return true;
+}
+function saveAsIconset(aImgObj) {
+	// paths in aImgObj MUST have ext
+	// paths in aImgObj are url's or file uri strings
+	console.log('doing saveAsIconset, aImgObj:', aImgObj);
+	
+	var isGithubUrls = false;
+	
+	var generateSlugForImgObj_setLocalGlobals_makeDir = function() {
+		// depends on isGithubUrls
+		// for use only when aImgObj contains all full platform or github urls. MUST have extension `.png` or something
+		// sets cImgSlug and cImgSlugDirPath
+		// also makes the dir
+		/*
+		var allImgObjFilenames = [];
+		for (var aSize in aImgObj) {
+			
+			if (!isGithubUrls) {
+				// its platform paths then
+				var cFilename = OS.Path.basename(aImgObj[aSize]);
+				var cFilenameNoExt = cFilename.substr(0, cFilename.lastIndexOf('.'));
+			} else {
+				// url
+				var cFilename = aImgObj[aSize];
+				cFilename = cFilename.substr(cFilename.lastIndexOf('/') + 1);
+				cFilename = decodeURIComponent(cFilename);
+				var cFilenameNoExt = cFilename.substr(0, cFilename.lastIndexOf('.'));
+			}
+			
+			allImgObjFilenames.push(cFilenameNoExt);
+		}
+		var anyCommonStr = longestCommonSubstringInArr(allImgObjFilenames).trim();
+		if (anyCommonStr === '' || anyCommonStr.replace(/[^a-z]/g, '') === '') {
+			// nothing in common, so just take first entry of allImgObjFilenames
+			anyCommonStr = allImgObjFilenames[0];
+		}
+		*/
+		// user the directory name
+		var anyCommonStr;
+		for (var aSize in aImgObj) {
+			if (!isGithubUrls) {
+				// its platform paths then
+				var cSubdirName = OS.Path.split(OS.Path.fromFileURI(aImgObj[aSize])).components;
+				cSubdirName = cSubdirName[cSubdirName.length - 2]; // - 2 as -1 is the filename
+			} else {
+				// url
+				var githubUrl = gArrBufs[aImgObj[aSize]].github_url;
+
+				var githubRepo = '/Noitidart/Firefox-PNG-Icon-Collections/master/';
+				var githubConsequential = githubUrl.substr(githubUrl.indexOf(githubRepo) + githubRepo.length);
+				var githubComponentsStr = githubConsequential.substr(0, githubConsequential.lastIndexOf('/'));
+
+				var githubSplitByCollection = githubComponentsStr.split('%20-%20Collection/');
+
+				// replace all the by's
+				for (var i = 0; i < githubSplitByCollection.length; i++) {
+					if (githubSplitByCollection[i].indexOf('%20by%20') > -1) {
+						githubSplitByCollection[i] = githubSplitByCollection[i].substr(0, githubSplitByCollection[i].lastIndexOf('%20by%20'));
+					}
+				}
+
+				cSubdirName = safedForPlatFS(decodeURIComponent(githubSplitByCollection.join('-')).toLowerCase());
+			}
+			anyCommonStr = cSubdirName.toLowerCase().replace(/ /g, '-');
+			break;
+		}
+		// ensure its avaiable, if not then append -## till it is avail
+		var retryWithStr = anyCommonStr;
+		var cRetry = 2;
+		while (allProfilistUserImages.indexOf(retryWithStr) > -1) {
+			retryWithStr = anyCommonStr + '-' + cRetry;
+			cRetry++;
+		}
+		
+		cImgSlug = retryWithStr;
+		cImgSlugDirPath = OS.Path.join(core.profilist.path.images, cImgSlug);
+		
+		OS.File.makeDir(cImgSlugDirPath, {from:OS.Constants.Path.userApplicationDataDir});
+	};
+	
+	// get imgSlug (save to disk if necessary)
+	var cImgSlug;
+	var cImgSlugDirPath;
+	var coreProfilistPathImages_fileuri = OS.Path.toFileURI(core.profilist.path.images);
+	for (var aSize in aImgObj) {
+		var cUrl = aImgObj[aSize];
+		console.error('cUrl:', cUrl);
+		if (cUrl.indexOf(core.addon.path.images) === 0 || cUrl.indexOf(coreProfilistPathImages_fileuri) === 0) {
+			// its already a saved slug, just apply that
+			if (!cImgSlug) {
+				if (cUrl.indexOf(core.addon.path.images) === 0) {
+					// chrome:// path
+					cImgSlug = cUrl.substr(cUrl.lastIndexOf('/') + 1);
+					cImgSlug = cImgSlug.substr(0, cImgSlug.lastIndexOf('_'));
+				} else {
+					cImgSlug = OS.Path.basename(OS.Path.fromFileURI(cUrl));
+					cImgSlug = cImgSlug.substr(0, cImgSlug.lastIndexOf('_'));
+				}
+				console.error('cImgSlug:', '"' + cImgSlug + '"');
+			}
+			break;
+		} else {
+			if (cUrl.indexOf('blob:') === 0) {
+				// take the blobs to arrbuff, save it, then delete the blobs
+				if (!cImgSlug) {
+					isGithubUrls = true;
+					generateSlugForImgObj_setLocalGlobals_makeDir();
+					console.error('cImgSlug:', '"' + cImgSlug + '"');
+				}
+				
+				var cUrlExt = gArrBufs[cUrl].github_url;
+				cUrlExt = cUrlExt.substr(cUrlExt.lastIndexOf('.') + 1);
+				
+
+				OS.File.writeAtomic(OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt), new Uint8Array(gArrBufs[cUrl].arrbuf)); // :note: i dont write as .png in case the image was non .png
+				
+				URL.revokeObjectURL(cUrl);
+				delete gArrBufs[cUrl];
+			} else {
+				// its a file path
+				if (!cImgSlug) {
+					isGithubUrls = false;
+					generateSlugForImgObj_setLocalGlobals_makeDir();
+					console.error('cImgSlug:', '"' + cImgSlug + '"');
+				}
+				
+				var cUrlExt = cUrl.substr(cUrl.lastIndexOf('.') + 1);
+				
+				OS.File.copy(OS.Path.fromFileURI(cUrl), OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt));
+			}
+		}
+	}
+	
+	// apply imgSlug
 	
 	return true;
 }
@@ -2875,11 +3011,17 @@ function readImgsInDir(aDirPlatPath) {
 			
 			for (var aSize in rezObj) {
 				var request_imgdata = xhr(rezObj[aSize], {
-					responseType: 'blob'
+					responseType: 'arraybuffer'
 				});
-				rezObj[aSize] = URL.createObjectURL(request_imgdata.response);
-				gBlobs[rezObj[size]] = request_imgdata.response;
+				var cBlobUrl = URL.createObjectURL(new Blob([request_imgdata.response], {type:'image/png'}));
+				// need to keep saved in gArrBufs in case user selects this one, it gets released if user does not
+				gArrBufs[cBlobUrl] = { // important that key is cBlobUrl
+					arrbuf: request_imgdata.response,
+					github_url: rezObj[aSize]
+				};
+				rezObj[aSize] = cBlobUrl;
 			}
+			console.error('ok here it is:', gArrBufs);
 			
 		} else {
 			rezObj = [];
@@ -2931,6 +3073,7 @@ function readImgsInDir(aDirPlatPath) {
 	return [rezObj]; // need to return array because am going through my custom communication stuff
 }
 
+var allProfilistUserImages = []; // for use when generating slug, and verifying rename is acceptable. holds all the dir names in the profilist_user_images directory which is core.profilist.path.images
 function readSubdirsInDir(aDirPlatPath) {
 	// aDirPlatPath - string, either platform dir path or specials: "desktop", "documents", "pictures", "home", "downloads", "profilist_user_images", "profilist_github"
 	// returns
@@ -3027,6 +3170,12 @@ function readSubdirsInDir(aDirPlatPath) {
 			{name:'nightly', path:core.addon.path.images + 'channel-iconsets/nightly'},
 			{name:'release', path:core.addon.path.images + 'channel-iconsets/release'}
 		);
+		
+		// push all names to
+		allProfilistUserImages = [];
+		for (var i=0; i<rezArr.length; i++) {
+			allProfilistUserImages.push(rezArr[i].name);
+		}
 	}
 	
 	return [rezArr]; // because this goes through callInPromiseWorker
@@ -4365,5 +4514,56 @@ function copyDirRecursive(aDirPlatPath, aNewDirParentPlatPath, aOptions={}) {
 	enumChildEntries(aDirPlatPath, delegateCopy, aOptions.depth, false); // 4th arg is false, meaning dont run on root
 	
 	return true;
+}
+function longestCommonSubstring(lcstest, lcstarget) {
+	// jan 30 2016 - noida
+    /*
+    http://cache.mifio.com/javascript002.html
+     Here is a down and dirty Javascript function that returns the longest substring shared by two string variables. In other words, given the two sentences:
+
+    "I'm looking for a little string within a big string." and
+    "Why here's a little string now!",:
+
+    The function will return the string " a little string".
+
+    The function, named lcs, will return a string as small as a single character. "123" and "345" will return "3". If no match is found, lcs returns a null string. 
+    */
+    var matchfound = 0;
+    var result;
+    var lsclen = lcstest.length;
+    for (var lcsi = 0; lcsi < lcstest.length; lcsi++) {
+        var lscos = 0;
+        for (var lcsj = 0; lcsj < lcsi + 1; lcsj++) {
+            var re = new RegExp("(?:.{" + lscos + "})(.{" + lsclen + "})", "i");
+            var temp = re.test(lcstest);
+            re = new RegExp("(" + RegExp.$1 + ")", "i");
+            if (re.test(lcstarget)) {
+                matchfound = 1;
+                result = RegExp.$1;
+                break;
+            }
+            lscos = lscos + 1;
+        }
+        if (matchfound == 1) {
+            return result;
+            break;
+        }
+        lsclen = lsclen - 1;
+    }
+    result = "";
+    return result;
+}
+function longestCommonSubstringInArr(aArrOfStrs) {
+	// jan 30 2016 - noida
+	// depends on longestCommonSubstring
+	
+	if (aArrOfStrs.length < 2) { console.error('aArrOfStrs must have at least two tring elements'); throw new Error('aArrOfStrs must have at least two tring elements'); }
+	
+	var lastCommon = aArrOfStrs[0];
+	for (var i=1; i<aArrOfStrs.length; i++) {
+		lastCommon = longestCommonSubstring(lastCommon, aArrOfStrs[i]);
+	}
+	
+	return lastCommon;
 }
 // end - common helper functions
