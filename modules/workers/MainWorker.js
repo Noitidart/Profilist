@@ -2898,7 +2898,7 @@ function saveAsIconset(aImgObj) {
 	
 	// get imgSlug (save to disk if necessary)
 	var cImgSlug;
-	var cImgObj;
+	var cImgObj = {};
 	var cImgSlugDirPath;
 	var coreProfilistPathImages_fileuri = OS.Path.toFileURI(core.profilist.path.images);
 	for (var aSize in aImgObj) {
@@ -2920,7 +2920,6 @@ function saveAsIconset(aImgObj) {
 			}
 			break;
 		} else {
-			cImgObj = {};
 			if (cUrl.indexOf('blob:') === 0) {
 				// take the blobs to arrbuff, save it, then delete the blobs
 				if (!cImgSlug) {
@@ -2954,10 +2953,23 @@ function saveAsIconset(aImgObj) {
 			}
 		}
 	}
+	gCache_getImgSrcsForImgSlug[cImgSlug] = cImgObj; // does nothing for if this was a slug. but if github or browse then yes
 	
 	// apply imgSlug
 	
 	return [cImgSlug, cImgObj];
+}
+function deleteIconset(aImgSlug) {
+	if (isSlugInChromeChannelIconsets(aImgSlug)) {
+		throw new Error('cannot delete a chrome img slug');
+	}
+	
+	OS.File.removeDir(OS.Path.join(core.profilist.path.images, aImgSlug));
+	console.log('ok removed iconset with slug:', aImgSlug);
+	
+	invalidateCache_getImgSrcsFormImgSlug(cImgSlug);
+	
+	return [true]
 }
 function readImgsInDir(aDirPlatPath) {
 	// aDirPlatPath is either a plat path OR object {profilist_imgslug:aImgSlug} - gurantted aImgSlug must exist, as i dont handle errors in here if it doesnt

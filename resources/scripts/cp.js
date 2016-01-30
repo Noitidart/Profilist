@@ -1424,7 +1424,7 @@ var IPStore = {
 				
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
-					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback},
+					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback, sDirSubdirs:this.props.sDirSubdirs},
 						'controls'
 					)
 				);
@@ -1459,6 +1459,25 @@ var IPStore = {
 					this.props.unselect_callback();
 				}
 			},
+			clickDelete: function() {
+				var cImgSlug = getSlugOfSlugDirPath(this.props.sDirSelected);
+				
+				// premptively remove from gui
+				var new_sDirSubdirs = this.props.sDirSubdirs.filter(function(aElVal) {
+					return aElVal.path != this.props.sDirSelected;
+				}.bind(this));
+				console.log('new_sDirSubdirs:', new_sDirSubdirs);
+
+				IPStore.setState({
+					sPreview: null,
+					sDirSelected: null,
+					sDirSubdirs: new_sDirSubdirs
+				});
+					
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['deleteIconset', cImgSlug]], bootstrapMsgListener.funcScope, function(aImgSlug, aImgObj) {
+					console.error('ok back from deleteIconset. so now in framescript');
+				});
+			},
 			render: function() {
 				// props
 				//	sNavSelected
@@ -1469,6 +1488,7 @@ var IPStore = {
 				//	select_callback
 				//	sAppliedSlugDir
 				//	unselect_callback
+				//	sDirSubdirs
 				
 				var cProps = {
 					className: 'iconsetpicker-controls'
@@ -1489,8 +1509,8 @@ var IPStore = {
 								disbleRenameDelete = true;
 							}
 							
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false)}));
+							// cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
 							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
 								disableApply = true;
 								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
@@ -1787,7 +1807,7 @@ var IPStore = {
 			componentDidMount: function() {
 				if (this.props.selected) {
 					// because this is in mount, and only way for something to already be selected before mounting, is if sAppliedSlugDir was set to this.props.path.... meaning this only triggers once aH this is what i wanted
-					ReactDOM.findDOMNode(this).scrollIntoView();
+					ReactDOM.findDOMNode(this).scrollIntoView(false);
 				}
 			},
 			render: function() {
