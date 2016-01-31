@@ -1,9 +1,20 @@
+XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
+
 var IPStore = {
-	init: function(aTargetElement, aSelectCallback, aAppliedSlug, aUnselectCallback) {
+	init: function(aTargetElement, aSelectCallback, aAppliedSlug, aUnselectCallback, aDirection, aOptions={}) {
+		// default aDirection is 0 meaning it opens upwards (arrow on bottom)
+			// can set to 1, which means it will open rightwards (arrow on left side)
 		// aSelectCallback is called when an icon is applied, it is passed two arguments, aSelectCallback(aImgSlug, aImgObj)
 		// aTargetElement is where the arrow of the dialog will point to
 		// must have iconsetpicker.css loaded in the html
 		console.log('aTargetElement:', aTargetElement);
+		
+		var cOptionsDefaults = {
+			aDirection: 0,
+			insertId: null
+		};
+		
+		validateOptionsObj(aOptions, cOptionsDefaults);
 		
 		var wrap = document.createElement('div');
 		wrap.setAttribute('class', 'iconsetpicker-wrap');
@@ -12,7 +23,23 @@ var IPStore = {
 		cover.setAttribute('class', 'iconsetpicker-cover');
 		document.body.appendChild(cover);
 		
-		aTargetElement.parentNode.appendChild(wrap);
+		if (aOptions.insertId) {
+			var insertEl = document.getElementById(aOptions.insertId);
+			insertEl.appendChild(wrap);
+			var cumOffset = {
+				top: 0,
+				left: 0
+			};
+			var cOffsetEl = aTargetElement;
+			while (cOffsetEl && (cOffsetEl != insertEl || cOffsetEl != insertEl.offsetParent)) {
+				cumOffset.top += cOffsetEl.offsetTop;
+				cumOffset.left += cOffsetEl.offsetLeft;
+				console.log('cOffsetTop:', cOffsetEl.offsetTop, 'cOffsetLeft:', cOffsetEl.offsetLeft, 'cumOffsetTop:', cumOffset.top, 'cumOffsetLeft:', cumOffset.left, 'cOffsetEl:', cOffsetEl.nodeName, cOffsetEl.classList.toString(), cOffsetEl.getAttribute('id'));
+				cOffsetEl = cOffsetEl.offsetParent;
+			}
+		} else {
+			aTargetElement.parentNode.appendChild(wrap);
+		}
 		
 		var uninit = function(e, didSelect) {
 			// document.removeEventListener('keypress', uninitKeypress, false);
@@ -29,14 +56,25 @@ var IPStore = {
 		
 		cover.addEventListener('mousedown', uninit, false);
 		// document.addEventListener('keypress', uninitKeypress, false);
-		
-		wrap.style.left = (aTargetElement.offsetLeft - ((100 + 150 + 200) / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
-		wrap.style.bottom = (aTargetElement.offsetTop + aTargetElement.offsetHeight + 2) + 'px';
-		
+
 		var myIPProps = {
 			uninit:uninit,
 			select_callback:aSelectCallback
 		};
+		
+		if (!aDirection) {
+			// todo - implement the cumOffset here
+			wrap.style.left = (aTargetElement.offsetLeft - ((100 + 150 + 200) / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
+			wrap.style.bottom = (aTargetElement.offsetTop + aTargetElement.offsetHeight + 2) + 'px';
+		} else {
+			// wrap.style.top = (aTargetElement.offsetTop - 120)+ 'px'; // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
+			// wrap.style.left = (aTargetElement.offsetLeft + aTargetElement.offsetWidth + 2) + 'px';
+			wrap.style.top = (cumOffset.top - 120)+ 'px'; // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
+			wrap.style.left = (cumOffset.left + aTargetElement.offsetWidth + 2) + 'px';
+			myIPProps.pDirection = aDirection;
+		}
+		
+
 		
 		if (aAppliedSlug) {
 			if (isSlugInChromeChannelIconsets(aAppliedSlug)) {
@@ -360,7 +398,28 @@ var IPStore = {
 				//	select_callback
 				//	pDirSelected
 				//	pAppliedSlugDir
-				return React.createElement(React.addons.CSSTransitionGroup, {transitionName:'iconsetpicker-initanim', transitionEnterTimeout:200, transitionLeaveTimeout:200, className:'iconsetpicker-animwrap'},
+				//	pDirection
+				var cProps = {
+					transitionName:'iconsetpicker-initanim',
+					transitionEnterTimeout:200,
+					transitionLeaveTimeout:200,
+					className:'iconsetpicker-animwrap'
+				}
+				
+				switch (this.props.pDirection) {
+					case 1:
+						
+							// open rightwards, arrow on left
+							cProps.className += ' iconsetpicker-direction-rightwards';
+							
+						break;
+					default:
+						// do nothing, which means open upwards, arrow on bottom
+							
+							cProps.className += ' iconsetpicker-direction-upwards';
+				}
+
+				return React.createElement(React.addons.CSSTransitionGroup, cProps,
 					!this.state.sInit ? undefined : React.createElement('div', {className:'iconsetpicker-subwrap'},
 						React.createElement(IPStore.component.IPArrow),
 						React.createElement(IPStore.component.IPContent, {sNavSelected:this.state.sNavSelected, sNavItems:this.state.sNavItems, sDirSubdirs:this.state.sDirSubdirs, sDirSelected:this.state.sDirSelected, sPreview:this.state.sPreview, sDirListHistory:this.state.sDirListHistory, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.state.sAppliedSlugDir, unselect_callback:this.props.unselect_callback})

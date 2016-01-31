@@ -36,7 +36,6 @@ var gCFMM; // needed for contentMMFromContentWindow_Method2
 // Lazy imports
 var myServices = {};
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'cp.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
-XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 
 // Start - DOM Event Attachments
 function doOnBeforeUnload() {
@@ -806,7 +805,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		IPStore.init(e.target, function(aImgSlug, aImgObj) {
 			console.error('ok applied icon, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
 			this.userInputLastRow(undefined, aImgSlug, aImgObj);
-		}.bind(this), IPStoreInitWithSlug, IPStoreInitWithUnselectCallback);
+		}.bind(this), IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
 	},
 	clickPath: function() {
 		alert('clicked path');

@@ -16,7 +16,7 @@
 	position: absolute;
 	z-index: 100;
 	pointer-events: none;
-	margin-bottom: 3px;
+	/*margin-bottom: 3px;*/
 }
 /* end - main_wrap */
 
@@ -24,25 +24,51 @@
 .iconsetpicker-animwrap {
 	pointer-events: none;
 	margin-bottom: 10px;
+	position: relative;
+	top: -3px;
 }
-/* state:react_animation */
-.iconsetpicker-initanim-enter {
+/* state:rightwards */
+.iconsetpicker-direction-rightwards.iconsetpicker-animwrap {
+	top: 0;
+	right: -3px;
+}
+/* state:react_animation_upwards */
+.iconsetpicker-direction-upwards .iconsetpicker-initanim-enter {
 	opacity: 0;
 	margin-bottom: 30px;
 }
-.iconsetpicker-initanim-enter.iconsetpicker-initanim-enter-active {
+.iconsetpicker-direction-upwards .iconsetpicker-initanim-enter.iconsetpicker-initanim-enter-active {
 	opacity: 1;
 	margin-bottom: 0;
 	transition: opacity 200ms, margin-bottom 200ms;
 }
-.iconsetpicker-initanim-leave {
+.iconsetpicker-direction-upwards .iconsetpicker-initanim-leave {
 	opacity: 1;
 	margin-bottom: 0;
 }
-.iconsetpicker-initanim-leave.iconsetpicker-initanim-leave-active {
+.iconsetpicker-direction-upwards .iconsetpicker-initanim-leave.iconsetpicker-initanim-leave-active {
 	opacity: 0;
 	margin-bottom: 30px;
 	transition: opacity 200ms, margin-bottom 200ms;
+}
+/* state:react_animation_rightwards */
+.iconsetpicker-direction-rightwards .iconsetpicker-initanim-enter {
+	opacity: 0;
+	margin-left: 30px;
+}
+.iconsetpicker-direction-rightwards .iconsetpicker-initanim-enter.iconsetpicker-initanim-enter-active {
+	opacity: 1;
+	margin-left: 0;
+	transition: opacity 200ms, margin-left 200ms;
+}
+.iconsetpicker-direction-rightwards .iconsetpicker-initanim-leave {
+	opacity: 1;
+	margin-left: 0;
+}
+.iconsetpicker-direction-rightwards .iconsetpicker-initanim-leave.iconsetpicker-initanim-leave-active {
+	opacity: 0;
+	margin-left: 30px;
+	transition: opacity 200ms, margin-left 200ms;
 }
 /* end - iconsetpicker-animwrap */
 
@@ -54,6 +80,11 @@
 	/* width: 200px; */
 	pointer-events: none;
 	padding-bottom: 8px; /* to accomdte for height of arrow */
+}
+/* state:rightwards */
+.iconsetpicker-direction-rightwards .iconsetpicker-subwrap {
+	padding-bottom: 0;
+	padding-left: 8px; /* to accomadate for height (still not width due to rotate) of arrow */
 }
 /* end - iconsetpicker_subwrap */
 
@@ -78,7 +109,7 @@
 	display: block;
 	width: 11px;
 	height: 20px;
-	background-color: #f6f5f6;
+	background-color: inherit; /*#f6f5f6;*/
 	position: absolute;
 	left: -10px;
 	top: -10px;
@@ -90,7 +121,7 @@
 	display: block;
 	width: 20px;
 	height: 11px;
-	background-color: #f6f5f6;
+	background-color: inherit; /*#f6f5f6;*/
 	position: absolute;
 	top: -10px;
 	left: -10px;
@@ -98,12 +129,19 @@
 	z-index: -1;
 }
 .iconsetpicker-arrow-filler {
-	background-color: #f6f5f6;
+	background-color: inherit; /*#f6f5f6;*/
 	display: block;
 	width: 19px;
 	height: 10px;
 	position: relative;
 	left: -9px;
+}
+/* state:rightwards */
+.iconsetpicker-direction-rightwards .iconsetpicker-arrow {
+	background-color: #e4e3e4;
+	transform: rotate(135deg);
+	left: 0;
+	bottom: 105px;
 }
 /* end - iconsetpicker_arrow */
 

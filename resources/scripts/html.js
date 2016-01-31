@@ -1113,6 +1113,22 @@ var PrimaryIcon = React.createClass({
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('ICON CLICKED');
 		
+		var IPStoreInitWithSlug;
+		var IPStoreInitWithUnselectCallback
+		// if (this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) {
+			// IPStoreInitWithSlug = this.props.sBuildsLastRow.imgSlug;
+			// IPStoreInitWithUnselectCallback = function() {
+				// MyStore.setState({
+					// sBuildsLastRow: {}
+				// });
+			// }.bind(this)
+		// }
+		IPStore.init(e.target, function(aImgSlug, aImgObj) {
+			console.error('ok picked');
+		}.bind(this), IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 1, {
+			insertId: 'profilist_menu_container'
+		});
+		
 	},
 	mouseEnter: function() {
 		if (this.props.sMessage.interactive.sKey != this.props.sKey) {
@@ -1729,5 +1745,22 @@ function isFocused(window) {
     }
 
     return (focusedChildWindow === childTargetWindow);
+}
+
+function validateOptionsObj(aOptions, aOptionsDefaults) {
+	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
+	for (var aOptKey in aOptions) {
+		if (!(aOptKey in aOptionsDefaults)) {
+			console.error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value, aOptionsDefaults:', aOptionsDefaults, 'aOptions:', aOptions);
+			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
+		}
+	}
+	
+	// if a key is not found in aOptions, but is found in aOptionsDefaults, it sets the key in aOptions to the default value
+	for (var aOptKey in aOptionsDefaults) {
+		if (!(aOptKey in aOptions)) {
+			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
+		}
+	}
 }
 // end - common helper functions
