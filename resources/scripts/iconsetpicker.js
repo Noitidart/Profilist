@@ -1,3 +1,7 @@
+// depnds on common helper functions:
+	//	justFormatStringFromName
+	//	validateOptionsObj
+	
 XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 
 var IPStore = {
@@ -136,7 +140,7 @@ var IPStore = {
 				});
 				throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
 			} else {
-				if (typeof(readImgsInDirArg) == 'string' && readImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
+				if (typeof(aReadImgsInDirArg) == 'string' && aReadImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
 					var aPartialImgObj = aErrorOrImgObj;
 					console.log('got aPartialImgObj:', aPartialImgObj);
 					var cPathKeyImgObj = {};
@@ -238,7 +242,7 @@ var IPStore = {
 								name: 'promiseAll_loadImgs',
 								aCaught: aCaught
 							};
-							console.error('Caught - promiseAll_loadImgs - ', rejObj);
+							console.error('Caught - promiseAll_loadImgs - ', uneval(rejObj));
 						}
 					);
 				} else {

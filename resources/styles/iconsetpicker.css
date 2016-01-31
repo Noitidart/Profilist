@@ -17,6 +17,11 @@
 	z-index: 100;
 	pointer-events: none;
 	/*margin-bottom: 3px;*/
+	
+	color: #000;
+	font-family: arial,helvetica,sans-serif;
+	font-size: 13px;
+	-moz-user-select: none;
 }
 /* end - main_wrap */
 
@@ -356,6 +361,14 @@
     
 }
 /* end - iconsetpicker_preview_erroboj_li */
+
+
+/* start - iconsetpicker_preview_erroboj_h4 */
+/* state:innate */
+.iconsetpicker-preview-errobj h4 {
+	text-align: center;    
+}
+/* end - iconsetpicker_preview_erroboj_h4 */
 
 /* start - iconsetpicker_preview_loading */
 /* state:innate */

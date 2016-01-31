@@ -1763,4 +1763,17 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 		}
 	}
 }
+
+function justFormatStringFromName(aLocalizableStr, aReplacements) {
+	// justFormatStringFromName is formating only ersion of the worker version of formatStringFromName
+	
+	var cLocalizedStr = aLocalizableStr;
+	if (aReplacements) {
+		for (var i=0; i<aReplacements.length; i++) {
+			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+		}
+	}
+	
+	return cLocalizedStr;
+}
 // end - common helper functions

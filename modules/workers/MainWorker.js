@@ -1699,7 +1699,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							// step4 - verify/update icon
 							if (eLauncherIconPath != aLauncherIconPath) {
 								console.log('have to SetIconLocation because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
-								var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, core.os.version > 5.2 ? 1 : 2); // 'iconIndex' in cObj ? cObj.iconIndex : 0
+								var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, /*core.os.version > 5.2 ? 1 : 2*/ 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 								ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 							}
 							
@@ -2000,7 +2000,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'createLauncher -> SetArguments');
 						
 						console.error('usssssing aLauncherIconPath:', aLauncherIconPath);
-						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, core.os.version > 5.2 ? 1 : 2); // 'iconIndex' in cObj ? cObj.iconIndex : 0
+						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, /*core.os.version > 5.2 ? 1 : 2*/ 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 						
 						if (core.os.version >= 6.1) {
