@@ -460,7 +460,7 @@ function formatNoWriteObjs() {
 		/////// debug
 
 		// set gJProfilistBuilds
-		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));		
+		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
 		
 		// for all that are running set exeIconSlug and exePath
 		// in order to set exeIconSlug I need exePath (since i need exePath anyways i set it - this is INIOBJ_RULE#7)
@@ -700,62 +700,6 @@ function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
 	return null;
 }
 
-function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
-	// RETURNS
-	//	string value if aKeyName found OR not found but has defaultValue
-	//	null if no entry found for aKeyName AND no defaultValue
-	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
-	
-	if (gKeyInfoStore[aKeyName].unspecificOnly) {
-		// get profile-unspecific value else null
-		if (aKeyName in aGenIniEntry) {
-			return aGenIniEntry[aKeyName];
-		} else {
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				return null;
-			}
-		}
-	} else {
-		// check if profile-unspecific value exists return else continue on
-		if (!gKeyInfoStore[aKeyName].specificOnly) {
-			if (aKeyName in aGenIniEntry) {
-				return aGenIniEntry[aKeyName];
-			}
-		}
-		// return profile-specific value else null
-		if (aKeyName in aIniEntry) {
-			return aIniEntry[aKeyName];
-		} else {
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				return null;
-			}
-		}
-	}
-	
-	
-	if (aKeyName in aGenIniEntry) {
-		// user set it to profile-unspecific
-		return aGenIniEntry[aKeyName];
-	} else {
-		// user set it to profile-specific
-		if (aKeyName in aIniEntry) {
-			return aIniEntry[aKeyName];
-		} else {
-			// not found so return default value if it has one
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) { // no need to test `'defaultValue' in gKeyInfoStore[aKeyName]` because i expect all values in xIniObj to be strings // :note: :important: all values in xIniObj must be strings!!!
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				// no default value
-				return null;
-			}
-		}
-	}
-}
 var gCache_getImgSrcsForImgSlug = {}; // used to store paths for custom slugs, until this is invalidated
 function invalidateCache_getImgSrcsFormImgSlug(aImgSlug) {
 	delete gCache_getImgSrcsForImgSlug[aImgSlug];
@@ -872,6 +816,64 @@ function getImgPathOfSlug(aSlug) {
 			
 				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
 	}
+}
+function addBuild(aImgSlug, aExePath) {
+	// adds a new build t ProfilistBuilds and saves/reformats ini
+	
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	
+	
+	var maxBuildId = 0; // 0 means minimum id is 1. should this be so?
+	for (var i=0; i<j_gProfilistBuilds.length; i++) {
+		if (j_gProfilistBuilds[i].id > maxBuildId) {
+			maxBuildId = j_gProfilistBuilds[i].id;
+		}
+		if (j_gProfilistBuilds[i].p == aExePath) {
+			console.error('this aExePath is already in ProfilistBuilds');
+			// throw new Error('this aExePath is already in ProfilistBuilds');
+			return [gIniObj];
+		}
+	}
+	console.error('maxBuildIdmaxBuildIdmaxBuildIdmaxBuildIdmaxBuildId:', maxBuildId);
+	j_gProfilistBuilds.push({
+		id: maxBuildId + 1,
+		i: aImgSlug,
+		p: aExePath
+	});
+	
+	var new_gProfilistBuilds = JSON.stringify(j_gProfilistBuilds);
+	
+	setPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds', new_gProfilistBuilds);
+	
+	formatNoWriteObjs();
+	
+	writeIni();
+	
+	return [gIniObj];
+}
+function removeBuild(aBuildId) {
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	
+	for (var i=0; i<j_gProfilistBuilds.length; i++) {
+		if (j_gProfilistBuilds[i].id == aBuildId) {
+			j_gProfilistBuilds.splice(i, 1);
+	
+			var new_gProfilistBuilds = JSON.stringify(j_gProfilistBuilds);
+			
+			setPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds', new_gProfilistBuilds);
+			
+			formatNoWriteObjs();
+			
+			writeIni();
+			break;
+		}
+	}
+	
+	return [gIniObj];
 }
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
