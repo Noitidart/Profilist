@@ -2806,14 +2806,16 @@ function browseiconInit() {
 // End - Icon browse picker dialog
 
 // Start - Iconset Picker
-var gArrBufs = {}; // key is URL.createURL and value is blob
-function releaseBlobsAndUrls(aArrOfBlobUrls) {
-	console.log('in worker will release aArrOfBlobUrls:', aArrOfBlobUrls);
+// var gArrBufs = {}; // key is URL.createURL and value is blob
+function releaseBlobsAndUrls(aArrOfTempFileUris) {
+	console.log('in worker will release aArrOfTempFileUris:', aArrOfTempFileUris);
 	
-	for (var i=0; i<aArrOfBlobUrls.length; i++) {
-		console.log('releasing:', aArrOfBlobUrls[i]);
-		URL.revokeObjectURL(aArrOfBlobUrls[i]);
-		delete gArrBufs[aArrOfBlobUrls[i]];
+	for (var i=0; i<aArrOfTempFileUris.length; i++) {
+		console.log('releasing:', aArrOfTempFileUris[i]);
+		// URL.revokeObjectURL(aArrOfTempFileUris[i]);
+		// delete gArrBufs[aArrOfTempFileUris[i]];
+		delete gArrGithubUrls[aArrOfTempFileUris[i]];
+		OS.File.remove(OS.Path.fromFileURI(aArrOfTempFileUris[i]));
 	}
 	
 	return true;
@@ -2864,7 +2866,8 @@ function saveAsIconset(aImgObj) {
 				cSubdirName = cSubdirName[cSubdirName.length - 2]; // - 2 as -1 is the filename
 			} else {
 				// url
-				var githubUrl = gArrBufs[aImgObj[aSize]].github_url;
+				// var githubUrl = gArrBufs[aImgObj[aSize]].github_url;
+				var githubUrl = gArrGithubUrls[aImgObj[aSize]].github_url;
 
 				var githubRepo = '/Noitidart/Firefox-PNG-Icon-Collections/master/';
 				var githubConsequential = githubUrl.substr(githubUrl.indexOf(githubRepo) + githubRepo.length);
@@ -2922,7 +2925,8 @@ function saveAsIconset(aImgObj) {
 			}
 			break;
 		} else {
-			if (cUrl.indexOf('blob:') === 0) {
+			// if (cUrl.indexOf('blob:') === 0) {
+			if (cUrl.indexOf(gGithubDownloadPrefix) > -1) {
 				// take the blobs to arrbuff, save it, then delete the blobs
 				if (!cImgSlug) {
 					isGithubUrls = true;
@@ -2930,15 +2934,18 @@ function saveAsIconset(aImgObj) {
 					console.error('cImgSlug:', '"' + cImgSlug + '"');
 				}
 				
-				var cUrlExt = gArrBufs[cUrl].github_url;
+				// var cUrlExt = gArrBufs[cUrl].github_url;
+				var cUrlExt = gArrGithubUrls[cUrl].github_url;
 				cUrlExt = cUrlExt.substr(cUrlExt.lastIndexOf('.') + 1);
 				
 				var cWritePath = OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt);
-				OS.File.writeAtomic(cWritePath, new Uint8Array(gArrBufs[cUrl].arrbuf)); // :note: i dont write as .png in case the image was non .png
+				// OS.File.writeAtomic(cWritePath, new Uint8Array(gArrBufs[cUrl].arrbuf)); // :note: i dont write as .png in case the image was non .png
+				OS.File.move(OS.Path.fromFileURI(cUrl), cWritePath);
 				cImgObj[aSize] = OS.Path.toFileURI(cWritePath);
 				
-				URL.revokeObjectURL(cUrl);
-				delete gArrBufs[cUrl];
+				// URL.revokeObjectURL(cUrl);
+				// delete gArrBufs[cUrl];
+				delete gArrGithubUrls[cUrl];
 			} else {
 				// its a file path
 				if (!cImgSlug) {
@@ -2973,6 +2980,11 @@ function deleteIconset(aImgSlug) {
 	
 	return [true]
 }
+
+var gGithubDownloadId = -1;
+const gGithubDownloadPrefix = 'prflst-_-dl_-_'; // cross file link1110238471
+var gArrGithubUrls = {}; // key is plat path file uri, and value is github url // these should all be released (meaning deleted)
+
 function readImgsInDir(aDirPlatPath) {
 	// aDirPlatPath is either a plat path OR object {profilist_imgslug:aImgSlug} - gurantted aImgSlug must exist, as i dont handle errors in here if it doesnt
 	// returns
@@ -3018,19 +3030,30 @@ function readImgsInDir(aDirPlatPath) {
 				rezObj[size] = 'https://raw.githubusercontent.com/Noitidart/Firefox-PNG-Icon-Collections/master/' + path;
 			}
 			
+			OS.File.makeDir(core.profilist.path.root, {from:OS.Constants.Path.userApplicationDataDir});
+			
 			for (var aSize in rezObj) {
 				var request_imgdata = xhr(rezObj[aSize], {
 					responseType: 'arraybuffer'
 				});
-				var cBlobUrl = URL.createObjectURL(new Blob([request_imgdata.response], {type:'image/png'}));
-				// need to keep saved in gArrBufs in case user selects this one, it gets released if user does not
-				gArrBufs[cBlobUrl] = { // important that key is cBlobUrl
-					arrbuf: request_imgdata.response,
+				gGithubDownloadId++;
+				var thisTempPngDlPlatPath = OS.Path.join(core.profilist.path.root, gGithubDownloadPrefix + gGithubDownloadId + '.png');
+				OS.File.writeAtomic(thisTempPngDlPlatPath, new Uint8Array(request_imgdata.response));
+				
+				var thisTmpPngDlFileUri = OS.Path.toFileURI(thisTempPngDlPlatPath);
+				gArrGithubUrls[thisTmpPngDlFileUri] = {
 					github_url: rezObj[aSize]
 				};
-				rezObj[aSize] = cBlobUrl;
+				// var cBlobUrl = URL.createObjectURL(new Blob([request_imgdata.response], {type:'image/png'}));
+				// // need to keep saved in gArrBufs in case user selects this one, it gets released if user does not
+				// gArrBufs[cBlobUrl] = { // important that key is cBlobUrl
+				// 	arrbuf: request_imgdata.response,
+				// 	github_url: rezObj[aSize]
+				// };
+				rezObj[aSize] = thisTmpPngDlFileUri;
 			}
-			console.error('ok here it is:', gArrBufs);
+			// console.error('ok here it is:', gArrBufs);
+			console.error('ok here it is:', gArrGithubUrls);
 			
 		} else {
 			rezObj = [];

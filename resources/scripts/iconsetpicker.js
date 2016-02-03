@@ -3,6 +3,7 @@
 	//	validateOptionsObj
 	
 XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
+const gGithubDownloadPrefix = 'prflst-_-dl_-_'; // cross file link1110238471
 
 var IPStore = {
 	init: function(aTargetElement, aSelectCallback, aAppliedSlug, aUnselectCallback, aDirection, aOptions={}) {
@@ -11,7 +12,7 @@ var IPStore = {
 		// aSelectCallback is called when an icon is applied, it is passed two arguments, aSelectCallback(aImgSlug, aImgObj)
 		// aTargetElement is where the arrow of the dialog will point to
 		// must have iconsetpicker.css loaded in the html
-		console.log('aTargetElement:', aTargetElement);
+		console.log('aTargetElement:', uneval(aTargetElement));
 		
 		var cOptionsDefaults = {
 			aDirection: 0,
@@ -38,7 +39,7 @@ var IPStore = {
 			while (cOffsetEl && (cOffsetEl != insertEl || cOffsetEl != insertEl.offsetParent)) {
 				cumOffset.top += cOffsetEl.offsetTop;
 				cumOffset.left += cOffsetEl.offsetLeft;
-				console.log('cOffsetTop:', cOffsetEl.offsetTop, 'cOffsetLeft:', cOffsetEl.offsetLeft, 'cumOffsetTop:', cumOffset.top, 'cumOffsetLeft:', cumOffset.left, 'cOffsetEl:', cOffsetEl.nodeName, cOffsetEl.classList.toString(), cOffsetEl.getAttribute('id'));
+				console.log('cOffsetTop:', cOffsetEl.offsetTop, 'cOffsetLeft:', cOffsetEl.offsetLeft, 'cumOffsetTop:', cumOffset.top, 'cumOffsetLeft:', cumOffset.left, 'cOffsetEl:', cOffsetEl.nodeName, uneval(cOffsetEl.classList), cOffsetEl.getAttribute('id'));
 				cOffsetEl = cOffsetEl.offsetParent;
 			}
 		} else {
@@ -161,16 +162,16 @@ var IPStore = {
 								this.imgloadreason = 'not-square';
 								this.deferred.resolve('not-square');
 							}
-							console.log('loaded img:', this);
+							console.log('loaded img:', uneval(this));
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
 							this.imgloadreason = 'abort';
-							console.log('abort img:', this);
+							console.log('abort img:', uneval(this));
 							this.deferred.resolve('abort');
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
 							this.imgloadreason = 'not-img';
-							console.log('error img:', this);
+							console.log('error img:', uneval(this));
 							this.deferred.resolve('not-img');
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
@@ -179,7 +180,7 @@ var IPStore = {
 					var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
 					promiseAll_loadImgs.then(
 						function(aVal) {
-							console.log('Fullfilled - promiseAll_loadImgs - ', aVal);
+							console.log('Fullfilled - promiseAll_loadImgs - ', uneval(aVal));
 							// check if duplicate sizes
 							
 							// create cImgObj
@@ -248,7 +249,7 @@ var IPStore = {
 				} else {
 					// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
 					var aImgObj = aErrorOrImgObj;
-					console.log('got aImgObj:', aImgObj);
+					console.log('got aImgObj:', uneval(aImgObj));
 					IPStore.setState({
 						sPreview: {
 							path: a_cDirSelected,
@@ -289,7 +290,7 @@ var IPStore = {
 				document.removeEventListener('keypress', this.keypress, true);
 			},
 			componentDidUpdate: function(aPrevPropsObj, aPrevStateObj) {
-				console.error('componentDidUpdate! and prevAndNowStateObj:', {prev:aPrevStateObj, now:this.state});
+				console.error('componentDidUpdate! and prevAndNowStateObj:', uneval({prev:aPrevStateObj, now:this.state}));
 				// check if pref state sPreview had imgObj and if imgObj has blob urls. if true then -- check if sPreview is now changed, if it is then tell worker to revokeObjectURL on those blob urls
 				if (aPrevStateObj.sPreview && typeof(aPrevStateObj.sPreview) != 'string' && aPrevStateObj.sPreview.imgObj) {
 					var urlsInPrevState = [];
@@ -297,11 +298,11 @@ var IPStore = {
 					for (var aSize in aPrevStateObj.sPreview.imgObj) {
 						var cUrl = aPrevStateObj.sPreview.imgObj[aSize];
 						urlsInPrevState.push(cUrl);
-						if (cUrl.indexOf('blob:') === 0) {
+						if (cUrl.indexOf(gGithubDownloadPrefix) > -1) {
 							urlsInPrevAreBlobs = true;
 						}
 					}
-					console.log('urlsInPrevState:', urlsInPrevState);
+					console.log('urlsInPrevState:', uneval(urlsInPrevState));
 					if (urlsInPrevAreBlobs) {
 						console.log('yes there are blobs in prev state, check if those urls are no longer being shown, if they are not then release from worker');
 						// i dont simply revoke the url here, because im holding onto to the blobs in global space over in worker
@@ -335,11 +336,11 @@ var IPStore = {
 									var cUrl = this.state.sPreview.imgObj[aSize];
 									urlsInNowState.push(cUrl);
 								}
-								console.log('urlsInNowState:', urlsInNowState);
+								console.log('urlsInNowState:', uneval(urlsInNowState));
 								
 								for (var i=0; i<urlsInPrevState.length; i++) {
 									if (urlsInNowState.indexOf(urlsInPrevState[i]) == -1) {
-										console.log('old url not found in new urls, old url:', urlsInPrevState[i]);
+										console.log('old url not found in new urls, old url:', uneval(urlsInPrevState[i]));
 										needToReleaseOldImgObj = true;
 										break;
 									}
@@ -621,7 +622,7 @@ var IPStore = {
 				var new_sDirSubdirs = this.props.sDirSubdirs.filter(function(aElVal) {
 					return aElVal.path != this.props.sDirSelected;
 				}.bind(this));
-				console.log('new_sDirSubdirs:', new_sDirSubdirs);
+				console.log('new_sDirSubdirs:', uneval(new_sDirSubdirs));
 
 				IPStore.setState({
 					sPreview: null,
@@ -785,7 +786,7 @@ var IPStore = {
 						// loading
 						cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
 					} else {
-						console.log('this.props.sPreview:', this.props.sPreview);
+						console.log('this.props.sPreview:', uneval(this.props.sPreview));
 						if (typeof(this.props.sPreview) == 'string') {
 							var previewTxt = myServices.sb_ip.GetStringFromName(this.props.sPreview);
 							cChildren.push(React.createElement('span', {},
@@ -920,7 +921,7 @@ var IPStore = {
 					return;
 				}
 				if (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length) {
-					console.log('this.props of dbl clickable:', this.props);
+					console.log('this.props of dbl clickable:', uneval(this.props));
 					if (!this.props.selected) {
 						IPStore.setState({
 							sDirSelected: this.props.path,
