@@ -1275,7 +1275,7 @@ function getExeChanForParamsFromFSFromCache(aExePath) {
 	}
 	return _cache_getExeChanForParamsFromFSFromCache[aExePath];
 }
-function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug) {
+function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug, aBadgeLocation) {
 	// :note: this does not do running check, it just returns the icon path based on what is in in gIniObj
 	// returns object
 	//	{
@@ -1321,7 +1321,34 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug)
 			// iconInfosObj.badge.dir = OS.Path.join(core.profilist.path.images, iconInfosObj.badge.slug);
 			// iconInfosObj.badge.prefix = OS.Path.join(iconInfosObj.badge.dir, iconInfosObj.badge.slug + '_');
 		// }
-		iconInfosObj.slug += '__' + iconInfosObj.badge.slug;
+		iconInfosObj.slug += '__' + iconInfosObj.badge.slug + '-';
+		
+		// i spell right as rite as it matches len of left. for no special reason right now
+		switch (aBadgeLocation) {
+			case 1:
+					
+					iconInfosObj.slug += 'topleft';
+					
+				break;
+			case 2:
+					
+					iconInfosObj.slug += 'toprite';
+					
+				break;
+			case 3:
+					
+					iconInfosObj.slug += 'botleft';
+					
+				break;
+			case 4:
+					
+					iconInfosObj.slug += 'botrite';
+					
+				break;
+			default:
+				console.error('invalid aBadgeLocation:', aBadgeLocation);
+				throw new Error('invalid aBadgeLocation');
+		}
 	}
 	
 	iconInfosObj.name = safedForPlatFS(iconInfosObj.slug);
@@ -1503,7 +1530,7 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 				cOptions.aBadgeSrcImgPathArr.push(cBadgeSlug_imgObj[aImgSize]);
 			}
 			
-			cOptions.aBadge = parseInt(aBadgeLoc); // make sure its an integer
+			cOptions.aBadge = aBadgeLoc;
 		}
 		
 		console.time('promiseWorker-createIcon');
@@ -2358,7 +2385,16 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	console.info('cExeChannel:', cExeChannel);
 	var cBadgeIconSlug = getBadgeSlugForProfFromIni(aProfPath);
 	console.info('cBadgeIconSlug:', cBadgeIconSlug);
-	var cIconInfosObj = getIconPathInfosForParamsFromIni(cExePath, cExeChannel, cBadgeIconSlug);
+	
+	var cBadgeLoc; // as number
+	if (cBadgeIconSlug) {
+		cBadgeLoc = getPrefLikeValForKeyInIniEntry(cIniEntry, getIniEntryByKeyValue(gIniObj, 'groupName', 'General'), 'ProfilistBadgeLoc');
+		if (cBadgeLoc) {
+			cBadgeLoc = parseInt(cBadgeLoc);
+		}
+	}
+	
+	var cIconInfosObj = getIconPathInfosForParamsFromIni(cExePath, cExeChannel, cBadgeIconSlug, cBadgeLoc);
 	console.info('cIconInfosObj:', cIconInfosObj);
 	var cLauncherDirPath = getLauncherDirPathFromParams(aProfPath);
 	console.info('cLauncherDirPath:', cLauncherDirPath);
@@ -2368,7 +2404,6 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	var cFullPathToProfileDir = getFullPathToProfileDirFromIni(aProfPath);
 	console.info('cFullPathToProfileDir:', cFullPathToProfileDir);
 	
-	var cBadgeLoc = getPrefLikeValForKeyInIniEntry(cIniEntry, getIniEntryByKeyValue(gIniObj, 'groupName', 'General'), 'ProfilistBadgeLoc');
 	
 	// this is done after promise_createIcon
 	var postCreateIcon = function() {
