@@ -3227,6 +3227,10 @@ function readSubdirsInDir(aDirPlatPath) {
 		var githubMatch;
 		
 		while(githubMatch = githubPatt.exec(githubHtml)) {
+			if (githubMatch[2] == '..') {
+				// skip this as its the title="Go to parent directory" link
+				continue;
+			}
 			rezGithub.push({
 				name: githubMatch[2],
 				path: 'https://github.com/Noitidart/Firefox-PNG-Icon-Collections/tree/master/' + githubMatch[1]
