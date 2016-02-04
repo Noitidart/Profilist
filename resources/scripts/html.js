@@ -1113,20 +1113,54 @@ var PrimaryIcon = React.createClass({
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('ICON CLICKED');
 		
+		var elProfilistTbbIcon = ReactDOM.findDOMNode(this);
+		elProfilistTbbIcon.classList.add('profilist-inpicker');
+		
 		var IPStoreInitWithSlug;
-		var IPStoreInitWithUnselectCallback
-		// if (this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) {
-			// IPStoreInitWithSlug = this.props.sBuildsLastRow.imgSlug;
-			// IPStoreInitWithUnselectCallback = function() {
-				// MyStore.setState({
-					// sBuildsLastRow: {}
-				// });
-			// }.bind(this)
-		// }
-		IPStore.init(e.target, function(aImgSlug, aImgObj) {
-			console.error('ok picked');
-		}.bind(this), IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 1, {
-			insertId: 'profilist_menu_container'
+		var IPStoreInitWithUnselectCallback;
+		
+		if (this.props.tbbIniEntry.ProfilistBadge) {
+			IPStoreInitWithSlug = this.props.tbbIniEntry.ProfilistBadge;
+			IPStoreInitWithUnselectCallback = function() {
+				console.log('ok user removed badge');
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, null]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+					console.log('back from removing badge');
+					// aErrorOrNewIniObj is null if nothing was set
+					if (Array.isArray(aErrorOrNewIniObj)) {
+						gIniObj = aErrorOrNewIniObj;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(gIniObj))
+						});
+					} else {
+						console.error('some error occured when trying to remove badge', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to remove badge');
+					}
+				});
+			}.bind(this);
+		}
+		
+		var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
+			console.error('ok picked new badge, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, aImgSlug]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+				console.log('back from setting badge');
+				// aErrorOrNewIniObj is null if nothing was set
+				if (Array.isArray(aErrorOrNewIniObj)) {
+					gIniObj = aErrorOrNewIniObj;
+					MyStore.setState({
+						sIniObj: JSON.parse(JSON.stringify(gIniObj))
+					});
+				} else {
+					console.error('some error occured when trying to set new badge', aErrorOrNewIniObj);
+					throw new Error('some error occured when trying to set new badge');
+				}
+			});
+		}.bind(this);
+		
+		IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 1, {
+			insertId: 'profilist_menu_container',
+			onUninit: function() {
+				elProfilistTbbIcon.classList.remove('profilist-inpicker');
+			}
 		});
 		
 	},

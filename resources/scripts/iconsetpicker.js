@@ -16,7 +16,8 @@ var IPStore = {
 		
 		var cOptionsDefaults = {
 			aDirection: 0,
-			insertId: null
+			insertId: null,
+			onUninit: null // callback to run when picker is closed
 		};
 		
 		validateOptionsObj(aOptions, cOptionsDefaults);
@@ -57,6 +58,10 @@ var IPStore = {
 				ReactDOM.unmountComponentAtNode(wrap);
 				wrap.parentNode.removeChild(wrap);
 			}, 200);
+			
+			if (aOptions.onUninit) {
+				aOptions.onUninit();
+			}
 		};
 		
 		cover.addEventListener('mousedown', uninit, false);
@@ -613,6 +618,7 @@ var IPStore = {
 						sAppliedSlugDir: null
 					});
 					this.props.unselect_callback();
+					this.props.uninit(null, true);
 				}
 			},
 			clickDelete: function() {

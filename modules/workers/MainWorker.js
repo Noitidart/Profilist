@@ -901,6 +901,33 @@ function replaceBuildEntry(aBuildId, aNewBuildEntry) {
 	
 	return [gIniObj];
 }
+
+function replaceBadgeForProf(aProfPath, aNewBadge) {
+	// aNewBadge - string which is new imgSlug to apply, or null/undefined t oremove it
+	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	
+	var needToUpdate = false;
+	
+	if (aNewBadge) {
+		if (!cIniEntry.ProfilistBadge || cIniEntry.ProfilistBadge != aNewBadge) {
+			cIniEntry.ProfilistBadge = aNewBadge;
+			needToUpdate = true;
+		}
+	} else {
+		if (cIniEntry.ProfilistBadge) {
+			delete cIniEntry.ProfilistBadge;
+			needToUpdate = true;
+		}
+	}
+	
+	if (needToUpdate) {
+		formatNoWriteObjs(); // have to do this so it brings in the imgSrcObj_nearest16_forImgSlug for the new one
+		writeIni();
+		return [gIniObj];
+	} else {
+		return [null];
+	}
+}
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 

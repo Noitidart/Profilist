@@ -385,8 +385,9 @@
 #profilist_menu .profilist-tbb:not([data-tbb-type$=active]) .profilist-tbb-primary .profilist-tbb-icon .profilist-tbb-badge {
 	display: none;
 }
-/* state:mouseover */
-#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge {
+/* state:mouseover_or_iconset_picker */
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-badge,
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon.profilist-inpicker .profilist-tbb-badge {
 	transform: none;
 }
 /* end - primary_icon_badge */
@@ -415,8 +416,9 @@
 	background: transparent url("chrome://profilist/content/resources/images/plus.png") no-repeat scroll center center;
 	/*opacity: 0.3;*/
 }
-/* state:mouseover */
-#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-status {
+/* state:mouseover_or_iconset_picker */
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon:hover .profilist-tbb-status,
+#profilist_menu .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon.profilist-inpicker .profilist-tbb-status {
 	opacity: 0;
 }
 /* end - primary_icon_status */
