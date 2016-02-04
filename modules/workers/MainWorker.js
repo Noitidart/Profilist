@@ -229,12 +229,16 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 			'1'					// launch right away, as IsRelative=1, with default naming scheme for Path and Name
 		]
 	},
-	ProfilistBadge: {			// slug_of_icon_in_icons_folder
+	ProfilistBadge: {			// imgSlug - not iconSlug
+		pref: false,
 		specificOnly: true
 	},
-	ProfilistBadgeLoc: {	// slug_of_icon_in_icons_folder
-		unspecificOnly: true,
-		defaultValue: '4',
+	ProfilistBadgeLoc: {
+		pref: true,
+		// unspecificOnly: true,
+		specificOnly: false,
+		defaultSpecificness: false,
+		defaultValue: '3',
 		possibleValues: [
 			'1',				// top left
 			'2',				// top right
@@ -243,10 +247,12 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		]
 	},
 	ProfilistTie: {			// slug_of_icon_in_icons_folder
+		pref: false,
 		specificOnly: true
 		// value should be id of something in the ProfilistBuilds.
 	},
 	ProfilistTemp: {			// tells whether (temporary profiles found && that did NOT have profilist installed) into them (so no ProfilistStatus), should remain in ini after it is found to be not running. only way to remove is to delete from menu. // if profilist is installed into that profile, it will be a temporary profile still so group will be [TempProfile#] but it will stay regardless of this key setting
+		pref: true,
 		unspecificOnly: true,
 		// defaultValue: '0',
 		defaultValue: '1',
