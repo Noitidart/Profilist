@@ -669,7 +669,9 @@ var IPStore = {
 							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
 							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
 								disableApply = true;
-								cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
+								if (this.props.unselect_callback) {
+									cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
+								}
 							}
 							
 						

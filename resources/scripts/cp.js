@@ -792,20 +792,57 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			}
 		}.bind(this));
 		*/
-		var IPStoreInitWithSlug;
-		var IPStoreInitWithUnselectCallback
-		if (this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) {
-			IPStoreInitWithSlug = this.props.sBuildsLastRow.imgSlug;
-			IPStoreInitWithUnselectCallback = function() {
-				MyStore.setState({
-					sBuildsLastRow: {}
+		if (!this.props.jProfilistBuildsEntry) {
+			// its last row (well or head, but head doesnt have clickDel so its definitely last row)
+			// alert('ok clearing sBuildsLastRow');
+			
+			var IPStoreInitWithSlug;
+			var IPStoreInitWithUnselectCallback;
+			
+			if (this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) {
+				IPStoreInitWithSlug = this.props.sBuildsLastRow.imgSlug;
+				IPStoreInitWithUnselectCallback = function() {
+					MyStore.setState({
+						sBuildsLastRow: {}
+					});
+				}.bind(this)
+			}
+			
+			var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
+				console.error('ok applied icon, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+				this.userInputLastRow(undefined, aImgSlug, aImgObj);
+			}.bind(this);
+			
+			IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
+			
+		} else {
+			// its a build entry row
+			var IPStoreInitWithSlug = this.props.jProfilistBuildsEntry.i;
+			var IPStoreInitWithUnselectCallback = undefined; // no unselect allowed			
+			var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
+				console.error('ok replaced icon, new aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+				
+				var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
+				console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
+				new_jProfilistBuildEntry.i = aImgSlug;
+				
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+					console.log('back from replaceBuildEntry');
+					if (Array.isArray(aErrorOrNewIniObj)) {
+						gIniObj = aErrorOrNewIniObj;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+							sBuildsLastRow: {}
+						});
+					} else {
+						console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to add new build');
+					}
 				});
-			}.bind(this)
+			}.bind(this);
+			
+			IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
 		}
-		IPStore.init(e.target, function(aImgSlug, aImgObj) {
-			console.error('ok applied icon, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
-			this.userInputLastRow(undefined, aImgSlug, aImgObj);
-		}.bind(this), IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
 	},
 	clickPath: function() {
 		alert('clicked path');
@@ -838,7 +875,29 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 	clickBrowse: function() {
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['browseExe'], bootstrapMsgListener.funcScope, function(aBrowsedPlatPath) {
 			if (aBrowsedPlatPath) {
-				this.userInputLastRow(aBrowsedPlatPath);
+				if (!this.props.jProfilistBuildsEntry) {
+					// its last row (well or head, but head doesnt have clickDel so its definitely last row)
+					this.userInputLastRow(aBrowsedPlatPath);
+				} else {
+					// not last row
+					var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
+					console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
+					new_jProfilistBuildEntry.p = aBrowsedPlatPath;
+					
+					sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+						console.log('back from replaceBuildEntry');
+						if (Array.isArray(aErrorOrNewIniObj)) {
+							gIniObj = aErrorOrNewIniObj;
+							MyStore.setState({
+								sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+								sBuildsLastRow: {}
+							});
+						} else {
+							console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+							throw new Error('some error occured when trying to add new build');
+						}
+					});
+				}
 			} // else cancelled
 		}.bind(this));
 	},

@@ -875,6 +875,32 @@ function removeBuild(aBuildId) {
 	
 	return [gIniObj];
 }
+function replaceBuildEntry(aBuildId, aNewBuildEntry) {
+	// aBuildId - number 
+	// aNewBuildEntry - js object of what the new entry should be
+	// returns an array hold ref to new gIniObj
+	
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	
+	for (var i=0; i<j_gProfilistBuilds.length; i++) {
+		if (j_gProfilistBuilds[i].id == aBuildId) {
+			
+			j_gProfilistBuilds[i] = aNewBuildEntry;
+			var new_gProfilistBuilds = JSON.stringify(j_gProfilistBuilds);
+			
+			setPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds', new_gProfilistBuilds);
+			
+			formatNoWriteObjs();
+			
+			writeIni();
+			break;
+		}
+	}
+	
+	return [gIniObj];
+}
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
