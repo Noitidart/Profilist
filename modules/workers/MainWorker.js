@@ -1280,17 +1280,17 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug)
 	// returns object
 	//	{
 	//		base: {
-	//			slug: '' // same thing as dirName
-	//			dir: '' path to directory holding images of different sizes. no ending slash
-	//			prefix: '' full path to the image without the ##.png
-	//			chrome: isSlugInChromeChannelIconsets
+	//			slug: '' // same thing as dirName, this is imgSlug
+	//			DEPRECATED--dir: '' path to directory holding images of different sizes. no ending slash
+	//			DEPRECATED--prefix: '' full path to the image without the ##.png
+	//			DEPRECATED--chrome: isSlugInChromeChannelIconsets
 	//		},
 	//		badge: { // is not set if no aBadgeIconSlug
 	//			same keys as base
 	//		},
 	//		path: 'string to file system path.png', on linux this is same as name
 	//		name: the stuff before the .png safedForPlatFS
-	//		slug: the stuff before the .png NOT safedForPlatFS
+	//		slug: the stuff before the .png NOT safedForPlatFS this is iconSlug
 	//	}
 	
 	var iconInfosObj = {}; // short for iconInfoObj	
@@ -1298,37 +1298,36 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug)
 	iconInfosObj.base = {};
 	iconInfosObj.base.slug = getSlugForExePathFromParams(aExePath, gJProfilistDev, gJProfilistBuilds, aExeChannel);
 	
-	if (isSlugInChromeChannelIconsets(iconInfosObj.base.slug)) {
-		iconInfosObj.base.chrome = true;
-		iconInfosObj.base.dir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.base.slug;
-		iconInfosObj.base.prefix = iconInfosObj.base.dir + '/' + iconInfosObj.base.slug + '_';
-	} else {
-		iconInfosObj.base.dir = OS.Path.join(core.profilist.path.images, iconInfosObj.base.slug);
-		iconInfosObj.base.prefix = OS.Path.join(iconInfosObj.base.baseImagesDir, iconInfosObj.base.slug + '_');
-	}
+	// if (isSlugInChromeChannelIconsets(iconInfosObj.base.slug)) {
+		// iconInfosObj.base.chrome = true;
+		// iconInfosObj.base.dir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.base.slug;
+		// iconInfosObj.base.prefix = iconInfosObj.base.dir + '/' + iconInfosObj.base.slug + '_';
+	// } else {
+		// iconInfosObj.base.dir = OS.Path.join(core.profilist.path.images, iconInfosObj.base.slug);
+		// iconInfosObj.base.prefix = OS.Path.join(iconInfosObj.base.dir, iconInfosObj.base.slug + '_');
+	// }
 		
 	
 	iconInfosObj.slug = iconInfosObj.base.slug;
 	
 	if (aBadgeIconSlug) {
 		iconInfosObj.badge = {};
-		if (isSlugInChromeChannelIconsets(aBadgeIconSlug)) {
-			iconInfosObj.badge.chrome = true;
-			iconInfosObj.badge.badgeImagesSlug = aBadgeIconSlug;
-			iconInfosObj.badge.badgeImagesDir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.badge.badgeImagesSlug;
-			iconInfosObj.badge.badgeImagesPrefix = iconInfosObj.badge.badgeImagesDir + '/' + iconInfosObj.badge.badgeImagesSlug + '_';
-		} else {
-			iconInfosObj.badge.badgeImagesSlug = aBadgeIconSlug;
-			iconInfosObj.badge.badgeImagesDir = OS.Path.join(core.profilist.path.images, iconInfosObj.badge.badgeImagesSlug);
-			iconInfosObj.badge.badgeImagesPrefix = OS.Path.join(iconInfosObj.badge.badgeImagesDir, iconInfosObj.badge.badgeImagesSlug + '_');
-		}
-		iconInfosObj.slug += '__' + iconInfosObj.badge.badgeImagesSlug;
+		iconInfosObj.badge.slug = aBadgeIconSlug;
+		// if (isSlugInChromeChannelIconsets(aBadgeIconSlug)) {
+			// iconInfosObj.badge.chrome = true;
+			// iconInfosObj.badge.dir = core.addon.path.images + 'channel-iconsets/' + iconInfosObj.badge.slug;
+			// iconInfosObj.badge.prefix = iconInfosObj.badge.dir + '/' + iconInfosObj.badge.slug + '_';
+		// } else {
+			// iconInfosObj.badge.dir = OS.Path.join(core.profilist.path.images, iconInfosObj.badge.slug);
+			// iconInfosObj.badge.prefix = OS.Path.join(iconInfosObj.badge.dir, iconInfosObj.badge.slug + '_');
+		// }
+		iconInfosObj.slug += '__' + iconInfosObj.badge.slug;
 	}
 	
 	iconInfosObj.name = safedForPlatFS(iconInfosObj.slug);
 	// set iconInfosObj.path
 	if (core.os.mname == 'gtk') {
-		iconInfosObj.path = iconInfosObj.name;
+		iconInfosObj.path = iconInfosObj.name; // :todo: test if i should append ".profilist" here because really the path is name plus .profilist
 	} else {
 		iconInfosObj.path = OS.Path.join(core.profilist.path.icons, iconInfosObj.name);
 		if (core.os.mname == 'darwin') {
@@ -1448,10 +1447,7 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 			case 'wince':
 					
 					cCreateType = 'ICO';
-					cOutputSizesArr = [16, 24, 32, 48, 256];
-					if (aIconInfosObj.badge) {
-						cOptions.aBadgeSizePerOutputSize = [10, 12, 16, 24, 128];
-					}
+					cOutputSizesArr = [16, 32, 48, 256];
 					
 				break
 			case 'gtk':
@@ -1460,9 +1456,6 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 					cCreateName += '.profilist'; // link787575758
 					cCreateType = 'Linux';
 					cOutputSizesArr = [16, 24, 48, 96];
-					if (aIconInfosObj.badge) {
-						cOptions.aBadgeSizePerOutputSize = [10, 12, 16, 24, 128];
-					}
 					
 				break
 			case 'darwin':
@@ -1479,30 +1472,43 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 		}
 		
 		// populate cBaseSrcImgPathArr
-		cBaseSrcImgPathArr = [];
-		for (var i=0; i<cOutputSizesArr.length; i++) {
-			cBaseSrcImgPathArr.push(aIconInfosObj.base.prefix + cOutputSizesArr[i] + '.png');
+		var cBaseSrcImgPathArr = [];
+		// for (var i=0; i<cOutputSizesArr.length; i++) {
+			// cBaseSrcImgPathArr.push(aIconInfosObj.base.prefix + cOutputSizesArr[i] + '.png');
+		// }
+		var cBaseSlug_imgObj = getImgSrcsForImgSlug(aIconInfosObj.base.slug);
+		for (var aImgSize in cBaseSlug_imgObj) {
+			cBaseSrcImgPathArr.push(cBaseSlug_imgObj[aImgSize]);
 		}
 	
 		// if badge stuff
 		if (aIconInfosObj.badge) {
-			cOptions.aBadgeSizePerOutputSize = cOutputSizesArr.map(function(aOutputSize) {
-				if (aOutputSize == 16) {
-					return 10;
-				} else {
-					return aOutputSize / 2;
-				}
-			});
+			cOptions.aBadgeSizePerOutputSize = {
+				16: 10,
+				24: 12,
+				32: 16,
+				48: 24,
+				64: 32,
+				96: 48,
+				128: 64,
+				256: 128,
+				512: 256,
+				1024: 512
+			};
 			// populate cOptions.aBadgeSrcImgPathArr
 			cOptions.aBadgeSrcImgPathArr = [];
-			for (var i=0; i<cOutputSizesArr.length; i++) {
-				cOptions.aBadgeSrcImgPathArr.push(aIconInfosObj.badge.prefix + '_' + cOutputSizesArr[i] + '.png');
+			var cBadgeSlug_imgObj = getImgSrcsForImgSlug(aIconInfosObj.badge.slug);
+			cOptions.aBadgeSrcImgPathArr = [];
+			for (var aImgSize in cBadgeSlug_imgObj) {
+				cOptions.aBadgeSrcImgPathArr.push(cBadgeSlug_imgObj[aImgSize]);
 			}
 			
-			cOptions.aBadge = aBadgeLoc;
+			cOptions.aBadge = parseInt(aBadgeLoc); // make sure its an integer
 		}
 		
 		console.time('promiseWorker-createIcon');
+		console.log('rawr:', ['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions]);
+		console.log('aIconInfosObj:', aIconInfosObj);
 		self.postMessageWithCallback(['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions], function(aCreateIconRez) { // :note: this is how to call WITH callback
 			console.timeEnd('promiseWorker-createIcon');
 			console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
