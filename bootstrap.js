@@ -10,7 +10,7 @@ Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 
 // Globals
-const core = {
+var core = {
 	addon: {
 		name: 'Profilist',
 		id: 'Profilist@jetpack',
@@ -434,6 +434,7 @@ function startup(aData, aReason) {
 		function(aVal) {
 			console.log('Fullfilled - promise_initMainWorker - ', aVal);
 			// start - do stuff here - promise_initMainWorker
+			core = aVal;
 			setupMainWorkerCustomErrors();
 			afterWorker();
 			// end - do stuff here - promise_initMainWorker
@@ -708,7 +709,8 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				
 					// fp.appendFilter('Firefox Application Bundle', '*.app');
 					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-mac'), '*.app');
-					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent;
+					// fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent;
+					fp.displayDirectory = (new FileUtils.File(core.profilist.path.XREExeF)).parent.parent.parent;
 					// .parent = MacOs
 					// .parent.parent = Contents
 					// .parent.parent.parent = .app

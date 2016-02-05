@@ -170,7 +170,7 @@ function init(objCore) { // function name init required for SIPWorker
 	readIni();
 	
 	console.log('MainWorker init success');
-	return true; // required for SIPWorker
+	return core; // required for SIPWorker
 }
 
 // Start - Addon Functionality
