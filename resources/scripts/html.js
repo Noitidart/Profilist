@@ -1176,12 +1176,29 @@ var PrimaryIcon = React.createClass({
 			MyStore.setState({sMessage:new_sMessage});
 		}
 	},
+	/*
+	// this is not always triggering. if move mouse over and out really fast. even though mouseEnter does trigger. weird, so i resorted to transitionened
 	mouseLeave: function() {
 		if (this.props.sMessage.hover[this.props.sKey]) {
 			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 			delete new_sMessage.hover[this.props.sKey];
 			MyStore.setState({sMessage:new_sMessage});
 		}
+	},
+	*/
+	componentDidMount: function() {
+		var elThis = ReactDOM.findDOMNode(this);
+		elThis.addEventListener('transitionend', function(e) {
+			console.log('TRANSITIONEND:', e.propertyName, e);
+			if (e.propertyName == 'line-height') {
+				// mouse outted
+				if (this.props.sMessage && this.props.sMessage.hover && this.props.sKey in this.props.sMessage.hover) {
+					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+					delete new_sMessage.hover[this.props.sKey];
+					MyStore.setState({sMessage:new_sMessage});
+				}
+			}
+		}.bind(this), false);
 	},
 	render: function() {
 		// incoming props
@@ -1197,7 +1214,7 @@ var PrimaryIcon = React.createClass({
 		
 		if (this.props.tbbIniEntry) {
 			aProps.onMouseEnter = this.mouseEnter;
-			aProps.onMouseLeave = this.mouseLeave;
+			// aProps.onMouseLeave = this.mouseLeave;
 		}
 		
 		if (this.props.sKey == 'createnewprofile' || this.props.sKey == 'loading') {

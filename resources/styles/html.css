@@ -364,11 +364,18 @@
 	flex-direction: column;
 	justify-content: center;
 	height: 60%; /* to increase the mouseover target */
+	line-height: 0px;
+	transition: line-height 1ms; /* used to detect mouseleave as mouseleave does not trigger if done very fast */
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon {
 	animation: profilist-vshake 300ms infinite;
 	pointer-events: none;
+}
+/* state:mouseover */
+#profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon:hover {
+	line-height: 1px;
+	transition: none;
 }
 /* end - primary_icon */
 
