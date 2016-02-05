@@ -1942,6 +1942,12 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
 							var rez_copyIcon = OS.File.copy(aLauncherIconPath, OS.Path.join(cTargetContentsPath, 'Resources', 'profilist-' + cLauncherDirName + '.icns'), {noOverwrite:false}); // i copy the icon into the main folder, because i alias the folders
 							cLauncherJsonLine.LauncherIconPathName = aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5);
+							
+							// create dummy folder in Contents to update icon
+							OS.File.makeDir(OS.Path.join(eLauncherPath, 'dummy for update icon'));
+							setTimeout(function() {
+								OS.File.removeDir(OS.Path.join(eLauncherPath, 'dummy for update icon'));
+							}, 1000);
 						}
 						
 						// step5 - verify/update exePath (the build it launches into)
@@ -2866,7 +2872,14 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 				case 'darwin':
 					
 						// create hard link
-						createHardLink(cPathToDeskcut, aPathToLauncher);
+						var resultMakeDeskcut = createHardLink(cPathToDeskcut, aPathToLauncher);
+						if (core.os.mname == 'darwin' && resultMakeDeskcut == 'exists') {
+							// ensure icon updates - only needed if it was already existing
+							OS.File.makeDir(OS.Path.join(cPathToDeskcut, 'dummy for update icon 2'));
+							setTimeout(function() {
+								OS.File.removeDir(OS.Path.join(cPathToDeskcut, 'dummy for update icon 2'));
+							}, 1000);
+						}
 					
 					break;
 				default:
@@ -3456,7 +3469,7 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 						if (cutils.jscEqual(jsErrCode, ostypes.CONST.NSFileWriteFileExistsError)) {
 							// it already exists
 							console.warn('already exists');
-							return true;
+							return 'exists';
 						}
 						
 						console.error('failed to create hard link with NSCocoaErrorDomain code of:', jsErrCode);
