@@ -823,7 +823,17 @@ function returnIconset(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPath
 		
 		console.log('in step5');
 		var promiseAllArr_scaleOutput = [];
+		var sortedDescP = [];
 		for (var p in objOutputSizes) {
+			sortedDescP.push(parseInt(p));
+		}
+		sortedDescP.sort(function(a, b) {
+			return b - a; // sorts descending. this is impotant because if badge and base are same. then if do asc then it will overlap till the top because i pollute the canvas for efficiency. cross file link165151
+		});
+		console.log('sortedDescP:', uneval(sortedDescP));
+		
+		for (var i=0; i<sortedDescP.length; i++) {
+			var p = sortedDescP[i];
 			// send message to frameworker to draw badge to canvas, and get back arr buf
 			// on promise.all then go to step5
 			var deferred_scaleOutput = new Deferred();

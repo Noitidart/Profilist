@@ -275,7 +275,11 @@ var ControlPanel = React.createClass({
 		}
 		
 		var aProps = {
-			className: 'wrap-react'
+			className: 'wrap-react',
+			component:'div',
+			transitionName:'section-collapse',
+			transitionEnterTimeout: 300,
+			transitionLeaveTimeout: 300
 		};
 		
 		var children = [];
@@ -288,12 +292,17 @@ var ControlPanel = React.createClass({
 		var sCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(this.state.sIniObj, 'currentProfile', true);
 		console.info('sGenIniEntry:', sGenIniEntry);
 		
+		var jProfilistDev = getPrefLikeValForKeyInIniEntry(sCurProfIniEntry, sGenIniEntry, 'ProfilistDev') == '1' ? true : false;
+		
 		for (var i=0; i<gDOMInfo.length; i++) {
 			console.log('gDOMInfo[i]:', gDOMInfo[i]);
+			if (gDOMInfo[i].section == myServices.sb.GetStringFromName('profilist.cp.developer') && !jProfilistDev) {
+				continue;
+			}
 			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != myServices.sb.GetStringFromName('profilist.cp.developer') ? undefined : this.state.sBuildsLastRow) }));
 		}
 		
-		return React.createElement('div', aProps,
+		return React.createElement(React.addons.CSSTransitionGroup, aProps,
 			children
 		);
 	}
@@ -875,6 +884,9 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 	clickBrowse: function() {
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['browseExe'], bootstrapMsgListener.funcScope, function(aBrowsedPlatPath) {
 			if (aBrowsedPlatPath) {
+				if (core.os.mname == 'darwin') {
+					aBrowsedPlatPath += '/Contents/MacOS/firefox';
+				}
 				if (!this.props.jProfilistBuildsEntry) {
 					// its last row (well or head, but head doesnt have clickDel so its definitely last row)
 					this.userInputLastRow(aBrowsedPlatPath);
@@ -991,7 +1003,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				} else {
 					imgSrc = core.addon.path.images + 'search.png'
 				}
-				
+
 				if (this.props.sBuildsLastRow.exePath) {
 					// this means that imgSlug/imgObj were not set!
 					textVal = this.props.sBuildsLastRow.exePath;
@@ -999,7 +1011,6 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			} else {
 				// its content
 				var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.jProfilistBuildsEntry.i];
-				
 				imgSrc = img16SrcObj.src;
 				textVal = this.props.jProfilistBuildsEntry.p;
 				if (img16SrcObj.resize) {

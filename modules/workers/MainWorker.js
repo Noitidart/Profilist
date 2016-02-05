@@ -2872,7 +2872,16 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 				default:
 					// make symlink
 					
-						OS.File.unixSymLink(aPathToLauncher, cPathToDeskcut);
+						try {
+							OS.File.unixSymLink(aPathToLauncher, cPathToDeskcut);
+						} catch (OSFileError) {
+							if (OSFileError.unixErrno == 17) {
+								console.warn('symlink already exists:', OSFileError);
+							} else {
+								console.error('symlink already exists:', OSFileError);
+								throw new Error('symlink got error!');
+							}
+						}
 			}
 			
 			self.postMessage([aCbIdToResolveToFramescript]);

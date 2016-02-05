@@ -3,6 +3,7 @@ html {
 	height: 100%;
 	-moz-user-select: none;
 	cursor: default;
+	overflow-y: scroll;
 }
 /* end - the_body */
 
@@ -101,6 +102,27 @@ body {
 /* start - sections */
 .section {
 	margin-bottom: 20px;
+}
+/* state:react_anim */
+.section-collapse-enter {
+	max-height: 0;
+	margin-bottom: 0;
+	overflow: hidden;
+}
+.section-collapse-enter.section-collapse-enter-active {
+	max-height: 500px;
+	margin-bottom: 20px;
+	transition: margin-bottom 300ms, max-height 300ms;
+}
+.section-collapse-leave {
+	max-height: 500px;
+	margin-bottom: 20px;
+	overflow: hidden;
+}
+.section-collapse-leave.section-collapse-leave-active {
+	max-height: 0;
+	margin-bottom: 0;
+	transition: margin-bottom 300ms, max-height 300ms;
 }
 /* end - sections */
 

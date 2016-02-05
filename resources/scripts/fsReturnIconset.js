@@ -33,6 +33,12 @@ var bootstrapCallbacks = {
 		
 		var deferredMain_loadImg = new Deferred();
 		
+		if (aProvidedPath in imgPathData) {
+			console.log('aProvidedPath is already loaded in imgPathData so dont reload it');
+			deferredMain_drawScaled.resolve(imgPathData[aProvidedPath]);
+			return deferredMain_drawScaled.promise;
+		}
+		
 		imgPathData[aProvidedPath] = {};
 		
 		imgPathData[aProvidedPath].Image = new content.Image();
@@ -125,7 +131,7 @@ var bootstrapCallbacks = {
 		// this method will polute the imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can with the overlap // link165151
 		
 		// aProvidedPath
-		// drawAtSize - size to draw aProvidedImgPath at. this will also be the canvas size
+		// aDrawAtSize - size to draw aProvidedImgPath at. this will also be the canvas size
 		// optBuf - after drawing scaled aProvidedImgPath then optionally get non-overlaped buf. set to true. only obyed if optOverlapProvidedImgPath is set, else throws
 		// optOverlapObj - {
 		//  	aProvidedPath
