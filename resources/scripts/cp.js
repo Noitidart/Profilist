@@ -284,7 +284,7 @@ var ControlPanel = React.createClass({
 		
 		var children = [];
 		
-		children.push(React.createElement(Row, {gRowInfo:{id:'help'}}));
+		children.push(React.createElement(Row, {gRowInfo:{id:'help', type:'ignore'}})); // otherwise link8484888888 will give a warning
 		
 		// console.log('gDOMInfo.length:', gDOMInfo.length);
 		
@@ -441,14 +441,15 @@ var Row = React.createClass({
 			children.push(React.createElement('span', {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc}));
 		}
 		
-		switch (this.props.gRowInfo.type) {
+		switch (this.props.gRowInfo.type) { // must have type link8484888888 or you get a warning, it doesnt break, but its a warning
 			case 'select':
 				
 					var options = [];
 					var aSelectProps;
-					if (this.props.gRowInfo.id == 'desktop-shortcut') {
+
+					if (this.props.gRowInfo.id && this.props.gRowInfo.id == 'desktop-shortcut') { // gRowInfo does not have to have an id
 						// :todo: clean this up, im using globals and recalculating stuff here, not good
-						options.push(React.createElement('option', {value:'', selected:''},
+						options.push(React.createElement('option', {value:''},
 									myServices.sb.GetStringFromName('profilist.cp.select-profile')
 						));
 						var sortedIniObj = JSON.parse(JSON.stringify(gIniObj));
@@ -515,7 +516,9 @@ var Row = React.createClass({
 						}
 					}
 					if (this.props.gRowInfo.key) {
-						aSelectProps = {};
+						aSelectProps = {
+							defaultValue: ''
+						};
 						// console.log('fetching pref val for key:', this.props.gRowInfo.key);
 						aSelectProps.value = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
 						
@@ -548,7 +551,7 @@ var Row = React.createClass({
 					////
 		}
 		
-		if (this.props.gRowInfo.id == 'desktop-shortcut') {
+		if (this.props.gRowInfo.id && this.props.gRowInfo.id == 'desktop-shortcut') { // gRowInfo does not have to have an id
 			// add in the loader image
 			aProps.style = {position:'relative'};
 			children.push(React.createElement('img', {ref:'loader', src:core.addon.path.images + 'cp/loading.gif', style:{position:'absolute',top:'50%',height:'7px',marginTop:'-3px', right:'-34px', opacity:0, transition:'opacity 500ms'}}));
@@ -644,7 +647,7 @@ var BuildsWidget = React.createClass({
 		this.draggingRowEl.classList.remove('builds-row-indrag');
 		this.lastDidSet = undefined;
 		// set the dragging ref to be exactly in position
-		this.refs[this.draggingRef].getDOMNode().style.top = this.refs[this.draggingRef].rowStepSlots[this.jsRefToSlot[this.draggingRef]] + 'px'; // instead of setting this.draggingRef to null, then calling this.matchDomTo_jsRefToSlot()
+		ReactDOM.findDOMNode(this.refs[this.draggingRef]).style.top = this.refs[this.draggingRef].rowStepSlots[this.jsRefToSlot[this.draggingRef]] + 'px'; // instead of setting this.draggingRef to null, then calling this.matchDomTo_jsRefToSlot()
 
 		// if needs update do this stuff
 		if (this.jsRefToSlot[this.draggingRef] != this.draggingRef.substr(3)) { // testing if row# is a different # - which indicates it needs update
@@ -671,14 +674,14 @@ var BuildsWidget = React.createClass({
 			
 			this.dragDropTimout = setTimeout(function() {
 				delete this.dragDropTimout;
-				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
+				ReactDOM.findDOMNode(this.refs.widget).classList.remove('builds-widget-indrag');
 				// MyStore.updateStatedIniObj();
 			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		} else {
 			console.log('no need for update');
 			this.dragDropTimout = setTimeout(function() {
 				delete this.dragDropTimout;
-				this.refs.widget.getDOMNode().classList.remove('builds-widget-indrag');
+				ReactDOM.findDOMNode(this.refs.widget).classList.remove('builds-widget-indrag');
 			}.bind(this), 100); //100 is the transition time - cross file link381739311
 		}
 	},
@@ -687,9 +690,9 @@ var BuildsWidget = React.createClass({
 		console.log('did update');
 		for (var ref in this.refs) {
 			if (ref == 'widget') { continue; }
-			this.refs[ref].getDOMNode().style.top = '';
+			ReactDOM.findDOMNode(this.refs[ref]).style.top = '';
 		}
-		this.refs.widget.getDOMNode().lastChild.style.top = '';
+		ReactDOM.findDOMNode(this.refs.widget).lastChild.style.top = '';
 		delete this.jsRefToSlot;
 	},
 	dragStart: function(aRowRef, e) {
@@ -705,7 +708,7 @@ var BuildsWidget = React.createClass({
 			this.rowOffsets = []; // holds the offset tops
 			for (var ref in this.refs) { // each ref is a row element
 				if (ref == 'widget') { continue; }
-				this.rowOffsets.push(this.refs[ref].getDOMNode().offsetTop);
+				this.rowOffsets.push(ReactDOM.findDOMNode(this.refs[ref]).offsetTop);
 			}
 			console.error('this.rowOffsets:', this.rowOffsets);
 			this.rowSlotsCnt = this.rowOffsets.length;
@@ -732,7 +735,7 @@ var BuildsWidget = React.createClass({
 		}
 		this.refs.widget.classList.add('builds-widget-indrag');
 		this.draggingRef = aRowRef;
-		this.draggingRowEl = this.refs[aRowRef].getDOMNode();
+		this.draggingRowEl = ReactDOM.findDOMNode(this.refs[aRowRef]);
 		console.log('drag started', e);
 		this.yInit = e.clientY;
 		this.topInit = this.draggingRowEl.style.top;
@@ -748,7 +751,7 @@ var BuildsWidget = React.createClass({
 			if (ref == this.draggingRef) { // we dont set top on this as user is dragging it
 				continue;
 			}
-			this.refs[ref].getDOMNode().style.top = this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]] + 'px';
+			ReactDOM.findDOMNode(this.refs[ref]).style.top = this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]] + 'px';
 			// console.warn('set:', ref, 'to :', this.refs[ref].rowStepSlots[this.jsRefToSlot[ref]]);
 		}
 	},
@@ -978,7 +981,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		//	sBuildsLastRow - only if this is last row
 		//	sGenIniEntry - only if this is NOT last row and NOT head row
 		
-		if (this.props.jProfilistBuildsEntry == 'head') {
+		if (this.props.jProfilistBuildsEntry && this.props.jProfilistBuildsEntry == 'head') {
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.icon')),
 				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.path-to-exe')),
