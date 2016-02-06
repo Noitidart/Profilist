@@ -211,14 +211,41 @@
 
 /* start - submenu_main */
 /* state:innate */
-#profilist_menu .profilist-tbb-submenu {
+.profilist-tbb-submenu {
 	flex: 0 1 auto;
 	display: flex;
 	flex-direction: row;
-	justify-content: flex-end;
+	justify-content: flex-start;
 	align-items: center;
 	height: 100%;
 	overflow: hidden;
+	/*background-color: springgreen;*/
+	opacity: 0;
+	transition: width 326ms, opacity 326ms;
+	z-index: 1; /* need this, otherwise the tbb-hover covers it up and the transition of opacity is not seen until it hits 1, which is no transition just appears */
+}
+/* state:tbb_hovered */
+.profilist-tbb:hover .profilist-tbb-submenu {
+	opacity: 1;
+}
+/* state:not_hovered */
+.profilist-tbb-submenu:not(:hover) {
+	width: 20px !important; /* important is needed, because an inline width is placed, and on hover i need to unimportant this */
+}
+/* state:not_hovered_with_buildhint */
+.profilist-tbb-submenu.profilist-hasbuildhint:not(:hover) {
+	width: 40px !important; /* important is needed, because an inline width is placed, and on hover i need to unimportant this */
+}
+/* state:interactive_message */ /* like for rename or delete, this needs to go after .profilist-hasbuildhint because it needs to hide that one as well via width, so for specificity */
+.profilist-tbb .profilist-tbb-submenu.profilist-interacting { /* had to add `.profilist-tbb ` to make it more specific otherwise if .profilist-hasbuildhint and user unhovers the submenu, then it goes to 40px width when it should remain 20px*/
+	width: 20px !important; /* important is needed, because an inline width is placed, and on hover i need to unimportant this */
+	opacity: 1; /* because when tbb not hovered opacity goes to 0. so therfore for specificity reasons this bust go below `.profilist-tbb:hover .profilist-tbb-submenu`*/
+}
+/* state:showdefault */ /*important that this goes at bottom, so width of it, overides the above widths as they may not be 20, like in case of hasbuildhint*/
+.profilist-tbb .profilist-tbb-submenu.profilist-showasdefault {
+	width: 20px !important;
+	opacity: 1;
+	transition: none;
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb-submenu {
@@ -458,22 +485,29 @@
 /* start - submenu_icons */
 /* state:innate */
 #profilist_menu .profilist-tbb-submenu-subicon {
-	flex: 1 0 auto;
+	flex: 0 0 auto;
 	display: inline-block;
-	width: 20px;
-	height: 20px;
+	width: 20px; /* link22433425566 */
+	/*height: 20px;*/
 	background: transparent url("chrome://profilist/content/resources/images/missing.png") no-repeat scroll center center;
-	z-index: 3;
+	/*z-index: 3;*/ /* was needed for showing it hover the tbb-hover, however i gave this z-index to the profilist-tbb-submenu now, so not needed here */
 	height: 100%;
-	transition: filter 200ms, font-weight 25ms; /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
+	transition: filter 200ms, width 326ms, opacity 326ms, font-weight 25ms; /* link882728110 copy width and opacity transitions */ /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
 	font-weight: 0; /* link949000300 */
 	letter-spacing: 0; /* link949000300 */
-}
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) { /* link3920284 - match the not specificity or the hover doesnt work */
+	opacity: 1;
+	cursor: pointer;
 	filter: grayscale(100%);
 }
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) {
-	cursor: pointer;
+/* state:interactive_message */
+#profilist_menu .profilist-tbb-submenu.profilist-interacting .profilist-tbb-submenu-subicon:not(.profilist-interacting-with-this) {
+	opacity: 0;
+	width: 0;
+	pointer-events: none; /* :todo: figure out whats going on, cuz if i hover the subicon while its width is changing, it just jumps to 20px if hovered, real weird, THIS HANDLES THE COLLAPSE CASE, BUT ITS A WORKAROUND, AND IT DOESNT HANDLE THE EXPAND CASE - actually not a workaround, but still need to find other way, its just that this pointer-events none now has another purpose, to block the hover of default so it doesnt show the showasdefault*/
+}
+/* state:interactive_message_WITH_THIS_SUBICON */
+#profilist_menu .profilist-tbb-submenu.profilist-interacting .profilist-tbb-submenu-subicon.profilist-interacting-with-this {
+	filter: grayscale(0%);
 }
 /* state:mouseover */
 #profilist_menu .profilist-tbb-submenu-subicon:hover {
@@ -481,49 +515,84 @@
 	letter-spacing: 1px; /* link949000300 */
 	transition: filter 200ms, letter-spacing 1ms; /* link949000300 */
 }
-/* note: specific bg images */
-#profilist_menu .profilist-si-clone {
-	background-image: url("chrome://profilist/content/resources/images/subicon-clone.png");
-}
-#profilist_menu .profilist-si-isdefault {
-	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
-	pointer-events: none;
-}
-#profilist_menu .profilist-si-buildhint {
-	pointer-events: none;
-}
-/* not needed because these elements get specific dom mutation on style.backgroundImage
-#profilist_menu .profilist-si-buildhint {
-	background-image: url("chrome://profilist/content/defaultFavicon.png");
-}
-#profilist_menu .profilist-si-tie {
-	background-image: url("chrome://profilist/content/defaultFavicon.png");
-}
-*/
-#profilist_menu .profilist-si-tie {
-	transition: font-weight 25ms; /* link949000300 */ /* no grayscale transition on this one */
-}
-#profilist_menu .profilist-si-dots {
-	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
-}
-#profilist_menu .profilist-si-safe {
-	background-image: url("chrome://profilist/content/resources/images/subicon-wrench.png");
-}
-#profilist_menu .profilist-si-setdefault {
-	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
-}
-#profilist_menu .profilist-si-rename {
-	background-image: url("chrome://profilist/content/resources/images/subicon-edit.png");
-}
-#profilist_menu .profilist-si-del {
-	background-image: url("chrome://profilist/content/resources/images/subicon-delete.png");
-}
 /* state:mouseover */
-#profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint):hover { /* link3920284 - match the not specificity or the hover doesnt work */
+#profilist_menu .profilist-tbb-submenu-subicon:hover {
 	filter: grayscale(0%);
+}
+/* state:showdefault */ /*important that this goes at bottom, so width of it, overides the above widths as they may not be 20, like in case of hasbuildhint*/
+#profilist_menu .profilist-tbb-submenu.profilist-showasdefault .profilist-tbb-submenu-subicon:not(.profilist-si-setdefault) {
+	display: none;
 }
 /* end - submenu_icons */
 
+/* start - subicon_del */
+/* state:innate */
+#profilist_menu .profilist-si-del {
+	background-image: url("chrome://profilist/content/resources/images/subicon-delete.png");
+}
+/* end - subicon_del */
+
+/* start - subicon_rename */
+/* state:innate */
+#profilist_menu .profilist-si-rename {
+	background-image: url("chrome://profilist/content/resources/images/subicon-edit.png");
+}
+/* end - subicon_rename */
+
+/* start - subicon_setdefault */
+/* state:innate */
+#profilist_menu .profilist-si-setdefault {
+	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
+}
+/* end - subicon_setdefault */
+
+/* start - subicon_safe */
+/* state:innate */
+#profilist_menu .profilist-si-safe {
+	background-image: url("chrome://profilist/content/resources/images/subicon-wrench.png");
+}
+/* end - subicon_safe */
+
+/* start - subicon_tie */
+/* state:innate */
+#profilist_menu .profilist-si-tie {
+	transition: width 326ms, opacity 326ms, font-weight 25ms; /* link949000300 */ /* no grayscale transition on this one */ /* link882728110 copy width and opacity transitions */
+}
+/* end - subicon_tie */
+
+/* start - subicon_dots */
+/* state:innate */
+#profilist_menu .profilist-si-dots {
+	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
+	cursor: default;
+}
+/* end - subicon_dots */
+
+/* start - subicon_buildhint */
+/* state:innate */
+#profilist_menu .profilist-si-buildhint {
+	pointer-events: none;
+	filter: grayscale(0%);
+}
+/* end - subicon_buildhint */
+
+/* start - subicon_isdefault */
+/* state:innate */
+#profilist_menu .profilist-si-isdefault {
+	background-image: url("chrome://profilist/content/resources/images/subicon-default.png");
+	pointer-events: none;
+	display: none;
+	filter: grayscale(0%);
+	opacity: 1;
+}
+/* end - subicon_isdefault */
+
+/* start - subicon_clone */
+/* state:innate */
+#profilist_menu .profilist-si-clone {
+	background-image: url("chrome://profilist/content/resources/images/subicon-clone.png");
+}
+/* end - subicon_clone */
 
 /* start - other_stuff */
 /* clone animation */

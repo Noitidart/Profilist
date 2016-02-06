@@ -476,6 +476,23 @@ var Menu = React.createClass({
 				}
 		}
 	},
+	hoverOnSetDefault: function(aDefault) {
+		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
+		if (!aDefault || aDefault !== '1') {
+			this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.add('profilist-showasdefault');
+		}
+	},
+	hoverOffSetDefault: function(aDefault) {
+		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
+		if (!aDefault || aDefault !== '1') {
+			this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = 'none';
+			// putting this in a timeout of 0 is a trick. i first set it to none, because when display is none, transitions do not happen. so i set it to none, then i have to remove the showasdefault class. normally, without the showasdefault there is transition. but because its display was none, there will be no transition
+			setTimeout(function() {
+				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.remove('profilist-showasdefault');
+				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = '';
+			}.bind(this), 0);
+		}
+	},
     render: function() {
 		
 		var THAT = this;
@@ -491,6 +508,14 @@ var Menu = React.createClass({
 			// end - common props, everything should get these
 			
 			delete aProps.nonProfileType;
+			
+			if (aProps.tbbIniEntry) {
+				aProps.hoverOnSetDefault = THAT.hoverOnSetDefault;
+				aProps.hoverOffSetDefault = THAT.hoverOffSetDefault;
+				if (aProps.tbbIniEntry.Default === '1') {
+					aProps.ref = 'ToolbarButton_IsDefault';
+				}
+			}
 			
 			list.push(
 				React.createElement(ToolbarButton, aProps)  // link1049403002 key must be set to aPath --- never mind learned that key is not accessible via this.props.key
@@ -776,11 +801,14 @@ var ToolbarButton = React.createClass({
     render: function() {
 		// incoming props
 			// sMessage - only for createnewprofile and profile tbb's
-			// sKey - for profiles its the .Path, others are createnewprofile, loading, noresultsfor
+			// sKey - for profiles its the .Path, others are createnewprofile, loading, noresultsfor link885754342
 			// sSearch - available to all non-currentProfile tbb's and noresultsfor tbb
 			// tbbIniEntry - only to profile type tbb's - it is really sTbbIniEntry but i haven't got a chance to rename it. what i want to clarify is that it is not connected to gIniObj, so modifying it would have no effect
 			// sCurProfIniEntry - present if dev mode is on OR this is createnewprofile
 			// sGenIniEntry - present for createnewprofile and all profile type tbb's
+			// jProfilistDev - present and set to true if dev mode is on. js version, so bool, of keyValDevMode which is ProfilistDev
+			// hoverOnSetDefault - present if profile type tbb
+			// hoverOffSetDefault - present if profile type tbb
 			
 		// console.log('ToolbarButton-render FOR key:', this.props.sKey, 'this.props:', this.props, 'this:', this);
 		
@@ -820,6 +848,49 @@ var ToolbarButton = React.createClass({
 			} // else is not running AND is not tied, so dont show this
 		}
 		
+		// subicon count and width calc for submenu
+		var cntSubiconsIn = 0; // in/introverted means the ones on the right side
+		var cntSubiconsEx = 0; // ex/extroverted means the ones on the left side of the divider
+		var cntSubiconsDiv = 0; // either 0 or 1, if divider or not
+		if (this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading') { // link8857467674
+			// no submenu
+		} else {
+			if (this.props.sKey == 'createnewprofile') {
+				cntSubiconsDiv = 0;
+				cntSubiconsEx = 1;
+			} else {
+				// it is a profile type tbb, for sure, as only possibles are noresultsfor, loading, createnewprofile, and profile type tbb link885754342
+				cntSubiconsDiv = 1;
+				if (buildHintImg16Obj) {
+					cntSubiconsEx++; // build hint icon
+				}
+				if (!this.props.tbbIniEntry.noWriteObj.status) {
+					cntSubiconsIn++; // delete icon
+				}
+				if (this.props.jProfilistDev) {
+					cntSubiconsIn += 2; // wrench icon, and toggle tie icon
+				}
+				cntSubiconsIn++; // rename icon
+				cntSubiconsIn++; // set default icon
+			}
+		}
+		var cntSubicons = cntSubiconsIn + cntSubiconsEx + cntSubiconsDiv;
+		var widSubicon = 20; // cross file link22433425566 from the css file, width given to the subicon
+		
+		// is submenu interactive message with something? // link22345531115122
+		var submenuInInteractiveMode = false;
+		if (this.props.tbbIniEntry) { // if tbbIniEntry then its a profile type tbb, and all profile type tbb's have submenu (well unless in profilist-clone-pick state)
+			if (this.props.sMessage.interactive && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
+				if (this.props.sMessage.interactive.details.type == 'textbox') {
+					// is interacting with rename
+					submenuInInteractiveMode = true;
+				} else if (this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('confirm-delete')) {
+					// interacting with delete
+					submenuInInteractiveMode = true;
+				}
+			}
+		}
+		
 		var cClassList = ['profilist-tbb'];
 		// if (this.props.sMsgObj && this.props.sMsgObj.aKey == this.props.sKey) {
 			// cClassList.push('profilist-tbb-show-msg');
@@ -830,14 +901,14 @@ var ToolbarButton = React.createClass({
 				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage, sGenIniEntry:(!this.props.tbbIniEntry ? undefined : this.props.sGenIniEntry)}),
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
 			),
-			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
+			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* link8857467674 must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu' + (buildHintImg16Obj ? ' profilist-hasbuildhint' : '') + (submenuInInteractiveMode ? ' profilist-interacting' : ''), style:{width:(cntSubicons * widSubicon)+'px'}, ref:((!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default) ? undefined : 'Submenu_IsDefault') },
 				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage, sKey: this.props.sKey}),
-				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
+				// !this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {ref:'SubiconIsDefault', className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
 				!buildHintImg16Obj ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage:'url("' + buildHintImg16Obj.src + '")', backgroundSize:(!buildHintImg16Obj.resize ? undefined : '16px 16px')} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry, sGenIniEntry:this.props.sGenIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe, {tbbIniEntry: this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
-				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage: this.props.sMessage}),
+				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {hoverOffSetDefault:this.props.hoverOffSetDefault, hoverOnSetDefault:this.props.hoverOnSetDefault, tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage: this.props.sMessage}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status /*noWriteObj.currentProfile check is not needed because if its currentProfile obviously .status is set to pid */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
@@ -1117,7 +1188,7 @@ var PrimaryIcon = React.createClass({
 
 function hoverListener(aEl, onHoverOver, onHoverOut) {
 	aEl.addEventListener('transitionend', function(e) {
-		console.log('TRANSITIONEND wooooo:', e.propertyName, e);
+		// console.log('TRANSITIONEND wooooo:', e.propertyName, e);
 		if (e.propertyName == 'font-weight') {
 			// mouse outted
 			onHoverOut();
@@ -1128,7 +1199,7 @@ function hoverListener(aEl, onHoverOver, onHoverOut) {
 	}, false);
 }
 
-function hoverListenerMessage(aReactInstanceThis, aMsgOnHover) {
+function hoverListenerMessage(aReactInstanceThis, aMsgOnHover, aOnHoverCallback, aOffHoverCallback) {
 	hoverListener(
 		ReactDOM.findDOMNode(aReactInstanceThis),
 		function onHoverOver() {
@@ -1142,12 +1213,18 @@ function hoverListenerMessage(aReactInstanceThis, aMsgOnHover) {
 				};
 				MyStore.setState({sMessage:new_sMessage});
 			}
+			if (aOnHoverCallback) {
+				aOnHoverCallback();
+			}
 		},
 		function onHoverOut() {
 			if (aReactInstanceThis.props.sMessage && aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sKey in aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sMessage.hover[aReactInstanceThis.props.sKey].details.text == aMsgOnHover) {
 				var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
 				delete new_sMessage.hover[aReactInstanceThis.props.sKey];
 				MyStore.setState({sMessage:new_sMessage});
+			}
+			if (aOffHoverCallback) {
+				aOffHoverCallback();
 			}
 		}
 	);
@@ -1204,6 +1281,14 @@ var SubiconRename = React.createClass({
 			onClick: this.click
 		};
 		
+		// is submenu interactive message with something? // link22345531115122
+		if (this.props.sMessage.interactive && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
+			if (this.props.sMessage.interactive.details.type == 'textbox') {
+				// is interacting with rename
+				aProps.className += ' profilist-interacting-with-this';
+			}
+		}
+		
 		return React.createElement('div', aProps);
 	}
 });
@@ -1237,19 +1322,25 @@ var SubiconSetDefault = React.createClass({
 		
 		contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['toggleDefaultProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 		
-		MyStore.setState({
-			sIniObj: JSON.parse(JSON.stringify(gIniObj))
-		});
+		this.props.hoverOffSetDefault();
+		// need to wrap this in a setTimeout of 0 as hoverOffSetDefault has a setTimeout of 0 in there . otherwise setState happens first and then this.refs.Submenu_IsDefault is changed so it wont succesfully pull off the setTimeout 0 in hoverOffSetDefault
+		setTimeout(function() {
+			MyStore.setState({
+				sIniObj: JSON.parse(JSON.stringify(gIniObj))
+			});
+		}.bind(this), 0);
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile');
+		hoverListenerMessage(this, this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile', function() { this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default) }.bind(this), function() { this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default) }.bind(this));
 	},
 	render: function() {
 		// props
 		//		sMessage - for hoverListenerMessage
 		//		tbbIniEntry
 		//		sKey
+		//		hoverOnSetDefault
+		//		hoverOffSetDefault
 		
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-setdefault',
@@ -1274,7 +1365,7 @@ var SubiconSafe = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, this.props.tbbIniEntry.noWriteObj.status ? 'Restart in safe mode (will first force terminate)' : 'Launch in safe mode');
+		hoverListenerMessage(this, this.props.tbbIniEntry.noWriteObj.status ? 'Restart in safe mode' + (this.props.tbbIniEntry.noWriteObj.currentProfile ? '' : ' (will first force terminate)') : 'Launch in safe mode');
 	},
 	render: function() {
 		// props
@@ -1354,6 +1445,14 @@ var SubiconDel = React.createClass({
 			className: 'profilist-tbb-submenu-subicon profilist-si-del',
 			onClick: this.click
 		};
+		
+		// is submenu interactive message with something? // link22345531115122
+		if (this.props.sMessage.interactive && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
+			if (this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('confirm-delete')) {
+				// interacting with delete
+				aProps.className += ' profilist-interacting-with-this';
+			}
+		}
 		
 		var aRendered = React.createElement('div', aProps);
 		return aRendered;
