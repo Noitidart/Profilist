@@ -833,9 +833,9 @@ var ToolbarButton = React.createClass({
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
 				!buildHintImg16Obj ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage:'url("' + buildHintImg16Obj.src + '")', backgroundSize:(!buildHintImg16Obj.resize ? undefined : '16px 16px')} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry, sGenIniEntry:this.props.sGenIniEntry}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe),
-				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey}),
+				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry, sGenIniEntry:this.props.sGenIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
+				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe, {tbbIniEntry: this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
+				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage: this.props.sMessage}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status /*noWriteObj.currentProfile check is not needed because if its currentProfile obviously .status is set to pid */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
 			)
@@ -866,8 +866,13 @@ var PrimarySquishy = React.createClass({
 			// classNamePrimarySquishy += ' profilist-tbb-show-msg';
 			// only increment lastMsgId if the text of last was different
 			
-			var cMessage = this.props.sMessage.hover[this.props.sKey] || this.props.sMessage.interactive;
-
+			var cMessage;
+			if (this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
+				cMessage = this.props.sMessage.interactive;
+			} else if (this.props.sMessage.hover[this.props.sKey]) {
+				cMessage = this.props.sMessage.hover[this.props.sKey];
+			}
+			
 			cPrimarySquishySingleElement = React.createElement(PrimaryMessage, {key:cMessage.details.type + '__' + cMessage.details.text, sKey:this.props.sKey, sMessage:this.props.sMessage});
 		} else {
 			// show sKey name
@@ -952,8 +957,16 @@ var PrimaryMessage = React.createClass({ // has two fields always there, just op
 		
 		// only creates this element if a message exists link37481711473
 		
-		var cMessage = this.props.sMessage.hover[this.props.sKey] || this.props.sMessage.interactive; // can do this because of link37481711473
-		
+		// var cMessage = this.props.sMessage.interactive || this.props.sMessage.hover[this.props.sKey]; // can do this because of link37481711473 // moved interactive to left of OR so it takes priority over hover
+		var cMessage;
+		if (this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
+			cMessage = this.props.sMessage.interactive;
+		} else if (this.props.sMessage.hover[this.props.sKey]) {
+			cMessage = this.props.sMessage.hover[this.props.sKey];
+		} else {
+			throw new Error('should never ever get here, as the cMessage in PrimarySquishy would not send here unless cMessage exists');
+		}
+			
 		var cMessageContents;
 		if (cMessage.details.type == 'label') {
 			cMessageContents = cMessage.details.text;
@@ -1055,30 +1068,7 @@ var PrimaryIcon = React.createClass({
 	},
 	componentDidMount: function() {
 		if (this.props.tbbIniEntry) {
-			ReactDOM.findDOMNode(this).addEventListener('transitionend', function(e) {
-				console.log('TRANSITIONEND:', e.propertyName, e);
-				if (e.propertyName == 'font-weight') {
-					// mouse outted
-					if (this.props.sMessage && this.props.sMessage.hover && this.props.sKey in this.props.sMessage.hover) {
-						var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-						delete new_sMessage.hover[this.props.sKey];
-						MyStore.setState({sMessage:new_sMessage});
-					}
-				} else if (e.propertyName == 'letter-spacing') {
-					// mouse overed
-					if (this.props.sMessage.interactive.sKey != this.props.sKey) {
-						var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-						new_sMessage.hover[this.props.sKey] = {
-							details: {
-								type: 'label',
-								// text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
-								text: myServices.sb.GetStringFromName('badgeify')
-							}
-						};
-						MyStore.setState({sMessage:new_sMessage});
-					}
-				}
-			}.bind(this), false);
+			hoverListenerMessage(this, myServices.sb.GetStringFromName('badgeify'));
 		}
 	},
 	render: function() {
@@ -1122,6 +1112,44 @@ var PrimaryIcon = React.createClass({
 		return aRendered;
 	}
 });
+
+function hoverListener(aEl, onHoverOver, onHoverOut) {
+	aEl.addEventListener('transitionend', function(e) {
+		console.log('TRANSITIONEND wooooo:', e.propertyName, e);
+		if (e.propertyName == 'font-weight') {
+			// mouse outted
+			onHoverOut();
+		} else if (e.propertyName == 'letter-spacing') {
+			// mouse overed
+			onHoverOver();
+		}
+	}, false);
+}
+
+function hoverListenerMessage(aReactInstanceThis, aMsgOnHover) {
+	hoverListener(
+		ReactDOM.findDOMNode(aReactInstanceThis),
+		function onHoverOver() {
+			if (aReactInstanceThis.props.sMessage.interactive.sKey != aReactInstanceThis.props.sKey) {
+				var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
+				new_sMessage.hover[aReactInstanceThis.props.sKey] = {
+					details: {
+						type: 'label',
+						text: aMsgOnHover
+					}
+				};
+				MyStore.setState({sMessage:new_sMessage});
+			}
+		},
+		function onHoverOut() {
+			if (aReactInstanceThis.props.sMessage && aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sKey in aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sMessage.hover[aReactInstanceThis.props.sKey].details.text == aMsgOnHover) {
+				var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
+				delete new_sMessage.hover[aReactInstanceThis.props.sKey];
+				MyStore.setState({sMessage:new_sMessage});
+			}
+		}
+	);
+}
 var SubiconRename = React.createClass({
     displayName: 'SubiconRename',
 	click: function(e) {
@@ -1159,6 +1187,9 @@ var SubiconRename = React.createClass({
 			MyStore.setState({sMessage:new_sMessage});
 		}
 		
+	},
+	componentDidMount: function() {
+		hoverListenerMessage(this, 'rename this profile');
 	},
 	render: function() {
 		// incoming props
@@ -1209,10 +1240,14 @@ var SubiconSetDefault = React.createClass({
 		});
 		
 	},
+	componentDidMount: function() {
+		hoverListenerMessage(this, this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile');
+	},
 	render: function() {
-		// incoming props
-		//	tbbIniEntry
-		//	sKey
+		// props
+		//		sMessage - for hoverListenerMessage
+		//		tbbIniEntry
+		//		sKey
 		
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-setdefault',
@@ -1236,8 +1271,14 @@ var SubiconSafe = React.createClass({
 		console.error('SAFE CLICKED');
 		
 	},
+	componentDidMount: function() {
+		hoverListenerMessage(this, this.props.tbbIniEntry.noWriteObj.status ? 'Restart in safe mode (will first force terminate)' : 'Launch in safe mode');
+	},
 	render: function() {
-		// props - none
+		// props
+		//		sMessage - for hoverListenerMessage
+		//		sKey - for hoverListenerMessage
+		//		tbbIniEntry
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-safe profilist-devmode',
@@ -1298,6 +1339,9 @@ var SubiconDel = React.createClass({
 		
 		MyStore.setState({sMessage:new_sMessage});
 		
+	},
+	componentDidMount: function() {
+		hoverListenerMessage(this, 'Delete this profile');
 	},
 	render: function() {
 		// props
@@ -1459,8 +1503,13 @@ var SubiconTie = React.createClass({
 			});
 		}
 	},
+	componentDidMount: function() {
+		hoverListenerMessage(this, 'Tie this profile to a build');
+	},
 	render: function() {
 		// props
+		//		sMessage - for hoverListenerMessage
+		//		sKey - for hoverListenerMessage
 		//		jProfilistBuilds
 		//		sCurProfIniEntry - need this because of this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug]
 		//		tbbIniEntry

@@ -366,7 +366,7 @@
 	height: 60%; /* to increase the mouseover target */
 	font-weight: 0; /* link949000300 */
 	letter-spacing: 0; /* link949000300 */
-	transition: font-weight 1ms; /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
+	transition: font-weight 25ms; /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon {
@@ -465,13 +465,21 @@
 	background: transparent url("chrome://profilist/content/resources/images/missing.png") no-repeat scroll center center;
 	z-index: 3;
 	height: 100%;
-	transition: filter 200ms;
+	transition: filter 200ms, font-weight 25ms; /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
+	font-weight: 0; /* link949000300 */
+	letter-spacing: 0; /* link949000300 */
 }
 #profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-clone):not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) { /* link3920284 - match the not specificity or the hover doesnt work */
 	filter: grayscale(100%);
 }
 #profilist_menu .profilist-tbb-submenu-subicon:not(.profilist-si-isdefault):not(.profilist-si-dots):not(.profilist-si-buildhint) {
 	cursor: pointer;
+}
+/* state:mouseover */
+#profilist_menu .profilist-tbb-submenu-subicon:hover {
+	font-weight: 100; /* link949000300 - cant be 1, it needs to be 100 otherwise transitionend doesnt happen apparnetly (fx45) */
+	letter-spacing: 1px; /* link949000300 */
+	transition: filter 200ms, letter-spacing 1ms; /* link949000300 */
 }
 /* note: specific bg images */
 #profilist_menu .profilist-si-clone {
@@ -493,7 +501,7 @@
 }
 */
 #profilist_menu .profilist-si-tie {
-	transition: none;
+	transition: font-weight 25ms; /* link949000300 */ /* no grayscale transition on this one */
 }
 #profilist_menu .profilist-si-dots {
 	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
