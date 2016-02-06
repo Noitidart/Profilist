@@ -956,7 +956,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		} else {
 			// add new row
 			// alert('add new row: ' + uneval(newRowInfo));
-			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
 				if (Array.isArray(aErrorOrNewIniObj)) {
 					gIniObj = aErrorOrNewIniObj;
 					MyStore.setState({
@@ -1087,17 +1087,6 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 }
 
 // start - xIniObj functions with no options
-function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
-	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
-	for (var i=0; i<aJProfilistBuilds.length; i++) {
-		if (aJProfilistBuilds[i].id == aTieId) {
-			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
-		}
-	}
-	
-	return null;
-}
-
 function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	// only for use on non-ONLY values. meaning if key is specificOnly or unspecificOnly it fails, no need to use this function to determine that
 	// RETURNS

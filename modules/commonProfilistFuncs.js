@@ -231,3 +231,27 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 	}
 }
 // END - aIniObj end
+
+// START - jProfilistBuilds actors
+function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
+	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
+	for (var i=0; i<aJProfilistBuilds.length; i++) {
+		if (aJProfilistBuilds[i].id == aTieId) {
+			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
+		}
+	}
+	
+	return null;
+}
+
+function getBuildEntryByKeyValue(aJProfilistBuilds, aKeyName, aKeyValue) {
+	// returns null if entry with aKeyName having a val of aKeyValue is not found, else it returns that entry
+	for (var i=0; i<aJProfilistBuilds.length; i++) {
+		if (aJProfilistBuilds[i][aKeyName] == aKeyValue) {
+			return aJProfilistBuilds[i];
+		}
+	}
+	
+	return null;
+}
+// END - jProfilistBuilds actors

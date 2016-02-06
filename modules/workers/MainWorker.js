@@ -641,17 +641,6 @@ function getSlugForExePathFromParams(aExePath, aJProfilistDev, aJProfilistBuilds
 	// if get to this line - it means no custom icon set or dev mode is off... so use aExeChannel to determine base
 	return getSlugForChannel(aExeChannel);
 }
-
-function getBuildEntryByKeyValue(aJProfilistBuilds, aKeyName, aKeyValue) {
-	// returns null if entry with aKeyName having a val of aKeyValue is not found, else it returns that entry
-	for (var i=0; i<aJProfilistBuilds.length; i++) {
-		if (aJProfilistBuilds[i][aKeyName] == aKeyValue) {
-			return aJProfilistBuilds[i];
-		}
-	}
-	
-	return null;
-}
 // end - profilist helper functions FOR WORKER ONLY
 
 // START - COMMON PROFILIST HELPER FUNCTIONS
@@ -695,17 +684,6 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 }
 
 // start - xIniObj functions with no options
-function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
-	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
-	for (var i=0; i<aJProfilistBuilds.length; i++) {
-		if (aJProfilistBuilds[i].id == aTieId) {
-			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
-		}
-	}
-	
-	return null;
-}
-
 var gCache_getImgSrcsForImgSlug = {}; // used to store paths for custom slugs, until this is invalidated
 function invalidateCache_getImgSrcsFormImgSlug(aImgSlug) {
 	delete gCache_getImgSrcsForImgSlug[aImgSlug];
@@ -823,15 +801,20 @@ function getImgPathOfSlug(aSlug) {
 				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
 	}
 }
-function addBuild(aImgSlug, aExePath) {
+function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 	// adds a new build t ProfilistBuilds and saves/reformats ini
+	// aBool_doNotPostProcess is for use when dev will handle formating ini obj (if needed) and writing to ini, this is done only in one case right now, which is in mainworker in saveTieForProf
+	
+	// RETURN
+		// if !aBool_doNotPostProcess THEN array with one element, holding gIniObj, as the only reason for this as a response to callInPromiseWorker
+		// if true for aBool_doNotPostProcess THEN a copy of the entry added
 	
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
 	
 	
-	var maxBuildId = 0; // 0 means minimum id is 1. should this be so?
+	var maxBuildId = 0; // 0 means minimum id is 1. should this be so? cross file link38817716352
 	for (var i=0; i<j_gProfilistBuilds.length; i++) {
 		if (j_gProfilistBuilds[i].id > maxBuildId) {
 			maxBuildId = j_gProfilistBuilds[i].id;
@@ -853,11 +836,15 @@ function addBuild(aImgSlug, aExePath) {
 	
 	setPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds', new_gProfilistBuilds);
 	
-	formatNoWriteObjs();
-	
-	writeIni();
-	
-	return [gIniObj];
+	if (!aBool_doNotPostProcess) {
+		formatNoWriteObjs();
+		
+		writeIni();
+		
+		return [gIniObj];
+	} else {
+		return j_gProfilistBuilds[j_gProfilistBuilds.length - 1];
+	}
 }
 function removeBuild(aBuildId) {
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
@@ -933,6 +920,51 @@ function replaceBadgeForProf(aProfPath, aNewBadge) {
 	} else {
 		return [null];
 	}
+}
+
+function saveTieForProf(aProfPath, aNewTieId) {
+	
+	var gIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	
+	var aNewProfilistTie;
+	if (aNewTieId == -2) {
+		aNewProfilistTie = undefined;
+	} else if (aNewTieId == -1) {
+		var curProfBuildsEntry = getBuildEntryByKeyValue(j_gProfilistBuilds, 'p', gCurProfIniEntry.noWriteObj.exePath);
+		if (!curProfBuildsEntry) {
+			// curProfBuildsEntry is null meaning its not in jProfilistBuilds so we have to insert one
+			aNewProfilistTie = addBuild(gCurProfIniEntry.noWriteObj.exeIconSlug, gCurProfIniEntry.noWriteObj.exePath, true).id + '';
+		} else {
+			aNewProfilistTie = curProfBuildsEntry.id + '';
+		}
+	} else {
+		aNewProfilistTie = aNewTieId + '';
+	}
+	
+	// aNewProfilistTie must be a string OR undefined
+	
+	if (gIniEntry.ProfilistTie !== aNewProfilistTie) {
+		
+		if (aNewProfilistTie === undefined) {
+			delete gIniEntry.ProfilistTie;
+		} else {
+			gIniEntry.ProfilistTie = aNewProfilistTie;
+		}
+		
+		// formatNoWriteObjs(); // no need for this (even if had to addBuild on current build to ProfilistBuilds), because the icon info is already in imgSrcObj_nearest16_forImgSlug
+		
+		writeIni();
+		
+		return [gIniObj];
+	} else {
+		return [null];
+	}
+	
+	
 }
 // end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS

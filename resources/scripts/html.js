@@ -281,76 +281,6 @@ function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
 	
 	return null;
 }
-
-// start - xIniObj functions with no options
-function getBuildValByTieId(aJProfilistBuilds, aTieId, aKeyName) {
-	// returns null if aTieId is not found, or undefined if aKeyName is not found ELSE value
-	for (var i=0; i<aJProfilistBuilds.length; i++) {
-		if (aJProfilistBuilds[i].id == aTieId) {
-			return aJProfilistBuilds[i][aKeyName]; // if aKeyName does not exist it returns undefined
-		}
-	}
-	
-	return null;
-}
-
-function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
-	// RETURNS
-	//	string value if aKeyName found OR not found but has defaultValue
-	//	null if no entry found for aKeyName AND no defaultValue
-	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
-	
-	if (gKeyInfoStore[aKeyName].unspecificOnly) {
-		// get profile-unspecific value else null
-		if (aKeyName in aGenIniEntry) {
-			return aGenIniEntry[aKeyName];
-		} else {
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				return null;
-			}
-		}
-	} else {
-		// check if profile-unspecific value exists return else continue on
-		if (!gKeyInfoStore[aKeyName].specificOnly) {
-			if (aKeyName in aGenIniEntry) {
-				return aGenIniEntry[aKeyName];
-			}
-		}
-		// return profile-specific value else null
-		if (aKeyName in aIniEntry) {
-			return aIniEntry[aKeyName];
-		} else {
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				return null;
-			}
-		}
-	}
-	
-	
-	if (aKeyName in aGenIniEntry) {
-		// user set it to profile-unspecific
-		return aGenIniEntry[aKeyName];
-	} else {
-		// user set it to profile-specific
-		if (aKeyName in aIniEntry) {
-			return aIniEntry[aKeyName];
-		} else {
-			// not found so return default value if it has one
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) { // no need to test `'defaultValue' in gKeyInfoStore[aKeyName]` because i expect all values in xIniObj to be strings // :note: :important: all values in xIniObj must be strings!!!
-				return gKeyInfoStore[aKeyName].defaultValue;
-			} else {
-				// no default value
-				return null;
-			}
-		}
-	}
-}
-// end - xIniObj functions with no options
 // END - COMMON PROFILIST HELPER FUNCTIONS
 
 function setInteractiveMsg(aMessage, aKey, aDetails, aInteractiveCallbacks) {
@@ -705,7 +635,7 @@ var Menu = React.createClass({
 		}
 		
 		var cClassList = [];
-		if (this.state.sMessage.interactive.sKey == 'createnewprofile' && this.state.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
+		if (this.state.sMessage.interactive.sKey && this.state.sMessage.interactive.sKey == 'createnewprofile' && this.state.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
 			// i have to test the text, because if it can be interactive but in typing profile name, or showing an error message due to like "already used profile name" etc
 			cClassList.push('profilist-clone-pick');
 		}
@@ -972,7 +902,7 @@ var PrimarySquishy = React.createClass({
 		var cPrimarySquishySingleElement;
 		
 		// determine what primary content should be
-		if (this.props.sMessage.interactive.sKey == this.props.sKey || this.props.sMessage.hover[this.props.sKey])  {
+		if ((this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) || this.props.sMessage.hover[this.props.sKey])  {
 			// show sMessage
 			// classNamePrimarySquishy += ' profilist-tbb-show-msg';
 			// only increment lastMsgId if the text of last was different
@@ -1170,7 +1100,8 @@ var PrimaryIcon = React.createClass({
 			new_sMessage.hover[this.props.sKey] = {
 				details: {
 					type: 'label',
-					text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
+					// text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
+					text: myServices.sb.GetStringFromName('badgeify')
 				}
 			};
 			MyStore.setState({sMessage:new_sMessage});
@@ -1187,8 +1118,7 @@ var PrimaryIcon = React.createClass({
 	},
 	*/
 	componentDidMount: function() {
-		var elThis = ReactDOM.findDOMNode(this);
-		elThis.addEventListener('transitionend', function(e) {
+		ReactDOM.findDOMNode(this).addEventListener('transitionend', function(e) {
 			console.log('TRANSITIONEND:', e.propertyName, e);
 			if (e.propertyName == 'line-height') {
 				// mouse outted
@@ -1493,101 +1423,94 @@ var SubiconClone = React.createClass({
 		return aRendered;
 	}
 });
+
 var SubiconTie = React.createClass({
     displayName: 'SubiconTie',
-	getInitialState: function() {
-		console.warn('getting initail state on subicontie');
-		return {
-			bi: -3, // stands for build_index_tied_to // -3 means not yet initialized, so check if ini has one and initialize it
-			onent: -2 // means tie on onMouseEnter
-		}
-	},
 	click: function(e) {
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('TIE CLICKED');
-		var newBi;
-		if (this.state.bi == -2) { // its untied
-			newBi = -1; // tie to current
+		
+		var nextTieId;
+		if (this.uiTieId == -2) {
+			// its untied, take it to -1 which is self
+			nextTieId = -1;
 		} else {
-			var i = this.state.bi + 1;
-			// find next entry that isnt currentProfile's exePath
-			while (i < this.props.jProfilistBuilds.length) {
-				console.log('while i:', i);
-				if (this.props.jProfilistBuilds[i].p != this.props.sCurProfIniEntry.noWriteObj.exePath) {
-					newBi = i;
+			var startPoint; // short for startIndexInJProfilistBuildsArr
+			if (this.uiTieId == -1) {
+				startPoint = 0;
+				// its a ProfilistTie, find that in the array, then from that point go on out of this if block
+			} else {
+				for (var i=0; i<this.props.jProfilistBuilds.length; i++) {
+					if (this.props.jProfilistBuilds[i].id == this.uiTieId) {
+						startPoint = i + 1;
+						break;
+					}
+				}
+			}
+			
+			
+			// starting from point find next jBuildsEntry that is not current profile. if on last one then untie
+			for (var i=startPoint; i<this.props.jProfilistBuilds.length; i++) {
+				if (this.props.jProfilistBuilds[i].p == this.props.sCurProfIniEntry.noWriteObj.exePath) {
+					continue;
+				}
+				if (this.props.jProfilistBuilds[i].id != this.uiTieId) {
+					nextTieId = this.props.jProfilistBuilds[i].id;
 					break;
 				}
-				i++;
 			}
-			if (newBi === undefined) {
-				// nothing found so untie it
-				newBi = -2;
+			if (nextTieId === undefined) {
+				// untie it. as startPoint was last entry
+				nextTieId = -2;
 			}
 		}
-
-		this.setState({
-			bi: newBi
-		});
-	},
-	mouseEnter: function() {
-
-		this.setState({
-			onent: this.state.bi
-		});
+		
+		// reflect nextTieId to this.uiTieId
+		this.uiTieId = nextTieId;
+		
+		var thisNearest16;
+		var grayscaleLevel;
+		if (this.uiTieId == -2) {
+			// untie it
+			grayscaleLevel = '100%';
+			thisNearest16 = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug];
+		} else if (this.uiTieId == -1) {
+			// tie to current profile
+			grayscaleLevel = '0%';
+			thisNearest16 = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug];
+		} else {
+			grayscaleLevel = '0%';
+			thisNearest16 = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[getBuildValByTieId(this.props.jProfilistBuilds, this.uiTieId, 'i')];
+		}
+		
+		// start - this section is not js-dom optimized like react - :todo:
+		var elSubiconTie = ReactDOM.findDOMNode(this);
+		elSubiconTie.style.filter = 'grayscale(' + grayscaleLevel + ')';
+		elSubiconTie.style.backgroundImage = 'url("' + thisNearest16.src + '")';
+		if (thisNearest16.resize) {
+			elSubiconTie.style.backgroundSize = '16px 16px';
+		} else {
+			elSubiconTie.style.backgroundSize = '';
+		}
+		// end - this section is not js-dom optimized like react - :todo:
 	},
 	mouseLeave: function() {
-		if (this.state.bi != this.state.onent) {
-			console.log('will now save');
-			// :todo: send message to bootstrap to save to ini
-			var gIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path);
-			console.log('gIniEntry:', gIniEntry);
-			
-			if (this.state.bi == -2) {
-				// means untied
-				delete gIniEntry.ProfilistTie;
-				console.log('gIniEntry after deleting tie:', gIniEntry);
-			} else {
-				// tied to current or something else
-				
-				var cTieId;
-				if (this.state.bi == -1) {
-					// when send message to bootstrap here as well, read below for what it should do
-					// get aTieId(ProfilistTie) from bi
-						// if current is not in there, add it at last index, bootstrap will do the same but bootstrap will also write it to file :todo:
-					
-					var cMaxId = 0; // if need to add, this is what bootstrap will do as well, so minimum id to set should be 1 :note: :todo: :link: :important: // i set this to aMinId - 1
-					for (var i=0; i<this.props.jProfilistBuilds.length; i++) {
-						if (this.props.jProfilistBuilds[i].p == this.props.sCurProfIniEntry.noWriteObj.exePath) {
-							cTieId = this.props.jProfilistBuilds[i].id;
-							cMaxId = null; // not needed, as i only need this for if currentProfile
-							break;
-						}
-						if (this.props.jProfilistBuilds[i].id > cMaxId) {
-							cMaxId = this.props.jProfilistBuilds[i].id;
-						}
-					}
-					if (!cTieId) { // especially because of this test, minimum id to set should be 1
-						var cNextId = cMaxId + 1;
-						cTieId = cNextId;
-						
-						this.props.jProfilistBuilds.push({
-							id: cTieId,
-							p: this.props.sCurProfIniEntry.noWriteObj.exePath,
-							i: this.props.sCurProfIniEntry.noWriteObj.exeIconSlug
-						});
-						
-						var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-						gGenIniEntry.ProfilistBuilds = JSON.stringify(this.props.jProfilistBuilds);
-					}
+		// this.uiTieId is not equal to this.props.tbbIniEntry.ProfilistTie then send message to worker, which will write to file and send message back which will MyStore.setState
+		if (this.uiTieId != this.uiTieId_onRender) {
+			// alert('telling mainworker to save tie using uiTieId: ' + this.uiTieId + ' uiTieId_onRender: ' + this.uiTieId_onRender);
+			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+				console.log('back from saving tie for prof');
+				// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
+				if (Array.isArray(aErrorOrNewIniObj)) {
+					gIniObj = aErrorOrNewIniObj;
+					MyStore.setState({
+						sIniObj: JSON.parse(JSON.stringify(gIniObj))
+					});
 				} else {
-					cTieId = this.props.jProfilistBuilds[this.state.bi].id;
+					console.error('some error occured when trying to save the tie', aErrorOrNewIniObj);
+					throw new Error('some error occured when trying to save the tie');
 				}
-				gIniEntry.ProfilistTie = cTieId + '';
-				
-				console.log('gIniEntry after adding tie:', gIniEntry);
-			}
-			
-			MyStore.updateStatedIniObj();
+			});
 		}
 	},
 	render: function() {
@@ -1597,52 +1520,44 @@ var SubiconTie = React.createClass({
 		//		tbbIniEntry
 		//		sGenIniEntry
 		
-		console.info('this.props:', this.props);
-		console.log('parsedBuilds:', this.props.jProfilistBuilds);
-		// if current is not in ProfilistBuilds then add it in
+		/* this.uiTieId notes
+		-2 - means untied
+		-1 - tied to current profile
+		0 - this is never possible as minimum tie id is 1 link38817716352
+		> 0 - a value of ProfilistTie
+		
+		every time render happens uiTieId is set to current ProfilistTie which is either > 0 OR -2 OR if current profile path is in jProfilistBuilds then it will be set to -1
+		*/
+		
+		// console.info('this.props:', this.props);
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-tie profilist-devmode',
 			style: {},
-			onMouseEnter: this.mouseEnter,
 			onMouseLeave: this.mouseLeave,
 			onClick: this.click
 		};
 		
-		if (this.state.bi == -3) {
-			// first render of component, so component is uninted, so check if tbbIniEntry is tied, and if it then store its index in parsedBuilds to this.state.bi
-			if (this.props.tbbIniEntry.ProfilistTie) {
-				for (var i=0; i<this.props.jProfilistBuilds.length; i++) {
-					if (this.props.jProfilistBuilds[i].id == this.props.tbbIniEntry.ProfilistTie) {
-						this.state.bi = i;
-						break;
-					}
-				}
-				if (this.state.bi == -3) {
-					console.error('error error! this should never happen, how can its tbbIniEntry have a ProfilistTie but then I couldnt find it in parsedBuilds???', 'parsedBuilds:', this.props.jProfilistBuilds, 'tbbIniEntry:', this.props.tbbIniEntry);
-					throw new Error('error error!!!!! should never get here!!! so i have no fallback setup!!!');
-				}
+		var thisNearest16;
+		if (this.props.tbbIniEntry.ProfilistTie) {
+			// its tied
+			aProps.style.filter = 'grayscale(0%)';			
+			thisNearest16 = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'i')];
+			if (getBuildValByTieId(this.props.jProfilistBuilds, this.props.tbbIniEntry.ProfilistTie, 'p') == this.props.sCurProfIniEntry.noWriteObj.exePath) {
+				this.uiTieId = -1;
 			} else {
-				this.state.bi = -2; // its untied
+				this.uiTieId = this.props.tbbIniEntry.ProfilistTie;
 			}
+		} else { // its untied (this.state.bi should be -2), so show current
+			aProps.style.filter = 'grayscale(100%)';
+			thisNearest16 = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug];
+			this.uiTieId = -2;
 		}
-		
-		if (this.state.bi > -1) {
-			// its tied to something other then current
-			aProps.style.filter = 'grayscale(0%)';
-			aProps.style.backgroundImage = 'url("' + this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.jProfilistBuilds[this.state.bi].i].src + '")';
-		} else {
-			if (this.state.bi == -1) {
-				// its tied to current
-				aProps.style.filter = 'grayscale(0%)';
-			} else { // its untied (this.state.bi should be -2), so show current
-				aProps.style.filter = 'grayscale(100%)';
-			}
-			aProps.style.backgroundImage = 'url("' + this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug].src + '")';
-			if (this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.sCurProfIniEntry.noWriteObj.exeIconSlug].resize) {
-				aProps.style.backgroundSize = '16px 16px';
-			}
+		aProps.style.backgroundImage = 'url("' + thisNearest16.src + '")';
+		if (thisNearest16.resize) {
+			aProps.style.backgroundSize = '16px 16px';
 		}
+		this.uiTieId_onRender = this.uiTieId;
 		
 		var aRendered = React.createElement('div', aProps); // , this.state.bi, ' ', this.state.onent
 		return aRendered;

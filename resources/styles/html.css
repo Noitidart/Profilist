@@ -490,6 +490,9 @@
 	background-image: url("chrome://profilist/content/defaultFavicon.png");
 }
 */
+#profilist_menu .profilist-si-tie {
+	transition: none;
+}
 #profilist_menu .profilist-si-dots {
 	background-image: url("chrome://profilist/content/resources/images/subicon-dots.png");
 }
