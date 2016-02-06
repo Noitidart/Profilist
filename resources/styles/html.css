@@ -364,8 +364,9 @@
 	flex-direction: column;
 	justify-content: center;
 	height: 60%; /* to increase the mouseover target */
-	line-height: 0px;
-	transition: line-height 1ms; /* used to detect mouseleave as mouseleave does not trigger if done very fast */
+	font-weight: 0; /* link949000300 */
+	letter-spacing: 0; /* link949000300 */
+	transition: font-weight 1ms; /* link949000300 used to detect mouseleave as mouseleave does not trigger if done very fast. need at least 1ms otehrwise transitionend doesnt trigger (fx45) */
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary .profilist-tbb-icon {
@@ -374,8 +375,9 @@
 }
 /* state:mouseover */
 #profilist_menu .profilist-tbb .profilist-tbb-primary .profilist-tbb-icon:hover {
-	line-height: 1px;
-	transition: none;
+	font-weight: 100; /* link949000300 - cant be 1, it needs to be 100 otherwise transitionend doesnt happen apparnetly (fx45) */
+	letter-spacing: 1px; /* link949000300 */
+	transition: letter-spacing 1ms; /* link949000300 */
 }
 /* end - primary_icon */
 

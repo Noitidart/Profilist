@@ -1053,41 +1053,33 @@ var PrimaryIcon = React.createClass({
 		});
 		
 	},
-	mouseEnter: function() {
-		if (this.props.sMessage.interactive.sKey != this.props.sKey) {
-			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			new_sMessage.hover[this.props.sKey] = {
-				details: {
-					type: 'label',
-					// text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
-					text: myServices.sb.GetStringFromName('badgeify')
-				}
-			};
-			MyStore.setState({sMessage:new_sMessage});
-		}
-	},
-	/*
-	// this is not always triggering. if move mouse over and out really fast. even though mouseEnter does trigger. weird, so i resorted to transitionened
-	mouseLeave: function() {
-		if (this.props.sMessage.hover[this.props.sKey]) {
-			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			delete new_sMessage.hover[this.props.sKey];
-			MyStore.setState({sMessage:new_sMessage});
-		}
-	},
-	*/
 	componentDidMount: function() {
-		ReactDOM.findDOMNode(this).addEventListener('transitionend', function(e) {
-			console.log('TRANSITIONEND:', e.propertyName, e);
-			if (e.propertyName == 'line-height') {
-				// mouse outted
-				if (this.props.sMessage && this.props.sMessage.hover && this.props.sKey in this.props.sMessage.hover) {
-					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-					delete new_sMessage.hover[this.props.sKey];
-					MyStore.setState({sMessage:new_sMessage});
+		if (this.props.tbbIniEntry) {
+			ReactDOM.findDOMNode(this).addEventListener('transitionend', function(e) {
+				console.log('TRANSITIONEND:', e.propertyName, e);
+				if (e.propertyName == 'font-weight') {
+					// mouse outted
+					if (this.props.sMessage && this.props.sMessage.hover && this.props.sKey in this.props.sMessage.hover) {
+						var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+						delete new_sMessage.hover[this.props.sKey];
+						MyStore.setState({sMessage:new_sMessage});
+					}
+				} else if (e.propertyName == 'letter-spacing') {
+					// mouse overed
+					if (this.props.sMessage.interactive.sKey != this.props.sKey) {
+						var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+						new_sMessage.hover[this.props.sKey] = {
+							details: {
+								type: 'label',
+								// text: this.props.tbbIniEntry.ProfilistBadge ? 'click to remove the currently applied badge' : 'click to browse for images/icons to apply as badge' // :l10n:
+								text: myServices.sb.GetStringFromName('badgeify')
+							}
+						};
+						MyStore.setState({sMessage:new_sMessage});
+					}
 				}
-			}
-		}.bind(this), false);
+			}.bind(this), false);
+		}
 	},
 	render: function() {
 		// incoming props
@@ -1100,11 +1092,6 @@ var PrimaryIcon = React.createClass({
 			className: 'profilist-tbb-icon',
 			onClick: this.click
 		};
-		
-		if (this.props.tbbIniEntry) {
-			aProps.onMouseEnter = this.mouseEnter;
-			// aProps.onMouseLeave = this.mouseLeave;
-		}
 		
 		if (this.props.sKey == 'createnewprofile' || this.props.sKey == 'loading') {
 			// icon is not clickable
