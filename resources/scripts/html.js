@@ -831,7 +831,7 @@ var ToolbarButton = React.createClass({
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
 			),
 			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu'},
-				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage}),
+				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage, sKey: this.props.sKey}),
 				!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-isdefault'}),
 				!buildHintImg16Obj ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage:'url("' + buildHintImg16Obj.src + '")', backgroundSize:(!buildHintImg16Obj.resize ? undefined : '16px 16px')} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
@@ -1191,7 +1191,7 @@ var SubiconRename = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, 'rename this profile');
+		hoverListenerMessage(this, 'Rename this profile');
 	},
 	render: function() {
 		// incoming props
@@ -1381,34 +1381,17 @@ var SubiconClone = React.createClass({
 		MyStore.setState({sMessage:new_sMessage});
 		
 	},
-	mouseEnter: function() {
-		if (this.props.sMessage.interactive.sKey != 'createnewprofile') {
-			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			new_sMessage.hover.createnewprofile = {
-				details: {
-					type: 'label',
-					text: myServices.sb.GetStringFromName('clone-profile')
-				}
-			};
-			MyStore.setState({sMessage:new_sMessage});
-		}
-	},
-	mouseLeave: function() {
-		if (this.props.sMessage.hover.createnewprofile) {
-			var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
-			delete new_sMessage.hover.createnewprofile;
-			MyStore.setState({sMessage:new_sMessage});
-		}
+	componentDidMount: function() {
+		hoverListenerMessage(this, myServices.sb.GetStringFromName('clone-profile'));
 	},
 	render: function() {
 		// incomping props
 			// sMessage
+			// sKey - for hoverListenerMessage
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-clone',
-			onClick: this.click,
-			onMouseEnter: this.mouseEnter,
-			onMouseLeave: this.mouseLeave
+			onClick: this.click
 		};
 		
 		var aRendered = React.createElement('div', aProps);
