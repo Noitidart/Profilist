@@ -415,16 +415,18 @@ var Menu = React.createClass({
 						gInteractiveRefs = {}; // for good measure, mem stuff, theres no need to clear gInteractiveRefs though it wont harm
 						
 						MyStore.setState({sMessage:new_sMessage});
-					}
+					} else {
 					
-					// search stuff
-					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
-						if (this.state.sSearch) {
-							// search is in progress - cancel it
-							this.executeSearch('');
+						// search stuff
+						if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
+							if (this.state.sSearch) {
+								// search is in progress - cancel it
+								this.executeSearch('');
+							}
 						}
-					}
 					
+					}
+
 				break;
 				
 			case 'Enter':
