@@ -636,8 +636,16 @@ var IPStore = {
 					sDirSubdirs: new_sDirSubdirs
 				});
 					
-				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['deleteIconset', cImgSlug]], bootstrapMsgListener.funcScope, function(aImgSlug, aImgObj) {
+				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['deleteIconset', cImgSlug]], bootstrapMsgListener.funcScope, function(aErrorObjOrIni) {
 					console.error('ok back from deleteIconset. so now in framescript');
+					// if gIniObj was updated, then aErrorObjOrIni is gIniObj
+					// else it is null
+					if (Array.isArray(aErrorObjOrIni)) {
+						gIniObj = aErrorObjOrIni;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(aErrorObjOrIni))
+						})
+					}
 				});
 			},
 			render: function() {
@@ -665,14 +673,31 @@ var IPStore = {
 							// saved
 							
 							var disbleRenameDelete = false;
+							var specialTxtNote;
 							if (!this.props.sDirSelected) {
 								disbleRenameDelete = true;
-							} else if (this.props.sDirSelected.indexOf('chrome://profilist/content/resources/images/channel-iconsets/') > -1) {
-								disbleRenameDelete = true;
+							} else {
+								if (this.props.sDirSelected.indexOf('chrome://profilist/content/resources/images/channel-iconsets/') > -1) {
+									disbleRenameDelete = true;
+								} else {
+									// check if this imgSlug is in use by a ProfilistBuilds entry, if it is then i mark it undeleteable // cross file link171111174957393
+									var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+									var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+									var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+									console.error('j_gProfilistBuilds:', j_gProfilistBuilds);
+									
+									var imgSlugOfSelectedDir = this.props.sDirSelected.substr(core.profilist.path.images.length + core.os.filesystem_seperator.length);
+									console.error('imgSlugOfSelectedDir:', imgSlugOfSelectedDir);
+									if (getBuildEntryByKeyValue(j_gProfilistBuilds, 'i', imgSlugOfSelectedDir)) {
+										disbleRenameDelete = true;
+										specialTxtNote = myServices.sb_ip.GetStringFromName('inuse');
+									}
+								}
 							}
 							
 							// cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete'), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
+
+							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete') + (specialTxtNote ? ' ' + specialTxtNote : ''), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
 							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
 								disableApply = true;
 								if (this.props.unselect_callback) {

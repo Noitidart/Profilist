@@ -866,7 +866,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			MyStore.setState({sBuildsLastRow:{}});
 		} else {
 			console.log('hi:', this.props.jProfilistBuildsEntry)
-			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['removeBuild', this.props.jProfilistBuildsEntry.id]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
+			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['removeBuild', this.props.jProfilistBuildsEntry.id, false]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
 				if (Array.isArray(aErrorOrNewIniObj)) {
 					gIniObj = aErrorOrNewIniObj;
 					MyStore.setState({
@@ -1048,43 +1048,6 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 
 // START - COMMON PROFILIST HELPER FUNCTIONS
 // start - xIniObj helper functions
-
-function getIniEntryByNoWriteObjKeyValue(aIniObj, aKeyName, aKeyVal) {
-	//*******************************************
-	// RETURNS
-	//	null
-	//	an element in the aIniObj
-	//*******************************************
-	for (var i=0; i<aIniObj.length; i++) {
-		if (aKeyName in aIniObj[i].noWriteObj && aIniObj[i].noWriteObj[aKeyName] == aKeyVal) {
-			return aIniObj[i];
-		}
-	}
-	
-	return null;
-}
-function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
-	//*******************************************
-	// DESC
-	// 	Iterates through the ini object provided, once it finds an entry that has aKeyName that equals aKeyVal it returns it
-	//	If nothing is found then it returns NULL
-	// RETURNS
-	//	null
-	//	an element in the aIniObj
-	// ARGS
-	//	aIniObj - the ini object you want to get value from
-	// 	aKeyName - the name of the field
-	//	aVal - the value the field should be
-	//*******************************************
-
-	for (var i=0; i<aIniObj.length; i++) {
-		if (aKeyName in aIniObj[i] && aIniObj[i][aKeyName] == aKeyVal) {
-			return aIniObj[i];
-		}
-	}
-	
-	return null;
-}
 
 // start - xIniObj functions with no options
 function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {

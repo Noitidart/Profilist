@@ -645,44 +645,6 @@ function getSlugForExePathFromParams(aExePath, aJProfilistDev, aJProfilistBuilds
 
 // START - COMMON PROFILIST HELPER FUNCTIONS
 // start - xIniObj helper functions
-
-function getIniEntryByNoWriteObjKeyValue(aIniObj, aKeyName, aKeyVal) {
-	//*******************************************
-	// RETURNS
-	//	null
-	//	an element in the aIniObj
-	//*******************************************
-	for (var i=0; i<aIniObj.length; i++) {
-		if (aKeyName in aIniObj[i].noWriteObj && aIniObj[i].noWriteObj[aKeyName] == aKeyVal) {
-			return aIniObj[i];
-		}
-	}
-	
-	return null;
-}
-function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
-	//*******************************************
-	// DESC
-	// 	Iterates through the ini object provided, once it finds an entry that has aKeyName that equals aKeyVal it returns it
-	//	If nothing is found then it returns NULL
-	// RETURNS
-	//	null
-	//	an element in the aIniObj
-	// ARGS
-	//	aIniObj - the ini object you want to get value from
-	// 	aKeyName - the name of the field
-	//	aVal - the value the field should be
-	//*******************************************
-
-	for (var i=0; i<aIniObj.length; i++) {
-		if (aKeyName in aIniObj[i] && aIniObj[i][aKeyName] == aKeyVal) {
-			return aIniObj[i];
-		}
-	}
-	
-	return null;
-}
-
 // start - xIniObj functions with no options
 var gCache_getImgSrcsForImgSlug = {}; // used to store paths for custom slugs, until this is invalidated
 function invalidateCache_getImgSrcsFormImgSlug(aImgSlug) {
@@ -846,10 +808,21 @@ function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 		return j_gProfilistBuilds[j_gProfilistBuilds.length - 1];
 	}
 }
-function removeBuild(aBuildId) {
+function removeBuild(aBuildId, aBool_doNotPostProcess) {
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	
+	// remove anything that is tied to this build from ini
+	var aBuildIdStr = aBuildId + '';
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path) {
+			// its a prof type
+			if (gIniObj[i].ProfilistTie && gIniObj[i].ProfilistTie == aBuildIdStr) {
+				delete gIniObj[i].ProfilistTie;
+			}
+		}
+	}
 	
 	for (var i=0; i<j_gProfilistBuilds.length; i++) {
 		if (j_gProfilistBuilds[i].id == aBuildId) {
@@ -859,9 +832,11 @@ function removeBuild(aBuildId) {
 			
 			setPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds', new_gProfilistBuilds);
 			
-			formatNoWriteObjs();
-			
-			writeIni();
+			if (!aBool_doNotPostProcess) {
+				formatNoWriteObjs();
+				
+				writeIni();
+			}
 			break;
 		}
 	}
@@ -3130,9 +3105,48 @@ function deleteIconset(aImgSlug) {
 	OS.File.removeDir(OS.Path.join(core.profilist.path.images, aImgSlug));
 	console.log('ok removed iconset with slug:', aImgSlug);
 	
-	invalidateCache_getImgSrcsFormImgSlug(cImgSlug);
+	invalidateCache_getImgSrcsFormImgSlug(aImgSlug);
 	
-	return [true]
+	var doWriteIni = false;
+	// :todo: if any profiles use aImgSlug as a ProfilistBadge then delete from that entry ProfilistBadge
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path) {
+			// its a prof type
+			if (gIniObj[i].ProfilistBadge && gIniObj[i].ProfilistBadge == aImgSlug) {
+				doWriteIni = true;
+				delete gIniObj[i].ProfilistBadge;
+			}
+		}
+	}
+	
+	// :todo: if any jProfilistBuildEntry uses this as an icon then delete that entry? or give it a missing icon image? or try to get channel for that build and use that?
+	//	i decided that i should just disallow delete from the gui, if the iconset is in use by a build // cross file link171111174957393
+	
+	/* // this was the stuff i was doing when i was considering making delete default the icon to "release" or delete the build entry
+	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
+	// var buildEntryIdsToRemove = [];
+	for (var i=0; i<j_gProfilistBuilds.length; i++) {
+		if (j_gProfilistBuilds[i].i == aImgSlug) {
+			doWriteIni = true; // not really needed because of link1711111
+			// buildEntryIdsToRemove.push(j_gProfilistBuilds[i].id);
+			j_gProfilistBuilds[i].i = 'release'; // default it to release
+		}
+	}
+	// for (var i=0; i<buildEntryIdsToRemove.length; i++) {
+		// doWriteIni = true; // link1711111
+		// removeBuild(buildEntryIdsToRemove[i], false);
+	// }
+	*/
+	
+	if (doWriteIni) {
+		// formatNoWriteObjs(); // i dont have to format it as things were just removed
+		writeIni();
+		return [gIniObj];
+	} else {
+		return [null];
+	}
 }
 
 var gGithubDownloadId = -1;

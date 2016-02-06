@@ -230,6 +230,44 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 		}
 	}
 }
+
+
+function getIniEntryByNoWriteObjKeyValue(aIniObj, aKeyName, aKeyVal) {
+	//*******************************************
+	// RETURNS
+	//	null
+	//	an element in the aIniObj
+	//*******************************************
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aKeyName in aIniObj[i].noWriteObj && aIniObj[i].noWriteObj[aKeyName] == aKeyVal) {
+			return aIniObj[i];
+		}
+	}
+	
+	return null;
+}
+function getIniEntryByKeyValue(aIniObj, aKeyName, aKeyVal) {
+	//*******************************************
+	// DESC
+	// 	Iterates through the ini object provided, once it finds an entry that has aKeyName that equals aKeyVal it returns it
+	//	If nothing is found then it returns NULL
+	// RETURNS
+	//	null
+	//	an element in the aIniObj
+	// ARGS
+	//	aIniObj - the ini object you want to get value from
+	// 	aKeyName - the name of the field
+	//	aVal - the value the field should be
+	//*******************************************
+
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aKeyName in aIniObj[i] && aIniObj[i][aKeyName] == aKeyVal) {
+			return aIniObj[i];
+		}
+	}
+	
+	return null;
+}
 // END - aIniObj end
 
 // START - jProfilistBuilds actors
