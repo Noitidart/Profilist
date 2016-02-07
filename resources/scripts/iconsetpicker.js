@@ -79,9 +79,21 @@ var IPStore = {
 		} else {
 			// wrap.style.top = (aTargetElement.offsetTop - 120)+ 'px'; // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
 			// wrap.style.left = (aTargetElement.offsetLeft + aTargetElement.offsetWidth + 2) + 'px';
-			wrap.style.top = (cumOffset.top - 120)+ 'px'; // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
-			wrap.style.left = (cumOffset.left + aTargetElement.offsetWidth + 2) + 'px';
+			var calcdTop = (cumOffset.top - 120); // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
+			var calcdLeft = (cumOffset.left + aTargetElement.offsetWidth + 2) + 'px';
 			myIPProps.pDirection = aDirection;
+			
+			if (calcdTop < 0) {
+				var extraTopPadding = 4; // some extra padding so the top of the thing doesnt line up with the top
+				var arrowModStylesheet = document.createElement('style');
+				var bottomInCss = 104; // cross file link299949994849
+				arrowModStylesheet.textContent = '.iconsetpicker-arrow { bottom: ' + (bottomInCss + Math.abs(calcdTop) + extraTopPadding) + 'px !important; }';
+				cover.appendChild(arrowModStylesheet);
+				
+				calcdTop = 0 + extraTopPadding;
+			}
+			wrap.style.top = calcdTop + 'px';
+			wrap.style.left = calcdLeft;
 		}
 		
 

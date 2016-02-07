@@ -1131,7 +1131,11 @@ var PrimaryIcon = React.createClass({
 			});
 		}.bind(this);
 		
-		IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 1, {
+		var elPickerTarget = e.target;
+		if (elPickerTarget.nodeName == 'div') {
+			elPickerTarget = elPickerTarget.firstChild;
+		}
+		IPStore.init(elPickerTarget, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 1, {
 			insertId: 'profilist_menu_container',
 			onUninit: function() {
 				elProfilistTbbIcon.classList.remove('profilist-inpicker');
