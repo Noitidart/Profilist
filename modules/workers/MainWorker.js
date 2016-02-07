@@ -1809,7 +1809,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 								ostypes.HELPER.checkHRESULT(hr_SetPath, 'createLauncher -> SetPath');
 							}
 							
-							var hr_Save = persistFile.Save(persistFilePtr, cLauncherPath, false);
+							var hr_Save = persistFile.Save(persistFilePtr, eLauncherPath, false);
 							ostypes.HELPER.checkHRESULT(hr_Save, 'createLauncher -> Save');
 							
 							// step3-continued - becase have to do the rename after the persistFile.Save
@@ -1877,7 +1877,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step5 - verify/update exePath (the build it launches into)
 						if (eLauncherExePath != aLauncherExePath) {
 							console.log('have to update exePath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
-							cLauncherContents = cLauncherContents.replace(eLauncherExePath_patt, 'Exec=' + aLauncherExePath + ' -profile "');
+							cLauncherContents = cLauncherContents.replace(eLauncherExePath_patt, 'Exec="' + aLauncherExePath + '" -profile "');
 						}
 						
 						// final step
@@ -2148,7 +2148,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						'Name=' + aLauncherName, //link3771919171700
 						'Type=Application',
 						'Icon=' + aLauncherIconPath + '.profilist', // link787575758
-						'Exec=' + aLauncherExePath + ' -profile "' + aFullPathToProfileDir + '" -no-remote'
+						'Exec="' + aLauncherExePath + '" -profile "' + aFullPathToProfileDir + '" -no-remote'
 					];
 					
 					try {
