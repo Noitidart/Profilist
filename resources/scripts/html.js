@@ -477,20 +477,26 @@ var Menu = React.createClass({
 		}
 	},
 	hoverOnSetDefault: function(aDefault) {
+		// var aDefault = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath).Default;
 		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
 		if (!aDefault || aDefault !== '1') {
-			this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.add('profilist-showasdefault');
+			if (this.refs.ToolbarButton_IsDefault) {
+				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.add('profilist-showasdefault');
+			}
 		}
 	},
 	hoverOffSetDefault: function(aDefault) {
+		// var aDefault = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath).Default;
 		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
 		if (!aDefault || aDefault !== '1') {
-			this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = 'none';
-			// putting this in a timeout of 0 is a trick. i first set it to none, because when display is none, transitions do not happen. so i set it to none, then i have to remove the showasdefault class. normally, without the showasdefault there is transition. but because its display was none, there will be no transition
-			setTimeout(function() {
-				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.remove('profilist-showasdefault');
-				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = '';
-			}.bind(this), 0);
+			if (this.refs.ToolbarButton_IsDefault) {
+				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = 'none';
+				// putting this in a timeout of 0 is a trick. i first set it to none, because when display is none, transitions do not happen. so i set it to none, then i have to remove the showasdefault class. normally, without the showasdefault there is transition. but because its display was none, there will be no transition
+				setTimeout(function() {
+					this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.remove('profilist-showasdefault');
+					this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = '';
+				}.bind(this), 0);
+			}
 		}
 	},
     render: function() {
@@ -1204,15 +1210,20 @@ function hoverListener(aEl, onHoverOver, onHoverOut) {
 }
 
 function hoverListenerMessage(aReactInstanceThis, aMsgOnHover, aOnHoverCallback, aOffHoverCallback) {
+	// aMsgOnHover is either a string, or a function to return a string
+	
 	hoverListener(
 		ReactDOM.findDOMNode(aReactInstanceThis),
 		function onHoverOver() {
 			if (aReactInstanceThis.props.sMessage.interactive.sKey != aReactInstanceThis.props.sKey) {
+				
+				aReactInstanceThis.usedMsgOnHover = typeof(aMsgOnHover) == 'string' ? aMsgOnHover : aMsgOnHover();
+				
 				var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
 				new_sMessage.hover[aReactInstanceThis.props.sKey] = {
 					details: {
 						type: 'label',
-						text: aMsgOnHover
+						text: aReactInstanceThis.usedMsgOnHover
 					}
 				};
 				MyStore.setState({sMessage:new_sMessage});
@@ -1222,7 +1233,7 @@ function hoverListenerMessage(aReactInstanceThis, aMsgOnHover, aOnHoverCallback,
 			}
 		},
 		function onHoverOut() {
-			if (aReactInstanceThis.props.sMessage && aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sKey in aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sMessage.hover[aReactInstanceThis.props.sKey].details.text == aMsgOnHover) {
+			if (aReactInstanceThis.props.sMessage && aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sKey in aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sMessage.hover[aReactInstanceThis.props.sKey].details.text == aReactInstanceThis.usedMsgOnHover) {
 				var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
 				delete new_sMessage.hover[aReactInstanceThis.props.sKey];
 				MyStore.setState({sMessage:new_sMessage});
@@ -1303,8 +1314,9 @@ var SubiconSetDefault = React.createClass({
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('SETDEFAULT CLICKED');
 		
+		this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default);
 		
-		if (this.props.tbbIniEntry.Default == '1') {
+		if (this.props.tbbIniEntry.Default && this.props.tbbIniEntry.Default == '1') {
 			var gIniEntry_toUndefault = getIniEntryByKeyValue(gIniObj, 'Path', this.props.tbbIniEntry.Path);
 			delete gIniEntry_toUndefault.Default;
 			
@@ -1326,17 +1338,57 @@ var SubiconSetDefault = React.createClass({
 		
 		contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['toggleDefaultProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 		
-		this.props.hoverOffSetDefault();
 		// need to wrap this in a setTimeout of 0 as hoverOffSetDefault has a setTimeout of 0 in there . otherwise setState happens first and then this.refs.Submenu_IsDefault is changed so it wont succesfully pull off the setTimeout 0 in hoverOffSetDefault
+		
+		// important to set it on usedMsgOnHover, as hoverListenerMessage onHoverOut it will look for this before clearing it out
+		this.usedMsgOnHover = this.props.tbbIniEntry.Default == '1' ? 'Set this as the default profile' : 'Unset default profile, generic launcher will launch into profile manager';
+		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
+		new_sMessage.hover[this.props.sKey] = {
+			details: {
+				type: 'label',
+				text: this.usedMsgOnHover
+			}
+		};
+		
 		setTimeout(function() {
 			MyStore.setState({
-				sIniObj: JSON.parse(JSON.stringify(gIniObj))
+				sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+				sMessage: new_sMessage
 			});
 		}.bind(this), 0);
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile', function() { this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default) }.bind(this), function() { this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default) }.bind(this));
+		hoverListenerMessage(this, function() { return (this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile') }.bind(this), function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default) }.bind(this) /* i think the this.props.tbbIniEntry is by reference in here -- tested YES ah it is by reference -- i do this because its importaant that hoverOnSetDefault be remained binded to this of its react instance */, function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default) }.bind(this));
+		
+		/*
+		var aReactInstanceThis = this;
+		hoverListener(
+			ReactDOM.findDOMNode(aReactInstanceThis),
+			function onHoverOver() {
+				aReactInstanceThis.props.hoverOnSetDefault(aReactInstanceThis.props.tbbIniEntry.Default);
+				aReactInstanceThis.aMsgOnHover = aReactInstanceThis.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile';
+				if (aReactInstanceThis.props.sMessage.interactive.sKey != aReactInstanceThis.props.sKey) {
+					var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
+					new_sMessage.hover[aReactInstanceThis.props.sKey] = {
+						details: {
+							type: 'label',
+							text: aReactInstanceThis.aMsgOnHover
+						}
+					};
+					MyStore.setState({sMessage:new_sMessage});
+				}
+			},
+			function onHoverOut() {
+				aReactInstanceThis.props.hoverOffSetDefault(aReactInstanceThis.props.tbbIniEntry.Default);
+				if (aReactInstanceThis.props.sMessage && aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sKey in aReactInstanceThis.props.sMessage.hover && aReactInstanceThis.props.sMessage.hover[aReactInstanceThis.props.sKey].details.text == aReactInstanceThis.aMsgOnHover) {
+					var new_sMessage = JSON.parse(JSON.stringify(aReactInstanceThis.props.sMessage));
+					delete new_sMessage.hover[aReactInstanceThis.props.sKey];
+					MyStore.setState({sMessage:new_sMessage});
+				}
+			}
+		);
+		*/
 	},
 	render: function() {
 		// props
@@ -1369,7 +1421,7 @@ var SubiconSafe = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, this.props.tbbIniEntry.noWriteObj.status ? 'Restart in safe mode' + (this.props.tbbIniEntry.noWriteObj.currentProfile ? '' : ' (will first force terminate)') : 'Launch in safe mode');
+		hoverListenerMessage(this, function(){ return (this.props.tbbIniEntry.noWriteObj.status ? 'Restart in safe mode' + (this.props.tbbIniEntry.noWriteObj.currentProfile ? '' : ' (will first force terminate)') : 'Launch in safe mode') }.bind(this));
 	},
 	render: function() {
 		// props
