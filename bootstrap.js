@@ -76,7 +76,7 @@ function initAndRegisterAboutProfilist() {
 		QueryInterface: XPCOMUtils.generateQI([Ci.nsIAboutModule]),
 
 		getURIFlags: function(aURI) {
-			return Ci.nsIAboutModule.ALLOW_SCRIPT | Ci.nsIAboutModule.URI_MUST_LOAD_IN_CHILD;
+			return Ci.nsIAboutModule.ALLOW_SCRIPT | Ci.nsIAboutModule.URI_CAN_LOAD_IN_CHILD;
 		},
 
 		newChannel: function(aURI, aSecurity) {

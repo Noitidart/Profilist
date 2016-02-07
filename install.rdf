@@ -10,6 +10,7 @@
 		<em:bootstrap>true</em:bootstrap>
 		<em:optionsType>3</em:optionsType>
 		<em:optionsURL>about:profilist</em:optionsURL>
+		<em:multiprocessCompatible>true</em:multiprocessCompatible>
 		
 		<!-- Firefox -->
 		<em:targetApplication>
