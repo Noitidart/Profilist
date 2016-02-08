@@ -1,7 +1,7 @@
 /*start - chrome stuff*/
 const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
 Cm.QueryInterface(Ci.nsIComponentRegistrar);
-
+Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
@@ -17,7 +17,7 @@ const core = {
 		path: {
 			name: 'profilist',
 		},
-		cache_key: '3.0a' // set to version on release
+		cache_key: Math.random() // set to version on release
 	}
 };
 var gCFMM;
@@ -29,12 +29,12 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 var bootstrapCallbacks = {
 	loadImg: function(aProvidedPath, aLoadPath) {
 		// aProvidedPath must be file uri, or chrome path, or http NOT os path
-
+		console.log('in loadImg');
 		
 		var deferredMain_loadImg = new Deferred();
 		
 		if (aProvidedPath in imgPathData) {
-
+			console.log('aProvidedPath is already loaded in imgPathData so dont reload it');
 			deferredMain_drawScaled.resolve(imgPathData[aProvidedPath]);
 			return deferredMain_drawScaled.promise;
 		}
@@ -79,7 +79,7 @@ var bootstrapCallbacks = {
 		// must be square obiouvsly, i am assuming it is
 		// aDrawAtSize is what the width and height will be set to
 		// a canvas is created, and and saved in this object
-
+		console.error('in drawScaled, arguments:', aProvidedPath, aDrawAtSize);
 		var deferredMain_drawScaled = new Deferred();
 		
 		if (!('scaleds' in imgPathData[aProvidedPath])) {
@@ -155,7 +155,7 @@ var bootstrapCallbacks = {
 		
 		//////
 		var step1 = function() {
-
+			console.error('step1');
 			// check if imgPathData has (it will be canvas if it has it) size of aDrawAtSize else create it
 			if (!('scaleds' in imgPathData[aProvidedPath])) {
 				imgPathData[aProvidedPath].scaleds = {};
@@ -181,14 +181,14 @@ var bootstrapCallbacks = {
 		};
 		
 		var step2 = function() {
-
+			console.error('step2');
 			// optBuf
 			if (optBuf) {
 				var deferred_optBuf = new Deferred();
 				(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlobHD || imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlob).call(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can, blobCb.bind(null, aProvidedPath, deferred_optBuf), 'image/png');
 				deferred_optBuf.promise.then(
 					function(aVal) {
-
+						console.log('Fullfilled - deferred_optBuf - ', aVal);
 						// start - do stuff here - deferred_optBuf
 						rezObj.optBuf = aVal;
 						step3();
@@ -196,7 +196,7 @@ var bootstrapCallbacks = {
 					},
 					function(aReason) {
 						var rejObj = {name:'deferred_optBuf', aReason:aReason};
-
+						console.warn('Rejected - deferred_optBuf - ', rejObj);
 						// deferred_createProfile.reject(rejObj);
 						deferredMain_dSoBoOOSb.resolve([{
 							status: 'fail',
@@ -206,7 +206,7 @@ var bootstrapCallbacks = {
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'deferred_optBuf', aCaught:aCaught};
-
+						console.error('Caught - deferred_optBuf - ', rejObj);
 						// deferred_createProfile.reject(rejObj);
 						deferredMain_dSoBoOOSb.resolve([{
 							status: 'fail',
@@ -220,7 +220,7 @@ var bootstrapCallbacks = {
 		};
 		
 		var step3 = function() {
-
+			console.error('step3');
 			// overlap
 			if (optOverlapObj) {
 				// check of optOverlapObj.aProvidedPath at optOverlapObj.aDrawAtSize exists, else draw it to the current canvas at that size
@@ -236,13 +236,13 @@ var bootstrapCallbacks = {
 		};
 		
 		var step4 = function() {
-
+			console.error('step4');
 			// final buf
 			var deferred_finalBuf = new Deferred();
 			(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlobHD || imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlob).call(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can, blobCb.bind(null, aProvidedPath, deferred_finalBuf), 'image/png');
 			deferred_finalBuf.promise.then(
 				function(aVal) {
-
+					console.log('Fullfilled - deferred_finalBuf - ', aVal);
 					// start - do stuff here - deferred_finalBuf
 					rezObj.finalBuf = aVal;
 					rezObj.status = 'ok';
@@ -251,7 +251,7 @@ var bootstrapCallbacks = {
 				},
 				function(aReason) {
 					var rejObj = {name:'deferred_finalBuf', aReason:aReason};
-
+					console.warn('Rejected - deferred_finalBuf - ', rejObj);
 					// deferred_createProfile.reject(rejObj);
 					deferredMain_dSoBoOOSb.resolve([{
 						status: 'fail',
@@ -261,7 +261,7 @@ var bootstrapCallbacks = {
 			).catch(
 				function(aCaught) {
 					var rejObj = {name:'deferred_finalBuf', aCaught:aCaught};
-
+					console.error('Caught - deferred_finalBuf - ', rejObj);
 					// deferred_createProfile.reject(rejObj);
 					deferredMain_dSoBoOOSb.resolve([{
 						status: 'fail',
@@ -347,7 +347,7 @@ function Deferred() {
 		}.bind(this));
 		Object.freeze(this);
 	} catch (ex) {
-
+		console.log('Promise not available!', ex);
 		throw new Error('Promise not available!');
 	}
 }
@@ -372,7 +372,7 @@ var bootstrapMsgListener = {
 	funcScope: bootstrapCallbacks,
 	receiveMessage: function(aMsgEvent) {
 		var aMsgEventData = aMsgEvent.data;
-
+		console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
 		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
 		
 		var callbackPendingId;
@@ -393,12 +393,12 @@ var bootstrapMsgListener = {
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
 						},
 						function(aReason) {
-
+							console.error('aReject:', aReason);
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
 						}
 					).catch(
 						function(aCatch) {
-
+							console.error('aCatch:', aCatch);
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
 						}
 					);
@@ -408,7 +408,7 @@ var bootstrapMsgListener = {
 				}
 			}
 		}
-
+		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 		
 	}
 };
@@ -418,24 +418,24 @@ contentMMFromContentWindow_Method2(content).addMessageListener(core.addon.id, bo
 // start - load unload stuff
 function fsUnloaded() {
 	// framescript on unload
-
+	console.log('fsReturnIconset.js framworker unloading');
 	contentMMFromContentWindow_Method2(content).removeMessageListener(core.addon.id, bootstrapMsgListener); // framescript comm
 
 }
 function onPageReady(aEvent) {
 	var aContentWindow = aEvent.target.defaultView;
-
-
+	console.info('domcontentloaded time:', (new Date().getTime() - timeStart1.getTime()));
+	console.log('fsReturnIconset.js page ready, content.location:', content.location.href, 'aContentWindow.location:', aContentWindow.location.href);
 	contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, ['frameworkerReady']);
 }
 
 addEventListener('unload', fsUnloaded, false);
 var timeStart1 = new Date();
 if (content.location.href == 'chrome://profilist/content/content_remote/frameworker.htm') {
-
+	console.log('no need for DOMContentLoaded event, as current location is already of frameworker.htm:', content.location.href);
 	onPageReady({target:{defaultView:content}});
 } else {
 	addEventListener('DOMContentLoaded', onPageReady, false);
-
+	console.log('added DOMContentLoaded event, as frameworker.htm not yet loaded, current location is:', content.location.href);
 }
 // end - load unload stuff

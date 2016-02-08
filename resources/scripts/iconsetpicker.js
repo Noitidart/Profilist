@@ -12,7 +12,7 @@ var IPStore = {
 		// aSelectCallback is called when an icon is applied, it is passed two arguments, aSelectCallback(aImgSlug, aImgObj)
 		// aTargetElement is where the arrow of the dialog will point to
 		// must have iconsetpicker.css loaded in the html
-
+		console.log('aTargetElement:', uneval(aTargetElement));
 		
 		var cOptionsDefaults = {
 			aDirection: 0,
@@ -40,7 +40,7 @@ var IPStore = {
 			while (cOffsetEl && (cOffsetEl != insertEl || cOffsetEl != insertEl.offsetParent)) {
 				cumOffset.top += cOffsetEl.offsetTop;
 				cumOffset.left += cOffsetEl.offsetLeft;
-
+				console.log('cOffsetTop:', cOffsetEl.offsetTop, 'cOffsetLeft:', cOffsetEl.offsetLeft, 'cumOffsetTop:', cumOffset.top, 'cumOffsetLeft:', cumOffset.left, 'cOffsetEl:', cOffsetEl.nodeName, uneval(cOffsetEl.classList), cOffsetEl.getAttribute('id'));
 				cOffsetEl = cOffsetEl.offsetParent;
 			}
 		} else {
@@ -111,7 +111,7 @@ var IPStore = {
 		ReactDOM.render(myIP, wrap);
 	},
 	readSubdirsInDir: function(aDirPlatPath, setNull_sDirSubdirs, sDirListHistory) {
-
+		console.error('sDirListHistory:', sDirListHistory);
 		if (setNull_sDirSubdirs) {
 			IPStore.setState({
 				sDirSubdirs: null,
@@ -128,7 +128,7 @@ var IPStore = {
 			new_sDirListHistory.push(aDirPlatPath);
 		}
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], bootstrapMsgListener.funcScope, function(aSubdirsArr) {
-
+			console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
 			if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
 				// errored
 				IPStore.setState({
@@ -160,7 +160,7 @@ var IPStore = {
 			} else {
 				if (typeof(aReadImgsInDirArg) == 'string' && aReadImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
 					var aPartialImgObj = aErrorOrImgObj;
-
+					console.log('got aPartialImgObj:', aPartialImgObj);
 					var cPathKeyImgObj = {};
 					var promiseAllArr_loadImgs = [];
 					for (var i=0; i<aPartialImgObj.length; i++) {
@@ -179,16 +179,16 @@ var IPStore = {
 								this.imgloadreason = 'not-square';
 								this.deferred.resolve('not-square');
 							}
-
+							console.log('loaded img:', uneval(this));
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
 							this.imgloadreason = 'abort';
-
+							console.log('abort img:', uneval(this));
 							this.deferred.resolve('abort');
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
 							this.imgloadreason = 'not-img';
-
+							console.log('error img:', uneval(this));
 							this.deferred.resolve('not-img');
 						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
 						cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
@@ -197,7 +197,7 @@ var IPStore = {
 					var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
 					promiseAll_loadImgs.then(
 						function(aVal) {
-
+							console.log('Fullfilled - promiseAll_loadImgs - ', uneval(aVal));
 							// check if duplicate sizes
 							
 							// create cImgObj
@@ -260,13 +260,13 @@ var IPStore = {
 								name: 'promiseAll_loadImgs',
 								aCaught: aCaught
 							};
-
+							console.error('Caught - promiseAll_loadImgs - ', uneval(rejObj));
 						}
 					);
 				} else {
 					// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
 					var aImgObj = aErrorOrImgObj;
-
+					console.log('got aImgObj:', uneval(aImgObj));
 					IPStore.setState({
 						sPreview: {
 							path: a_cDirSelected,
@@ -307,7 +307,7 @@ var IPStore = {
 				document.removeEventListener('keypress', this.keypress, true);
 			},
 			componentDidUpdate: function(aPrevPropsObj, aPrevStateObj) {
-
+				console.error('componentDidUpdate! and prevAndNowStateObj:', uneval({prev:aPrevStateObj, now:this.state}));
 				// check if pref state sPreview had imgObj and if imgObj has blob urls. if true then -- check if sPreview is now changed, if it is then tell worker to revokeObjectURL on those blob urls
 				if (aPrevStateObj.sPreview && typeof(aPrevStateObj.sPreview) != 'string' && aPrevStateObj.sPreview.imgObj) {
 					var urlsInPrevState = [];
@@ -319,31 +319,31 @@ var IPStore = {
 							urlsInPrevAreBlobs = true;
 						}
 					}
-
+					console.log('urlsInPrevState:', uneval(urlsInPrevState));
 					if (urlsInPrevAreBlobs) {
-
+						console.log('yes there are blobs in prev state, check if those urls are no longer being shown, if they are not then release from worker');
 						// i dont simply revoke the url here, because im holding onto to the blobs in global space over in worker
 						
 						var needToReleaseOldImgObj = false;
 						
 						// test if needToReleaseOldImgObj should be set to true
 						if (aPrevStateObj.sInit && !this.state.sInit) {
-
+							console.log('sInit was set to false, so is unmounting, so release them blobs if user DID NOT select');
 							if (!this.state.sSelected) {
-
+								console.error('did not do select so make sure to RELEASE');
 								needToReleaseOldImgObj = true;
 							} else {
-
+								console.error('did do select so DONT release');
 							}
 						} else if (!this.state.sPreview) {
-
+							console.log('now sPreview is null, so release those blobs');
 							needToReleaseOldImgObj = true;
 						} else if (typeof(this.state.sPreview) == 'string') {
-
+							console.log('now sPreview is a string, so no more imgObj so release those blobs');
 							needToReleaseOldImgObj = true;
 						} else if (typeof(this.state.sPreview) == 'object') {
 							if (!this.state.sPreview.imgObj) {
-
+								console.log('now sPreview has no imgObj anymore so release those blobs');
 								needToReleaseOldImgObj = true;
 							} else {
 								// check if new urls are same, if they are then do nothing
@@ -353,28 +353,28 @@ var IPStore = {
 									var cUrl = this.state.sPreview.imgObj[aSize];
 									urlsInNowState.push(cUrl);
 								}
-
+								console.log('urlsInNowState:', uneval(urlsInNowState));
 								
 								for (var i=0; i<urlsInPrevState.length; i++) {
 									if (urlsInNowState.indexOf(urlsInPrevState[i]) == -1) {
-
+										console.log('old url not found in new urls, old url:', uneval(urlsInPrevState[i]));
 										needToReleaseOldImgObj = true;
 										break;
 									}
 								}
 							}
 						} else {
-
+							console.error('should never ever ever get here');
 						}
 						
 						if (needToReleaseOldImgObj) {
-
+							console.log('ok releeasing old obj urls');
 							sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['releaseBlobsAndUrls', urlsInPrevState]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
-
+								console.error('ok back from releaseBlobsAndUrls. so now in framescript');
 							});
 						}
 					} else {
-
+						console.log('no blob urls in previous so no need to worry about checking if its time to release');
 					}
 				}
 				
@@ -616,7 +616,7 @@ var IPStore = {
 					// this.state.sPreview.imgObj must be valid (gui disables button if it is not valid)
 					// setTimeout(function() { // :debug: wrapping in setTimeout to test if it will work after uninit has been called. im worried this.props might be dead, not sure ----- results of test, yes it worked, which makes wonder when does it get gc'ed, how does it know? interesting stuff. i would think on unmount this object is destroyed
 						sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], bootstrapMsgListener.funcScope, function(aImgSlug, aImgObj) {
-
+							console.error('ok back from saveAsIconset. so now in framescript');
 							if (this.props.select_callback) {
 								this.props.select_callback(aImgSlug, aImgObj);
 							}
@@ -640,7 +640,7 @@ var IPStore = {
 				var new_sDirSubdirs = this.props.sDirSubdirs.filter(function(aElVal) {
 					return aElVal.path != this.props.sDirSelected;
 				}.bind(this));
-
+				console.log('new_sDirSubdirs:', uneval(new_sDirSubdirs));
 
 				IPStore.setState({
 					sPreview: null,
@@ -649,7 +649,7 @@ var IPStore = {
 				});
 					
 				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['deleteIconset', cImgSlug]], bootstrapMsgListener.funcScope, function(aErrorObjOrIni) {
-
+					console.error('ok back from deleteIconset. so now in framescript');
 					// if gIniObj was updated, then aErrorObjOrIni is gIniObj
 					// else it is null
 					if (Array.isArray(aErrorObjOrIni)) {
@@ -696,10 +696,10 @@ var IPStore = {
 									var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 									var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 									var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
-
+									console.error('j_gProfilistBuilds:', j_gProfilistBuilds);
 									
 									var imgSlugOfSelectedDir = this.props.sDirSelected.substr(core.profilist.path.images.length + core.os.filesystem_seperator.length);
-
+									console.error('imgSlugOfSelectedDir:', imgSlugOfSelectedDir);
 									if (getBuildEntryByKeyValue(j_gProfilistBuilds, 'i', imgSlugOfSelectedDir)) {
 										disbleRenameDelete = true;
 										specialTxtNote = myServices.sb_ip.GetStringFromName('inuse');
@@ -831,7 +831,7 @@ var IPStore = {
 						// loading
 						cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
 					} else {
-
+						console.log('this.props.sPreview:', uneval(this.props.sPreview));
 						if (typeof(this.props.sPreview) == 'string') {
 							var previewTxt = myServices.sb_ip.GetStringFromName(this.props.sPreview);
 							cChildren.push(React.createElement('span', {},
@@ -962,11 +962,11 @@ var IPStore = {
 			click: function() {
 				
 				if (this.props.selected) {
-
+					console.log('already selected, so dont do anything'); // on subdirs, clicking again should do nothing (currently i allow clicking again on main IPNavRow)
 					return;
 				}
 				if (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length) {
-
+					console.log('this.props of dbl clickable:', uneval(this.props));
 					if (!this.props.selected) {
 						IPStore.setState({
 							sDirSelected: this.props.path,
