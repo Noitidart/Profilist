@@ -1909,6 +1909,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// step3-continued - rename file on disk
 
 						// initial step - get current contents
+						var needDummyDir = false; // to update icon
 						var eLauncherExecPath = OS.Path.join(eLauncherPath, 'Contents', 'MacOS', 'profilist-' + cLauncherDirName) // LauncherExePath is different from LauncherExecPath. Exec is that shell script
 						
 						var eLauncherContents = OS.File.read(eLauncherExecPath, {encoding:'utf-8'});
@@ -1939,16 +1940,15 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// }
 						
 						// step4 - verify/update icon
-						if (eLauncherIconPath != aLauncherIconPath) {
-							console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+						if (eLauncherIconPath != aLauncherIconPath || eLauncherExePath != aLauncherExePath) {
+							// i have to do even if eLauncherExePath != aLauncherExePath because if exe path is changed, then i need to create the icon in that new exe app resources folder. for instance, if currently it is tied to dev. and then i have a custom build which i gave it the dev icon. and now user ties it to the other. well then it sees eLauncherIconPath and cLauncherIconPath are the same, so it does not create the icon.
+							if (eLauncherExePath == aLauncherExePath) { console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath); } else { console.log('have to update icon because --', 'eLauncherExePath:', eLauncherExePath, 'is changing to another exe, it os now be aLauncherExePath:', aLauncherExePath); }
+							
 							var rez_copyIcon = OS.File.copy(aLauncherIconPath, OS.Path.join(cTargetContentsPath, 'Resources', 'profilist-' + cLauncherDirName + '.icns'), {noOverwrite:false}); // i copy the icon into the main folder, because i alias the folders
 							cLauncherJsonLine.LauncherIconPathName = aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5);
 							
 							// create dummy folder in Contents to update icon
-							OS.File.makeDir(OS.Path.join(eLauncherPath, 'dummy for update icon'));
-							setTimeout(function() {
-								OS.File.removeDir(OS.Path.join(eLauncherPath, 'dummy for update icon'));
-							}, 1000);
+							needDummyDir = true;
 						}
 						
 						// step5 - verify/update exePath (the build it launches into)
@@ -2027,6 +2027,14 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						if (eLauncherName != aLauncherName) {
 							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
 							OS.File.move(eLauncherPath, cLauncherPath);
+						}
+						
+						if (needDummyDir) {
+							// create dummy folder in Contents to update icon
+							OS.File.makeDir(OS.Path.join(cLauncherPath, 'dummy for update icon'));
+							setTimeout(function() {
+								OS.File.removeDir(OS.Path.join(cLauncherPath, 'dummy for update icon'));
+							}, 1000);
 						}
 						
 					break;
