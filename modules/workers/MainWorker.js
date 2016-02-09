@@ -58,14 +58,14 @@ var WORKER = this;
 self.addEventListener('message', function(aMsgEvent) { // this is what you do if you want SIPWorker mainthread calling ability
 	var aMsgEventData = aMsgEvent.data;
 	if (Array.isArray(aMsgEventData)) {
-		console.error('worker got response for main thread calling SIPWorker functionality:', aMsgEventData)
+
 		var funcName = aMsgEventData.shift();
 		if (funcName in WORKER) {
 			var rez_worker_call = WORKER[funcName].apply(null, aMsgEventData);
 		}
-		else { console.error('funcName', funcName, 'not in scope of WORKER') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+
 	} else {
-		console.error('no this is just regular promise worker message');
+
 		worker.handleMessage(aMsgEvent)
 	}
 });
@@ -80,7 +80,7 @@ self.postMessageWithCallback = function(aPostMessageArr, aCB, aPostMessageTransf
 	var thisCallbackId = SIP_CB_PREFIX + sic_last_cb_id;
 	aFuncExecScope[thisCallbackId] = function() {
 		delete aFuncExecScope[thisCallbackId];
-		console.log('in worker callback trigger wrap, will apply aCB with these arguments:', arguments);
+
 		aCB.apply(null, arguments[0]);
 	};
 	aPostMessageArr.push(thisCallbackId);
@@ -103,7 +103,7 @@ MainWorkerError.prototype.toMsg = function() {
 ////// end of imports and definitions
 
 function init(objCore) { // function name init required for SIPWorker
-	//console.log('in worker init');
+
 	
 	// merge objCore into core
 	// core and objCore is object with main keys, the sub props
@@ -121,7 +121,7 @@ function init(objCore) { // function name init required for SIPWorker
 	core.os.filesystem_seperator = platformFilePathSeperator();
 	
 	// I import ostypes_*.jsm in init as they may use things like core.os.isWinXp etc
-	console.log('bringing in ostypes');
+
 	switch (core.os.mname) {
 		case 'winnt':
 		case 'winmo':
@@ -140,7 +140,7 @@ function init(objCore) { // function name init required for SIPWorker
 				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 			});
 	}
-	console.log('brought in ostypes');
+
 	
 	// OS Specific Init
 	switch (core.os.name) {
@@ -154,10 +154,10 @@ function init(objCore) { // function name init required for SIPWorker
 		case 'darwin':
 				
 				if (core.profilist.path.XREExeF.indexOf(core.profilist.path.root) === 0) {
-					console.warn('XREExeF is a symlink path!:', core.profilist.path.XREExeF);
+
 					var XREExeF_filename = OS.Path.basename(core.profilist.path.XREExeF); // i have never seen it be anything other then "firefox" but just to be safe. i do assume "firefox" in other places in my code, i should make that code be not assumption based
 					core.profilist.path.XREExeF = OS.Path.join(resolveSymlinkPath(OS.Path.dirname(core.profilist.path.XREExeF)), XREExeF_filename); // I do OS.Path.dirname(core.profilist.path.XREExeF) because `/Users/noida/Library/Application Support/Firefox/profilist_data/exes/1756982928/Firefox Developer Edition - Unnamed Profile 1.app/Contents/MacOS/firefox` is NOT a symlink, so it readlink will give rez of -1 and errno of EINVAL which is 22 meaning file is not a symlink or buffer size is negative. MacOS folder is a symlink though so thats why i do it
-					console.log('XREExeF UN-linkd path:', core.profilist.path.XREExeF);
+
 				}
 				
 			break;
@@ -166,10 +166,10 @@ function init(objCore) { // function name init required for SIPWorker
 	}
 	
 	// Profilist Specific Init
-	console.log('starting profilist specifc init');
+
 	readIni();
 	
-	console.log('MainWorker init success');
+
 	return core; // required for SIPWorker
 }
 
@@ -303,16 +303,16 @@ function readIni() {
 	   }
 	}
 	
-	console.log('rez_read:', rez_read);
+
 	strIniContents = rez_read;
 	
 	if (rez_read.indexOf('ProfilistStatus') == -1) {
 		// read bkp
-		console.error('needs to read backup file as no ProfilistStatus found in ini');
+
 		try {
 		   rez_read = OS.File.read(core.profilist.path.inibkp, {encoding:'utf-8'});
 		} catch (ex if ex instanceof OS.File.Error && ex.becauseNoSuchFile) {
-			console.log('inibkp does not exist!');
+
 		}
 		strIniContents = rez_read;
 	}
@@ -323,11 +323,11 @@ function readIni() {
 	// 
 	// var matchIniBlock;
 	// while (matchIniBlock = pattIniBlock.exec(strIniContents)) {
-	// 	console.log('matchIniBlock:', matchIniBlock);
+
 	// }
 	
 	var arrIniBlocks = strIniContents.match(pattIniBlock);
-	console.log('arrIniBlocks:', arrIniBlocks);
+
 	
 	var pattIniGroupName = /\[(.*?)\]/
 	gIniObj = [];
@@ -336,13 +336,13 @@ function readIni() {
 	}
 	*/
 	
-	console.time('parse_gIniObj');
+
 	gIniObj = [];
 	var pattIniBlockWithDetails = /\[(.*?)\](?:\s+?(.+?)=(.*))(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?(?:\s+?(.+?)=(.*))?/mg; //currently supports 16 lines max per block `(?:\s+?(.+?)=(.*))?` repeat that at end
 
 	var matchIniBlock;
 	while (matchIniBlock = pattIniBlockWithDetails.exec(strIniContents)) {
-		console.log('matchIniBlock:', matchIniBlock);
+
 		var cNewEntry = {
 			groupName: matchIniBlock[1]
 		}
@@ -354,8 +354,8 @@ function readIni() {
 		}
 		gIniObj.push(cNewEntry);
 	}
-	console.timeEnd('parse_gIniObj');
-	console.log('gIniObj:', gIniObj);
+
+
 	
 	formatNoWriteObjs();
 }
@@ -452,7 +452,7 @@ function formatNoWriteObjs() {
 	// set global var telling if dev mode is on or off
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // not really global. i usually use g prefix on real global vars. but here im just using it to idicate that the general etnry if from gIniObj
 	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
-	console.error('gJProfilistDev:', gJProfilistDev);
+
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff
 	if (gJProfilistDev) {
@@ -474,9 +474,9 @@ function formatNoWriteObjs() {
 			if (gIniObj[i].noWriteObj.status) { // this loop will for sure hit the curProfIniEntry.noWriteObj.currentProfile entry as it has obviously status
 				// its profile type tbb with exe needed
 				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
-				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
+
 				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath);
-				// console.log('cExePathChan:', cExePathChan);
+
 				var cExeImgSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, cExePathChan);// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
 				gIniObj[i].noWriteObj.exeIconSlug = cExeImgSlug
 			}
@@ -554,7 +554,7 @@ function writeIni() {
 	}
 	writeStrArr.push('');
 	var writeStr = writeStrArr.join('\n');
-	console.log('should now write:', writeStr);
+
 	
 	OS.File.writeAtomic(core.profilist.path.ini, writeStr, {encoding:'utf-8'});
 	
@@ -596,7 +596,7 @@ function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 // start - profilist helper functions FOR WORKER ONLY
 function getSlugForChannel(aChannel) {
 	// GEN_RULE#1 slug is a plat slafed string
-	// console.info('aChannel: -----' + aChannel + '------');
+
 	switch (aChannel) {
 		case 'esr':
 		case 'release':
@@ -702,7 +702,7 @@ function getImgSrcsForImgSlug(aImgSlug) {
 								var cImgNameMatch = cImgNamePatt.exec(aEntry.name);
 								
 								if (!cImgNameMatch) {
-									console.warn('invalid format on filename of this icon, filename:', aEntry.name);
+
 									return;
 								}
 								
@@ -711,7 +711,7 @@ function getImgSrcsForImgSlug(aImgSlug) {
 								cImgExt = cImgNameMatch[3];
 								
 								if (cImgSlug != aImgSlug) {
-									console.warn('invalid format on file in this directory, filename:', aEntry.name);
+
 									return;
 								}
 								
@@ -721,7 +721,7 @@ function getImgSrcsForImgSlug(aImgSlug) {
 							rezObj[cImgSize] = OS.Path.toFileURI(aEntry.path);
 						});
 					} catch(OSFileError) {
-						// console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+
 						throw new MainWorkerError('getImgSrcsForImgSlug', OSFileError);
 					} finally {
 						cImgDirIterator.close();
@@ -745,7 +745,7 @@ function getImgPathOfSlug(aSlug) {
 	//	aSlug - icon short name
 	//*******************************************
 
-	console.info('getImgPathOfSlug, aSlug:', aSlug);
+
 	
 	switch (aSlug) {
 		// case 'esr': // esr should go to release. but worker should never set it to esr, as esr here is a slug, not channel name
@@ -782,12 +782,12 @@ function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 			maxBuildId = j_gProfilistBuilds[i].id;
 		}
 		if (j_gProfilistBuilds[i].p == aExePath) {
-			console.error('this aExePath is already in ProfilistBuilds');
+
 			// throw new Error('this aExePath is already in ProfilistBuilds');
 			return [gIniObj];
 		}
 	}
-	console.error('maxBuildIdmaxBuildIdmaxBuildIdmaxBuildIdmaxBuildId:', maxBuildId);
+
 	j_gProfilistBuilds.push({
 		id: maxBuildId + 1,
 		i: aImgSlug,
@@ -995,7 +995,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						// path not even there, this is weird shouldnt happen, but if its not there obviously the profile doesnt exist so nothing in use so just return 0
 						cIsRunning = 0;
 					} else {
-						console.error('getIsRunningFromIniFromPlat', {msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',OSFileError: OSFileError});
+
 						throw new MainWorkerError('getIsRunningFromIniFromPlat', {
 							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
 							OSFileError: OSFileError
@@ -1008,7 +1008,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 					
 					// ok lets get the time the parentlock was locked
 					var rez_statLock = OS.File.stat(cParentLockPath);
-					// console.info('rez_statLock:', 'lastModificationDate:', rez_statLock.lastModificationDate.toLocaleString());
+
 					
 					var lockTime = rez_statLock.lastModificationDate;
 					
@@ -1024,7 +1024,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 							closestPidInfo.msBetween_createTime_lockTime = msBetween_createTime_lockTime;
 						}
 					}
-					// console.log('closest pid is:', closestPidInfo, 'its info obj is:', aOptions.winProcessIdsInfos[closestPidInfo.pid], 'cParentLockPath:', cParentLockPath);
+
 					cIsRunning = closestPidInfo.pid;
 				}
 
@@ -1033,14 +1033,14 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 		case 'darwin':
 
 				var cParentLockPath = OS.Path.join(cProfRootDir, '.parentlock');
-				console.log('cParentLockPath:', cParentLockPath);
+
 				
 				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR | OS.Constants.libc.O_CREAT); //setting this to O_RDWR fixes errno of 9 on fcntl
-				console.log('rez_lockFd:', rez_lockFd);
+
 				if (cutils.jscEqual(rez_lockFd, -1)) {
 					// failed to open
 					// :todo: add test for errno, if it tells me it file doesnt exist then obviously return 0 meaning its not in use
-					console.error('getIsRunningFromIniFromPlat -> ostypes.api.open', {msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',errno: ctypes.errno});
+
 					throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.open', {
 						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
 						errno: ctypes.errno
@@ -1056,7 +1056,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 					testlock.l_len = 0;
 					
 					var rez_fcntl = ostypes.API('fcntl')(rez_lockFd, OS.Constants.libc.F_GETLK, testlock.address());
-					console.log('rez_fcntl:', rez_fcntl);
+
 					if (cutils.jscEqual(rez_fcntl, -1)) {
 						// failed to open
 						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.fcntl', {
@@ -1067,11 +1067,11 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 					
 					// l_pid is unchanged if it wasnt locked, and since js-ctypes instatiates the struct at value of 0, i can just return that value, so 0 means its not running
 					cIsRunning = parseInt(cutils.jscGetDeepest(testlock.l_pid));
-					console.info('got cIsRunning:', cIsRunning);
+
 					
 				} finally {
 					var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
-					console.log('rez_closeLockFd:', rez_closeLockFd);
+
 					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
 						// failed to close
 						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
@@ -1110,12 +1110,12 @@ function getLastExePathForProfFromFS(aProfPath) {
 	
 	var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // this is the currently running profiles ini entry
 	if (aProfPath == curProfIniEntry.Path) {
-		console.log('checking self prof, so returning XREExeF');
+
 		return core.profilist.path.XREExeF;
 	}
 	
 	var cProfCompatIniPath = OS.Path.join(getFullPathToProfileDirFromIni(aProfPath), 'compatibility.ini');
-	console.info('cProfCompatIniPath:', cProfCompatIniPath);
+
 
 	// contents of compaitiblity.ini on diff plats
 		// on win10 - as of 010816
@@ -1151,7 +1151,7 @@ function getLastExePathForProfFromFS(aProfPath) {
 	
 	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
 	if (!cLastPlatformDir) {
-		console.error('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
+
 		throw new MainWorkerError('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
 	}
 	cLastPlatformDir = cLastPlatformDir[1];
@@ -1173,9 +1173,9 @@ function getLastExePathForProfFromFS(aProfPath) {
 		case 'darwin':
 				
 				if (cLastPlatformDir.indexOf(core.profilist.path.root) === 0) {
-					console.warn('cLastPlatformDir is a symlinked path:', cLastPlatformDir);
+
 					cLastPlatformDir = resolveSymlinkPath(cLastPlatformDir); // works because LastPlatformDir is to the Contents/Resources/ dir, which i do copy as symlink
-					console.log('cLastPlatformDir was resolved from symlink path, it is actually:', cLastPlatformDir);
+
 					// I do not cache this, as if user changes tie or something of this profile then it will change the exe path it points to
 				}
 				cLastExePath = OS.Path.join(OS.Path.dirname(cLastPlatformDir), 'MacOS', 'firefox');
@@ -1211,7 +1211,7 @@ function getCalcdExePathForProfFromIniFromFS(aProfPath) {
 			// :note: if the current profile is in dev mode, then we check for tie. else we dont consider tie - :todo: tell this to users in description somewhere
 			var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'id', cIniEntry.ProfilistTie);
 			if (!cBuildEntry) {
-				console.error('no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied'); // :todo: ensure this comment, code up the untie on tie deletion
+
 				throw new MainWorkerError('should_never_happen!', 'no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied');
 			}
 			return cBuildEntry.p;
@@ -1244,20 +1244,20 @@ function getExeChanForParamsFromFSFromCache(aExePath) {
 		if (aExePath == core.profilist.path.XREExeF) {
 			_cache_getExeChanForParamsFromFSFromCache[aExePath] = core.firefox.channel;
 		} else {
-			console.time('getExeChanFromFS');
+
 			var channelPrefsJsPath;
 			if (core.os.name == 'darwin') {
 				channelPrefsJsPath = OS.Path.join(aExePath.substr(0, aExePath.indexOf('.app') + 4), 'Contents', 'Resources', 'defaults', 'pref', 'channel-prefs.js'); // :note::assume:i assume that aExePath is properly cased meaning the .app is always lower, so its never .APP // :note::important::todo: therefore when allow browse to .app from cp.js i should display only till the .app in the gui, but i should save it up till the .app/Contents/MacOS/firefox // link009838393
 			} else {
 				channelPrefsJsPath = OS.Path.join(OS.Path.dirname(aExePath), 'defaults', 'pref', 'channel-prefs.js');
 			}
-			console.log('channelPrefsJsPath:', channelPrefsJsPath);
+
 			
 			var rez_read;
 			try {
 			   rez_read = OS.File.read(channelPrefsJsPath, {encoding:'utf-8'});
 			} catch (ex) {
-				console.error('can get here if the build doesnt exist anymore, ex:', ex);
+
 				if (ex instanceof OS.File.Error) {
 					// ex.becauseNoSuchFile // The file does not exist
 					throw ex;
@@ -1266,18 +1266,18 @@ function getExeChanForParamsFromFSFromCache(aExePath) {
 				}
 			}
 			
-			// console.log('rez_read channelPrefsJsPath:', rez_read);
+
 
 			var channel_name = rez_read.match(/app\.update\.channel", "([^"]+)/);
-			// console.log('channel_name post regex match:', channel_name);
+
 			if (!channel_name) {
 				_cache_getExeChanForParamsFromFSFromCache[aExePath] = null;
-				console.error('should-nver-happen!', 'as a exe path must exist for all builds!!!');
+
 				throw new MainWorkerError('should-nver-happen!', 'as a exe path must exist for all builds!!!');
 			} else {
 				_cache_getExeChanForParamsFromFSFromCache[aExePath] = channel_name[1];
 			}
-			console.timeEnd('getExeChanFromFS');
+
 		}
 	}
 	return _cache_getExeChanForParamsFromFSFromCache[aExePath];
@@ -1353,7 +1353,7 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug,
 					
 				break;
 			default:
-				console.error('invalid aBadgeLocation:', aBadgeLocation);
+
 				throw new Error('invalid aBadgeLocation');
 		}
 	}
@@ -1385,7 +1385,7 @@ function getLinuxIsIconInstalledFromFS(aIconName) {
 	switch (core.os.mname) {
 		case 'qt':
 			
-				console.error('unsupported-platform', 'QT platform not yet supported, only GTK as of right now.');
+
 				throw new MainWorkerError('unsupported-platform', 'QT platform not yet supported');
 			
 			break;
@@ -1540,12 +1540,12 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 			cOptions.aBadge = aBadgeLoc;
 		}
 		
-		console.time('promiseWorker-createIcon');
-		console.log('rawr:', ['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions]);
-		console.log('aIconInfosObj:', aIconInfosObj);
+
+
+
 		self.postMessageWithCallback(['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions], function(aCreateIconRez) { // :note: this is how to call WITH callback
-			console.timeEnd('promiseWorker-createIcon');
-			console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
+
+
 			if (aCreateIconRez.status == 'fail') {
 				deferredMain_createIconForParamsFromFS.reject(aCreateIconRez.reason);
 			} else {
@@ -1561,10 +1561,10 @@ function getLauncherDirPathFromParams(aProfPath) {
 		// string - platform path to the launcher directory
 		
 	var launcherDirName = HashString(aProfPath);
-	// console.info('launcherDirName:', launcherDirName, '');
-	// console.info('core.profilist.path.exes:', core.profilist.path.exes, '');
+
+
 	var launcherDirPath = OS.Path.join(core.profilist.path.exes, launcherDirName + ''); // need to make launcherDirName a string otherwise OS.Path.join causes this error ```path.startsWith is not a function```
-	// console.info('launcherDirPath:', launcherDirPath, '');
+
 	
 	return launcherDirPath;
 }
@@ -1584,7 +1584,7 @@ function getLauncherNameFromParams(aExeChannel, aProfName) {
 	// RETURNS
 		// string - current platform safed, the name in format Firefox CHANNEL_NAME - PROFILE_NAME
 	
-	console.info('aExeChannel:', aExeChannel, 'aProfName:', aProfName, '');
+
 	
 	var exeChannelDisplayName;
 	switch (aExeChannel) {
@@ -1619,7 +1619,7 @@ function getLauncherNameFromParams(aExeChannel, aProfName) {
 			
 			break;
 		default:
-			console.error('A programtic channel value of "' + aExeChannel + '" does not have a recognized display name, so returning same thing');
+
 			exeChannelDisplayName = aExeChannel.substr(0, 1).toUpperCase() + aExeChannel.substr(1);
 	}
 	
@@ -1680,7 +1680,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	var eLauncherDirIterator = new OS.File.DirectoryIterator(aLauncherDirPath);
 	try {
 		eLauncherDirIterator.forEach(function(aEntry, aIndex, aIterator) {
-			console.log(aIndex, '------------', aEntry, aIterator);
+
 			if (aEntry.name.indexOf('Firefox') == 0) { // link18494940498498 all launchers must start with Firefox
 				if (aEntry.name.substr(aEntry.name.lastIndexOf('.') + 1) == cLauncherExtension) {
 					eLauncherEntry = aEntry;
@@ -1689,7 +1689,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			}
 		});
 	} catch(OSFileError) {
-		console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+
 		if (!OSFileError.becauseNoSuchFile) {
 			throw new MainWorkerError('createeLauncher', OSFileError);
 		} // if it does not exist, thats ok, this func will carry on to create the launcher :todo: should make the dir though at this point, when we get error that dir doesnt exist
@@ -1706,8 +1706,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			var eLauncherPath = eLauncherEntry.path; // this does not need test/verification, but it is used for the rename process if needed
 			var eLauncherName = eLauncherEntry.name.substr(0, eLauncherEntry.name.lastIndexOf('.'));
 			
-			console.info('eLauncherPath:', eLauncherPath);
-			console.info('eLauncherName:', eLauncherName);
+
+
 			
 			var eLauncherIconSlug; // platform specific get method
 			var eLauncherExePath; // platform specific get method // this is the exe/build it launches the profile in
@@ -1741,14 +1741,14 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// var propertyStorePtr;
 						try {
 							var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
-							console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+
 							if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx)) {
-								console.log('CoInitializeEx says successfully initialized');
+
 								//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
 							} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
-								console.error('CoInitializeEx says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
+
 							} else {
-								console.error('Unexpected return value from CoInitializeEx: ' + hr);
+
 								throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
 							}
 							
@@ -1776,7 +1776,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							var eLauncherIconPath = buffer_eLauncherIconPath.readString();
 							var eIconIndex = c_eIconIndex.value;
 							// var eLauncherIconSlug = OS.Path.basename(eLauncherIconPath).replace('.ico', '');
-							console.log('eLauncherIconPath:', eLauncherIconPath, 'eIconIndex:', eIconIndex);
+
 							
 							// step2 - get eLauncherExePath
 							var buffer_eLauncherExePath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
@@ -1784,21 +1784,21 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							ostypes.HELPER.checkHRESULT(hr_Load, 'createLauncher -> GetPath');
 							
 							var eLauncherExePath = buffer_eLauncherExePath.readString();
-							console.log('eLauncherExePath:', '"' + eLauncherExePath + '"');
+
 							
 							// step3 - verify/update name
 							// moved to step3-continued because have to do the rename after the persistFile.Save
 							
 							// step4 - verify/update icon
 							if (eLauncherIconPath != aLauncherIconPath) {
-								console.log('have to SetIconLocation because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+
 								var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, /*core.os.version > 5.2 ? 1 : 2*/ 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 								ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 							}
 							
 							// step5 - verify/update exePath (the build it launches into)
 							if (eLauncherExePath != aLauncherExePath) {
-								console.log('have to SetPath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+
 								var hr_SetPath = shellLink.SetPath(shellLinkPtr, aLauncherExePath);
 								ostypes.HELPER.checkHRESULT(hr_SetPath, 'createLauncher -> SetPath');
 							}
@@ -1808,19 +1808,19 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							
 							// step3-continued - becase have to do the rename after the persistFile.Save
 							if (eLauncherName != aLauncherName) {
-								console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+
 								OS.File.move(eLauncherPath, cLauncherPath);
 							}
 							
 						} finally {
 							if (persistFile) {
 								var rez_refCntPFile = persistFile.Release(persistFilePtr);
-								console.log('rez_refCntPFile:', rez_refCntPFile);
+
 							}
 
 							if (shellLink) {
 								var rez_refCntShelLink = shellLink.Release(shellLinkPtr);
-								console.log('rez_refCntShelLink:', rez_refCntShelLink);
+
 							}
 							
 							//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
@@ -1841,7 +1841,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						var eLauncherContents = OS.File.read(eLauncherPath, {encoding:'utf-8'});
 						var cLauncherContents = eLauncherContents;
-						console.log('eLauncherContents:', eLauncherContents);
+
 						
 						// step1 - get eLauncherIconPath (for gtk only the icon slug is stored as path with .profilist appended) (meaning aLauncherIconPath is also just iconSlug) // link787575758
 						var eLauncherIconPath_patt = /Icon=(.+)/;
@@ -1857,26 +1857,26 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						// step3 - verify/update name
 						if (eLauncherName != aLauncherName) {
-							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+
 							var eLauncherName_patt = /Name=(.+)/; // :note: I make the Name match the filenme wthout .desktop //link3771919171700
 							cLauncherContents = cLauncherContents.replace(eLauncherName_patt, 'Name=' + aLauncherName);
 						}
 						
 						// step4 - verify/update icon
 						if (eLauncherIconPath != aLauncherIconPath + '.profilist') { // link787575758
-							console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath);
+
 							cLauncherContents = cLauncherContents.replace(eLauncherIconPath_patt, 'Icon=' + aLauncherIconPath + '.profilist'); // link787575758
 						}
 						
 						// step5 - verify/update exePath (the build it launches into)
 						if (eLauncherExePath != aLauncherExePath) {
-							console.log('have to update exePath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+
 							cLauncherContents = cLauncherContents.replace(eLauncherExePath_patt, 'Exec="' + aLauncherExePath + '" -profile "');
 						}
 						
 						// final step
 						if (eLauncherContents != cLauncherContents) {
-							console.log('cLauncherContents is modded:', cLauncherContents);
+
 							// means i updated it, so lets write it to file now
 							var eLauncherFD = OS.File.open(eLauncherPath, {truncate:true}); // FD stands for file descriptor
 							eLauncherFD.write(getTxtEncodr().encode(cLauncherContents));
@@ -1885,7 +1885,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						// step3-continued
 						if (eLauncherName != aLauncherName) {
-							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+
 							OS.File.move(eLauncherPath, cLauncherPath);
 						}
 						
@@ -1913,15 +1913,15 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var eLauncherExecPath = OS.Path.join(eLauncherPath, 'Contents', 'MacOS', 'profilist-' + cLauncherDirName) // LauncherExePath is different from LauncherExecPath. Exec is that shell script
 						
 						var eLauncherContents = OS.File.read(eLauncherExecPath, {encoding:'utf-8'});
-						console.log('eLauncherContents:', eLauncherContents);
+
 						
 						// mac only get json line
 						eLauncherJsonLine_patt = /^##(\{.*?\})##$/m;
 						var eLauncherJsonLine_match = eLauncherJsonLine_patt.exec(eLauncherContents);
-						console.log('eLauncherJsonLine_match:', eLauncherJsonLine_match);
+
 						
 						var eLauncherJsonLine = JSON.parse(eLauncherJsonLine_match[1]);
-						console.log('eLauncherJsonLine:', eLauncherJsonLine, 'stringified:', eLauncherJsonLine_match[1]);
+
 						var cLauncherJsonLine = JSON.parse(eLauncherJsonLine_match[1]);
 						
 						// mac only defined target app path
@@ -1936,13 +1936,13 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						// step3 - verify/update name
 						// if (eLauncherName != aLauncherName) {
-						// 	console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+
 						// }
 						
 						// step4 - verify/update icon
 						if (eLauncherIconPath != aLauncherIconPath || eLauncherExePath != aLauncherExePath) {
 							// i have to do even if eLauncherExePath != aLauncherExePath because if exe path is changed, then i need to create the icon in that new exe app resources folder. for instance, if currently it is tied to dev. and then i have a custom build which i gave it the dev icon. and now user ties it to the other. well then it sees eLauncherIconPath and cLauncherIconPath are the same, so it does not create the icon.
-							if (eLauncherExePath == aLauncherExePath) { console.log('have to update icon because --', 'eLauncherIconPath:', eLauncherIconPath, 'is not what it should be, it should be aLauncherIconPath:', aLauncherIconPath); } else { console.log('have to update icon because --', 'eLauncherExePath:', eLauncherExePath, 'is changing to another exe, it os now be aLauncherExePath:', aLauncherExePath); }
+
 							
 							var rez_copyIcon = OS.File.copy(aLauncherIconPath, OS.Path.join(cTargetContentsPath, 'Resources', 'profilist-' + cLauncherDirName + '.icns'), {noOverwrite:false}); // i copy the icon into the main folder, because i alias the folders
 							cLauncherJsonLine.LauncherIconPathName = aLauncherIconPath.substring(core.profilist.path.icons.length + 1, aLauncherIconPath.length - 5);
@@ -1953,7 +1953,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						// step5 - verify/update exePath (the build it launches into)
 						if (eLauncherExePath != aLauncherExePath) {
-							console.log('have to update exePath because --', 'eLauncherExePath:', eLauncherExePath, 'is not what it should be, it should be aLauncherExePath:', aLauncherExePath);
+
 							
 							cLauncherJsonLine.XREExeF_APP = cTargetAppPath;
 							
@@ -2000,7 +2000,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						// final step - write modified contents
 						if (eLauncherName != aLauncherName || eLauncherJsonLine.XREExeF_APP != cLauncherJsonLine.XREExeF_APP || eLauncherJsonLine.LauncherIconPathName != cLauncherJsonLine.LauncherIconPathName) {
 							// eLauncherName != aLauncherName because that changes cLauncherAppPath
-							console.log('cLauncherContents is modded:', cLauncherJsonLine, JSON.stringify(cLauncherJsonLine));
+
 							// means i updated it, so lets write it to file now
 							var cLauncherAppPath = cLauncherPath;
 							var execContents = [
@@ -2010,13 +2010,13 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 							];
 							
 							//if (eLauncherExePath != aLauncherExePath) {
-								console.log('replacing it with writeAtomic');
+
 								// it may not be there, if this .app is being used for first time
 								var rez_writeExec = OS.File.writeAtomic(eLauncherExecPath, execContents.join('\n'));// i write the exec into the main folder, because i alias the folders)
 								var rez_permExec = OS.File.setPermissions(eLauncherExecPath, {unixMode: core.FileUtils.PERMS_DIRECTORY});
 								// i dont think i need to xattr this, i just had to xattr the cLauncherPath (which is cLauncherAppPath) on first creation
 							// } else {
-							// 	console.log('trying to open it');
+
 							// 	var eLauncherFD = OS.File.open(eLauncherExecPath, {truncate:true}); // FD stands for file descriptor
 							// 	eLauncherFD.write(getTxtEncodr().encode(execContents.join('\n')));
 							// 	eLauncherFD.close();
@@ -2025,7 +2025,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						
 						// step3-continued - rename file on disk
 						if (eLauncherName != aLauncherName) {
-							console.log('have to rename because --', 'eLauncherName:', eLauncherName, 'is not what it should be, it should be aLauncherName:', aLauncherName);
+
 							OS.File.move(eLauncherPath, cLauncherPath);
 						}
 						
@@ -2060,8 +2060,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 			case 'wince':
 
 					// create .lnk
-					console.info('aLauncherDirPath:', aLauncherDirPath);
-					console.info('aLauncherName:', aLauncherName);
+
+
 					
 					var shellLinkPtr;
 					var shellLink;
@@ -2071,14 +2071,14 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					var propertyStorePtr;
 					try {
 						var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
-						console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+
 						if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx)) {
-							console.log('CoInitializeEx says successfully initialized');
+
 							//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
 						} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
-							console.error('CoInitializeEx says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
+
 						} else {
-							console.error('Unexpected return value from CoInitializeEx: ' + hr);
+
 							throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
 						}
 						
@@ -2106,7 +2106,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var hr_SetArguments = shellLink.SetArguments(shellLinkPtr, '-profile "' + aFullPathToProfileDir + '" -no-remote');
 						ostypes.HELPER.checkHRESULT(hr_SetArguments, 'createLauncher -> SetArguments');
 						
-						console.error('usssssing aLauncherIconPath:', aLauncherIconPath);
+
 						var hr_SetIconLocation = shellLink.SetIconLocation(shellLinkPtr, aLauncherIconPath, /*core.os.version > 5.2 ? 1 : 2*/ 0); // 'iconIndex' in cObj ? cObj.iconIndex : 0
 						ostypes.HELPER.checkHRESULT(hr_SetIconLocation, 'createLauncher -> SetIconLocation');
 						
@@ -2122,17 +2122,17 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					} finally {
 						if (persistFile) {
 							var rez_refCntPFile = persistFile.Release(persistFilePtr);
-							console.log('rez_refCntPFile:', rez_refCntPFile);
+
 						}
 						
 						if (propertyStore) {
 							var rez_refCntPropStore = propertyStore.Release(propertyStorePtr);
-							console.log('rez_refCntPropStore:', rez_refCntPropStore);
+
 						}
 
 						if (shellLink) {
 							var rez_refCntShelLink = shellLink.Release(shellLinkPtr);
-							console.log('rez_refCntShelLink:', rez_refCntShelLink);
+
 						}
 						
 						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
@@ -2156,7 +2156,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					try {
 						var promise_writeScript = OS.File.writeAtomic(cLauncherPath, cmdArr.join('\n'), {encoding:'utf-8', /*unixMode:0o4777,*/ noOverwrite:true}); // doing unixMode:0o4777 here doesn't work, i have to `OS.File.setPermissions(path_toFile, {unixMode:0o4777})` after the file is made
 					} catch(ex) {
-						console.error('createLauncher-platform-error', ex);
+
 						throw new MainWorkerError('createLauncher-platform-error', ex);
 					}
 					
@@ -2168,17 +2168,17 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					// create .app
 					
 					var cLauncherAppPath = cLauncherPath;
-					console.info('cLauncherAppPath:', cLauncherAppPath);
+
 					var rez_makeLauncherApp = OS.File.makeDir(cLauncherAppPath);
 					
 					var cLauncherContentsPath = OS.Path.join(cLauncherAppPath, 'Contents');
-					console.info('cLauncherContentsPath:', cLauncherContentsPath);
+
 					var rez_makeLauncherContents = OS.File.makeDir(cLauncherContentsPath);
 					
 					
 					// C:\Users\Mercurius\Pictures\osx firefox.app contents dir entries.png
 					var cTargetAppPath = aLauncherExePath.substr(0, aLauncherExePath.indexOf('.app') + 4); // link009838393
-					console.info('cTargetAppPath:', cTargetAppPath);
+
 					var cTargetContentsPath = OS.Path.join(cTargetAppPath, 'Contents');
 					// var rez_hardLinkCodeSig = createAlias(OS.Path.join(cLauncherContentsPath, '_CodeSignature'), OS.Path.join(cTargetContentsPath, '_CodeSignature'));
 					// var rez_hardLinkMacOs = createAlias(OS.Path.join(cLauncherContentsPath, 'MacOS'), OS.Path.join(cTargetContentsPath, 'MacOS'));
@@ -2221,10 +2221,10 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 					var rez_writePlistInfo = OS.File.writeAtomic(OS.Path.join(cLauncherContentsPath, 'Info.plist'), launcherPlistInfo, {encoding:'utf-8'});
 					
 					// xattr it
-					console.log('xattr-ing the regular app - trying symlink');
+
 					var rez_xattrOpen = ostypes.API('popen')('/usr/bin/xattr -d com.apple.quarantine "' + cLauncherAppPath.replace(/ /g, '\ ') + '"', 'r')
 					var rez_xattrClose = ostypes.API('pclose')(rez_xattrOpen); // waits for process to exit
-					console.log('rez_xattrClose:', cutils.jscGetDeepest(rez_xattrClose));
+
 
 				break;
 			default:
@@ -2250,9 +2250,9 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	
 	validateOptionsObj(aOptions, cOptionsDefaults);
 	
-	// console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
+
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
-	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cIniEntry could not be found'); }
+
 	
 	/*
 	if (aOptions.refreshRunningStatus) {
@@ -2275,7 +2275,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 							filterVisible: true,
 							getPid: true
 						});
-						console.log('allWinInfos:', allWinInfos);
+
 						
 						var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
 							if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
@@ -2292,10 +2292,10 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 						for (var i=matchingWinInfos.length-1; i>=0; i--) {
 							if (matchingWinInfos[i].isMinimized) {
 								var rez_unMinimize = ostypes.API('ShowWindow')(matchingWinInfos[i].hwndPtr, ostypes.CONST.SW_RESTORE);
-								console.log('rez_unMinimize:', rez_unMinimize);
+
 							}
 							var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
-							console.log('rez_focus:', rez_focus);
+
 						}
 						
 					break;
@@ -2308,7 +2308,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 							getBounds: true // this is force set to true if i dont specify this or set it to false for gtk
 						});
 						
-						console.log('allWinInfos:', allWinInfos);
+
 						
 						var matchingWinInfos = allWinInfos.filter(function(aWinInfo) {
 							if (aWinInfo.pid == cIniEntry.noWriteObj.status) {
@@ -2316,7 +2316,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 							}
 						});
 						
-						console.log('matchingWinInfos:', matchingWinInfos);
+
 						
 						// focus the matching windows
 						var xevent = ostypes.TYPE.XEvent();
@@ -2333,10 +2333,10 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 						// ubuntu is cool in that even if minimized, the order is proper z order, unlike windows
 						
 						for (var i=matchingWinInfos.length-1; i>=0; i--) {
-							console.log('setting xclient.window to:', matchingWinInfos[i].hwndXid);
+
 							xevent.xclient.window = matchingWinInfos[i].hwndXid;
 							var rez_focus = ostypes.API('XSendEvent')(ostypes.HELPER.cachedXOpenDisplay(), ostypes.HELPER.cachedDefaultRootWindow(), ostypes.CONST.False, ostypes.CONST.SubstructureRedirectMask | ostypes.CONST.SubstructureNotifyMask, xevent.address()); // need for SubstructureRedirectMask is because i think this topic - http://stackoverflow.com/q/650223/1828637 - he says "I've read that Window Managers try to stop this behaviour, so tried to disable configure redirection"
-							console.log('rez_focus:', rez_focus);
+
 							// the zotero guy tests if rez_focus is 1, and if so then he does XMapRaised, i dont know why, as simply doing a flush after this focuses. this is zotero - https://github.com/zotero/zotero/blob/7d404e8d4ad636987acfe33d0b8620263004d6d0/chrome/content/zotero/xpcom/integration.js#L619
 							// i suspect zotero does that for cross window manager abilty, as just simply flushing worked for me on ubuntu
 							ostypes.API('XFlush')(ostypes.HELPER.cachedXOpenDisplay()); // will not set on top if you dont do this, wont even change window title name which was done via XChangeProperty, MUST FLUSH
@@ -2349,42 +2349,42 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 						var NSRunningApplication = ostypes.API('objc_getClass')('NSRunningApplication');
 						var runningApplicationWithProcessIdentifier = ostypes.API('sel_registerName')('runningApplicationWithProcessIdentifier:');
 						var app = ostypes.API('objc_msgSend')(NSRunningApplication, runningApplicationWithProcessIdentifier, ostypes.TYPE.pid_t(cIniEntry.noWriteObj.status));
-						console.info('app:', app, app.toString(), uneval(app));
+
 						
 						// [app activateWithOptions: NSApplicationActivateAllWindows]
 						var activateWithOptions = ostypes.API('sel_registerName')('activateWithOptions:');
 						var rez_focus = ostypes.API('objc_msgSend')(app, activateWithOptions, ostypes.TYPE.NSUInteger(3));
 						
 						// C:\Users\Mercurius\OneDrive\Documents\jscGetDepeest with args.png
-						//// console.info('rez_focus:', rez_focus, rez_focus.toString(), uneval(rez_focus));
+
 						//// 
-						//// console.info('rez_focus jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
-						//// console.info('rez_focus jscGetDeepest 16:', cutils.jscGetDeepest(rez_focus, 16));
-						//// console.info('rez_focus jscGetDeepest 10:', cutils.jscGetDeepest(rez_focus, 10));
+
+
+
 						//// 
 						//// rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
-						//// console.info('rez_focus casted:', rez_focus);
-						//// console.info('rez_focus casted jscGetDeepest:', cutils.jscGetDeepest(rez_focus));
+
+
 						//// 
-						//// console.info('YES jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.YES));
+
 						
 						rez_focus = ctypes.cast(rez_focus, ostypes.TYPE.BOOL);
 						
 						if (cutils.jscEqual(rez_focus, ostypes.CONST.YES)) {
-							console.log('App was focused!');
+
 						} else {
-							console.log('Failed to focus app :(');
+
 						}
 						
 						debugVar = !debugVar;
 						// if (!debugVar) {
 						// 	var unhide = ostypes.API('sel_registerName')('unhide');
 						// 	var rez_unhide = ostypes.API('objc_msgSend')(app, unhide);
-						// 	console.log('rez_unhide:', rez_unhide);
+
 						// } else {
 						// 	var hide = ostypes.API('sel_registerName')('hide');
 						// 	var rez_hide = ostypes.API('objc_msgSend')(app, hide);
-						// 	console.log('rez_hide:', rez_hide);
+
 						// }
 						
 					break;
@@ -2401,11 +2401,11 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	
 	// these vars, are all the things it should SET-TO/NOW be - on launching
 	var cExePath = getCalcdExePathForProfFromIniFromFS(aProfPath);
-	console.info('cExePath:', cExePath);
+
 	var cExeChannel = getExeChanForParamsFromFSFromCache(cExePath);
-	console.info('cExeChannel:', cExeChannel);
+
 	var cBadgeIconSlug = getBadgeSlugForProfFromIni(aProfPath);
-	console.info('cBadgeIconSlug:', cBadgeIconSlug);
+
 	
 	var cBadgeLoc; // as number
 	if (cBadgeIconSlug) {
@@ -2416,14 +2416,14 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	}
 	
 	var cIconInfosObj = getIconPathInfosForParamsFromIni(cExePath, cExeChannel, cBadgeIconSlug, cBadgeLoc);
-	console.info('cIconInfosObj:', cIconInfosObj);
+
 	var cLauncherDirPath = getLauncherDirPathFromParams(aProfPath);
-	console.info('cLauncherDirPath:', cLauncherDirPath);
+
 	var cLauncherName = getLauncherNameFromParams(cExeChannel, cIniEntry.Name)
-	console.info('cLauncherName:', cLauncherName);
+
 	
 	var cFullPathToProfileDir = getFullPathToProfileDirFromIni(aProfPath);
-	console.info('cFullPathToProfileDir:', cFullPathToProfileDir);
+
 	
 	
 	// this is done after promise_createIcon
@@ -2453,7 +2453,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	var promise_createIcon = createIconForParamsFromFS(cIconInfosObj, cBadgeLoc);
 	promise_createIcon.then(
 		function(aVal) {
-			console.log('Fullfilled - promise_createIcon - ', aVal);
+
 			postCreateIcon();
 		},
 		genericReject.bind(null, 'promise_createIcon', 0)
@@ -2469,7 +2469,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
 	// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
 	
-	console.error('in createNewProfile in worker');
+
 	
 	var cFailedReason;
 	
@@ -2501,7 +2501,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 						var presetMatch = presetPatt.exec(gIniObj[i].Name);
 						if (presetMatch) {
 							var presetThisNumber = parseInt(presetMatch[1]);
-							console.log('presetThisNumber:', presetThisNumber);
+
 							if (presetThisNumber >= presetNextNumber) {
 								presetNextNumber = presetThisNumber + 1;
 							}
@@ -2522,7 +2522,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 						var presetMatch = presetPatt.exec(gIniObj[i].Name);
 						if (presetMatch) {
 							var presetThisNumber = parseInt(presetMatch[1]);
-							console.log('presetThisNumber:', presetThisNumber);
+
 							if (presetThisNumber >= presetNextNumber) {
 								presetNextNumber = presetThisNumber + 1;
 							}
@@ -2552,8 +2552,8 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 				
 				var aNewProfPlatPath = aNewProfPlatPath_TFSPSS.substr(0, startIndexOfProfName) /* this first portion includes the path seperator */ + safedForPlatFS(aNewProfName); // link900073
 				
-				console.error('aNewProfPlatPath:', aNewProfPlatPath);
-				console.error('aNewProfName:', aNewProfName);
+
+
 			}
 			if (aNewProfName == '') {
 				cFailedReason = 'New name cannot be blank.'; //:l10n:
@@ -2613,7 +2613,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	
 	// create profile root dir
 	if (!cFailedReason) {
-		console.log('cProfPlatPathToRootDir:', cProfPlatPathToRootDir);
+
 		if (!aCloneProfPath) {
 			try {
 				OS.File.makeDir(cProfPlatPathToRootDir);
@@ -2656,7 +2656,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			// } else {
 				// not a clone, so make a local dir i am sure about this
 				var cProfPlatPathToLocalDir = OS.Path.join(core.profilist.path.defProfLRt, OS.Path.basename(cProfPlatPathToRootDir));
-				console.log('cProfPlatPathToLocalDir:', cProfPlatPathToLocalDir);
+
 				var rez_makeLocalDir = OS.File.makeDir(cProfPlatPathToLocalDir);
 			// }
 		}
@@ -2780,7 +2780,7 @@ function deleteProfile(aProfPath) {
 			try {
 				OS.File.removeDir(delPlatPath_profRootDir, {ignoreAbsent:true, ignorePermissions:false});
 			} catch (OSFileError) {
-				console.error('error deleting root profile directory - ', OSFileError);
+
 				// this is cause for do not remove from ini
 				cFailedReason = 'Could not delete root directory. Windows error: ' + ctypes.winLastError + '. Unix error: ' + ctypes.errno; // :l10n:
 			}
@@ -2791,7 +2791,7 @@ function deleteProfile(aProfPath) {
 				try {
 					OS.File.removeDir(delPlatPath_profLocalDir, {ignoreAbsent:true, ignorePermissions:false});
 				} catch (OSFileError) {
-					console.error('error deleting local profile directory - ', OSFileError);
+
 					// if this delete fails its ok, delete from ini, as profile is unusable - however there will be left over files on the users computer. :todo: figure out how to clean it up if delete fails - i never encounterd failed delete though
 						// this is why i dont set cFailedReason
 				}
@@ -2870,7 +2870,7 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 	
 	deferred_ensureLauncher.promise.then(
 		function(aPathToLauncher) {
-			console.log('ok launcher ensured, now make desktop shortcut, then call. aPathToLauncher:', aPathToLauncher);
+
 			
 			var cPathToDeskcut = OS.Path.join(OS.Constants.Path.desktopDir, OS.Path.basename(aPathToLauncher));
 			
@@ -2898,9 +2898,9 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 							OS.File.unixSymLink(aPathToLauncher, cPathToDeskcut);
 						} catch (OSFileError) {
 							if (OSFileError.unixErrno == 17) {
-								console.warn('symlink already exists:', OSFileError);
+
 							} else {
-								console.error('symlink already exists:', OSFileError);
+
 								throw new Error('symlink got error!');
 							}
 						}
@@ -2921,7 +2921,7 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 		}
 	);
 	
-	console.log('calling launchOrFocusProfile with deferred_ensureLauncher');
+
 	launchOrFocusProfile(aProfPath, {}, deferred_ensureLauncher);
 	
 	// will not return anything here, because this calls launchOrFocusProfile with params to not launch and not focus, just to createLauncher as if it were laucnhing or focusing though and that might call async function of createIcon
@@ -2939,10 +2939,10 @@ function browseiconInit() {
 // Start - Iconset Picker
 // var gArrBufs = {}; // key is URL.createURL and value is blob
 function releaseBlobsAndUrls(aArrOfTempFileUris) {
-	console.log('in worker will release aArrOfTempFileUris:', aArrOfTempFileUris);
+
 	
 	for (var i=0; i<aArrOfTempFileUris.length; i++) {
-		console.log('releasing:', aArrOfTempFileUris[i]);
+
 		// URL.revokeObjectURL(aArrOfTempFileUris[i]);
 		// delete gArrBufs[aArrOfTempFileUris[i]];
 		delete gArrGithubUrls[aArrOfTempFileUris[i]];
@@ -2955,7 +2955,7 @@ function saveAsIconset(aImgObj) {
 	// triggered when "Apply this Icon" is clicked so props.select_callback so onSelectCallback
 	// paths in aImgObj MUST have ext
 	// paths in aImgObj are url's or file uri strings
-	console.log('doing saveAsIconset, aImgObj:', aImgObj);
+
 	
 	var isGithubUrls = false;
 	
@@ -3039,7 +3039,7 @@ function saveAsIconset(aImgObj) {
 	var coreProfilistPathImages_fileuri = OS.Path.toFileURI(core.profilist.path.images);
 	for (var aSize in aImgObj) {
 		var cUrl = aImgObj[aSize];
-		console.error('cUrl:', cUrl);
+
 		if (cUrl.indexOf(core.addon.path.images) === 0 || cUrl.indexOf(coreProfilistPathImages_fileuri) === 0) {
 			// its already a saved slug, just apply that
 			if (!cImgSlug) {
@@ -3052,7 +3052,7 @@ function saveAsIconset(aImgObj) {
 					cImgSlug = cImgSlug.substr(0, cImgSlug.lastIndexOf('_'));
 				}
 				cImgObj = getImgSrcsForImgSlug(cImgSlug);
-				console.error('cImgSlug:', '"' + cImgSlug + '"');
+
 			}
 			break;
 		} else {
@@ -3062,7 +3062,7 @@ function saveAsIconset(aImgObj) {
 				if (!cImgSlug) {
 					isGithubUrls = true;
 					generateSlugForImgObj_setLocalGlobals_makeDir();
-					console.error('cImgSlug:', '"' + cImgSlug + '"');
+
 				}
 				
 				// var cUrlExt = gArrBufs[cUrl].github_url;
@@ -3082,7 +3082,7 @@ function saveAsIconset(aImgObj) {
 				if (!cImgSlug) {
 					isGithubUrls = false;
 					generateSlugForImgObj_setLocalGlobals_makeDir();
-					console.error('cImgSlug:', '"' + cImgSlug + '"');
+
 				}
 				
 				var cUrlExt = cUrl.substr(cUrl.lastIndexOf('.') + 1);
@@ -3105,7 +3105,7 @@ function deleteIconset(aImgSlug) {
 	}
 	
 	OS.File.removeDir(OS.Path.join(core.profilist.path.images, aImgSlug));
-	console.log('ok removed iconset with slug:', aImgSlug);
+
 	
 	invalidateCache_getImgSrcsFormImgSlug(aImgSlug);
 	
@@ -3173,18 +3173,18 @@ function readImgsInDir(aDirPlatPath) {
 		
 		if (aDirPlatPath.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') > -1) {
 			// proflist_github
-			console.log('profilist_github:', aDirPlatPath);
+
 			rezObj = {};
 			
 			var githubHtml = xhr(aDirPlatPath).response;
-			// console.log('githubHtml:', githubHtml);
+
 			var githubPatt = /<a.*?\/Noitidart\/Firefox-PNG-Icon-Collections\/blob\/master\/([^ "']+)[^>]+>([^<]+)/g
 			var githubMatch;
 			
 			while(githubMatch = githubPatt.exec(githubHtml)) {
 				var name = githubMatch[2];
 				var path = githubMatch[1];
-				// console.log(name, path);
+
 				
 				var dotIndex = name.lastIndexOf('.');
 				if (dotIndex == -1) {
@@ -3222,8 +3222,8 @@ function readImgsInDir(aDirPlatPath) {
 				// };
 				rezObj[aSize] = thisTmpPngDlFileUri;
 			}
-			// console.error('ok here it is:', gArrBufs);
-			console.error('ok here it is:', gArrGithubUrls);
+
+
 			
 		} else {
 			rezObj = [];
@@ -3407,7 +3407,7 @@ function resolveSymlinkPath(aSymlinkPlatPath) {
 				// i havent tested this on anything else other then mac yet, but it should be true for all linux
 				var rlBuffer = ostypes.TYPE.char.array(OS.Constants.libc.PATH_MAX)();
 				var rez_rl = ostypes.API('readlink')(aSymlinkPlatPath, rlBuffer, rlBuffer.length); // works because LastPlatformDir is to the Contents/Resources/ dir, which i do copy as symlink
-				// console.log('rez_rl:', rez_rl);
+
 				
 				if (cutils.jscEqual(rez_rl, -1)) {
 					switch(ctypes.errno) {
@@ -3437,7 +3437,7 @@ function resolveSymlinkPath(aSymlinkPlatPath) {
 function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 	// returns true/false
 	
-	console.error('entered createHardLink - aCreatePlatformPath:', aCreatePlatformPath, 'aTargetPlatformPath:', aTargetPlatformPath);
+
 	
 	
 	switch (core.os.name) {
@@ -3454,14 +3454,14 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 				// cannot make hard link of a directory, files only
 				
 				var rez_CreateHardLink = ostypes.API('CreateHardLink')(aCreatePlatformPath, aTargetPlatformPath, null);
-				console.info('rez_CreateHardLink:', rez_CreateHardLink.toString(), uneval(rez_CreateHardLink));
+
 				if (ctypes.winLastError != 0) {
 					if (ctypes.winLastError == OS.Constants.Win.ERROR_ALREADY_EXISTS) {
 						// it already exists so it was already made so just return true
-						console.log('CreateHardLink got winLastError for already existing, its rez was:', rez_CreateHardLink, 'but lets return true as if hard link was already made then no need to make again, all hardlinks update right away to match all from what it is hard linekd to');
+
 						return true;
 					}
-					console.error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
+
 					throw new Error('Failed rez_CreateHardLink, winLastError:', ctypes.winLastError);
 				}
 				return rez_CreateHardLink;
@@ -3493,34 +3493,34 @@ function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 					var error = ctypes.voidptr_t(); //ostypes.API('objc_msgSend')(NSError, ostypes.HELPER.sel('errorWithDomain:code:userInfo:'), chlNSStrings.get('profilist'), ostypes.TYPE.NSInteger(0), ostypes.CONST.NIL);
 					
 					var rez_linkItemAtPath = ostypes.API('objc_msgSend')(fm, ostypes.HELPER.sel('linkItemAtPath:toPath:error:'), chlNSStrings.get(aTargetPlatformPath), chlNSStrings.get(aCreatePlatformPath), error.address());
-					console.log('rez_linkItemAtPath:', rez_linkItemAtPath, cutils.jscGetDeepest(rez_linkItemAtPath));
+
 					
 					// have to cast it, because it returns a voidptr_t which is a "ctypes.voidptr_t(ctypes.UInt64("0x1"))" for YES, intersting
 					
 					if (cutils.jscEqual(ctypes.cast(rez_linkItemAtPath, ostypes.TYPE.BOOL), ostypes.CONST.YES)) {
 						return true;
 					} else {
-						console.log('error was voidptr_t');
+
 						// if it already exists, it will also be ostypes.CONST.NO, check error object to verify
 						var errCode = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('code'));
-						console.log('errCode:', errCode);
+
 						
 						// var errDesc = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('localizedDescription'));
-						// console.log('errDesc:', errDesc, ostypes.HELPER.readNSString(errDesc));		
+
 						
 						// var errDomain = ostypes.API('objc_msgSend')(error, ostypes.HELPER.sel('domain'));
-						// console.log('errDomain:', errDomain, ostypes.HELPER.readNSString(errDomain));
+
 
 						
 						var jsErrCode = ctypes.cast(errCode, ostypes.TYPE.NSInteger);
-						console.log('jsErrCode:', jsErrCode);
+
 						if (cutils.jscEqual(jsErrCode, ostypes.CONST.NSFileWriteFileExistsError)) {
 							// it already exists
-							console.warn('already exists');
+
 							return 'exists';
 						}
 						
-						console.error('failed to create hard link with NSCocoaErrorDomain code of:', jsErrCode);
+
 						
 						return false;
 					}
@@ -3562,32 +3562,32 @@ function createAlias(aCreatePlatformPath, aTargetPlatformPath) {
 					var originalUrl = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('fileURLWithPath:'), caNSStrings.get(aTargetPlatformPath));
 					var aliasUrl = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('fileURLWithPath:'), caNSStrings.get(aCreatePlatformPath));
 					
-					console.log('originalUrl:', originalUrl);
-					console.log('aliasUrl:', aliasUrl);
+
+
 					
 					var NULL = ctypes.voidptr_t(ctypes.UInt64('0x0')).address(); // because this is getting set to a pointer to error by this API call, i have to use a new NULL, not ostypes.CONST.NULL
 					var bookmarkData = ostypes.API('objc_msgSend')(originalUrl, ostypes.HELPER.sel('bookmarkDataWithOptions:includingResourceValuesForKeys:relativeToURL:error:'), ostypes.CONST.NSURLBookmarkCreationSuitableForBookmarkFile, ostypes.CONST.NIL, ostypes.CONST.NIL, NULL);
-					console.log('bookmarkData:', bookmarkData);
+
 
 					if (cutils.jscEqual(bookmarkData, ostypes.CONST.NIL)) {
-						console.error('failed to create bookmarkData');
+
 						return false;
 					} else {
 						var NULL = ctypes.voidptr_t(ctypes.UInt64('0x0')).address();
 						var rez_writeAlias = ostypes.API('objc_msgSend')(NSURL, ostypes.HELPER.sel('writeBookmarkData:toURL:options:error:'), bookmarkData, aliasUrl, ostypes.CONST.NSURLBookmarkCreationSuitableForBookmarkFile, NULL);
-						console.log('rez_writeAlias:', rez_writeAlias);
+
 						rez_writeAlias = ctypes.cast(rez_writeAlias, ostypes.TYPE.BOOL);
-						console.log('casted:', rez_writeAlias);
+
 						
 						if (cutils.jscEqual(rez_writeAlias, ostypes.CONST.NO)) {
-							console.error('failed to create alias for some reason');
+
 							return false;
 						} else {
 							return true;
 						}
 					}
 				}
-				catch (ex) { console.error('ex happend:', ex); }
+
 				finally {
 					caNSStrings.releaseAll();
 				}
@@ -3613,7 +3613,7 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 		case 'wince':
 		
 				var sei = ostypes.TYPE.SHELLEXECUTEINFO();
-				//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
+
 				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
 				sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(aLaunchPlatPath);
 				if (aOptions.arguments.length > 0) {
@@ -3623,8 +3623,8 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
 				
 				var rez_ShellExecuteEx = ostypes.API('ShellExecuteEx')(sei.address());
-				console.log('rez_ShellExecuteEx:', rez_ShellExecuteEx.toString(), uneval(rez_ShellExecuteEx));
-				if (ctypes.winLastError != 0) { console.error('Failed rez_ShellExecuteEx, winLastError:', ctypes.winLastError); }
+
+
 				
 			break;
 		// case 'linux':
@@ -3637,7 +3637,7 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 
 				// gio
 				var launcher = ostypes.API('g_desktop_app_info_new_from_filename')(aLaunchPlatPath);
-				console.info('launcher:', launcher, launcher.toString(), uneval(launcher));
+
 				
 				if (launcher.isNull()) {
 					throw new Error('No file exists at path: "' + aLaunchPlatPath + '"');
@@ -3649,8 +3649,8 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				var error = ostypes.TYPE.GError.ptr(); // can use `null`
 
 				var rez_launch_uris = ostypes.API('g_app_info_launch_uris')(launcher, uris.address(), launch_context, error.address());
-				console.info('rez_launch_uris:', rez_launch_uris, rez_launch_uris.toString(), uneval(rez_launch_uris));
-				console.info('error:', error, error.toString(), uneval(error));
+
+
 
 			break;
 		case 'darwin':
@@ -3669,7 +3669,7 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				
 				// :debug:
 				/*
-				console.log('cmdStr:', cmdStr.join(' '));
+
 				var bufferSize = 1000;
 				var buffer = ctypes.char.array(bufferSize)('');
 				var size = bufferSize;
@@ -3677,14 +3677,14 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				while (size == bufferSize) {
 					size = ostypes.API('fread')(buffer, 1, bufferSize, rez_popenOpen);
 					outList.push(buffer.readString().substring(0, size));
-					console.log('did read');
+
 				}
-				console.log('pout:', outList.join(''));
+
 				*/
 				// :debug:
 				
 				var rez_plcoseOpen = ostypes.API('pclose')(rez_popenOpen); // waits for process to exit
-				console.log('rez_plcoseOpen:', cutils.jscGetDeepest(rez_plcoseOpen));
+
 				
 			break;
 		default:
@@ -4192,7 +4192,7 @@ function getAllPID(aOptions={}) {
 				
 				// Linux
 
-	// console.time('getAllPID');
+
 	
 	var cOptionsDefaults = {
 		firefoxOnly: false // setting to true will filter out results, will remove everything that doesnt belong to firefox
@@ -4209,30 +4209,30 @@ function getAllPID(aOptions={}) {
 
 				var bufferNtQrySysProcs = ostypes.TYPE.BYTE.array(0)();
 				var enumBufSizeNtQrySysProcs = ostypes.TYPE.ULONG(bufferNtQrySysProcs.constructor.size);
-				// console.log('sizof(bufferNtQrySysProcs):', bufferNtQrySysProcs.constructor.size);
+
 				
 				var rez_ntqrysysprocs;
 				while (true) {
 					rez_ntqrysysprocs = ostypes.API('NtQuerySystemInformation')(ostypes.CONST.SYSTEMPROCESSINFORMATION, bufferNtQrySysProcs, enumBufSizeNtQrySysProcs, enumBufSizeNtQrySysProcs.address());
-					// console.log('rez_ntqrysysprocs:', rez_ntqrysysprocs);
-					// console.log('rez_ntqrysysprocs jscGetDeepest:', cutils.jscGetDeepest(rez_ntqrysysprocs));
-					// console.log('ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH));
+
+
+
 					if (cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_BUFFER_TOO_SMALL) || cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH)) {
-						// console.log('new buf size:', parseInt(cutils.jscGetDeepest(enumBufSizeNtQrySysProcs)));
+
 						bufferNtQrySysProcs = ostypes.TYPE.BYTE.array(parseInt(cutils.jscGetDeepest(enumBufSizeNtQrySysProcs)))();
-						// console.log('increasing bufferNtQrySysProcs size and NtQuery-ing again');
+
 					} else break;
 				}
 				
 				// if (parseInt(cutils.jscGetDeepest(rez_ntqrysysprocs)) < 0) {
 				if (!cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_SUCCESS)) {
-					console.error('failed to NtQry, getStrOfResult:', ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_ntqrysysprocs))));
+
 					return null;
 				}
 				
 				var cEntryOffset = 0;
 				while (true) {
-					// console.log('cEntryOffset:', cEntryOffset);
+
 					var cProcessPlatInfoObj = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ostypes.TYPE.SYSTEM_PROCESS_INFORMATION.ptr).contents;
 
 					var filterOutThisEntry = false;
@@ -4283,7 +4283,7 @@ function getAllPID(aOptions={}) {
 			});
 	}
 	
-	// console.timeEnd('getAllPID');
+
 	
 	return cProcessIdsInfos;
 }
@@ -4410,7 +4410,7 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
 	for (var aOptKey in aOptions) {
 		if (!(aOptKey in aOptionsDefaults)) {
-			console.error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value, aOptionsDefaults:', aOptionsDefaults, 'aOptions:', aOptions);
+
 			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
 		}
 	}
@@ -4464,7 +4464,7 @@ function genericReject(aPromiseName, aPromiseToReject, aReason) {
 		name: aPromiseName,
 		aReason: aReason
 	};
-	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}
@@ -4474,7 +4474,7 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 		name: aPromiseName,
 		aCaught: aCaught
 	};
-	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}
@@ -4491,7 +4491,7 @@ function platformFilePathSeperator() {
 
 // rev1 - https://gist.github.com/Noitidart/ec1e6b9a593ec7e3efed
 function xhr(aUrlOrFileUri, aOptions={}) {
-	// console.error('in xhr!!! aUrlOrFileUri:', aUrlOrFileUri);
+
 	
 	// all requests are sync - as this is in a worker
 	var aOptionsDefaults = {
@@ -4516,9 +4516,9 @@ function xhr(aUrlOrFileUri, aOptions={}) {
 	cRequest.responseType = aOptions.responseType;
 	cRequest.send(aOptions.data);
 	
-	// console.log('response:', cRequest.response);
+
 	
-	// console.error('done xhr!!!');
+
 	return cRequest;
 }
 
@@ -4542,7 +4542,7 @@ function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
 		
 		_cache_formatStringFromName_packages[aLocalizedPackageName] = packageJson;
 		
-		console.log('packageJson:', packageJson);
+
 	}
 	
 	var cLocalizedStr = _cache_formatStringFromName_packages[aLocalizedPackageName][aKey];
@@ -4610,7 +4610,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
 	}
 	
 	if (max_depth === 0) {
-		console.log('only wanted to run delegate on root, done');
+
 		return true; // max_depth reached
 	}
 	
@@ -4624,7 +4624,7 @@ function enumChildEntries(pathToDir, delegate, max_depth, runDelegateOnRoot) {
 			if (depth > max_depth) {
 				// finished iterating over all files/dirs at depth of max_depth
 				// depth here will be max_depth + 1
-				console.log('finished running delegate on all files/dirs up to max_depth of', max_depth, 'depth was:', (depth-1));
+
 				return true;
 			}
 		}
@@ -4763,7 +4763,7 @@ function longestCommonSubstringInArr(aArrOfStrs) {
 	// jan 30 2016 - noida
 	// depends on longestCommonSubstring
 	
-	if (aArrOfStrs.length < 2) { console.error('aArrOfStrs must have at least two tring elements'); throw new Error('aArrOfStrs must have at least two tring elements'); }
+
 	
 	var lastCommon = aArrOfStrs[0];
 	for (var i=1; i<aArrOfStrs.length; i++) {

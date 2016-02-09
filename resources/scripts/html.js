@@ -11,7 +11,7 @@ var core = {
 		path: {
 			locale: 'chrome://profilist/locale/'
 		},
-		cache_key: Math.random() // set to version on release
+		cache_key: 'v3.0b' // set to version on release
 	}
 };
 
@@ -180,10 +180,10 @@ function doOnFocus() {
 // Start - Page Functionalities
 function fetchJustIniObj() {
 	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchJustIniObj'], bootstrapMsgListener.funcScope, function(aIniObj) {
-		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
+
 		// alert('ok got new ini obj, will now set global nad update react component');
 		gIniObj = aIniObj;
-		console.error('ok setting up new gIniObj to this:', aIniObj);
+
 		
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
@@ -197,10 +197,10 @@ function initPage(isReInit) {
 	
 	setTimeout(function() {
 		// get core and config objs
-		console.time('fetchReq');
+
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCoreAndConfigs'], bootstrapMsgListener.funcScope, function(aObjs) {
-			console.timeEnd('fetchReq');
-			console.log('got core and configs:', aObjs);
+
+
 			core = aObjs.aCore;
 			gIniObj = aObjs.aIniObj;
 			gKeyInfoStore = aObjs.aKeyInfoStore;
@@ -244,7 +244,7 @@ var gSortIniFunc = { // link83737383 // these sort functions must only run on an
 
 function setInteractiveMsg(aMessage, aKey, aDetails, aInteractiveCallbacks) {
 	
-	if (!aDetails) { console.error('dev error! must set aDetails!!!'); throw new Error('dev error! must set aDetails!!!'); }
+
 	
 	aMessage.interactive = {
 		sKey: aKey,
@@ -309,7 +309,7 @@ var Menu = React.createClass({
 		
 		// only searches on all non-currentProfile's
 		
-		console.log('newSearchPhrase:', newSearchPhrase);
+
 		
 		var cSearchHasResults = 0;
 		var new_sSearch;
@@ -349,14 +349,14 @@ var Menu = React.createClass({
 			// sSearchPhrase: newSearchPhrase,
 			// sSearchHasResults: cSearchHasResults
 		// });
-		console.info('new_sSearch:', new_sSearch);
+
 		this.setState({
 			sSearch: new_sSearch
 		});
-		// console.log('cSearchHasResults:', cSearchHasResults);
+
 	},
 	onKeyPress: function(e) {
-		console.log('onKeyPress, e:', e);
+
 		if (e.key != 'Enter' && (e.ctrlKey || e.altKey || e.metaKey)) { // disallow modifier keys if its not enter
 			return;
 		}
@@ -374,12 +374,12 @@ var Menu = React.createClass({
 		switch (e.key) {
 			case 'ArrowUp':
 			
-					console.log('ok move arrowIndex up 1');
+
 					
 				break;
 			case 'ArrowDown':
 			
-					console.log('ok move arrowIndex up 1');
+
 					
 				break;
 			case 'Backspace':
@@ -443,7 +443,7 @@ var Menu = React.createClass({
 							}
 						}
 						// gets here if the onAccept did not return true OR if there was no gInteractiveCallbacks.onAccept - it must be an object then!!! link331266162
-						// console.log('rez_cbOnAccept:', rez_cbOnAccept);
+
 						if (!rez_cbOnAccept) {
 							// gets here if there was no onAccept callback
 							// need to do this, as new_sMessage gets set into here
@@ -478,7 +478,7 @@ var Menu = React.createClass({
 	},
 	hoverOnSetDefault: function(aDefault) {
 		// var aDefault = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath).Default;
-		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
+
 		if (!aDefault || aDefault !== '1') {
 			if (this.refs.ToolbarButton_IsDefault) {
 				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.classList.add('profilist-showasdefault');
@@ -487,7 +487,7 @@ var Menu = React.createClass({
 	},
 	hoverOffSetDefault: function(aDefault) {
 		// var aDefault = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath).Default;
-		console.error('hovering set default, this.refs:', this.refs, 'aDefault:', aDefault);
+
 		if (!aDefault || aDefault !== '1') {
 			if (this.refs.ToolbarButton_IsDefault) {
 				this.refs.ToolbarButton_IsDefault.refs.Submenu_IsDefault.style.display = 'none';
@@ -504,7 +504,7 @@ var Menu = React.createClass({
 		var THAT = this;
 		var addToolbarButton = function(aProps) {
 			// note: aProps must contain key of nonProfileType OR tbbIniEntry. never both.
-			if ((aProps.nonProfileType && aProps.tbbIniEntry) || (!aProps.nonProfileType && !aProps.tbbIniEntry)) { console.error('aProps must contain key of nonProfileType OR tbbIniEntry. never both.'); throw new Error('aProps must contain key of nonProfileType OR tbbIniEntry. never both.'); }  // on same line as console as its a dev error
+
 			
 			// start - common props, everything should get these
 			aProps.key = aProps.nonProfileType ? aProps.nonProfileType : aProps.tbbIniEntry.Path; // note: key of "nonProfileType" indicates that its not a profile toolbarbutton, and holds what type it is, only accepted values right now are seen in line below link9391813 // i set key to avoid react-reconciliation
@@ -654,26 +654,26 @@ var Menu = React.createClass({
 var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
 	// aKeyForClone should be the .Path of the profile to clone
 	
-	console.error('nameThenCreateProfileAcceptor, gInteractiveRefs:', gInteractiveRefs);
+
 	
 	if (gInteractiveRefs.textbox.value == '') {
 		return true; // cancel accept - i dont accept blank values
 	}
 	
 	if (document.activeElement != gInteractiveRefs.textbox) {
-		console.error('cancel accept as focus is not textbox when hit enter, user obviously hit enter as onAccept is only called on hit enter');
+
 		return true; // cancel accept
 	}
 	
 	var newProfileName = gInteractiveRefs.textbox.value;
-	// console.log('newProfileName:', newProfileName);
+
 	
 	
 	var cNameIsPlatPath = e.altKey && e.shiftKey;
 	var cLaunchIt = e.ctrlKey || e.metaKey;
-	console.error('cLaunchIt:', cLaunchIt);
+
 	
-	console.error('ok create here are args:', 'aKeyForClone:', aKeyForClone, 'e:', e);
+
 	
 	contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['createNewProfile', newProfileName, aKeyForClone, cNameIsPlatPath, cLaunchIt]);
 	// send message to worker to create it
@@ -685,7 +685,7 @@ var gDoTbbLeaveAnim = false;
 var ToolbarButton = React.createClass({
     displayName: 'ToolbarButton',
 	click: function() {
-		console.error('TBB CLICKED, props:', this.props);
+
 		if (this.props.sKey == 'createnewprofile') {
 			var keyValLaunchOnCreate = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistLaunch');
 			if (keyValLaunchOnCreate === '0') {
@@ -712,12 +712,12 @@ var ToolbarButton = React.createClass({
 		} else if (this.props.tbbIniEntry) {
 			// check if there is interactive message showing, if it is, then dont do the click action, if its a textbox then focus that
 			if (this.props.sMessage.interactive.sKey == this.props.sKey) {
-				// console.log('cancel click because this prof tbb is in interactive message');
+
 				if (this.props.sMessage.interactive.details.type == 'textbox') {
 					// if not focused on the textbox then focus it
-					// console.log('its a textbox message, so gInteractiveRefs should have textbox, gInteractiveRefs:', gInteractiveRefs);
+
 					if (document.activeElement != gInteractiveRefs.textbox) {
-						// console.log('focusing the textbox as it wasnt focused');
+
 						gInteractiveRefs.textbox.focus();
 					}
 				}
@@ -734,7 +734,7 @@ var ToolbarButton = React.createClass({
 					// start modded copy of block link37371017111 - this link is in mainworker.js
 					var presetPattStr = escapeRegExp(myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 2));
 					presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
-					console.log('presetPattStr:', presetPattStr);
+
 					var presetPatt = new RegExp(presetPattStr);
 					var presetNextNumber = 1;
 					for (var i=0; i<gIniObj.length; i++) {
@@ -742,7 +742,7 @@ var ToolbarButton = React.createClass({
 							var presetMatch = presetPatt.exec(gIniObj[i].Name);
 							if (presetMatch) {
 								var presetThisNumber = parseInt(presetMatch[1]);
-								console.log('presetThisNumber:', presetThisNumber);
+
 								if (presetThisNumber >= presetNextNumber) {
 									presetNextNumber = presetThisNumber + 1;
 								}
@@ -797,12 +797,12 @@ var ToolbarButton = React.createClass({
 				// alert('launch profile');
 				// contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
 				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path], bootstrapMsgListener.funcScope, function() {
-					console.error('okkkk back from launching');
+
 					// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
 				});
 			}
 		}
-		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
+
 	},
     render: function() {
 		// incoming props
@@ -816,7 +816,7 @@ var ToolbarButton = React.createClass({
 			// hoverOnSetDefault - present if profile type tbb
 			// hoverOffSetDefault - present if profile type tbb
 			
-		// console.log('ToolbarButton-render FOR key:', this.props.sKey, 'this.props:', this.props, 'this:', this);
+
 		
 		// // test if in search mode
 		var hideDueToSearch = false;
@@ -934,7 +934,7 @@ var PrimarySquishy = React.createClass({
 		// check if this entry has a message
 
 		// if (this.props.sKey == 'createnewprofile') {
-			// console.error('hover:', this.props.sMessage.hover[this.props.sKey], 'this.props.sMessage:', this.props.sMessage);
+
 		// }
 
 		var cPrimarySquishySingleElement;
@@ -986,7 +986,7 @@ var PrimaryLabel = React.createClass({ // capable of highlighting self
 						labelChildren.push(cProfName.substring(leaveOffIndex, searchMatchedAtIndex[i]));
 						leaveOffIndex = searchMatchedAtIndex[i] + 1;
 					}
-					// console.log('start index:', searchMatchedAtIndex[i]);
+
 					labelChildren.push(React.createElement('span', {className:'profilist-highlight-txt'},
 						cProfName.substr(searchMatchedAtIndex[i], this.props.sSearch.phrase.length)
 					));
@@ -1018,7 +1018,7 @@ var PrimaryMessage = React.createClass({ // has two fields always there, just op
 	displayName: 'PrimaryMessage',
 	componentDidMount: function() {
 		if (this.refs && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey && this.props.sMessage.interactive.details.type == 'textbox') {
-			console.error('ok setting reffs to gInteractiveRefs for sKey:', this.props.sKey);
+
 			// i need the ``this.props.sMessage.interactive.sKey == this.props.sKey`` test because on hover of other elements, it will set it to that when its not interactive for that
 			gInteractiveRefs = this.refs;
 			// this.props.sMessage.interactive.refs = this.refs; // do not do this, otherwise it casues `TypeError: cyclic object value` error on link3818888888 - this is because i cant do JSON.stringify on DOM nodes
@@ -1064,14 +1064,14 @@ var LabelHighlighted = React.createClass({
 	render: function() {
 		var inner = [];
 		
-		// console.info('this.props.searchMatchedAtIndex:', this.props.searchMatchedAtIndex);
+
 		var leaveOffIndex = 0;
 		for (var i=0; i<this.props.searchMatchedAtIndex.length; i++) {
 			if (leaveOffIndex < this.props.searchMatchedAtIndex[i]) {
 				inner.push(this.props.value.substring(leaveOffIndex, this.props.searchMatchedAtIndex[i]));
 				leaveOffIndex = this.props.searchMatchedAtIndex[i] + 1;
 			}
-			// console.log('start index:', this.props.searchMatchedAtIndex[i]);
+
 			inner.push(React.createElement('span', {className:'profilist-tbb-highlight-this'},
 				this.props.value.substr(this.props.searchMatchedAtIndex[i], this.props.sSearchPhrase.length)
 			));
@@ -1092,7 +1092,7 @@ var PrimaryIcon = React.createClass({
 	click: function(e) {
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('ICON CLICKED');
+
 		
 		var elProfilistTbbIcon = ReactDOM.findDOMNode(this);
 		elProfilistTbbIcon.classList.add('profilist-inpicker');
@@ -1103,9 +1103,9 @@ var PrimaryIcon = React.createClass({
 		if (this.props.tbbIniEntry.ProfilistBadge) {
 			IPStoreInitWithSlug = this.props.tbbIniEntry.ProfilistBadge;
 			IPStoreInitWithUnselectCallback = function() {
-				console.log('ok user removed badge');
+
 				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, null]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
-					console.log('back from removing badge');
+
 					// aErrorOrNewIniObj is null if nothing was set
 					if (Array.isArray(aErrorOrNewIniObj)) {
 						gIniObj = aErrorOrNewIniObj;
@@ -1113,7 +1113,7 @@ var PrimaryIcon = React.createClass({
 							sIniObj: JSON.parse(JSON.stringify(gIniObj))
 						});
 					} else {
-						console.error('some error occured when trying to remove badge', aErrorOrNewIniObj);
+
 						throw new Error('some error occured when trying to remove badge');
 					}
 				});
@@ -1121,9 +1121,9 @@ var PrimaryIcon = React.createClass({
 		}
 		
 		var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
-			console.error('ok picked new badge, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+
 			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, aImgSlug]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
-				console.log('back from setting badge');
+
 				// aErrorOrNewIniObj is null if nothing was set
 				if (Array.isArray(aErrorOrNewIniObj)) {
 					gIniObj = aErrorOrNewIniObj;
@@ -1131,7 +1131,7 @@ var PrimaryIcon = React.createClass({
 						sIniObj: JSON.parse(JSON.stringify(gIniObj))
 					});
 				} else {
-					console.error('some error occured when trying to set new badge', aErrorOrNewIniObj);
+
 					throw new Error('some error occured when trying to set new badge');
 				}
 			});
@@ -1176,7 +1176,7 @@ var PrimaryIcon = React.createClass({
 		var badgeImgHeight;
 		if (this.props.tbbIniEntry && this.props.tbbIniEntry.ProfilistBadge) {
 			// is profile type tbb, and it has a badge
-			console.log('yes ProfilistBadge exists on this tbbIniEntry:', this.props.tbbIniEntry.ProfilistBadge, 'tbbIniEntry:', this.props.tbbIniEntry)
+
 			var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.tbbIniEntry.ProfilistBadge];
 			badgeImgSrc = img16SrcObj.src;
 			
@@ -1198,7 +1198,7 @@ var PrimaryIcon = React.createClass({
 
 function hoverListener(aEl, onHoverOver, onHoverOut) {
 	aEl.addEventListener('transitionend', function(e) {
-		// console.log('TRANSITIONEND wooooo:', e.propertyName, e);
+
 		if (e.propertyName == 'font-weight') {
 			// mouse outted
 			onHoverOut();
@@ -1260,7 +1260,7 @@ var SubiconRename = React.createClass({
 				},
 				{
 					onAccept: function() {
-						// console.error('gInteractiveRefs.textbox:', gInteractiveRefs.textbox, 'Services.focus.focusedElement:', Services.focus.focusedElement, 'document.activeElement:', document.activeElement);
+
 	
 						if (gInteractiveRefs.textbox.value == '') {
 							return true; // cancel accept - i dont accept blank values
@@ -1312,7 +1312,7 @@ var SubiconSetDefault = React.createClass({
 	click: function(e) {
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('SETDEFAULT CLICKED');
+
 		
 		this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default);
 		
@@ -1359,7 +1359,7 @@ var SubiconSetDefault = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, function() { return (this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile') }.bind(this), function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default) }.bind(this) /* i think the this.props.tbbIniEntry is by reference in here -- tested YES ah it is by reference -- i do this because its importaant that hoverOnSetDefault be remained binded to this of its react instance */, function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default) }.bind(this));
+
 		
 		/*
 		var aReactInstanceThis = this;
@@ -1417,7 +1417,7 @@ var SubiconSafe = React.createClass({
 	click: function(e) {
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('SAFE CLICKED');
+
 		
 	},
 	componentDidMount: function() {
@@ -1463,7 +1463,7 @@ var SubiconDel = React.createClass({
 	click: function(e) {
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('DEL CLICKED');
+
 		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 		setInteractiveMsg(new_sMessage, this.props.sKey,
 			{
@@ -1518,7 +1518,7 @@ var SubiconClone = React.createClass({
     displayName: 'SubiconClone',
 	click: function(e) {
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('CLONE CLICKED');
+
 		var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 		setInteractiveMsg(new_sMessage, 'createnewprofile',
 			{
@@ -1558,7 +1558,7 @@ var SubiconTie = React.createClass({
     displayName: 'SubiconTie',
 	click: function(e) {
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
-		console.error('TIE CLICKED');
+
 		
 		var nextTieId;
 		if (this.uiTieId == -2) {
@@ -1629,7 +1629,7 @@ var SubiconTie = React.createClass({
 		if (this.uiTieId != this.uiTieId_onRender) {
 			// alert('telling mainworker to save tie using uiTieId: ' + this.uiTieId + ' uiTieId_onRender: ' + this.uiTieId_onRender);
 			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]], bootstrapMsgListener.funcScope, function(aErrorOrNewIniObj) {
-				console.log('back from saving tie for prof');
+
 				// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
 				if (Array.isArray(aErrorOrNewIniObj)) {
 					gIniObj = aErrorOrNewIniObj;
@@ -1637,7 +1637,7 @@ var SubiconTie = React.createClass({
 						sIniObj: JSON.parse(JSON.stringify(gIniObj))
 					});
 				} else {
-					console.error('some error occured when trying to save the tie', aErrorOrNewIniObj);
+
 					throw new Error('some error occured when trying to save the tie');
 				}
 			});
@@ -1664,7 +1664,7 @@ var SubiconTie = React.createClass({
 		every time render happens uiTieId is set to current ProfilistTie which is either > 0 OR -2 OR if current profile path is in jProfilistBuilds then it will be set to -1
 		*/
 		
-		// console.info('this.props:', this.props);
+
 
 		var aProps = {
 			className: 'profilist-tbb-submenu-subicon profilist-si-tie profilist-devmode',
@@ -1736,7 +1736,7 @@ var bootstrapMsgListener = {
 	funcScope: bootstrapCallbacks,
 	receiveMessage: function(aMsgEvent) {
 		var aMsgEventData = aMsgEvent.data;
-		console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
+
 		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
 		
 		var callbackPendingId;
@@ -1757,12 +1757,12 @@ var bootstrapMsgListener = {
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
 						},
 						function(aReason) {
-							console.error('aReject:', aReason);
+
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
 						}
 					).catch(
 						function(aCatch) {
-							console.error('aCatch:', aCatch);
+
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
 						}
 					);
@@ -1772,7 +1772,7 @@ var bootstrapMsgListener = {
 				}
 			}
 		}
-		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+
 		
 	}
 };
@@ -1805,7 +1805,7 @@ function Deferred() {
 		}.bind(this));
 		Object.freeze(this);
 	} catch (ex) {
-		console.log('Promise not available!', ex);
+
 		throw new Error('Promise not available!');
 	}
 }
@@ -1852,7 +1852,7 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
 	for (var aOptKey in aOptions) {
 		if (!(aOptKey in aOptionsDefaults)) {
-			console.error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value, aOptionsDefaults:', aOptionsDefaults, 'aOptions:', aOptions);
+
 			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
 		}
 	}
