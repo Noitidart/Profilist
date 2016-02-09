@@ -3112,7 +3112,7 @@ function saveAsIconset(aImgObj) {
 				
 				var cWritePath = OS.Path.join(cImgSlugDirPath, cImgSlug + '_' + aSize + '.' + cUrlExt);
 				OS.File.copy(OS.Path.fromFileURI(cUrl), cWritePath);
-				cImgObj[aSize] = cWritePath;
+				cImgObj[aSize] = OS.Path.toFileURI(cWritePath);
 			}
 		}
 	}
