@@ -518,7 +518,7 @@ var Menu = React.createClass({
 			if (aProps.tbbIniEntry) {
 				aProps.hoverOnSetDefault = THAT.hoverOnSetDefault;
 				aProps.hoverOffSetDefault = THAT.hoverOffSetDefault;
-				if (aProps.tbbIniEntry.Default === '1') {
+				if (aProps.tbbIniEntry.Default && aProps.tbbIniEntry.Default === '1') {
 					aProps.ref = 'ToolbarButton_IsDefault';
 				}
 			}
@@ -1174,18 +1174,20 @@ var PrimaryIcon = React.createClass({
 		var badgeImgSrc;
 		var badgeImgWidth;
 		var badgeImgHeight;
-		if (this.props.tbbIniEntry && this.props.tbbIniEntry.ProfilistBadge) {
-			// is profile type tbb, and it has a badge
-			console.log('yes ProfilistBadge exists on this tbbIniEntry:', this.props.tbbIniEntry.ProfilistBadge, 'tbbIniEntry:', this.props.tbbIniEntry)
-			var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.tbbIniEntry.ProfilistBadge];
-			badgeImgSrc = img16SrcObj.src;
-			
-			if (img16SrcObj.resize) {
-				badgeImgWidth = '16';
-				badgeImgHeight = '16';
+		if (this.props.tbbIniEntry) {
+			if (this.props.tbbIniEntry.ProfilistBadge) {
+				// is profile type tbb, and it has a badge
+				console.log('yes ProfilistBadge exists on this tbbIniEntry:', this.props.tbbIniEntry.ProfilistBadge, 'tbbIniEntry:', this.props.tbbIniEntry)
+				var img16SrcObj = this.props.sGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[this.props.tbbIniEntry.ProfilistBadge];
+				badgeImgSrc = img16SrcObj.src;
+				
+				if (img16SrcObj.resize) {
+					badgeImgWidth = '16';
+					badgeImgHeight = '16';
+				}
+			} else {
+				badgeImgSrc =  core.addon.path.images + 'missing.png';
 			}
-		} else {
-			badgeImgSrc =  core.addon.path.images + 'missing.png';
 		}
 		
 		var aRendered = React.createElement('div', aProps,
@@ -1215,7 +1217,7 @@ function hoverListenerMessage(aReactInstanceThis, aMsgOnHover, aOnHoverCallback,
 	hoverListener(
 		ReactDOM.findDOMNode(aReactInstanceThis),
 		function onHoverOver() {
-			if (aReactInstanceThis.props.sMessage.interactive.sKey != aReactInstanceThis.props.sKey) {
+			if (!aReactInstanceThis.props.sMessage || !aReactInstanceThis.props.sMessage.interactive || !aReactInstanceThis.props.sMessage.interactive.sKey || aReactInstanceThis.props.sMessage.interactive.sKey != aReactInstanceThis.props.sKey) {
 				
 				aReactInstanceThis.usedMsgOnHover = typeof(aMsgOnHover) == 'string' ? aMsgOnHover : aMsgOnHover();
 				
@@ -1359,7 +1361,20 @@ var SubiconSetDefault = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, function() { return (this.props.tbbIniEntry.Default == '1' ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile') }.bind(this), function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default) }.bind(this) /* i think the this.props.tbbIniEntry is by reference in here -- tested YES ah it is by reference -- i do this because its importaant that hoverOnSetDefault be remained binded to this of its react instance */, function() { console.error('NOW default is!:', this.props.tbbIniEntry.Default); this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default) }.bind(this));
+		hoverListenerMessage(
+			this,
+			function() {
+				return ((this.props.tbbIniEntry.Default && this.props.tbbIniEntry.Default === '1') ? 'Unset default profile, generic launcher will launch into profile manager' : 'Set this as the default profile');
+			}.bind(this),
+			function() {
+				console.error('NOW default is!:', this.props.tbbIniEntry.Default);
+				this.props.hoverOnSetDefault(this.props.tbbIniEntry.Default); // i think the this.props.tbbIniEntry is by reference in here -- tested YES ah it is by reference -- i do this because its importaant that hoverOnSetDefault be remained binded to this of its react instance
+			}.bind(this),
+			function() {
+				console.error('NOW default is!:', this.props.tbbIniEntry.Default);
+				this.props.hoverOffSetDefault(this.props.tbbIniEntry.Default);
+			}.bind(this)
+		);
 		
 		/*
 		var aReactInstanceThis = this;
