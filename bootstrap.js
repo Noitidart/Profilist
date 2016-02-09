@@ -798,8 +798,16 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return mainDeferred_callInPromiseWorker.promise;
-	}
+	},
 	// end - iconpicker set
+	restartInSafemode: function() {
+		// restarts self in safe mode
+		var cancelQuit = Cc['@mozilla.org/supports-PRBool;1'].createInstance(Ci.nsISupportsPRBool);
+		Services.obs.notifyObservers(cancelQuit, 'quit-application-requested', 'restart');
+		if (!cancelQuit.data) {
+			Services.startup.restartInSafeMode(Ci.nsIAppStartup.eAttemptQuit);
+		}
+	}
 };
 var gCreateDesktopShortcutId = -1;
 var fsMsgListener = {

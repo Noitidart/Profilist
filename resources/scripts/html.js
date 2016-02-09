@@ -1445,7 +1445,7 @@ var SubiconSafe = React.createClass({
 		console.error('SAFE CLICKED');
 		
 		if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
-			alert('trigger restart');
+			contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['restartInSafemode']);
 		} else {
 			// launch this profile
 			// alert('launch profile');
