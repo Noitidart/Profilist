@@ -2246,6 +2246,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	// aOptions
 	var cOptionsDefaults = {
 		// refreshRunningStatus: false // re-check if it is indeeded running - i havent set this up yet, and i plan not to, but leaving it here as a comment as it was a thought of mine
+		args: undefined // string of arguments to use when launching, ignored if only focusing
 	}
 	
 	validateOptionsObj(aOptions, cOptionsDefaults);
@@ -2442,7 +2443,22 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 			if (!cIniEntry.noWriteObj.status) { // link6847494493 this tells me that it wasnt focused, so i launch it now
 				// i do this test, because even if just have to focus, i should create launcher in background
 				if (didCreateLauncher) {
-					launchFile(didCreateLauncher);
+					var cLaunchOptions = {
+						args: aOptions.args ? aOptions.args : undefined
+					};
+					if (cIniEntry.ProfilistStatus && cIniEntry.ProfilistStatus === '-1') {
+						var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+						if (!cLaunchOptions.args) {
+							cLaunchOptions.args = '"' + OS.Path.join(getFullPathToProfileDirFromIni(gCurProfIniEntry.Path), 'extensions', 'Profilist@jetpack.xpi') + '"';
+						} else {
+							cLaunchOptions.args += ' "' + OS.Path.join(getFullPathToProfileDirFromIni(gCurProfIniEntry.Path), 'extensions', 'Profilist@jetpack.xpi') + '"';
+						}
+						delete cIniEntry.ProfilistStatus;
+						setTimeout(function() { // setTimeout so it runs after the launch and return // need to write as I deleted ProfilistStatus
+							writeIni();
+						}, 0);
+					}
+					launchFile(didCreateLauncher, cLaunchOptions);
 				} else {
 					throw new Error('launcher did not create so cannot launch');
 				}
@@ -2662,6 +2678,11 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 		}
 	}
 	
+	// add in ProfilistStatus of "-1" if necessary
+	if (!aLaunchIt) {
+		newIniEntry.ProfilistStatus = '-1';
+	}
+	
 	// update gIniObj and write to disk ini
 	if (!cFailedReason) {
 		gIniObj.push(newIniEntry);
@@ -2699,7 +2720,9 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 		// :debug:
 		if (aLaunchIt) {
 			setTimeout(function() { // setTimeout so it triggers after the return
-				launchOrFocusProfile(newIniEntry.Path)
+				launchOrFocusProfile(newIniEntry.Path, {
+					args: '"' + OS.Path.join(getFullPathToProfileDirFromIni(gCurProfIniEntry.Path), 'extensions', 'Profilist@jetpack.xpi') + '"'
+				});
 			}, 0);
 		}
 		
@@ -3603,7 +3626,7 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 	// on windows and osx it works with everything i tested
 	
 	var cOptionsDefaults = {
-		arguments: [] // i havent figured out how to get this to work on .desktop's yet, so this option is just windows and osx for now 010816
+		args: undefined // string - arguments to launch file with
 	}
 	validateOptionsObj(aOptions, cOptionsDefaults);
 	
@@ -3616,8 +3639,8 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				//console.info('ostypes.TYPE.SHELLEXECUTEINFO.size:', ostypes.TYPE.SHELLEXECUTEINFO.size);
 				sei.cbSize = ostypes.TYPE.SHELLEXECUTEINFO.size;
 				sei.lpFile = ostypes.TYPE.LPCTSTR.targetType.array()(aLaunchPlatPath);
-				if (aOptions.arguments.length > 0) {
-					sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()(arrOfArgs.join(' '));
+				if (aOptions.args) {
+					sei.lpParameters = ostypes.TYPE.LPCTSTR.targetType.array()(aOptions.args);
 				}
 				//sei.lpVerb = ostypes.TYPE.LPCTSTR.targetType.array()('open');
 				sei.nShow = ostypes.CONST.SW_SHOWNORMAL;
@@ -3636,6 +3659,26 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 		case 'gtk':
 
 				// gio
+				
+				var eLauncherContents;
+				if (aOptions.args) {
+					// special args for .desktop, just add it to exec, then remove it
+					eLauncherContents = OS.File.read(aLaunchPlatPath, {encoding:'utf-8'});
+					
+					// step2 - get Exec line
+					var eLauncherExecLine_patt = /^Exec=[^$]+/m;
+					var eLauncherExecLine_match = eLauncherExecLine_patt.exec(eLauncherContents);
+					
+					var eExecLine = eLauncherExecLine_match[0];
+					var cExecLine = eExecLine + ' ' + aOptions.args;
+					
+					cLauncherContents = eLauncherContents.replace(eExecLine, cExecLine);
+					
+					var eLauncherFD = OS.File.open(aLaunchPlatPath, {truncate:true}); // FD stands for file descriptor
+					eLauncherFD.write(getTxtEncodr().encode(cLauncherContents));
+					eLauncherFD.close();
+				}
+				
 				var launcher = ostypes.API('g_desktop_app_info_new_from_filename')(aLaunchPlatPath);
 				console.info('launcher:', launcher, launcher.toString(), uneval(launcher));
 				
@@ -3652,6 +3695,12 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 				console.info('rez_launch_uris:', rez_launch_uris, rez_launch_uris.toString(), uneval(rez_launch_uris));
 				console.info('error:', error, error.toString(), uneval(error));
 
+				if (aOptions.args) {
+					// special args for .desktop, just add it to exec, then remove it
+					var eLauncherFD = OS.File.open(aLaunchPlatPath, {truncate:true}); // FD stands for file descriptor
+					eLauncherFD.write(getTxtEncodr().encode(eLauncherContents));
+					eLauncherFD.close();
+				}
 			break;
 		case 'darwin':
 				
@@ -3661,9 +3710,9 @@ function launchFile(aLaunchPlatPath, aOptions={}) { // checkExistanceFirst to ch
 					'-a',
 					'"' + aLaunchPlatPath.replace(/ /g, '\ ') + '"'
 				];
-				if (aOptions.arguments.length > 0) {
+				if (aOptions.args) {
 					cmdStr.push('--args');
-					cmdStr = cmdStr.concat(aOptions.arguments);
+					cmdStr.push(aOptions.args)
 				}
 				var rez_popenOpen = ostypes.API('popen')(cmdStr.join(' '), 'r');
 				

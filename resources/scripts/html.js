@@ -51,9 +51,10 @@ INIOBJ_RULEs
 	* On profile entry if it is badged
 	* It is the icon slug, which is the platform safed file name before the .png, from jProfilistBuilds
 3. ProfilistStatus
-	* Found on all profile ini entrys that have profilist installed - meaing if it is not on it, then profilist is not installed on it
+	* On 020916 I added -1, so this is no longer true, if user install profilist on that profile then ProfilistStatus is changed to 1 -- Found on all profile ini entrys that have profilist installed - meaing if it is not on it, then profilist is not installed on it
 	* '0' - installed BUT disabled
 	* '1' - installed AND enabled
+	* '-1' - NOT installed but it was a profile created by Profilist, and the offer of installing profilist hasnt been made yet
 4. ProfilistBuilds
 	* JSON.stringify of:
 	  ```
@@ -1151,7 +1152,16 @@ var PrimaryIcon = React.createClass({
 	},
 	componentDidMount: function() {
 		if (this.props.tbbIniEntry) {
-			hoverListenerMessage(this, myServices.sb.GetStringFromName('badgeify'));
+			hoverListenerMessage(
+				this,
+				function() {
+					if (!this.props.tbbIniEntry.ProfilistBadge) {
+						return myServices.sb.GetStringFromName('badgeify')
+					} else {
+						return myServices.sb.GetStringFromName('badgeify-or-remove')
+					}
+				}.bind(this)
+			);
 		}
 	},
 	render: function() {
@@ -1433,6 +1443,18 @@ var SubiconSafe = React.createClass({
 		
 		e.stopPropagation(); // stops it from trigger ToolbarButton click event
 		console.error('SAFE CLICKED');
+		
+		if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
+			alert('trigger restart');
+		} else {
+			// launch this profile
+			// alert('launch profile');
+			// contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
+			sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]], bootstrapMsgListener.funcScope, function() {
+				console.error('ok back from launching in safe mode');
+				// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
+			});
+		}
 		
 	},
 	componentDidMount: function() {
