@@ -875,7 +875,10 @@ var ToolbarButton = React.createClass({
 					cntSubiconsIn++; // delete icon
 				}
 				if (this.props.jProfilistDev) {
-					cntSubiconsIn += 2; // wrench icon, and toggle tie icon
+					cntSubiconsIn++; // toggle tie icon
+					if ((this.props.tbbIniEntry.noWriteObj.status && this.props.tbbIniEntry.noWriteObj.currentProfile) || !this.props.tbbIniEntry.noWriteObj.status) {
+						cntSubiconsIn++; // safemode wrench icon
+					}
 				}
 				cntSubiconsIn++; // rename icon
 				cntSubiconsIn++; // set default icon
@@ -914,7 +917,7 @@ var ToolbarButton = React.createClass({
 				!buildHintImg16Obj ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-buildhint profilist-devmode', style: {backgroundImage:'url("' + buildHintImg16Obj.src + '")', backgroundSize:(!buildHintImg16Obj.resize ? undefined : '16px 16px')} }), // profilist-si-isrunning-inthis-exeicon-OR-notrunning-and-clicking-this-will-launch-inthis-exeicon
 				!this.props.tbbIniEntry ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu-subicon profilist-si-dots'}),
 				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconTie, {tbbIniEntry: this.props.tbbIniEntry, jProfilistBuilds: this.props.jProfilistBuilds, sCurProfIniEntry: this.props.sCurProfIniEntry, sGenIniEntry:this.props.sGenIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage}),
-				!this.props.tbbIniEntry || !this.props.jProfilistDev ? undefined : React.createElement(SubiconSafe, {tbbIniEntry: this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
+				(!this.props.tbbIniEntry || !this.props.jProfilistDev || (this.props.tbbIniEntry.noWriteObj.status && !this.props.tbbIniEntry.noWriteObj.currentProfile)) ? undefined : React.createElement(SubiconSafe, {tbbIniEntry: this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconSetDefault, {hoverOffSetDefault:this.props.hoverOffSetDefault, hoverOnSetDefault:this.props.hoverOnSetDefault, tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage: this.props.sMessage}),
 				!this.props.tbbIniEntry ? undefined : React.createElement(SubiconRename, {tbbIniEntry:this.props.tbbIniEntry, sKey:this.props.sKey, sMessage:this.props.sMessage}),
 				!this.props.tbbIniEntry || this.props.tbbIniEntry.noWriteObj.status /*noWriteObj.currentProfile check is not needed because if its currentProfile obviously .status is set to pid */ ? undefined : React.createElement(SubiconDel, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage})
