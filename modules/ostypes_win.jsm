@@ -1750,10 +1750,10 @@ var winInit = function() {
 			// throws if bad hresult
 			var primitiveHR = parseInt(cutils.jscGetDeepest(hr))
 			if (cutils.jscEqual(primitiveHR, ostypes.CONST.S_FALSE)) {
-
+				console.error('SPECIAL HRESULT FAIL RESULT!!!', 'HRESULT is 1!!! hr:', hr, 'funcName:', funcName);
 			} else if (primitiveHR < 0) {
 				// FAILED macro does this, linked from the msdn page at top of this func
-
+				console.error('HRESULT', hr, 'returned from function', funcName, 'getStrOfResult:', self.HELPER.getStrOfResult(primitiveHR));
 				throw new Error('HRESULT ' + hr + ' returned from function ' + funcName + ' getStrOfResult:' + JSON.stringify(self.HELPER.getStrOfResult(primitiveHR)));
 			} // else then it was success
 		},
@@ -1763,7 +1763,7 @@ var winInit = function() {
 			rezObj.strPrim = '0x' + PrimitiveJS_RESULT.toString(16);
 			for (var group in WIN32_ERROR_STR) {
 				for (var str in WIN32_ERROR_STR[group]) {
-
+					//console.error(WIN32_ERROR_STR[group][str], PrimativeJS_RESULT, str);
 					if (WIN32_ERROR_STR[group][str] == PrimitiveJS_RESULT) {
 						rezObj[group] = str;
 						break;
@@ -1804,7 +1804,7 @@ var winInit = function() {
 			self.HELPER.checkHRESULT(hr_SetValue, 'IPropertyStore_SetValue');
 			
 			var rez_PropVariantClear = self.API('PropVariantClear')(ppropvar.address());
-
+			// console.info('rez_PropVariantClear:', rez_PropVariantClear, rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
 
 			return hr_SetValue;
 		},
@@ -1819,28 +1819,28 @@ var winInit = function() {
 				ret_js = true;
 			}
 			
-
+			//console.info('pps.GetValue', pps.GetValue);
 			var hr_GetValue = pps.GetValue(vtblPpsPtr, pkey, ppropvar.address());
 			self.HELPER.checkHRESULT(hr_GetValue, 'IPropertyStore_GetValue');
 			
-
+			//console.info('ppropvar:', ppropvar.toString(), uneval(ppropvar));
 			
 			if (ret_js) {
-
+				//console.info('ppropvar.pwszVal:', ppropvar.pwszVal.toString(), uneval(ppropvar.pwszVal));
 				var jsstr;
 				if (ppropvar.pwszVal.isNull()) {
-
+					console.log('ppropvar.pwszVal is NULL so blank string was found');
 					jsstr = '';
 				} else {
 					jsstr = ppropvar.pwszVal.readStringReplaceMalformed();
 				}
 				
 				var rez_PropVariantClear = self.API('PropVariantClear')(ppropvar.address());
-
+				//console.info('rez_PropVariantClear:', rez_PropVariantClear.toString(), uneval(rez_PropVariantClear));
 
 				return jsstr;
 			} else {
-
+				// console.warn('remember to clear the PROPVARIANT yourself then');
 				return hr_GetValue;
 			}
 		},
@@ -1855,9 +1855,9 @@ var winInit = function() {
 			 */
 			// SHStrDup uses CoTaskMemAlloc to allocate the strin so is true to the noe from MSDN
 			var hr_SHStrDup = self.API('SHStrDup')(psz, ppropvar.contents.pwszVal.address()); //note in PROPVARIANT defintion `pwszVal` is defined as `LPWSTR` and `SHStrDup` expects second arg as `LPTSTR.ptr` but both `LPTSTR` and `LPWSTR` are defined the same with `ctypes.jschar` so this should be no problem // after learnin that LPTSTR is wchar when ifdef_UNICODE and i have ifdef_UNICODE set to true so they are the same
-
+			// console.info('hr_SHStrDup:', hr_SHStrDup.toString(), uneval(hr_SHStrDup));
 			
-
+			// console.log('propvarPtr.contents.pwszVal', propvarPtr.contents.pwszVal);
 			self.HELPER.checkHRESULT(hr_SHStrDup, 'InitPropVariantFromString -> hr_SHStrDup'); // this will throw if HRESULT is bad
 
 			ppropvar.contents.vt = self.CONST.VT_LPWSTR;

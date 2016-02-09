@@ -11,7 +11,7 @@ var core = {
 		path: {
 			locale: 'chrome://profilist/locale/'
 		},
-		cache_key: 'v3.0b' // set to version on release
+		cache_key: Math.random() // set to version on release
 	}
 };
 
@@ -43,10 +43,10 @@ function initPage(isReInit) {
 	
 	setTimeout(function() {
 		// get core and config objs
-
+		console.time('fetchReq');
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['biInit'], bootstrapMsgListener.funcScope, function(aObjs) {
-
-
+			console.timeEnd('fetchReq');
+			console.log('got core and configs:', aObjs);
 			
 			contentMMFromContentWindow_Method2(window).sendAsyncMessage(core.addon.id, ['biShow']);
 		});
@@ -108,7 +108,7 @@ var bootstrapMsgListener = {
 	funcScope: bootstrapCallbacks,
 	receiveMessage: function(aMsgEvent) {
 		var aMsgEventData = aMsgEvent.data;
-
+		console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
 		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
 		
 		var callbackPendingId;
@@ -129,12 +129,12 @@ var bootstrapMsgListener = {
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
 						},
 						function(aReason) {
-
+							console.error('aReject:', aReason);
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
 						}
 					).catch(
 						function(aCatch) {
-
+							console.error('aCatch:', aCatch);
 							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
 						}
 					);
@@ -144,7 +144,7 @@ var bootstrapMsgListener = {
 				}
 			}
 		}
-
+		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 		
 	}
 };
@@ -177,7 +177,7 @@ function Deferred() {
 		}.bind(this));
 		Object.freeze(this);
 	} catch (ex) {
-
+		console.log('Promise not available!', ex);
 		throw new Error('Promise not available!');
 	}
 }
