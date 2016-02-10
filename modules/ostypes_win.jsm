@@ -941,6 +941,21 @@ var winInit = function() {
 				self.TYPE.int
 			);
 		},
+		AttachThreadInput: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms681956%28v=vs.85%29.aspx
+			 * BOOL WINAPI AttachThreadInput(
+			 *   __in_ DWORD idAttach,
+			 *   __in_ DWORD idAttachTo,
+			 *   __in_ BOOL  fAttach
+			 * );
+			 */
+			return lib('user32').declare('AttachThreadInput', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.DWORD,	// idAttach
+				self.TYPE.DWORD,	// idAttachTo
+				self.TYPE.BOOL		// fAttach
+			);
+		},
 		BitBlt: function() {
 			/* http://msdn.microsoft.com/en-us/library/windows/desktop/dd183370%28v=vs.85%29.aspx
 			 * BOOL BitBlt(
@@ -1360,6 +1375,16 @@ var winInit = function() {
 				self.TYPE.UINT.ptr			// *dpiY
 			);
 		},
+		GetForegroundWindow: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633505%28v=vs.85%29.aspx
+			 * HWND WINAPI GetForegroundWindow(
+			 *   void
+			 * );
+			 */
+			return lib('user32').declare('GetForegroundWindow', self.TYPE.ABI,
+				self.TYPE.HWND		// return
+			)
+		},
 		GetMessage: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644936%28v=vs.85%29.aspx
 			 * BOOL WINAPI GetMessage(
@@ -1450,6 +1475,19 @@ var winInit = function() {
 				self.TYPE.HWND,		// hWnd
 				self.TYPE.LPTSTR,	// lpString
 				self.TYPE.INT		// nMaxCount
+			);
+		},
+		GetWindowThreadProcessId: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633522%28v=vs.85%29.aspx
+			 * DWORD WINAPI GetWindowThreadProcessId(
+			 *   __in_      HWND    hWnd,
+			 *   __out_opt_ LPDWORD lpdwProcessId
+			 * );
+			 */
+			return lib('user32').declare('GetWindowThreadProcessId', self.TYPE.ABI,
+				self.TYPE.DWORD,		// return
+				self.TYPE.HWND,			// hWnd
+				self.TYPE.LPDWORD		// lpdwProcessId
 			);
 		},
 		GetWindowRect: function() {

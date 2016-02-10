@@ -2295,8 +2295,10 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 								var rez_unMinimize = ostypes.API('ShowWindow')(matchingWinInfos[i].hwndPtr, ostypes.CONST.SW_RESTORE);
 								console.log('rez_unMinimize:', rez_unMinimize);
 							}
-							var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
+							// var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
+							var rez_focus = winForceForegroundWindow(matchingWinInfos[i].hwndPtr);
 							console.log('rez_focus:', rez_focus);
+							// setTimeoutSync(100);
 						}
 						
 					break;
@@ -3458,6 +3460,7 @@ function findNewTempProfs(aOptions={}) {
 	}
 	
 	// figure out parent.lock / .parentlock file path for each pid in pidsNotInIni, from which i can get its full prof path
+	console.time('populate lockPlatPath');
 	var lockPlatPath = {}; // key is pid, value is parent lock platform path
 	switch (core.os.mname) {
 		case 'winnt':
@@ -3630,6 +3633,7 @@ function findNewTempProfs(aOptions={}) {
 								if (cutils.jscEqual(rez_qiPath, ostypes.CONST.STATUS_SUCCESS)) {
 									var cFullPlatPath = fni.FileName.readString();
 									if (cFullPlatPath.indexOf('parent.lock') > -1) {
+										lockPlatPath[pid] = cFullPlatPath;
 										lockFound = true;
 									}
 									handlesForPid[pid][i] = cFullPlatPath;
@@ -3716,6 +3720,7 @@ function findNewTempProfs(aOptions={}) {
 				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
 			});
 	}
+	console.timeEnd('populate lockPlatPath');
 	console.log('lockPlatPath:', lockPlatPath);
 	
 	// create new ini entry for each
@@ -3749,6 +3754,81 @@ function findNewTempProfs(aOptions={}) {
 }
 
 // platform helpers
+function winForceForegroundWindow(aHwndToFocus) {
+	// windows only!
+	// focus a window even if this process, that is calling this function, is not the foreground window
+	// copy of work from here - ForceForegroundWindow - http://www.asyncop.com/MTnPDirEnum.aspx?treeviewPath=[o]+Open-Source\WinModules\Infrastructure\SystemAPI.cpp
+	
+	// aHwndToFocus should be ostypes.TYPE.HWND
+	// RETURNS
+		// true - if focused
+		// false - if it could not focus
+	
+	if (core.os.mname != 'winnt') {
+		throw new Error('winForceForegroundWindow is only for Windows platform');
+	}
+	
+	var hTo = aHwndToFocus;
+	
+	var hFrom = ostypes.API('GetForegroundWindow')();
+	if (hFrom.isNull()) {
+		// nothing in foreground, so calling process is free to focus anything
+		var rez_SetSetForegroundWindow = ostypes.API('SetForegroundWindow')(hTo);
+		console.log('rez_SetSetForegroundWindow:', rez_SetSetForegroundWindow);
+		return rez_SetSetForegroundWindow ? true : false;
+	}
+
+	if (cutils.jscEqual(hTo, hFrom)) {
+		// window is already focused
+		console.log('window is already focused');
+		return true;
+	}
+	
+	var pidFrom = ostypes.TYPE.DWORD();
+	var threadidFrom = ostypes.API('GetWindowThreadProcessId')(hFrom, pidFrom.address());
+	console.info('threadidFrom:', threadidFrom);
+	console.info('pidFrom:', pidFrom);
+	
+	var pidTo = ostypes.TYPE.DWORD();
+	var threadidTo = ostypes.API('GetWindowThreadProcessId')(hTo, pidTo.address()); // threadidTo is thread of my firefox id, and hTo is that of my firefox id so this is possible to do
+	console.info('threadidTo:', threadidTo);
+	console.info('pidTo:', pidTo);
+	
+	// impossible to get here if `cutils.jscEqual(threadidFrom, threadidTo)` because if thats the case, then the window is already focused!!
+	// if (cutils.jscEqual(threadidFrom, threadidTo) {
+	
+	// from testing, it shows that ```cutils.jscEqual(pidFrom, pidTo)``` works only if i allow at least 100ms of wait time between, which is very weird
+	if (/*cutils.jscEqual(pidFrom, pidTo) || */cutils.jscEqual(pidFrom, core.firefox.pid)) {
+		// the pid that needs to be focused, is already focused, so just focus it
+		// or
+		// the pid that needs to be focused is not currently focused, but the calling pid is currently focused. the current pid is allowed to shift focus to anything else it wants
+		// if (cutils.jscEqual(pidFrom, pidTo)) {
+		// 	console.info('the process, of the window that is to be focused, is already focused, so just focus it - no need for attach');
+		// } else if (cutils.jscEqual(pidFrom, core.firefox.pid)) {
+			console.log('the process, of the window that is currently focused, is of this calling thread, so i can go ahead and just focus it - no need for attach');
+		// }
+		var rez_SetSetForegroundWindow = ostypes.API('SetForegroundWindow')(hTo);
+		console.log('rez_SetSetForegroundWindow:', rez_SetSetForegroundWindow);
+		return rez_SetSetForegroundWindow ? true : false;
+	}
+	
+	var threadidOfCallingProcess = ostypes.API('GetCurrentThreadId')();
+	console.log('threadidOfCallingProcess:', threadidOfCallingProcess);
+	
+	var rez_AttachThreadInput = ostypes.API('AttachThreadInput')(threadidOfCallingProcess, threadidFrom, true);
+	console.info('rez_AttachThreadInput:', rez_AttachThreadInput);
+	if (!rez_AttachThreadInput) {
+		throw new Error('failed to attach thread input');
+	}
+	var rez_SetSetForegroundWindow = ostypes.API('SetForegroundWindow')(hTo);
+	console.log('rez_SetSetForegroundWindow:', rez_SetSetForegroundWindow);
+
+	var rez_AttachThreadInput = ostypes.API('AttachThreadInput')(threadidOfCallingProcess, threadidFrom, false);
+	console.info('rez_AttachThreadInput:', rez_AttachThreadInput);
+	
+	return rez_SetSetForegroundWindow ? true : false;
+}
+
 function resolveSymlinkPath(aSymlinkPlatPath) {
 	// aSymlinkPlatPath is a path that you know for sure is a symlinked path. if a parent dir is symlinked, and not the final child, then it will throw EINVAL
 		// if its not, then the platform functiosn will through, so ill throw a OSFile.Error
@@ -5227,5 +5307,9 @@ function longestCommonSubstringInArr(aArrOfStrs) {
 	}
 	
 	return lastCommon;
+}
+function setTimeoutSync(aMilliseconds) {
+	var breakDate = Date.now() + aMilliseconds;
+	while (Date.now() < breakDate) {}
 }
 // end - common helper functions
