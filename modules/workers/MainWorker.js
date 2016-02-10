@@ -3462,9 +3462,129 @@ function findNewTempProfs(aOptions={}) {
 		case 'winmo':
 		case 'wince':
 
+				var bufferNtQrySysProcs = ostypes.TYPE.BYTE.array(0)();
+				var enumBufSizeNtQrySysProcs = ostypes.TYPE.ULONG(bufferNtQrySysProcs.constructor.size);
+				// console.log('sizof(bufferNtQrySysProcs):', bufferNtQrySysProcs.constructor.size);
 				
+				var cntQuery = 0;
+				var rez_ntqrysysprocs;
+				console.time('queries');
+				while (true) {
+					rez_ntqrysysprocs = ostypes.API('NtQuerySystemInformation')(ostypes.CONST.SystemExtendedHandleInformation, bufferNtQrySysProcs, enumBufSizeNtQrySysProcs, enumBufSizeNtQrySysProcs.address());
+					cntQuery++;
+					// console.log('rez_ntqrysysprocs:', rez_ntqrysysprocs);
+					// console.log('rez_ntqrysysprocs jscGetDeepest:', cutils.jscGetDeepest(rez_ntqrysysprocs));
+					// console.log('ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH));
+					if (cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_BUFFER_TOO_SMALL) || cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH)) {
+						console.log('last buf size:', bufferNtQrySysProcs.constructor.size);
+						console.log('new buf size:', parseInt(cutils.jscGetDeepest(enumBufSizeNtQrySysProcs)));
+						if (cntQuery == 3) {
+							// because on first query, buf size is 0, so it just tells us the size to use for SYSTEM_HANDLE_INFORMATION_EX, which will be ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.size HAVING ONLY ONE ELEMENT IN THE HANDLES ARR (as thats how its defined) in enumBufSizeNtQrySysProcs which is 36 on my win10 --- buf size is still 0 at this point
+							// on second query, it does not populate the array Handles in the field of SYSTEM_HANDLE_INFORMATION_EX, it just populates the NumberOfHandles field and tells us how mauch the size of buf should be to get them all in enumBufSizeNtQrySysProcs --- buf size is still 36 at this point
+							// on third query it populates the Handles array field
+							// on greater then thid query, if i keep getting STATUS_BUFFER_TOO_SMALL or STATUS_INFO_LENGTH_MISMATCH thats because the number of the handles on the system is changing every millisecond it seems, but only a few, so the count might increase by 1 or 2 handles (which causes this too small error), or it might decrease by 1 or 2 (which causes the mismatch error) - but my target handle is not one of these new handles so i dont care to query more
+							break; // because i dont need the very last handles that are changing every nanosecond or so
+						}
+						bufferNtQrySysProcs = ostypes.TYPE.BYTE.array(parseInt(cutils.jscGetDeepest(enumBufSizeNtQrySysProcs)))();
+						// console.log('increasing bufferNtQrySysProcs size and NtQuery-ing again');
+					} else break;
+				}
+				console.timeEnd('queries');
 				
+				// if (parseInt(cutils.jscGetDeepest(rez_ntqrysysprocs)) < 0) {
+				if (!cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_SUCCESS) && !cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_BUFFER_TOO_SMALL) && !cutils.jscEqual(rez_ntqrysysprocs, ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH)) {
+					console.error('failed to NtQry, getStrOfResult:', ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_ntqrysysprocs))));
+					return null;
+				}
 				
+				// have to figure out real number of handles as i dont lop cntQuery until it doesnt get "STATUS_BUFFER_TOO_SMALL" or "STATUS_INFO_LENGTH_MISMATCH"				
+				
+				// the number of handles that are actually available
+				var cntHandlesActual = parseInt(cutils.jscGetDeepest(ctypes.cast(bufferNtQrySysProcs.addressOfElement(0), ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.fields[0].NumberOfHandles.ptr).contents));
+				// cntHandles -= 1000;
+				console.log('cntHandlesActual:', cntHandlesActual);
+				
+				// the number of handles i have, based on the size
+				var cntHandlesSize = (bufferNtQrySysProcs.constructor.size - ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.fields[0].NumberOfHandles.size - ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.fields[1].Reserved.size) / ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size;
+				console.log('cntHandlesSize:', cntHandlesSize);
+				
+				// what i actually am holding in buffer. i cannot read more then the size. but if actually available is less then the size. then that is my cntHandles
+				var cntHandles = Math.min(cntHandlesActual, cntHandlesSize);
+				console.log('cntHandles:', cntHandles);
+				
+				// var sizeOf_entryObject = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.fields[0].Object.size;
+				// var UniqueProcessIdPtr = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.fields[1].UniqueProcessId.ptr;
+				
+				/*
+				// "method b" - crashing i have no idea why
+				var cEntryOffset = (ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.size - (ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size * 1)); // as i declared the structure as having an element of 1 in the array
+				var Handles = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.array(cntHandles).ptr).contents;
+				var pidObj = {};
+				for (var i=0; i<cntHandles; i++) {
+					// var cPID = cutils.jscGetDeepest(Handles[i].UniqueProcessId);
+					var cPID = Handles[i].UniqueProcessId.toString();
+					pidObj[cPID] = true;
+				}
+				console.log('pidObj:', pidObj);
+				*/
+				
+				/*
+				// "method a" - not crashing ah!
+				var pidObj = {};
+				var cEntryOffset = (ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.size - (ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size * 1)); // as i declared the structure as having an element of 1 in the array
+				var iHandle = 0;
+				while (iHandle < cntHandles) {
+					var cHandleInfoObj = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.ptr).contents;
+					var cPid = cHandleInfoObj.UniqueProcessId.toString();
+					// console.log('cPid:', cPid);
+					pidObj[cPid] = true;
+					cEntryOffset += ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size;
+					iHandle++;
+				}
+				console.log('pidObj:', pidObj);
+				*/
+				
+				// "method a optimized" - average is 20ms less then "method a"
+				var sizeOf_entry = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size
+				var ptrOf_entry = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.ptr;
+				
+				var pidObj = {};
+				var cEntryOffset = (ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.size - (ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size * 1)); // as i declared the structure as having an element of 1 in the array
+				var iHandle = 0;
+				while (iHandle < cntHandles) {
+					var cHandleInfoObj = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ptrOf_entry).contents;
+					var cPid = cHandleInfoObj.UniqueProcessId.toString();
+					// console.log('cPid:', cPid);
+					pidObj[cPid] = true;
+					cEntryOffset += sizeOf_entry;
+					iHandle++;
+				}
+				console.log('pidObj:', pidObj);
+				
+				/*
+				// "method c" - cast whole thing to array, like "method a" but turn it to string then do index of to get stuff - i hate this
+				var Handles = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.array(cntHandles).ptr).contents;
+				var HandlesAsStr = Handles.toString();
+				console.log('HandlesAsStr ending:', HandlesAsStr.substr(HandlesAsStr.length - 1000));
+				var pidObj = {};
+				var lastEntryIndex = -1;
+				// for (var i=0; i<cntHandles; i++) {
+				for (var i=0; i<cntHandles; i++) {
+					// console.log('cEntryOffset:', cEntryOffset);
+					var cEntryIndex = HandlesAsStr.indexOf('{"Object":', lastEntryIndex);
+					lastEntryIndex = cEntryIndex;
+					
+					var cPIDIndex = HandlesAsStr.indexOf('UniqueProcessId": ctypes.UInt64("', cEntryIndex);
+					var cPIDEndIndex = HandlesAsStr.indexOf(')', cPIDIndex);
+					
+					// var cHandleInfoObj = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.ptr).contents;
+					// var cPid = Handles[i].UniqueProcessId.toString();
+					// pidObj[cPid] = true;
+					// var cPID = cutils.jscGetDeepest(cHandleInfoObj.UniqueProcessId);
+					// cEntryOffset += ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size;
+				}
+				console.log('pidObj:', pidObj);
+				*/
 
 			break;
 		case 'gtk':
