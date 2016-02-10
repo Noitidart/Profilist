@@ -948,7 +948,7 @@ function saveTieForProf(aProfPath, aNewTieId) {
 function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 	// does not update ini
 	// RETURNS
-		// 1 or pid - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
+		// 1 or pid (number) - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
 		// false - if NOT running
 	// currentProfile must be marked in gIniObj before using this
 
@@ -1025,7 +1025,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						}
 					}
 					// console.log('closest pid is:', closestPidInfo, 'its info obj is:', aOptions.winProcessIdsInfos[closestPidInfo.pid], 'cParentLockPath:', cParentLockPath);
-					cIsRunning = closestPidInfo.pid;
+					cIsRunning = parseInt(closestPidInfo.pid);
 				}
 
 			break;
@@ -2479,6 +2479,23 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 	return 'ok launched aProfPath: ' + aProfPath;
 }
 
+function getNextProfNum(aIniObj) {
+	// find next ## for [Profile##]/[TempProfile##]
+	var groupNameNumberNext = 0;
+	for (var i=0; i<aIniObj.length; i++) {
+		if (aIniObj[i].Path) {
+			var indexOfProfile = aIniObj[i].groupName.indexOf('Profile');
+			if (indexOfProfile == 0 /* std profile group [Profile##] */ || indexOfProfile == 4 /* temp profile [TempProfile##] */) {
+				groupNameNumberThis = parseInt(aIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */));
+				if (groupNameNumberThis >= groupNameNumberNext) {
+					groupNameNumberNext = groupNameNumberThis + 1;
+				}
+			}
+		}
+	}
+	return groupNameNumberNext;
+}
+
 function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt) {
 	// aNameIsPlatPath - should be true, if user wants aNewProfName to be considered as a platform path. If this is true, the name of the profile is the directory name, and this directory must not exist, therefore the name must be platform safe as i dont run safedForPlatFS on it
 	// aNewProfName - string for new profile that will be made. OR set to null to use preset name. can be platform path, but in this case set aNameIsPlatPath to true
@@ -2589,22 +2606,8 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	if (!cFailedReason) {
 		// no errors so far
 		
-		// find next ## for [Profile##]/[TempProfile##]
-		var groupNameNumberNext = 0;
-		for (var i=0; i<gIniObj.length; i++) {
-			if (gIniObj[i].Path) {
-				var indexOfProfile = gIniObj[i].groupName.indexOf('Profile');
-				if (indexOfProfile == 0 /* std profile group [Profile##] */ || indexOfProfile == 4 /* temp profile [TempProfile##] */) {
-					groupNameNumberThis = parseInt(gIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */));
-					if (groupNameNumberThis >= groupNameNumberNext) {
-						groupNameNumberNext = groupNameNumberThis + 1;
-					}
-				}
-			}
-		}
-		
 		newIniEntry = {
-			groupName: 'Profile' + groupNameNumberNext,
+			groupName: 'Profile' + getNextProfNum(gIniObj),
 			Name: aNewProfName, // depends on aNameIsPlatPath but can use aNewProfName here because of link900073
 			// IsRelative: depends on aNameIsPlatPath
 			// Path: depends on aNameIsPlatPath
@@ -2683,12 +2686,18 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 		newIniEntry.ProfilistStatus = '-1';
 	}
 	
+	// manual format this entry // link8393938311
+	newIniEntry.noWriteObj = {
+		status: 0
+	};
+	
 	// update gIniObj and write to disk ini
 	if (!cFailedReason) {
 		gIniObj.push(newIniEntry);
 		
-		// :todo: format this iniEntry for returning to framescript - for now i format the whole gIniObj
-		formatNoWriteObjs();
+		// // :todo: format this iniEntry for returning to framescript - for now i format the whole gIniObj
+		// formatNoWriteObjs();
+		// no more formating full as i do do it here - link8393938311
 		
 		writeIni();
 	}
@@ -3410,6 +3419,123 @@ function readSubdirsInDir(aDirPlatPath) {
 	return [rezArr]; // because this goes through callInPromiseWorker
 }
 // End - Iconset Picker
+
+function findNewTempProfs(aOptions={}) {
+	// requires that gIniObj have formatted noWriteObj
+	// returns number of new temp profiles found
+	
+	console.time('findNewTempProfs');
+	
+	var cOptionsDefaults = {
+		processIdsInfos: null // supply here the return from getAllPID
+	}
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
+	var pidSnapshot = aOptions.processIdsInfos ? aOptions.processIdsInfos : getAllPID({firefoxOnly:true});
+	
+	// check if each pid is in gIniObj, if it is not, then its a temp profile. then figure out its parent.lock file path, from which i can get its full prof path
+	var pidsNotInIni = []; // holding them as strings
+	
+	var pidsInIni = []; // holding them as strings
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path && gIniObj[i].noWriteObj.status) {
+			pidsInIni.push(gIniObj[i].noWriteObj.status + '');
+		}
+	}
+	
+	for (var pid in pidSnapshot) {
+		if (pidsInIni.indexOf(pid + '') == -1) {
+			pidsNotInIni.push(pid);
+		}
+	}
+	
+	pidsNotInIni = pidsInIni; // :debug:
+	
+	if (pidsNotInIni.length == 0) {
+		return 0; // no new temp profiles found
+	}
+	
+	// figure out parent.lock / .parentlock file path for each pid in pidsNotInIni, from which i can get its full prof path
+	var lockPlatPath = {}; // key is pid, value is parent lock platform path
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+
+				
+				
+				
+
+			break;
+		case 'gtk':
+		case 'darwin':
+
+				
+				var redirPlatPath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist temp dump.txt');
+				
+				console.log('bashing:', '/bin/bash -c "lsof -p ' + pidsNotInIni.join(',') + ' | grep .parentlock" > "' + redirPlatPath + '"');
+				var popenFile = ostypes.API('popen')('/bin/bash -c "lsof -p ' + pidsNotInIni.join(',') + ' | grep .parentlock" > "' + redirPlatPath + '"', 'r');
+				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+				
+				var redContents = OS.File.read(redirPlatPath, {encoding:'utf-8'});
+				console.log('redContents:', redContents);
+				
+				OS.File.remove(redirPlatPath);
+				
+				// Mac OS X 10.10.1
+					// "firefox 1527 noida    4w     REG                1,2         0 414826 /Users/noida/Library/Application Support/Firefox/Profiles/1sd3b67o.default/.parentlock"
+					// "firefox 1558 noida    4w     REG                1,2         0 419056 /Users/noida/Library/Application Support/Firefox/Profiles/d62n1gi5.Unnamed Profile 1/.parentlock"
+					
+				// Ubunut 15.01
+					// "firefox 9194  noi   11wW     REG                8,1        0  926487 /home/noi/.mozilla/firefox/hrupz8x8.Unnamed Profile 1/.parentlock"
+					// "firefox 9259  noi   11wW     REG                8,1        0  926895 /home/noi/.mozilla/firefox/wt6j8vm4.Unnamed Profile 1/.parentlock"
+				
+				for (var i=0; i<pidsNotInIni.length; i++) {
+					var indexOfPid = redContents.indexOf('firefox ' + pidsNotInIni[i]);
+					var indexOfPath = redContents.indexOf(' /', indexOfPid);
+					var indexOfParentlock = redContents.indexOf('/.parentlock', indexOfPath);
+					lockPlatPath[pidsNotInIni[i]] = redContents.substring(indexOfPath + 1, indexOfParentlock + 12);
+				}
+					
+			break;
+		default:
+			throw new MainWorkerError({
+				name: 'addon-error',
+				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
+			});
+	}
+	console.log('lockPlatPath:', lockPlatPath);
+	
+	// create new ini entry for each
+	var nextProfNum = getNextProfNum(gIniObj);
+	nextProfNum--;
+	for (var pid in lockPlatPath) {
+		nextProfNum++;
+		var cLockPlatPath = lockPlatPath[pid];
+		var cFullPathToProfileDir = OS.Path.dirname(cLockPlatPath);
+		var newIniEntry = {
+			groupName: 'TempProfile' + nextProfNum,
+			Name: OS.Path.basename(lockPlatPath[pid]),
+			IsRelative: OS.Path.dirname(cFullPathToProfileDir) == core.profilist.path.defProfRt ? '1' : '0',
+			// Path: cFullPathToProfileDir // depends on IsRelative
+			noWriteObj: {
+				temporaryProfile: true,
+				status: parseInt(pid)
+			}
+		};
+
+		newIniEntry.Path = newIniEntry.IsRelative === '0' ? cFullPathToProfileDir : getRelativeDescriptor(cFullPathToProfileDir, OS.Constants.Path.userApplicationDataDir);
+		
+		// no need to format whole gIniObj as per link8393938311
+		
+		console.log('newIniEntry:', newIniEntry);
+	}
+	
+	console.timeEnd('findNewTempProfs');
+	
+	// add these to ini
+}
 
 // platform helpers
 function resolveSymlinkPath(aSymlinkPlatPath) {
@@ -4236,12 +4362,13 @@ function getAllPID(aOptions={}) {
 		// object, key is pid, and value is an object with a bunch of info, the info varies per os
 			// info on different os's
 				// Windows
-				
+					// createTime - js date object, of time pid was mide
+					// imageName - only present if the process has a name. if it does, then this is a string.
 				// OSX
 				
 				// Linux
 
-	// console.time('getAllPID');
+	console.time('getAllPID');
 	
 	var cOptionsDefaults = {
 		firefoxOnly: false // setting to true will filter out results, will remove everything that doesnt belong to firefox
@@ -4262,7 +4389,7 @@ function getAllPID(aOptions={}) {
 				
 				var rez_ntqrysysprocs;
 				while (true) {
-					rez_ntqrysysprocs = ostypes.API('NtQuerySystemInformation')(ostypes.CONST.SYSTEMPROCESSINFORMATION, bufferNtQrySysProcs, enumBufSizeNtQrySysProcs, enumBufSizeNtQrySysProcs.address());
+					rez_ntqrysysprocs = ostypes.API('NtQuerySystemInformation')(ostypes.CONST.SystemProcessInformation, bufferNtQrySysProcs, enumBufSizeNtQrySysProcs, enumBufSizeNtQrySysProcs.address());
 					// console.log('rez_ntqrysysprocs:', rez_ntqrysysprocs);
 					// console.log('rez_ntqrysysprocs jscGetDeepest:', cutils.jscGetDeepest(rez_ntqrysysprocs));
 					// console.log('ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH jscGetDeepest:', cutils.jscGetDeepest(ostypes.CONST.STATUS_INFO_LENGTH_MISMATCH));
@@ -4298,7 +4425,7 @@ function getAllPID(aOptions={}) {
 						cProcessIdsInfos[pid].createTime = new Date();
 						var createTimeInMsSinceEpoch = ((parseInt(cutils.jscGetDeepest(cProcessPlatInfoObj.CreateTime.QuadPart)) - 116444736000000000) / 10000).toFixed();
 						cProcessIdsInfos[pid].createTime.setTime(createTimeInMsSinceEpoch);
-						cProcessIdsInfos[pid].createTimeStr = cProcessIdsInfos[pid].createTime.toString();
+						// cProcessIdsInfos[pid].createTimeStr = cProcessIdsInfos[pid].createTime.toString();
 						
 						// :debug:
 						if (!cProcessPlatInfoObj.ImageName.Buffer.isNull()) {
@@ -4316,13 +4443,81 @@ function getAllPID(aOptions={}) {
 
 			break;
 		case 'gtk':
-
-				//
-
-			break;
 		case 'darwin':
 
 				//
+				/*
+				if (sA) {
+					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux > ' + sA.replace(/\W/g, '\\$&'), 'r');
+				} else {
+					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux', 'r');
+				}
+				console.log('popenFile:', popenFile);
+
+				var popenBufSize = 1000;
+				var popenBuf = ostypes.TYPE.char.array(popenBufSize)(''); // i just picked 1000, you can do however much you want
+				
+				var redChunks = [];
+				var redSize = popenBufSize;
+				var i = 0;
+				while (redSize == popenBufSize) {
+					console.log('i:', i);
+					i++;
+					redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
+					redChunks.push(popenBuf.readString().substring(0, redSize));
+				}
+				
+				console.log('redChunks:', redChunks);
+				
+				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+				
+				var redRows = redChunks.join('').split('\n');
+				*/
+				
+				var redirPlatPath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist temp dump.txt');
+				
+				var popenFile = ostypes.API('popen')('/bin/bash -c "/bin/ps -x" > "' + redirPlatPath + '"', 'r');
+				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+				
+				var redContents = OS.File.read(redirPlatPath, {encoding:'utf-8'});
+				// console.log('redContents:', redContents);
+				
+				OS.File.remove(redirPlatPath);
+				
+				redRows = redContents.split('\n');
+				// redRows[0] is the header. here are first three rows of output on different platforms:
+					// Ubuntu 15.01
+						// "  PID TTY      STAT   TIME COMMAND"
+						// "  931 ?        Ss     0:00 /lib/systemd/systemd --user"
+						// "  932 ?        S      0:00 (sd-pam)         "
+						// "  935 ?        Ss     0:01 /sbin/upstart --user"
+					// Mac OS X 10.10.1
+						// "  PID TTY           TIME CMD"
+						// "  179 ??         0:01.50 /usr/libexec/UserEventAgent (Aqua)"
+						// "  181 ??         0:02.27 /usr/sbin/distnoted agent"
+						// "  183 ??         0:01.49 /usr/sbin/cfprefsd agent"
+				var startIndexOfCmd = redRows[0].search(/(?:CMD|COMMAND)/i); // ubuntu had it titled command. mac had it titled cmd
+				
+				var fxOnlyPatt = /firefox(?: |$)/m;
+				
+				for (var i=1; i<redRows.length; i++) { // dont start at i=0 because thats the header row
+				
+					var cmd = redRows[i].substr(startIndexOfCmd);
+					if (aOptions.firefoxOnly) {
+						if (!fxOnlyPatt.test(cmd)) {
+							continue;
+						}
+					}
+					
+					var pid = parseInt(redRows[i]);
+					cProcessIdsInfos[pid] = {};
+					
+					cProcessIdsInfos[pid].cmd = cmd;
+					
+				}
+				
 
 			break;
 		default:
@@ -4332,7 +4527,8 @@ function getAllPID(aOptions={}) {
 			});
 	}
 	
-	// console.timeEnd('getAllPID');
+	console.timeEnd('getAllPID');
+	console.log('cProcessIdsInfos:', cProcessIdsInfos);
 	
 	return cProcessIdsInfos;
 }

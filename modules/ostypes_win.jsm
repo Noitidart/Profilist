@@ -34,6 +34,7 @@ var winTypes = function() {
 	this.BYTE = ctypes.unsigned_char;
 	this.CHAR = ctypes.char;
 	this.DWORD = ctypes.unsigned_long; // IntSafe.h defines it as: // typedef unsigned long DWORD; // so maybe can change this to ctypes.unsigned_long // i was always using `ctypes.uint32_t`
+	this.FILE_INFORMATION_CLASS = ctypes.int; // https://msdn.microsoft.com/en-us/library/windows/hardware/ff728840%28v=vs.85%29.aspx // this is an enum, im guessing enum is ctypes.int
 	this.FXPT2DOT30 = ctypes.long; // http://stackoverflow.com/a/20864995/1828637 // https://github.com/wine-mirror/wine/blob/a7247df6ca54fd1209eff9f9199447643ebdaec5/include/wingdi.h#L150
 	this.INT = ctypes.int;
 	this.INT_PTR = is64bit ? ctypes.int64_t : ctypes.int;
@@ -81,7 +82,7 @@ var winTypes = function() {
 	this.PUINT = this.UINT.ptr;
 	this.PCWSTR = this.WCHAR.ptr;
 	this.SIZE_T = this.ULONG_PTR;
-	this.SYSTEM_INFORMATION_CLASS = this.INT; // i think due to this search: http://stackoverflow.com/questions/28858849/where-is-system-information-class-defined
+	this.SYSTEM_INFORMATION_CLASS = this.INT; // i think due to this search: http://stackoverflow.com/questions/28858849/where-is-system-information-class-defined // as this is an enum so i guess ctypes.int
 	this.TCHAR = ifdef_UNICODE ? this.WCHAR : ctypes.char; // when i copied pasted this it was just ctypes.char and had this comment: // Mozilla compiled with UNICODE/_UNICODE macros and wchar_t = jschar // in "advanced types" section even though second half is ctypes.char because it has something that is advanced, which is the first part, this.WCHAR
 	this.WPARAM = this.UINT_PTR;
 
@@ -157,6 +158,10 @@ var winTypes = function() {
 		{ DeviceID:		this.TCHAR.array(128) },
 		{ DeviceKey:	this.TCHAR.array(128) }
 	]);
+	this.FILE_NAME_INFORMATION = ctypes.StructType('_FILE_NAME_INFORMATION', [ // https://msdn.microsoft.com/en-us/library/windows/hardware/ff545817%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+		{ FileNameLength: this.ULONG },
+		{ FileName: this.WCHAR.array(1) }
+	]);
 	this.FILETIME = ctypes.StructType('_FILETIME', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/ms724284%28v=vs.85%29.aspx
 	  { 'dwLowDateTime': this.DWORD },
 	  { 'dwHighDateTime': this.DWORD }
@@ -166,6 +171,10 @@ var winTypes = function() {
 	  { 'Data2': this.USHORT },
 	  { 'Data3': this.USHORT },
 	  { 'Data4': this.BYTE.array(8) }
+	]);
+	this.IO_STATUS_BLOCK = ctypes.StructType('_IO_STATUS_BLOCK', [ // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550671%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+		{ Pointer: this.PVOID }, // union { NTSTATUS Status; PVOID Pointer; } // i just picked PVOID
+		{ Information: this.ULONG_PTR }
 	]);
 	this.LARGE_INTEGER = ctypes.StructType('_LARGE_INTEGER', [ // its a union, so i picked the one that my use case needs // https://msdn.microsoft.com/en-us/library/windows/desktop/aa383713%28v=vs.85%29.aspx
 		{ QuadPart: this.LONGLONG }
@@ -240,6 +249,16 @@ var winTypes = function() {
 		{ 'dwHotKey': this.DWORD },
 		{ 'hIcon': this.HANDLE }, // union {HANDLE hIcon;  HANDLE hMonitor;} DUMMYUNIONNAME; // i picked hIcon because i might be able to get winxp to seperate its groups ia
 		{ 'hProcess': this.HANDLE }
+	]);
+	this.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX = ctypes.StructType('_SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX', [ // http://processhacker.sourceforge.net/doc/struct___s_y_s_t_e_m___h_a_n_d_l_e___t_a_b_l_e___e_n_t_r_y___i_n_f_o___e_x.html // http://processhacker.sourceforge.net/doc/ntexapi_8h_source.html line 1864
+		{ Object: this.PVOID },
+		{ UniqueProcessId: this.ULONG_PTR  },
+		{ HandleValue: this.ULONG_PTR  },
+		{ GrantedAccess: this.ULONG },
+		{ CreatorBackTraceIndex: this.USHORT },
+		{ ObjectTypeIndex: this.USHORT },
+		{ HandleAttributes: this.ULONG },
+		{ Reserved: this.ULONG }
 	]);
 	this.UNICODE_STRING = ctypes.StructType('_LSA_UNICODE_STRING', [ // https://msdn.microsoft.com/en-us/library/windows/desktop/aa380518%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 		{ 'Length': this.USHORT },
@@ -318,6 +337,7 @@ var winTypes = function() {
 		{ pt: this.POINT }
 	]);
 	this.PGUID = this.GUID.ptr;
+	this.PIO_STATUS_BLOCK = this.IO_STATUS_BLOCK.ptr;
     this.PRECT = this.RECT.ptr;
 	this.PROPERTYKEY = new ctypes.StructType('PROPERTYKEY', [
 		{ 'fmtid': this.GUID },
@@ -334,6 +354,11 @@ var winTypes = function() {
 		{ mouse: this.RAWMOUSE } // use this.RAWMOUSE instead of RAWHID or RAWKEYBOARD as RAWMOUSE struct is the biggest, the tutorial linked below also says this
 	]);
 	this.REFPROPVARIANT = this.PROPVARIANT.ptr;
+	this.SYSTEM_HANDLE_INFORMATION_EX = ctypes.StructType('_SYSTEM_HANDLE_INFORMATION_EX', [ // http://processhacker.sourceforge.net/doc/ntexapi_8h_source.html#l01876 // http://processhacker.sourceforge.net/doc/struct___s_y_s_t_e_m___h_a_n_d_l_e___i_n_f_o_r_m_a_t_i_o_n___e_x.html#a207406a9486f1f35c2e9bf5214612e62
+		{ NumberOfHandles: this.ULONG_PTR },
+		{ Reserved: this.ULONG_PTR },
+		{ Handles: this.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.array(1) }
+	])
 	this.SYSTEM_THREAD_INFORMATION = ctypes.StructType('_SYSTEM_THREAD_INFORMATION', [ // http://processhacker.sourceforge.net/doc/struct___s_y_s_t_e_m___t_h_r_e_a_d___i_n_f_o_r_m_a_t_i_o_n.html
 		{ KernelTime: this.LARGE_INTEGER },
 		{ UserTime: this.LARGE_INTEGER },
@@ -833,11 +858,20 @@ var winInit = function() {
 		STATUS_BUFFER_TOO_SMALL: 0xC0000023 >> 0, // link847456312312132 - need the >> 0
 		STATUS_INFO_LENGTH_MISMATCH: 0xC0000004 >> 0, // link847456312312132 - need the >> 0 otherwise cutils.jscGetDeepest of return of NtQuerySystemInformation is -1073741820 and jscGetDeepest of CONST.STATUS_INFO_LENGTH_MISMATCH is 3221225476
 		
-		SYSTEMPROCESSINFORMATION: 5,
+		SystemProcessInformation: 5, // https://github.com/wine-mirror/wine/blob/80ea5a01ef42b0e9e0b6c872f8f5bbbf393c0ae7/include/winternl.h#L771-L847
+		SystemHandleInformation: 16,
+		SystemExtendedHandleInformation: 64, // http://processhacker.sourceforge.net/doc/ntexapi_8h.html#ad5d815b48e8f4da1ef2eb7a2f18a54e0a6b30a1ad494061a4d95fd1d0b2c2e9b5 - as the wine repo shows it as unknown. process hacker has them listed out in order of enum which is just from ntextapi.h - http://processhacker.sourceforge.net/doc/ntexapi_8h_source.html --- and note that SystemBasicInformation is 0 so 64 lines below that is this, cool stuff
 		
 		SW_RESTORE: 9,
 		
-		SLGP_RAWPATH: 0x4
+		SLGP_RAWPATH: 0x4,
+		
+		FileNameInformation: 9, // https://msdn.microsoft.com/en-us/library/windows/hardware/ff728840%28v=vs.85%29.aspx
+		
+		PROCESS_DUP_HANDLE: 0x0040,
+		PROCESS_QUERY_INFORMATION: 0x0400,
+		MAXIMUM_ALLOWED: 0x02000000,
+		DUPLICATE_SAME_ACCESS: 0x00000002
 	};
 	
 	var _lib = {}; // cache for lib
@@ -932,6 +966,17 @@ var winInit = function() {
 				self.TYPE.INT, // nXSrc
 				self.TYPE.INT, // nYSrc
 				self.TYPE.DWORD // dwRop
+			);
+		},
+		CloseHandle: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724211%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+			 * BOOL WINAPI CloseHandle(
+			 *   __in_ HANDLE hObject
+			 * );
+			 */
+			return lib('kernel32').declare('CloseHandle', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE	// hObject
 			);
 		},
 		CoCreateInstance: function() {
@@ -1147,6 +1192,29 @@ var winInit = function() {
 				self.TYPE.MSG.ptr	// *lpmsg
 			);
 		},
+		DuplicateHandle: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724251%28v=vs.85%29.aspx
+			 * BOOL WINAPI DuplicateHandle(
+			 *   __in_  HANDLE   hSourceProcessHandle,
+			 *   __in_  HANDLE   hSourceHandle,
+			 *   __in_  HANDLE   hTargetProcessHandle,
+			 *   __out_ LPHANDLE lpTargetHandle,
+			 *   __in_  DWORD    dwDesiredAccess,
+			 *   __in_  BOOL     bInheritHandle,
+			 *   __in_  DWORD    dwOptions
+			 * );
+			 */
+			return lib('kernel32').declare('DuplicateHandle', self.TYPE.ABI,
+				self.TYPE.BOOL,			// return
+				self.TYPE.HANDLE,		// hSourceProcessHandle
+				self.TYPE.HANDLE,		// hSourceHandle
+				self.TYPE.HANDLE,		// hTargetProcessHandle
+				self.TYPE.LPHANDLE,		// lpTargetHandle
+				self.TYPE.DWORD,		// dwDesiredAccess
+				self.TYPE.BOOL,			// bInheritHandle
+				self.TYPE.DWORD			// dwOptions
+			);
+		},
 		EnumDisplayDevices: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/dd162609%28v=vs.85%29.aspx
 			 * BOOL EnumDisplayDevices(
@@ -1220,6 +1288,16 @@ var winInit = function() {
 				self.TYPE.BOOL, //return
 				self.TYPE.HWND, // hWnd
 				self.TYPE.LPRECT // lpRec
+			);
+		},
+		GetCurrentProcess: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms683179%28v=vs.85%29.aspx
+			 * HANDLE WINAPI GetCurrentProcess(
+			 *   void
+			 * );
+			 */
+			return lib('kernel32').declare('GetCurrentProcess', self.TYPE.ABI,
+				self.TYPE.HANDLE	// return
 			);
 		},
 		GetCursorPos: function() {
@@ -1424,6 +1502,21 @@ var winInit = function() {
 				self.TYPE.UINT_PTR	// uIDEvent
 			);
 		},
+		OpenProcess: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684320%28v=vs.85%29.aspx
+			 * HANDLE WINAPI OpenProcess(
+			 *   __in_ DWORD dwDesiredAccess,
+			 *   __in_ BOOL  bInheritHandle,
+			 *   __in_ DWORD dwProcessId
+			 * );
+			 */
+			return lib('kernel32').declare('OpenProcess', self.TYPE.ABI,
+				self.TYPE.HANDLE,	// return
+				self.TYPE.DWORD,	// dwDesiredAccess
+				self.TYPE.BOOL,		// bInheritHandle
+				self.TYPE.DWORD		// dwProcessId
+			);
+		},
 		PostMessage: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644944%28v=vs.85%29.aspx
 			 * BOOL WINAPI PostMessage(
@@ -1484,6 +1577,26 @@ var winInit = function() {
 				self.TYPE.HMONITOR,	// HMONITOR
 				self.TYPE.POINT,	// pt
 				self.TYPE.DWORD		// dwFlags
+			);
+		},
+		NtQueryInformationFile: function() {
+			/* https://github.com/wine-mirror/wine/blob/80ea5a01ef42b0e9e0b6c872f8f5bbbf393c0ae7/dlls/ntdll/file.c#L2272
+			 * https://msdn.microsoft.com/en-us/library/windows/hardware/ff556646%28v=vs.85%29.aspx --> https://msdn.microsoft.com/en-us/library/windows/hardware/ff567052%28v=vs.85%29.aspx --- they have it wrong though, they say ULONG
+			 * NTSTATUS WINAPI NtQueryInformationFile(
+			 *   __in_ HANDLE hFile,
+			 *   __out_ PIO_STATUS_BLOCK io,
+			 *   __out_ PVOID ptr,
+			 *   __in_ LONG len,
+			 *   __in_ FILE_INFORMATION_CLASS class
+			 * );
+			 */
+			return lib('ntdll').declare('NtQueryInformationFile', self.TYPE.ABI,
+				self.TYPE.NTSTATUS,					// return
+				self.TYPE.HANDLE,					// hFile
+				self.TYPE.PIO_STATUS_BLOCK,			// io
+				self.TYPE.PVOID,					// ptr
+				self.TYPE.LONG,						// len
+				self.TYPE.FILE_INFORMATION_CLASS	// class
 			);
 		},
 		NtQuerySystemInformation: function() {

@@ -36,6 +36,7 @@ var xlibTypes = function() {
 	
 	// LIBC GUESS TYPES
 	this.fd_set = ctypes.uint8_t; // This is supposed to be fd_set*, but on Linux at least fd_set is just an array of bitfields that we handle manually. this is for my fd_set_set helper functions link4765403
+	this.FILE = ctypes.void_t; // not really a guess, i just dont have a need to fill it
 	
 	// SIMPLE TYPES // http://refspecs.linuxfoundation.org/LSB_1.3.0/gLSB/gLSB/libx11-ddefs.html
 	this.Atom = ctypes.unsigned_long;
@@ -727,6 +728,23 @@ var x11Init = function() {
 				self.TYPE.flock.ptr		// *lock
 			);
 		},
+		fread: function() {
+			/* http://linux.die.net/man/3/fread
+			 * size_t fread (
+			 *   void *ptr,
+			 *   size_t size,
+			 *   size_t nmemb,
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('fread', self.TYPE.ABI, 
+				self.TYPE.size_t,		// return
+				self.TYPE.void.ptr,		// *ptr
+				self.TYPE.size_t, 		// size
+				self.TYPE.size_t, 		// count
+				self.TYPE.FILE.ptr		// *stream
+			);
+		},
 		memcpy: function() {
 			/* http://linux.die.net/man/3/memcpy
 			 * void *memcpy (
@@ -755,6 +773,30 @@ var x11Init = function() {
 				self.TYPE.int,		// return
 				self.TYPE.char.ptr,	// *path
 				self.TYPE.int		// flags
+			);
+		},
+		popen: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/popen.3.html
+			 * FILE *popen(
+			 *   const char *command,
+			 *   const char *mode
+			 * );
+			 */
+			return lib('libc').declare('popen', self.TYPE.ABI,
+				self.TYPE.FILE.ptr,		// return
+				self.TYPE.char.ptr,		// *command
+				self.TYPE.char.ptr		// *mode
+			);
+		},
+		pclose: function() {
+			/* https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/popen.3.html
+			 * int pclose(
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('pclose', self.TYPE.ABI,
+				self.TYPE.int,			// return
+				self.TYPE.FILE.ptr		// *stream
 			);
 		},
 		// x11
