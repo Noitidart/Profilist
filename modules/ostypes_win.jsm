@@ -160,7 +160,7 @@ var winTypes = function() {
 	]);
 	this.FILE_NAME_INFORMATION = ctypes.StructType('_FILE_NAME_INFORMATION', [ // https://msdn.microsoft.com/en-us/library/windows/hardware/ff545817%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 		{ FileNameLength: this.ULONG },
-		{ FileName: this.WCHAR.array(1) }
+		{ FileName: this.WCHAR.array(OS.Constants.Win.MAX_PATH) } // { FileName: this.WCHAR.array(1) }
 	]);
 	this.FILETIME = ctypes.StructType('_FILETIME', [ // http://msdn.microsoft.com/en-us/library/windows/desktop/ms724284%28v=vs.85%29.aspx
 	  { 'dwLowDateTime': this.DWORD },

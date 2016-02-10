@@ -3450,6 +3450,8 @@ function findNewTempProfs(aOptions={}) {
 	}
 	
 	pidsNotInIni = pidsInIni; // :debug:
+	pidsNotInIni.splice(pidsNotInIni.indexOf(core.firefox.pid + ''), 1); // :debug: i have to make sure the current pid is not in there, as WINNT duplicates handle, so it will make the mem all messy
+	console.log('pidsNotInIni:', pidsNotInIni);
 	
 	if (pidsNotInIni.length == 0) {
 		return 0; // no new temp profiles found
@@ -3462,6 +3464,13 @@ function findNewTempProfs(aOptions={}) {
 		case 'winmo':
 		case 'wince':
 
+				// step - collect all handles for each pid
+				console.time('collect handles per pid');
+				var handlesForPid = {}; // key is pid, value is array of handles
+				for (var i=0; i<pidsNotInIni.length; i++) {
+					handlesForPid[pidsNotInIni[i]] = [];
+				}
+				
 				var bufferNtQrySysProcs = ostypes.TYPE.BYTE.array(0)();
 				var enumBufSizeNtQrySysProcs = ostypes.TYPE.ULONG(bufferNtQrySysProcs.constructor.size);
 				// console.log('sizof(bufferNtQrySysProcs):', bufferNtQrySysProcs.constructor.size);
@@ -3548,18 +3557,19 @@ function findNewTempProfs(aOptions={}) {
 				var sizeOf_entry = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size
 				var ptrOf_entry = ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.ptr;
 				
-				var pidObj = {};
 				var cEntryOffset = (ostypes.TYPE.SYSTEM_HANDLE_INFORMATION_EX.size - (ostypes.TYPE.SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX.size * 1)); // as i declared the structure as having an element of 1 in the array
 				var iHandle = 0;
 				while (iHandle < cntHandles) {
 					var cHandleInfoObj = ctypes.cast(bufferNtQrySysProcs.addressOfElement(cEntryOffset), ptrOf_entry).contents;
 					var cPid = cHandleInfoObj.UniqueProcessId.toString();
 					// console.log('cPid:', cPid);
-					pidObj[cPid] = true;
+					if (cPid in handlesForPid) {
+						handlesForPid[cPid].push(cHandleInfoObj.HandleValue);
+					}
 					cEntryOffset += sizeOf_entry;
 					iHandle++;
 				}
-				console.log('pidObj:', pidObj);
+				console.log('handlesForPid:', handlesForPid);
 				
 				/*
 				// "method c" - cast whole thing to array, like "method a" but turn it to string then do index of to get stuff - i hate this
@@ -3585,6 +3595,87 @@ function findNewTempProfs(aOptions={}) {
 				}
 				console.log('pidObj:', pidObj);
 				*/
+				console.timeEnd('collect handles per pid');
+				
+				// step - check the file path on each handle until you find parent.lock
+				console.time('find parent.lock handle');
+				
+				var currentProcessHandle = ostypes.API('GetCurrentProcess')(); // https://msdn.microsoft.com/en-us/library/windows/desktop/ms683179%28v=vs.85%29.aspx - "The pseudo handle need not be closed when it is no longer needed. Calling the CloseHandle function with a pseudo handle has no effect. If the pseudo handle is duplicated by DuplicateHandle, the duplicate handle must be closed." // link9999993338383
+				
+				// i use currentProcessHandle with DuplicateHandle and the docs say - https://msdn.microsoft.com/en-us/library/windows/desktop/ms724251%28v=vs.85%29.aspx - "If hSourceHandle is a pseudo handle returned by GetCurrentProcess or GetCurrentThread, DuplicateHandle converts it to a real handle to a process or thread, respectively." - so I must close handle on this when I am done // link9999993338383
+				
+				var isb = ostypes.TYPE.IO_STATUS_BLOCK();
+				var fni = ostypes.TYPE.FILE_NAME_INFORMATION();
+				
+				for (var pid in handlesForPid) {
+					var openedProcHandle = ostypes.API('OpenProcess')(ostypes.CONST.PROCESS_DUP_HANDLE | ostypes.CONST.PROCESS_QUERY_INFORMATION, false, parseInt(pid));
+					console.log('openedProcHandle:', openedProcHandle);
+					try {
+						var lockFound = false;
+						for (var i=0; i<handlesForPid[pid].length; i++) {
+							// not cFileHandle as it may not be a file-handle but some other kind of handle.
+							var cObjHandle = ostypes.TYPE.HANDLE();
+							// i always have to DuplicateHandle because I never run this code on pid that is self. there is absolutely no reason for that, I can easily get the lockPlatPath for the currentProfile. if i did run on currentProfile then i would have to NOT duplicateHandle for self proc
+							var rez_duplicateHandle = ostypes.API('DuplicateHandle')(openedProcHandle, ostypes.TYPE.HANDLE(handlesForPid[pid][i]), currentProcessHandle, cObjHandle.address(), 0, false, ostypes.CONST.DUPLICATE_SAME_ACCESS); // link9999993338383
+							// console.log('rez_duplicateHandle:', rez_duplicateHandle);
+							if (!rez_duplicateHandle) {
+								// console.error('Failed to duplicate handle! so will skip this one. winLastError:', ctypes.winLastError, 'handle:', ostypes.TYPE.HANDLE(handlesForPid[pid][i]));
+								// throw new Error('Failed to duplicate handle!');
+								handlesForPid[pid][i] = 'failed to duplicate, skipped - winLastError: ' + ctypes.winLastError; // :debug:
+							} else {
+								// cObjHandle holds a usable handle
+								var rez_qiPath = ostypes.API('NtQueryInformationFile')(cObjHandle, isb.address(), fni.address(), ostypes.TYPE.FILE_NAME_INFORMATION.fields[1].FileName.size, ostypes.CONST.FileNameInformation);
+								// console.log('rez_qiPath:', rez_qiPath);
+								
+								if (cutils.jscEqual(rez_qiPath, ostypes.CONST.STATUS_SUCCESS)) {
+									var cFullPlatPath = fni.FileName.readString();
+									if (cFullPlatPath.indexOf('parent.lock') > -1) {
+										lockFound = true;
+									}
+									handlesForPid[pid][i] = cFullPlatPath;
+								} else {
+									// i seem to get lots of ```Failed to read path of handle for pid: 3864 handle index: 16 error rez_qiPath: -1073741788 getStrOfResult: Object { strPrim: "0xc0000024", NTSTATUS: "STATUS_OBJECT_TYPE_MISMATCH" }``` - i guess this means its not a file-handle but some other kind of handle
+									// console.error('Failed to read path of handle for pid:', pid, 'handle index:', i, 'error rez_qiPath:', cutils.jscGetDeepest(rez_qiPath), 'getStrOfResult:', ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_qiPath))));
+									handlesForPid[pid][i] = ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_qiPath))).NTSTATUS; // :debug:
+								}
+								
+								// release duplicated handle
+								var closeObjHandle = ostypes.API('CloseHandle')(cObjHandle);
+								// console.log('closeObjHandle:', closeObjHandle);
+								if (!closeObjHandle) {
+									console.error('failed to close OBJ handle, this is probably a bad deal for mem, winLastError:', ctypes.winLastError);
+									throw new Error('this should never happen, it should close handle');
+								}
+								
+								// if lockFound
+								if (lockFound) {
+									console.error('ok gooooood - lockFound so breaking, will go onto next pid');
+									break;
+								}
+							}
+						}
+					} finally {
+						var closeProcHandle = ostypes.API('CloseHandle')(openedProcHandle);
+						// console.log('closeProcHandle:', closeProcHandle);
+						if (!closeProcHandle) {
+							console.error('failed to close PROC handle, this is probably a bad deal for mem, winLastError:', ctypes.winLastError);
+							throw new Error('this should never happen, it should close handle');
+						}
+					}
+				}
+				
+				var rez_closeCurProcHandle = ostypes.API('CloseHandle')(currentProcessHandle); // i have to close it because DuplicateHandle converts it to a real handle, and the docs say when its a real handle i should close it. if it wasnt converted, to a real handle, then CloseHandle has no effect, so lets just be safe // link9999993338383
+				// console.log('rez_closeCurProcHandle:', rez_closeCurProcHandle);
+				if (!rez_closeCurProcHandle) {
+					console.warn('failed to close handle on currentProcessHandle, this is no big deal see links of link9999993338383', 'winLastError:', ctypes.winLastError);
+				}
+				
+				console.info('handlesForPid after converting to paths:', handlesForPid);
+				
+				console.timeEnd('find parent.lock handle');
+				// typical dump of finding parent.lock is here:
+					// C:\Users\Mercurius\Pictures\enum-handles-read-paths-dump-win10-fx45.png
+					// average time is 35ms per pid
 
 			break;
 		case 'gtk':
