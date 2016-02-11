@@ -3422,7 +3422,7 @@ function readSubdirsInDir(aDirPlatPath) {
 }
 // End - Iconset Picker
 
-function findNewTempProfs(aOptions={}) {
+function adoptOrphanTempProfs(aOptions={}) {
 	// requires that gIniObj have formatted noWriteObj
 	// returns number of new temp profiles found
 	
@@ -3631,12 +3631,95 @@ function findNewTempProfs(aOptions={}) {
 								// console.log('rez_qiPath:', rez_qiPath);
 								
 								if (cutils.jscEqual(rez_qiPath, ostypes.CONST.STATUS_SUCCESS)) {
-									var cFullPlatPath = fni.FileName.readString();
-									if (cFullPlatPath.indexOf('parent.lock') > -1) {
-										lockPlatPath[pid] = cFullPlatPath;
+									var cRelSysPath = fni.FileName.readString();
+									if (cRelSysPath.indexOf('parent.lock') > -1) {
 										lockFound = true;
+										
+										var nqoReturnLength = ostypes.TYPE.ULONG();
+										var rez_qoSize = ostypes.API('NtQueryObject')(cObjHandle, ostypes.CONST.ObjectNameInformation, null, 0, nqoReturnLength.address())
+										
+										console.log('nqoReturnLength:', nqoReturnLength);
+										
+										var j_nqoReturnLength = parseInt(cutils.jscGetDeepest(nqoReturnLength)); // actual size of the information requested
+
+										// method
+										var nqoBufSize = j_nqoReturnLength;
+										var nqoBuf = ostypes.TYPE.BYTE.array(nqoBufSize)();
+										console.warn('nqoBuf.constructor.size:', nqoBuf.constructor.size);
+										
+										// method
+										// var nqoBufSize = j_nqoReturnLength;
+										// var nqoBufLength = nqoBufSize / ostypes.TYPE.OBJECT_NAME_INFORMATION.fields[0].Name.fields[2].Buffer.size;
+										// var nqoBuf = ostypes.TYPE.OBJECT_NAME_INFORMATION();
+										// nqoBuf.Name.Length = nqoBufLength;
+										// nqoBuf.Name.MaximumLength = nqoBufLength;
+										// nqoBuf.Name.Buffer = ostypes.TYPE.OBJECT_NAME_INFORMATION.fields[0].Name.fields[2].Buffer.targetType.array(nqoBufLength)();
+										
+										var rez_qoBuf = ostypes.API('NtQueryObject')(cObjHandle, ostypes.CONST.ObjectNameInformation, nqoBuf, nqoBufSize, nqoReturnLength.address()) // i have to do ostypes.TYPE.OBJECT_NAME_INFORMATION.fields[0].Name.fields[2].Buffer.size because i cant access size once i make something like ctypes.jschar(10)() nor can i access its length. because i cant access length i `* j_nqoReturnLength`
+										console.log('rez_qoBuf:', rez_qoBuf);
+										
+										// var UNICODE_STRING_pad = ctypes.StructType('UNICODE_STRING_pad', [
+										// 	{ 'Length': ostypes.TYPE.USHORT },
+										// 	{ 'MaximumLength': ostypes.TYPE.USHORT },
+										// 	{ 'no_idea_1': ostypes.TYPE.USHORT },
+										// 	{ 'no_idea_2': ostypes.TYPE.USHORT },
+										// 	{ 'Buffer': ostypes.TYPE.PWSTR }
+										// ]);
+										// var nqoBuf_casted = ctypes.cast(nqoBuf.address(), ostypes.UNICODE_STRING_pad.ptr).contents; // works
+										// var nqoBuf_casted = ctypes.cast(nqoBuf, ostypes.TYPE.UNICODE_STRING.ptr).contents; // this crashes it
+										// var nqoBuf_casted = ctypes.cast(nqoBuf.address(), ostypes.TYPE.UNICODE_STRING.ptr).contents; // works - i have to use .address() - i saw i didnt have to use .address() if i wanted to cast to something that doesnt contain a .ptr, the ostypes.TYPE.PWSTR is a .ptr so i think thats why
+
+										var nqoBuf_casted = ctypes.cast(nqoBuf.address(), ostypes.TYPE.OBJECT_NAME_INFORMATION.ptr).contents;
+										console.log('nqoBuf_casted:', nqoBuf_casted);
+										
+										console.log('nqoBuf_casted.Name.Length:', nqoBuf_casted.Name.Length); // size of Buffer in bytes
+										console.log('nqoBuf_casted.Name.MaximumLength:', nqoBuf_casted.Name.MaximumLength); // size of Buffer in bytes plus 2 bytes for null terminator it seems -- it seems if Buffer is null terminated, then MaximumLength is 2 bytes bigger in size then Length. i have not encountered a nno-null terminated Buffer yet so I cant say for sure.
+										console.log('nqoBuf_casted.Name.Buffer:', nqoBuf_casted.Name.Buffer);
+										
+										var bufferLength = parseInt(nqoBuf_casted.Name.Length) / nqoBuf_casted.Name.Buffer.constructor.targetType.size;
+										bufferLength += 2; // i have no idea why, but there are 4 bytes of junk between MaximumLength and Buffer, see method "individ cast" below
+										var bufferCasted = ctypes.cast(nqoBuf_casted.Name.Buffer.address(), nqoBuf_casted.Name.Buffer.constructor.targetType.array(bufferLength).ptr).contents;
+										console.log('bufferCasted:', bufferCasted);
+										console.log('readString:', bufferCasted.readString());
+										console.log('readString shifted:', bufferCasted.readString().substring(2));
+										
+										// // method - individ cast
+										// var lengthOfBuffer = nqoBufSize / ostypes.TYPE.WCHAR.size;
+										// console.log('lengthOfBuffer:', lengthOfBuffer);
+										// var nqoBuf_casted_ushort = ctypes.cast(nqoBuf.address(), ostypes.TYPE.USHORT.array(lengthOfBuffer).ptr).contents;
+										// console.log('nqoBuf_casted_ushort:', nqoBuf_casted_ushort);
+										// var nqoBuf_casted = ctypes.cast(nqoBuf.address(), ostypes.TYPE.WCHAR.array(lengthOfBuffer).ptr).contents;
+										// console.log('nqoBuf_casted:', nqoBuf_casted);
+										// console.log('nqoBuf_casted readString:', nqoBuf_casted.readString());
+										// 
+										// // nqoBuf.constructor.size: 128 MainWorker.js:3666:12
+										// // rez_qoBuf: 0 MainWorker.js:3677:12
+										// // lengthOfBuffer: 64 MainWorker.js:3681:12
+										// // nqoBuf_casted_ushort: ctypes.unsigned_short.array(64)([118, 120, 43784, 9336, 92, 68, 101, 118, 105, 99, 101, 92, 72, 97, 114, 100, 100, 105, 115, 107, 86, 111, 108, 117, 109, 101, 49, 92, 80, 114, 111, 103, 114, 97, 109, 32, 70, 105, 108, 101, 115, 32, 40, 120, 56, 54, 41, 92, 77, 111, 122, 105, 108, 108, 97, 32, 70, 105, 114, 101, 102, 111, 120, 0]) MainWorker.js:3683:12
+										// // nqoBuf_casted: ctypes.char16_t.array(64)(["v", "x", "\uAB08", "\u2478", "\\", "D", "e", "v", "i", "c", "e", "\\", "H", "a", "r", "d", "d", "i", "s", "k", "V", "o", "l", "u", "m", "e", "1", "\\", "P", "r", "o", "g", "r", "a", "m", " ", "F", "i", "l", "e", "s", " ", "(", "x", "8", "6", ")", "\\", "M", "o", "z", "i", "l", "l", "a", " ", "F", "i", "r", "e", "f", "o", "x", "\x00"]) MainWorker.js:3685:12
+										// // nqoBuf_casted readString: vx꬈⑸\Device\HarddiskVolume1\Program Files (x86)\Mozilla Firefox
+										// // 
+										// // nqoBuf.constructor.size: 134 MainWorker.js:3666:12
+										// // rez_qoBuf: 0 MainWorker.js:3677:12
+										// // lengthOfBuffer: 67 MainWorker.js:3681:12
+										// // nqoBuf_casted_ushort: ctypes.unsigned_short.array(67)([124, 126, 712, 9543, 92, 68, 101, 118, 105, 99, 101, 92, 72, 97, 114, 100, 100, 105, 115, 107, 86, 111, 108, 117, 109, 101, 49, 92, 87, 105, 110, 100, 111, 119, 115, 92, 82, 101, 103, 105, 115, 116, 114, 97, 116, 105, 111, 110, 92, 82, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 100, 46, 99, 108, 98, 0]) MainWorker.js:3683:12
+										// // nqoBuf_casted: ctypes.char16_t.array(67)(["|", "~", "\u02C8", "\u2547", "\\", "D", "e", "v", "i", "c", "e", "\\", "H", "a", "r", "d", "d", "i", "s", "k", "V", "o", "l", "u", "m", "e", "1", "\\", "W", "i", "n", "d", "o", "w", "s", "\\", "R", "e", "g", "i", "s", "t", "r", "a", "t", "i", "o", "n", "\\", "R", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "d", ".", "c", "l", "b", "\x00"]) MainWorker.js:3685:12
+										// // nqoBuf_casted readString: |~ˈ╇\Device\HarddiskVolume1\Windows\Registration\R00000000000d.clb
+										// // 
+										// // nqoBuf.constructor.size: 228 MainWorker.js:3666:12
+										// // rez_qoBuf: 0 MainWorker.js:3677:12
+										// // lengthOfBuffer: 114 MainWorker.js:3681:12
+										// // nqoBuf_casted_ushort: ctypes.unsigned_short.array(114)([218, 220, 54472, 8554, 92, 68, 101, 118, 105, 99, 101, 92, 72, 97, 114, 100, 100, 105, 115, 107, 86, 111, 108, 117, 109, 101, 49, 92, 85, 115, 101, 114, 115, 92, 77, 101, 114, 99, 117, 114, 105, 117, 115, 92, 65, 112, 112, 68, 97, 116, 97, 92, 82, 111, 97, 109, 105, 110, 103, 92, 77, 111, 122, 105, 108, 108, 97, 92, 70, 105, 114, 101, 102, 111, 120, 92, 80, 114, 111, 102, 105, 108, 101, 115, 92, 52, 104, 114, 97, 113, 115, 113, 120, 46, 100, 101, 102, 97, 117, 108, 116, 92, 112, 97, 114, 101, 110, 116, 46, 108, 111, 99, 107, 0]) MainWorker.js:3683:12
+										// // nqoBuf_casted: ctypes.char16_t.array(114)(["\xDA", "\xDC", "\uD4C8", "\u216A", "\\", "D", "e", "v", "i", "c", "e", "\\", "H", "a", "r", "d", "d", "i", "s", "k", "V", "o", "l", "u", "m", "e", "1", "\\", "U", "s", "e", "r", "s", "\\", "M", "e", "r", "c", "u", "r", "i", "u", "s", "\\", "A", "p", "p", "D", "a", "t", "a", "\\", "R", "o", "a", "m", "i", "n", "g", "\\", "M", "o", "z", "i", "l", "l", "a", "\\", "F", "i", "r", "e", "f", "o", "x", "\\", "P", "r", "o", "f", "i", "l", "e", "s", "\\", "4", "h", "r", "a", "q", "s", "q", "x", ".", "d", "e", "f", "a", "u", "l", "t", "\\", "p", "a", "r", "e", "n", "t", ".", "l", "o", "c", "k", "\x00"]) MainWorker.js:3685:12
+										// // nqoBuf_casted readString: ÚÜ퓈Ⅺ\Device\HarddiskVolume1\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock
+										
+										var cFullSysPath = bufferCasted.readString().substring(2); // this gives - "\Device\HarddiskVolume1\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock"
+										handlesForPid[pid][i] = cFullSysPath;
+										
+										lockPlatPath[pid] = cFullSysPath;
+									} else {
+										handlesForPid[pid][i] = cRelSysPath; // this gives - "\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock"
 									}
-									handlesForPid[pid][i] = cFullPlatPath;
 								} else {
 									// i seem to get lots of ```Failed to read path of handle for pid: 3864 handle index: 16 error rez_qiPath: -1073741788 getStrOfResult: Object { strPrim: "0xc0000024", NTSTATUS: "STATUS_OBJECT_TYPE_MISMATCH" }``` - i guess this means its not a file-handle but some other kind of handle
 									// console.error('Failed to read path of handle for pid:', pid, 'handle index:', i, 'error rez_qiPath:', cutils.jscGetDeepest(rez_qiPath), 'getStrOfResult:', ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_qiPath))));
@@ -3754,6 +3837,101 @@ function findNewTempProfs(aOptions={}) {
 }
 
 // platform helpers
+function winGetDosPathFromNtPath(u16_NTPath) {
+	// copy of http://stackoverflow.com/a/18792477/1828637
+	// u16_NTPath (string)
+	// RETURNS
+		// success - dos path
+		// error - throws
+	
+	if (u16_NTPath.indexOf('\\Device\\Serial') === 0 || u16_NTPath.indexOf('\\Device\\UsbSer') === 0) { // "Serial1" or "USBSER000"
+		
+		var h_Key = ostypes.TYPE.HKEY();
+		var rez_openKey = ostypes.API('RegOpenKeyEx')(ostypes.CONST.HKEY_LOCAL_MACHINE, 'Hardware\\DeviceMap\\SerialComm', 0, ostypes.CONST.KEY_QUERY_VALUE, h_Key.address());
+		if (!cutils.jscEqual(rez_openKey, ostypes.CONST.ERROR_SUCCESS)) {
+			console.error('failed opening registry key:', cutils.jscGetDeepest(rez_openKey));
+			throw new Error('failed opening registry key');
+		}
+		
+		try {
+			var u16_ComPort = ostypes.TYPE.WCHAR.array(50)();
+			
+			var u32_Type = ostypes.TYPE.DWORD();
+			var u32_Size = ostypes.TYPE.DWORD(u16_ComPort.constructor.size);
+			
+			var u16_ComPort_castedAsByte = ctypes.cast(u16_ComPort.address(), ostypes.TYPE.BYTE.ptr);
+			
+			// var a = ctypes.jschar.array(50)(); // CData { length: 50 }
+			// var ac = ctypes.cast(a.address(), ctypes.char.array(a.constructor.size / ctypes.char.size).ptr).contents; // CData { length: 100 }
+			
+			var rez_queryKey = ostypes.API('RegQueryValueEx')(h_Key, u16_NTPath, 0, u32_Type.address(), u16_ComPort_castedAsByte, u32_Size.address());
+			if (!cutils.jscEqual(rez_queryKey, ostypes.CONST.ERROR_SUCCESS)) {
+				console.error('failed querying registry key:', cutils.jscGetDeepest(rez_queryKey));
+				throw new Error('failed querying registry key');
+			}
+		} finally {
+			var rez_closeKey = ostypes.API('RegCloseKey')(h_Key);
+			if (!cutils.jscEqual(rez_closeKey, ostypes.CONST.ERROR_SUCCESS)) {
+				console.error('failed closing registry key:', cutils.jscGetDeepest(rez_closeKey));
+				throw new Error('failed closing registry key');
+			}	
+		}
+		
+		return u16_ComPort.readString();
+	}
+	
+	if (u16_NTPath.indexOf('\\Device\\LanmanRedirector\\') === 0) { // Win XP
+		return '\\\\' + u16_NTPath.substr(25);
+	}
+	
+	if (u16_NTPath.indexOf('\\Device\\Mup\\') === 0) { // Win 7
+		return '\\\\' + u16_NTPath.substr(12);
+	}
+	
+	var u16_Drives = ostypes.TYPE.WCHAR.array(300)();
+	var rez_getLogis = ostypes.API('GetLogicalDriveStrings')(u16_Drives.length, u16_Drives))
+	if (cutils.jscEqual(rez_getLogis, 0)) {
+		console.error('failed to get logical drive strings, winLastError:', ctypes.winLastError);
+		throw new Error('failed to get logical drive strings');
+	}
+	
+	console.log('u16_Drives.readString:', u16_Drives.readString());
+	
+	throw new Error('debug');
+	
+	// i have no idea what this block is doing, just take a dump of u16_Drives and go from there
+	var u16_Drv = u16_Drives;
+	while (u16_Drv[0]) {
+		var u16_Next = u16_Drv + u16_Drv.length + 1;
+		
+		u16_Drv[2] = 0; // the backslash is not allowed for QueryDosDevice()
+		
+		WCHAR u16_NtVolume[1000];
+		var u16_NtVolume = ostypes.TYPE.WCHAR.array(1000)();
+		u16_NtVolume[0] = 0;
+		
+        // may return multiple strings!
+        // returns very weird strings for network shares
+		var rez_queryDos = ostypes.API('QueryDosDevice')(u16_Drv, u16_NtVolume, u16_NtVolume.constructor.size / 2);
+		if (cutils.jscEqual(rez_queryDos, 0)) {
+			console.error('failed to query dos device, winLastError:', ctypes.winLastError);
+			throw new Error('failed to query dos device');
+		}
+		
+        // int s32_Len = (int)wcslen(u16_NtVolume);
+        // if (s32_Len > 0 && wcsnicmp(u16_NTPath, u16_NtVolume, s32_Len) == 0)
+        // {
+        //     *ps_DosPath  =  u16_Drv;
+        //     *ps_DosPath += (u16_NTPath + s32_Len);
+        //     return 0;
+        // }
+        // 
+        // u16_Drv = u16_Next;
+	}
+	
+	console.error('ERROR_BAD_PATHNAME');
+	throw new Error('ERROR_BAD_PATHNAME');
+}
 function winForceForegroundWindow(aHwndToFocus) {
 	// windows only!
 	// focus a window even if this process, that is calling this function, is not the foreground window
@@ -3778,7 +3956,7 @@ function winForceForegroundWindow(aHwndToFocus) {
 		return rez_SetSetForegroundWindow ? true : false;
 	}
 
-	if (cutils.jscEqual(hTo, hFrom)) {
+	if (cutils.comparePointers(hTo, hFrom) === 0) {
 		// window is already focused
 		console.log('window is already focused');
 		return true;

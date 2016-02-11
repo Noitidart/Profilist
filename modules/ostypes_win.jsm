@@ -46,6 +46,7 @@ var winTypes = function() {
 	this.LPCVOID = ctypes.voidptr_t;
 	this.LPVOID = ctypes.voidptr_t;
 	this.NTSTATUS = ctypes.long; // https://msdn.microsoft.com/en-us/library/cc230357.aspx // typedef long NTSTATUS;
+	this.OBJECT_INFORMATION_CLASS = ctypes.int; // im guessing its in, it is an enum though for sure
 	this.PVOID = ctypes.voidptr_t;
 	this.RM_APP_TYPE = ctypes.unsigned_int; // i dont know im just guessing, i cant find a typedef that makes sense to me: https://msdn.microsoft.com/en-us/library/windows/desktop/aa373670%28v=vs.85%29.aspx
 	this.SHORT = ctypes.short;
@@ -62,12 +63,14 @@ var winTypes = function() {
 	this.WORD = ctypes.unsigned_short;
 
 	// ADVANCED TYPES // as per how it was defined in WinNT.h // defined by "simple types"
+	this.ACCESS_MASK = this.DWORD; // https://msdn.microsoft.com/en-us/library/windows/desktop/aa374892%28v=vs.85%29.aspx
 	this.ATOM = this.WORD;
 	this.BOOLEAN = this.BYTE; // http://blogs.msdn.com/b/oldnewthing/archive/2004/12/22/329884.aspx
 	this.COLORREF = this.DWORD; // when i copied/pasted there was this comment next to this: // 0x00bbggrr
 	this.DWORD_PTR = this.ULONG_PTR;
 	this.HANDLE = this.PVOID;
 	this.HRESULT = this.LONG;
+	this.LPBYTE = this.BYTE.ptr;
 	this.LPCSTR = this.CHAR.ptr; // typedef __nullterminated CONST CHAR *LPCSTR;
 	this.LPCWSTR = this.WCHAR.ptr;
 	this.LPARAM = this.LONG_PTR;
@@ -106,10 +109,12 @@ var winTypes = function() {
 	this.LPOLESTR = this.OLECHAR.ptr; // typedef [string] OLECHAR *LPOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L287 // http://stackoverflow.com/a/1607335/1828637 // LPOLESTR is usually to be allocated with CoTaskMemAlloc()
 	this.LPTSTR = ifdef_UNICODE ? this.LPWSTR : this.LPSTR;
 	this.PWSTR = this.LPWSTR; // PWSTR and LPWSTR are the same. The L in LPWSTR stands for "long/far pointer" and it is a leftover from 16 bit when pointers were "far" or "near". Such a distinction no longer exists on 32/64 bit, all pointers have the same size. SOURCE: https://social.msdn.microsoft.com/Forums/vstudio/en-US/52ab8d94-f8f8-427f-ad66-5b38db9a61c9/difference-between-lpwstr-and-pwstr?forum=vclanguage
+	this.REGSAM = this.ACCESS_MASK; // https://github.com/wine-mirror/wine/blob/9bd963065b1fb7b445d010897d5f84967eadf75b/include/winreg.h#L53
 	
 	// SUPER DUPER ADVANCED TYPES // defined by "super advanced types"
 	this.HCURSOR = this.HICON;
 	this.HMODULE = this.HINSTANCE;
+	this.PHKEY = this.HKEY.ptr;
 	this.WNDENUMPROC = ctypes.FunctionType(this.CALLBACK_ABI, this.BOOL, [this.HWND, this.LPARAM]); // "super advanced type" because its highest type is `this.HWND` which is "advanced type"
 
 	// inaccrurate types - i know these are something else but setting them to voidptr_t or something just works and all the extra work isnt needed
@@ -335,6 +340,9 @@ var winTypes = function() {
 		{ lParam: this.LPARAM },
 		{ time: this.DWORD },
 		{ pt: this.POINT }
+	]);
+	this.OBJECT_NAME_INFORMATION = ctypes.StructType('_OBJECT_NAME_INFORMATION', [ // https://github.com/wine-mirror/wine/blob/80ea5a01ef42b0e9e0b6c872f8f5bbbf393c0ae7/include/winternl.h#L1107
+		{ Name: this.UNICODE_STRING }
 	]);
 	this.PGUID = this.GUID.ptr;
 	this.PIO_STATUS_BLOCK = this.IO_STATUS_BLOCK.ptr;
@@ -871,7 +879,14 @@ var winInit = function() {
 		PROCESS_DUP_HANDLE: 0x0040,
 		PROCESS_QUERY_INFORMATION: 0x0400,
 		MAXIMUM_ALLOWED: 0x02000000,
-		DUPLICATE_SAME_ACCESS: 0x00000002
+		DUPLICATE_SAME_ACCESS: 0x00000002,
+		
+		ObjectNameInformation: 1,
+		
+		HKEY_LOCAL_MACHINE: self.TYPE.HKEY(0x80000002), // https://github.com/wine-mirror/wine/blob/9bd963065b1fb7b445d010897d5f84967eadf75b/include/winreg.h#L30
+		KEY_QUERY_VALUE: 0x00000001
+		
+		ERROR_SUCCESS: 0x00000000
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1385,6 +1400,19 @@ var winInit = function() {
 				self.TYPE.HWND		// return
 			)
 		},
+		GetLogicalDriveStrings: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa364975%28v=vs.85%29.aspx
+			 * DWORD WINAPI GetLogicalDriveStrings(
+			 *   __in_  DWORD  nBufferLength,
+			 *   __out_ LPTSTR lpBuffer
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'GetLogicalDriveStringsW' : 'GetLogicalDriveStringsA', self.TYPE.ABI,
+				self.TYPE.DWORD,	// return
+				self.TYPE.DWORD,	// nBufferLength
+				self.TYPE.LPTSTR	// lpBuffer
+			);
+		},
 		GetMessage: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644936%28v=vs.85%29.aspx
 			 * BOOL WINAPI GetMessage(
@@ -1637,6 +1665,25 @@ var winInit = function() {
 				self.TYPE.FILE_INFORMATION_CLASS	// class
 			);
 		},
+		NtQueryObject: function() {
+			/* https://msdn.microsoft.com/en-us/library/bb432383%28v=vs.85%29.aspx
+			 * NTSTATUS NtQueryObject(
+			 *   __in_opt_  HANDLE Handle,
+			 *   __in_      OBJECT_INFORMATION_CLASS ObjectInformationClass,
+			 *   __out_opt_ PVOID ObjectInformation,
+			 *   __in_      ULONG ObjectInformationLength,
+			 *   __out_opt_ PULONG ReturnLength
+			 * );
+			 */
+			return lib('ntdll').declare('NtQueryObject', self.TYPE.ABI,
+				self.TYPE.NTSTATUS,						// return
+				self.TYPE.HANDLE,						// Handle
+				self.TYPE.OBJECT_INFORMATION_CLASS,		// ObjectInformationClass
+				self.TYPE.PVOID,						// ObjectInformation
+				self.TYPE.ULONG,						// ObjectInformationLength
+				self.TYPE.PULONG						// ReturnLength
+			);
+		},
 		NtQuerySystemInformation: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724509%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 			 * NTSTATUS WINAPI NtQuerySystemInformation(
@@ -1684,6 +1731,32 @@ var winInit = function() {
 				self.TYPE.PROPVARIANT.ptr		// *pvar
 			);
 		},
+		QueryDosDevice: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/aa365461%28v=vs.85%29.aspx
+			 * DWORD WINAPI QueryDosDevice(
+			 *   _in_opt_ LPCTSTR lpDeviceName,
+			 *   _out_    LPTSTR  lpTargetPath,
+			 *   _in_     DWORD   ucchMax
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'QueryDosDeviceW' : 'QueryDosDeviceA', self.TYPE.ABI,
+				self.TYPE.DWORD,		// return
+				self.TYPE.LPCTSTR,		// lpDeviceName
+				self.TYPE.LPTSTR,		// lpTargetPath
+				self.TYPE.DWORD			// ucchMax
+			);
+		},
+		RegCloseKey: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724837%28v=vs.85%29.aspx
+			 * LONG WINAPI RegCloseKey(
+			 *   __in_ HKEY hKey
+			 * );
+			 */
+			return lib('advapi32').declare('RegCloseKey', self.TYPE.ABI,
+				self.TYPE.LONG,		// return
+				self.TYPE.HKEY		// hKey
+			);
+		},
 		RegisterClass: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633586%28v=vs.85%29.aspx
 			 * ATOM WINAPI RegisterClass(
@@ -1693,6 +1766,46 @@ var winInit = function() {
 			return lib('user32').declare(ifdef_UNICODE ? 'RegisterClassW' : 'RegisterClassA', self.TYPE.ABI,
 				self.TYPE.ATOM,			// return
 				self.TYPE.WNDCLASS.ptr	// *lpWndClass
+			);
+		},
+		RegOpenKeyEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724897%28v=vs.85%29.aspx
+			 * LONG WINAPI RegOpenKeyEx(
+			 *   __in_     HKEY    hKey,
+			 *   __in_opt_ LPCTSTR lpSubKey,
+			 *   __in_     DWORD   ulOptions,
+			 *   __in_     REGSAM  samDesired,
+			 *   __out_    PHKEY   phkResult
+			 * );
+			 */
+			return lib('advapi32').declare('RegOpenKeyEx', self.TYPE.ABI,
+				self.TYPE.LONG,		// return
+				self.TYPE.HKEY,		// hKey
+				self.TYPE.LPCTSTR,	// lpSubKey
+				self.TYPE.DWORD,	// ulOptions
+				self.TYPE.REGSAM,	// samDesired
+				self.TYPE.PHKEY		// phkResult
+			);
+		},
+		RegQueryValueEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms724911%28v=vs.85%29.aspx
+			 * LONG WINAPI RegQueryValueEx(
+			 *   __in_        HKEY    hKey,
+			 *   __in_opt_    LPCTSTR lpValueName,
+			 *   __reserved_  LPDWORD lpReserved,
+			 *   __out_opt_   LPDWORD lpType,
+			 *   __out_opt_   LPBYTE  lpData,
+			 *   __inout_opt_ LPDWORD lpcbData
+			 * );
+			 */
+			return lib('advapi32').declare('RegQueryValueEx', self.TYPE.ABI,
+				self.TYPE.LONG,		// return
+				self.TYPE.HKEY,		// hKey
+				self.TYPE.LPCTSTR,	// lpValueName
+				self.TYPE.LPDWORD,	// lpReserved
+				self.TYPE.LPDWORD,	// lpType
+				self.TYPE.LPBYTE,	// lpData
+				self.TYPE.LPDWORD	// lpcbData
 			);
 		},
 		ReleaseDC: function() {
