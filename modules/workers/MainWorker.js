@@ -3714,12 +3714,9 @@ function adoptOrphanTempProfs(aOptions={}) {
 										// // nqoBuf_casted readString: ÚÜ퓈Ⅺ\Device\HarddiskVolume1\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock
 										
 										var cFullSysPath = bufferCasted.readString().substring(2); // this gives - "\Device\HarddiskVolume1\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock"
-										handlesForPid[pid][i] = cFullSysPath;
-										
 										lockPlatPath[pid] = cFullSysPath;
-									} else {
-										handlesForPid[pid][i] = cRelSysPath; // this gives - "\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock"
 									}
+									handlesForPid[pid][i] = cRelSysPath; // this gives - "\Users\Mercurius\AppData\Roaming\Mozilla\Firefox\Profiles\4hraqsqx.default\parent.lock"
 								} else {
 									// i seem to get lots of ```Failed to read path of handle for pid: 3864 handle index: 16 error rez_qiPath: -1073741788 getStrOfResult: Object { strPrim: "0xc0000024", NTSTATUS: "STATUS_OBJECT_TYPE_MISMATCH" }``` - i guess this means its not a file-handle but some other kind of handle
 									// console.error('Failed to read path of handle for pid:', pid, 'handle index:', i, 'error rez_qiPath:', cutils.jscGetDeepest(rez_qiPath), 'getStrOfResult:', ostypes.HELPER.getStrOfResult(parseInt(cutils.jscGetDeepest(rez_qiPath))));
@@ -3763,7 +3760,16 @@ function adoptOrphanTempProfs(aOptions={}) {
 				// typical dump of finding parent.lock is here:
 					// C:\Users\Mercurius\Pictures\enum-handles-read-paths-dump-win10-fx45.png
 					// average time is 35ms per pid
-
+				console.log('lockPlatPath with full sys path (NOT PLAT PATH):', lockPlatPath);
+				
+				console.time('convert nt path');
+				// convert lockPlat full sys path to proper plat path
+				for (var pid in lockPlatPath) {
+					lockPlatPath[pid] = winGetDosPathFromNtPath(lockPlatPath[pid]);
+				}
+				console.timeEnd('convert nt path');
+				console.log('lockPlatPath after nt conversion:', lockPlatPath);
+				
 			break;
 		case 'gtk':
 		case 'darwin':
@@ -3844,6 +3850,21 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 		// success - dos path
 		// error - throws
 	
+	// converts
+	// "\Device\HarddiskVolume3"                                -> "E:"
+	// "\Device\HarddiskVolume3\Temp"                           -> "E:\Temp"
+	// "\Device\HarddiskVolume3\Temp\transparent.jpeg"          -> "E:\Temp\transparent.jpeg"
+	// "\Device\Harddisk1\DP(1)0-0+6\foto.jpg"                  -> "I:\foto.jpg"
+	// "\Device\TrueCryptVolumeP\Data\Passwords.txt"            -> "P:\Data\Passwords.txt"
+	// "\Device\Floppy0\Autoexec.bat"                           -> "A:\Autoexec.bat"
+	// "\Device\CdRom1\VIDEO_TS\VTS_01_0.VOB"                   -> "H:\VIDEO_TS\VTS_01_0.VOB"
+	// "\Device\Serial1"                                        -> "COM1"
+	// "\Device\USBSER000"                                      -> "COM4"
+	// "\Device\Mup\ComputerName\C$\Boot.ini"                   -> "\\ComputerName\C$\Boot.ini"
+	// "\Device\LanmanRedirector\ComputerName\C$\Boot.ini"      -> "\\ComputerName\C$\Boot.ini"
+	// "\Device\LanmanRedirector\ComputerName\Shares\Dance.m3u" -> "\\ComputerName\Shares\Dance.m3u"
+	// returns an error for any other device type
+	
 	if (u16_NTPath.indexOf('\\Device\\Serial') === 0 || u16_NTPath.indexOf('\\Device\\UsbSer') === 0) { // "Serial1" or "USBSER000"
 		
 		var h_Key = ostypes.TYPE.HKEY();
@@ -3864,8 +3885,9 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 			// var a = ctypes.jschar.array(50)(); // CData { length: 50 }
 			// var ac = ctypes.cast(a.address(), ctypes.char.array(a.constructor.size / ctypes.char.size).ptr).contents; // CData { length: 100 }
 			
-			var rez_queryKey = ostypes.API('RegQueryValueEx')(h_Key, u16_NTPath, 0, u32_Type.address(), u16_ComPort_castedAsByte, u32_Size.address());
+			var rez_queryKey = ostypes.API('RegQueryValueEx')(h_Key, u16_NTPath, null, u32_Type.address(), u16_ComPort_castedAsByte, u32_Size.address());
 			if (!cutils.jscEqual(rez_queryKey, ostypes.CONST.ERROR_SUCCESS)) {
+				// if it is 2 then the value of u16_NTPath doesnt exist in this registry, its common to registry querying
 				console.error('failed querying registry key:', cutils.jscGetDeepest(rez_queryKey));
 				throw new Error('failed querying registry key');
 			}
@@ -3874,7 +3896,8 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 			if (!cutils.jscEqual(rez_closeKey, ostypes.CONST.ERROR_SUCCESS)) {
 				console.error('failed closing registry key:', cutils.jscGetDeepest(rez_closeKey));
 				throw new Error('failed closing registry key');
-			}	
+			}
+			else { console.log('closed key'); }
 		}
 		
 		return u16_ComPort.readString();
@@ -3889,24 +3912,66 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 	}
 	
 	var u16_Drives = ostypes.TYPE.WCHAR.array(300)();
-	var rez_getLogis = ostypes.API('GetLogicalDriveStrings')(u16_Drives.length, u16_Drives))
+	var rez_getLogis = ostypes.API('GetLogicalDriveStrings')(u16_Drives.length, u16_Drives);
 	if (cutils.jscEqual(rez_getLogis, 0)) {
 		console.error('failed to get logical drive strings, winLastError:', ctypes.winLastError);
 		throw new Error('failed to get logical drive strings');
 	}
 	
+	// console.log('u16_Drives:', u16_Drives); // u16_Drives: ctypes.char16_t.array(300)(["C", ":", "\\", "\x00", "D", ":", "\\", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", ....])
 	console.log('u16_Drives.readString:', u16_Drives.readString());
+	
+	
+	
+	var js_u16_Drives = ['']; // assuming there has to be at least 1 drive
+	for (var i=0; i<u16_Drives.length; i++) {
+		if (u16_Drives[i] == '\x00') {
+			if (u16_Drives[i + 1] == '\x00') {
+				break; // no more drives as hit a double null terminator
+			}
+			js_u16_Drives.push('');
+		} else {
+			js_u16_Drives[js_u16_Drives.length - 1] += u16_Drives[i];
+		}
+	}
+	
+	console.log('js_u16_Drives:', js_u16_Drives); // js_u16_Drives: Array [ "C:\", "D:\" ]
+	
+	var u16_NtVolume = ostypes.TYPE.WCHAR.array(300)();
+	for (var i=0; i<js_u16_Drives.length; i++) {
+		
+		var u16_Drv = js_u16_Drives[i];
+		u16_Drv = u16_Drv.substr(0, u16_Drv.length - 1); // the backslash is not allowed for QueryDosDevice()
+		
+        // may return multiple strings!
+        // returns very weird strings for network shares
+		var rez_queryDos = ostypes.API('QueryDosDevice')(u16_Drv, u16_NtVolume, u16_NtVolume.constructor.size / 2);
+		if (cutils.jscEqual(rez_queryDos, 0)) {
+			console.error('failed to query dos device, winLastError:', ctypes.winLastError);
+			throw new Error('failed to query dos device');
+		}
+		
+		// console.log('u16_NtVolume:', u16_NtVolume); // u16_NtVolume: ctypes.char16_t.array(300)(["\\", "D", "e", "v", "i", "c", "e", "\\", "H", "a", "r", "d", "d", "i", "s", "k", "V", "o", "l", "u", "m", "e", "3", "\x00", "\x00", "\x00", "
+		console.log('u16_NtVolume.readString:', u16_NtVolume.readString()); // u16_NtVolume.readString: \Device\HarddiskVolume3
+		
+		var js_u16_NtVolume = u16_NtVolume.readString();
+		
+		console.log('u16_NTPath:', u16_NTPath);
+		console.log('js_u16_NtVolume:', js_u16_NtVolume);
+		console.log('index:', u16_NTPath.indexOf(js_u16_NtVolume));
+		if(u16_NTPath.indexOf(js_u16_NtVolume) === 0) {
+			return u16_Drv + u16_NTPath.substr(js_u16_NtVolume.length);
+		}
+	}
 	
 	throw new Error('debug');
 	
-	// i have no idea what this block is doing, just take a dump of u16_Drives and go from there
 	var u16_Drv = u16_Drives;
 	while (u16_Drv[0]) {
 		var u16_Next = u16_Drv + u16_Drv.length + 1;
 		
 		u16_Drv[2] = 0; // the backslash is not allowed for QueryDosDevice()
 		
-		WCHAR u16_NtVolume[1000];
 		var u16_NtVolume = ostypes.TYPE.WCHAR.array(1000)();
 		u16_NtVolume[0] = 0;
 		

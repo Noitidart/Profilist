@@ -884,7 +884,7 @@ var winInit = function() {
 		ObjectNameInformation: 1,
 		
 		HKEY_LOCAL_MACHINE: self.TYPE.HKEY(0x80000002), // https://github.com/wine-mirror/wine/blob/9bd963065b1fb7b445d010897d5f84967eadf75b/include/winreg.h#L30
-		KEY_QUERY_VALUE: 0x00000001
+		KEY_QUERY_VALUE: 0x00000001,
 		
 		ERROR_SUCCESS: 0x00000000
 	};
@@ -1778,7 +1778,7 @@ var winInit = function() {
 			 *   __out_    PHKEY   phkResult
 			 * );
 			 */
-			return lib('advapi32').declare('RegOpenKeyEx', self.TYPE.ABI,
+			return lib('advapi32').declare(ifdef_UNICODE ? 'RegOpenKeyExW' : 'RegOpenKeyExA', self.TYPE.ABI,
 				self.TYPE.LONG,		// return
 				self.TYPE.HKEY,		// hKey
 				self.TYPE.LPCTSTR,	// lpSubKey
@@ -1798,7 +1798,7 @@ var winInit = function() {
 			 *   __inout_opt_ LPDWORD lpcbData
 			 * );
 			 */
-			return lib('advapi32').declare('RegQueryValueEx', self.TYPE.ABI,
+			return lib('advapi32').declare(ifdef_UNICODE ? 'RegQueryValueExW' : 'RegQueryValueExA', self.TYPE.ABI,
 				self.TYPE.LONG,		// return
 				self.TYPE.HKEY,		// hKey
 				self.TYPE.LPCTSTR,	// lpValueName
