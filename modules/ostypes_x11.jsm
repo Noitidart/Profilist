@@ -728,6 +728,33 @@ var x11Init = function() {
 				self.TYPE.flock.ptr		// *lock
 			);
 		},
+		feof: function() {
+			/* http://linux.die.net/man/3/feof
+			 * https://developer.apple.com/library/ios/documentation/System/Conceptual/ManPages_iPhoneOS/man3/feof.3.html
+			 * int feof(
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('feof', self.TYPE.ABI,
+				self.TYPE.int,		// return
+				self.TYPE.FILE.ptr	// *stream
+			);
+		},
+		fgets: function() {
+			/* http://linux.die.net/man/3/fgets
+			 * char* fgets(
+			 *   char *s,
+			 *   int size,
+			 *   FILE *stream
+			 * );
+			 */
+			return lib('libc').declare('fgets', self.TYPE.ABI,
+				self.TYPE.char.ptr,	// return
+				self.TYPE.char.ptr,	// *s
+				self.TYPE.int,		// size
+				self.TYPE.FILE.ptr	// *stream
+			);
+		},
 		fread: function() {
 			/* http://linux.die.net/man/3/fread
 			 * size_t fread (

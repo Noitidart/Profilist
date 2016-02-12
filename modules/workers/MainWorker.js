@@ -3798,35 +3798,37 @@ function adoptOrphanTempProfs(aOptions={}) {
 		case 'darwin':
 
 				
-				var redirPlatPath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist temp dump.txt');
+				var cReadChunks = {
+					chunkSize: 1000
+				};
+				var rez_lsof = unixSubprocess('lsof -p ' + pidsNotInIni.join(',') + ' | grep .parentlock', {
+					readChunks: cReadChunks
+				});
+				console.log('rez_lsof:', rez_lsof);
+				console.log('cReadChunks:', cReadChunks);
 				
-				console.log('bashing:', '/bin/bash -c "lsof -p ' + pidsNotInIni.join(',') + ' | grep .parentlock" > "' + redirPlatPath + '"');
-				var popenFile = ostypes.API('popen')('/bin/bash -c "lsof -p ' + pidsNotInIni.join(',') + ' | grep .parentlock" > "' + redirPlatPath + '"', 'r');
-				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
-				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
-				
-				var redContents = OS.File.read(redirPlatPath, {encoding:'utf-8'});
-				console.log('redContents:', redContents);
-				
-				OS.File.remove(redirPlatPath);
-				
-				// Mac OS X 10.10.1
-					// "firefox 1527 noida    4w     REG                1,2         0 414826 /Users/noida/Library/Application Support/Firefox/Profiles/1sd3b67o.default/.parentlock"
-					// "firefox 1558 noida    4w     REG                1,2         0 419056 /Users/noida/Library/Application Support/Firefox/Profiles/d62n1gi5.Unnamed Profile 1/.parentlock"
+				if (rez_lsof === 0) {
+					// Mac OS X 10.10.1
+						// "firefox 1527 noida    4w     REG                1,2         0 414826 /Users/noida/Library/Application Support/Firefox/Profiles/1sd3b67o.default/.parentlock"
+						// "firefox 1558 noida    4w     REG                1,2         0 419056 /Users/noida/Library/Application Support/Firefox/Profiles/d62n1gi5.Unnamed Profile 1/.parentlock"
+						
+					// Ubunut 15.01
+						// "firefox 9194  noi   11wW     REG                8,1        0  926487 /home/noi/.mozilla/firefox/hrupz8x8.Unnamed Profile 1/.parentlock"
+						// "firefox 9259  noi   11wW     REG                8,1        0  926895 /home/noi/.mozilla/firefox/wt6j8vm4.Unnamed Profile 1/.parentlock"
 					
-				// Ubunut 15.01
-					// "firefox 9194  noi   11wW     REG                8,1        0  926487 /home/noi/.mozilla/firefox/hrupz8x8.Unnamed Profile 1/.parentlock"
-					// "firefox 9259  noi   11wW     REG                8,1        0  926895 /home/noi/.mozilla/firefox/wt6j8vm4.Unnamed Profile 1/.parentlock"
-				
-				for (var i=0; i<pidsNotInIni.length; i++) {
-					var indexOfPid = redContents.indexOf('firefox ' + pidsNotInIni[i]);
-					if (indexOfPid == -1) {
-						// this can happen. like when i ran ```jpm run -b "/usr/lib/firefox/firefox"``` this was found in ps: "node /usr/local/bin/jpm run -b /usr/lib/firefox/firefox"
-						continue;
+					for (var i=0; i<pidsNotInIni.length; i++) {
+						var indexOfPid = cReadChunks.contents.indexOf('firefox ' + pidsNotInIni[i]);
+						if (indexOfPid == -1) {
+							// this can happen. like when i ran ```jpm run -b "/usr/lib/firefox/firefox"``` this was found in ps: "node /usr/local/bin/jpm run -b /usr/lib/firefox/firefox"
+							continue;
+						}
+						var indexOfPath = cReadChunks.contents.indexOf(' /', indexOfPid);
+						var indexOfParentlock = cReadChunks.contents.indexOf('/.parentlock', indexOfPath);
+						lockPlatPath[pidsNotInIni[i]] = cReadChunks.contents.substring(indexOfPath + 1, indexOfParentlock + 12);
 					}
-					var indexOfPath = redContents.indexOf(' /', indexOfPid);
-					var indexOfParentlock = redContents.indexOf('/.parentlock', indexOfPath);
-					lockPlatPath[pidsNotInIni[i]] = redContents.substring(indexOfPath + 1, indexOfParentlock + 12);
+				} else {
+					// on both ubutnu and mac, if i get no results for those pid, it comes back rez_lsof is 256
+					// rez_lsof is like when profile manager is loaded
 				}
 					
 			break;
@@ -3868,7 +3870,7 @@ function adoptOrphanTempProfs(aOptions={}) {
 		gIniObj.push(newIniEntry);
 	}
 	
-	if (!aOptions.dontWriteIni) {
+	if (cntTempProfsFound && !aOptions.dontWriteIni) {
 		writeIni();
 	}
 	
@@ -3878,6 +3880,179 @@ function adoptOrphanTempProfs(aOptions={}) {
 }
 
 // platform helpers
+function unixSubprocess(aCmd, aOptions={}) {
+	// for unix based systems only
+	
+	// RETURNS
+		// aOptions.dontWaitExit == true
+			// exit code of process
+		// else
+			// undefined
+	
+	// if the aCmd returns nothing and aOptions.readChunks was supplied, if nothing read, then no `contents` key exists
+	
+	console.time('unixSubprocess');
+	
+	var cOptionsDefaults = {
+		readChunks: null, // either not set OR an object. see cReadChunksDefaults for more info
+		dontWaitExit: false // if you do set readChunks true though, it will wait till it gets to end of file. and i think exit happens immeidately after reaching eof. so if you set readChunks, i think setting dontWaitExit is pointless
+	};
+	
+	validateOptionsObj(aOptions, cOptionsDefaults);
+	
+	if (aOptions.readChunks) {
+		cReadChunksDefaults = {
+			chunkSize: 100, // (number) default chunk size - bigger the chunk size, the less amount of times ill have to fread to get all data thats the theory
+			dontTestEof: 0, // (number) if set to > 0, then it will return return when done reading, it will wait for at least 1 char though. otherwise if it didReadAnything is false this many times then it breaks
+			chunks: [], // NOT USER OPTION - set default for programttic use - array of chunks read
+			// contents: '' // this is only set if somethign was succesfully read // NOT USER OPTION - set default string of chunks read
+		};
+		validateOptionsObj(aOptions.readChunks, cReadChunksDefaults)
+	}
+	
+				//
+				/*
+				// method - totally fail
+				if (sA) {
+					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux > ' + sA.replace(/\W/g, '\\$&'), 'r');
+				} else {
+					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux', 'r');
+				}
+				console.log('popenFile:', popenFile);
+
+				var popenBufSize = 1000;
+				var popenBuf = ostypes.TYPE.char.array(popenBufSize)(''); // i just picked 1000, you can do however much you want
+				
+				var redChunks = [];
+				var redSize = popenBufSize;
+				var i = 0;
+				while (redSize == popenBufSize) {
+					console.log('i:', i);
+					i++;
+					redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
+					redChunks.push(popenBuf.readString().substring(0, redSize));
+				}
+				
+				console.log('redChunks:', redChunks);
+				
+				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+				
+				var redRows = redChunks.join('').split('\n');
+				*/
+				
+					/*
+					// method - popen fread first_char_known - this loops forever if the command returns nothing such as pgrep with something that has no processes
+					// submethod - pgrep --- with \x01 - this works good if data will eventually return by popen. however if no data returns, then this will loop forever
+					var popenFile = ostypes.API('popen')('/bin/bash -c "pgrep -u "$(whoami)" -l ' + (aOptions.firefoxOnly ? 'firefoxx' : '.') + '"', 'r');
+					console.log('popenFile:', popenFile);
+
+					var popenBufSize = 50;
+					var popenBuf = ostypes.TYPE.char.array(popenBufSize)('\x01'); // i just picked 1000, you can do however much you want
+					
+					// var rez_fgets = ostypes.API('fgets')(popenBuf, popenBufSize, popenFile);
+					// console.log('rez_fgets:', rez_fgets);
+					
+					// console.log('popenBuf:', popenBuf.readString());
+					
+					var redChunks = [];
+					var redSize = popenBufSize;
+					var i = 0;
+					while (redSize == popenBufSize || popenBuf[0] == 1) {
+						console.log('i:', i);
+						i++;
+						redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
+						console.log('redSize:', redSize, 'popenBuf:', popenBuf);
+						redChunks.push(popenBuf.readString().substring(0, redSize));
+					}
+					console.log('redChunks:', redChunks.join(''));
+					
+					
+					var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+					console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+					*/
+					
+	// method - popen fread feof
+	
+	var popenFile = ostypes.API('popen')(aCmd, 'r');
+	console.log('popenFile:', popenFile);
+	var cntDidNotReadAnything = 0; // number of times it did not read anything
+	
+	if (aOptions.readChunks) {
+		var popenBuf;
+		if (aOptions.dontTestEof) {
+			popenBuf = ostypes.TYPE.char.array(aOptions.readChunks.chunkSize)();
+		} else {
+			popenBuf = ostypes.TYPE.char.array(aOptions.readChunks.chunkSize)('\x01'); // first_char_known method
+		}
+		// the \x01 first char (known first char method) doesnt work because if the command returns nothing, then it will loop forever as buf is never updated as it always reads 0
+		
+		var i = 0;
+		var reachedEof;
+		if (!aOptions.readChunks.dontTestEof) {
+			var didReadAnything = false; // can just use the length of aOptions.readChunks.chunks to determine if anything read, but this var name just makes things clearer
+		}
+		while (!reachedEof) {
+			console.log('i:', i);
+			i++;
+			
+			redSize = ostypes.API('fread')(popenBuf, 1, aOptions.readChunks.chunkSize, popenFile); // ostypes.TYPE.char.size is 1, hence 1 for second arg
+			console.log('redSize:', redSize, redSize.toString());
+			redSize = parseInt(redSize); // have to parseInt as fread returns a ctypes.size_t which is wrapped in UInt64 - at least on my Ubuntu 15.02 testing							
+			console.log('redSize:', redSize);
+			
+			if (redSize !== 0) { // i cant do redSize as ctypes.size_t is wrapped in ctypes.UInt64 - at least on ubuntu
+				console.log('pushed');
+				didReadAnything = true;
+				aOptions.readChunks.chunks.push(popenBuf.readString().substring(0, redSize)); // need substring, as i am reusing a buffer, and the read doesnt return null terminated.
+			}
+			
+			if (!aOptions.readChunks.dontTestEof) {
+				if (redSize != aOptions.readChunks.chunkSize) {
+					reachedEof = ostypes.API('feof')(popenFile); // returns non-zero if reached eof
+					console.log('reachedEof:', reachedEof);
+				} // else dont even bother check if reachedEof as there is very likely more to read. if it read > 0 and < popenBufSize then likely no more to read, but it could be the process is still running so check eof. if read 0 then definitely check if reached eof
+			} else {
+				if (!didReadAnything) { // synonomous with if (!aOptions.readChunks.chunks.length)
+					// assume did not reach eof
+					cntDidNotReadAnything++;
+					if (cntDidNotReadAnything == aOptions.readChunks.dontTestEof) {
+						// reached max times to try to read
+						reachedEof = true;
+					}
+				} else {
+					if (redSize != aOptions.readChunks.chunkSize) {
+						// assume that because it read a size that is less then chunkSize, assume there is nothing more. i assume this because assuming if process insntantly wrote everything, then if gets a red size less then chunkSize then there is obviously no more to read.
+						// this is dangerous assumption as if process hangs/delays mid write, then it will read 0 or not all and it will think it reached eof
+						reachedEof = true;
+					}
+				}
+			}
+		}
+		if (aOptions.readChunks.chunks.length) { // synonomous with didReadAnything
+			console.log('aOptions.readChunks.contents:', aOptions.readChunks.chunks.join(''));
+			aOptions.readChunks.contents = aOptions.readChunks.chunks.join('');
+		}
+	}
+	
+	if (!aOptions.dontWaitExit) {
+		var rez_pclose = ostypes.API('pclose')(popenFile); // waits for process to exit
+		console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
+		
+		console.timeEnd('unixSubprocess');
+		return rez_pclose;
+	} else {
+		// as pclose MUST be called per each popen
+		setTimeout(function() {
+			var rez_pclose = ostypes.API('pclose')(popenFile); // waits for process to exit
+			console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
+		}, 0);
+		
+		console.timeEnd('unixSubprocess');
+		return undefined;
+	}
+}
+
 function winGetDosPathFromNtPath(u16_NTPath) {
 	// copy of http://stackoverflow.com/a/18792477/1828637
 	// u16_NTPath (string)
@@ -4985,108 +5160,57 @@ function getAllPID(aOptions={}) {
 		case 'gtk':
 		case 'darwin':
 
-				//
-				/*
-				// method - totally fail
-				if (sA) {
-					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux > ' + sA.replace(/\W/g, '\\$&'), 'r');
-				} else {
-					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux', 'r');
-				}
-				console.log('popenFile:', popenFile);
-
-				var popenBufSize = 1000;
-				var popenBuf = ostypes.TYPE.char.array(popenBufSize)(''); // i just picked 1000, you can do however much you want
+				var cReadChunks = {
+					chunkSize: (aOptions.firefoxOnly ? 200 : 1000)
+				};
+				var rez_pgrep = unixSubprocess('pgrep -u "$(whoami)" ' + (aOptions.firefoxOnly ? 'firefox' : '-l .'), {
+					readChunks: cReadChunks
+				});
+				console.log('rez_pgrep:', rez_pgrep);
+				console.log('cReadChunks:', cReadChunks);
 				
-				var redChunks = [];
-				var redSize = popenBufSize;
-				var i = 0;
-				while (redSize == popenBufSize) {
-					console.log('i:', i);
-					i++;
-					redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
-					redChunks.push(popenBuf.readString().substring(0, redSize));
-				}
-				
-				console.log('redChunks:', redChunks);
-				
-				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
-				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
-				
-				var redRows = redChunks.join('').split('\n');
-				*/
-
-				// method - works does ps to file
-				var redirPlatPath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist temp dump.txt');
-				
-				var popenFile = ostypes.API('popen')('/bin/bash -c "/bin/ps -x" > "' + redirPlatPath + '"', 'r');
-				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
-				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
-				
-				var redContents = OS.File.read(redirPlatPath, {encoding:'utf-8'});
-				// console.log('redContents:', redContents);
-				
-				OS.File.remove(redirPlatPath);
-				
-				redRows = redContents.split('\n');
-				// redRows[0] is the header. here are first three rows of output on different platforms:
-					// Ubuntu 15.01
-						// "  PID TTY      STAT   TIME COMMAND"
-						// "  931 ?        Ss     0:00 /lib/systemd/systemd --user"
-						// "  932 ?        S      0:00 (sd-pam)         "
-						// "  935 ?        Ss     0:01 /sbin/upstart --user"
-					// Mac OS X 10.10.1
-						// "  PID TTY           TIME CMD"
-						// "  179 ??         0:01.50 /usr/libexec/UserEventAgent (Aqua)"
-						// "  181 ??         0:02.27 /usr/sbin/distnoted agent"
-						// "  183 ??         0:01.49 /usr/sbin/cfprefsd agent"
-				var startIndexOfCmd = redRows[0].search(/(?:CMD|COMMAND)/i); // ubuntu had it titled command. mac had it titled cmd
-				
-				var fxOnlyPatt = /\/firefox(?: |$)/m;
-				
-				for (var i=1; i<redRows.length; i++) { // dont start at i=0 because thats the header row
-				
-					var cmd = redRows[i].substr(startIndexOfCmd);
+				if (aOptions.firefoxOnly && rez_pgrep == 256) {
+					// on mac, pgrep does not find itself, so it wont find self pid
+					cProcessIdsInfos[core.firefox.pid] = {
+						processName: 'firefox'
+					};
+				} else if (rez_pgrep === 0) {
+					var pidInfoRows = cReadChunks.contents.split('\n');
+					console.log('pidInfoRows:', pidInfoRows);
 					if (aOptions.firefoxOnly) {
-						if (!fxOnlyPatt.test(cmd)) {
-							continue;
+						for (var i=0; i<pidInfoRows.length; i++) {
+							if (pidInfoRows[i] == '') {
+								continue; // its a blank row, on ubuntu the last row is blank
+							}
+							cProcessIdsInfos[pidInfoRows[i]] = {
+								processName: 'firefox',
+								pid: pidInfoRows[i]
+							}
+						}
+						// pgrep on mac doesnt find itself's pid, so if its not in there, add it in
+						if (!(core.firefox.pid in cProcessIdsInfos)) {
+							console.log('pid of self was not in there so adding it in!!!');
+							cProcessIdsInfos[core.firefox.pid] = {
+								processName: 'firefox'
+							};
+						}
+					} else {
+						for (var i=0; i<pidInfoRows.length; i++) {
+							if (pidInfoRows[i] == '') {
+								continue; // its a blank row, on ubuntu the last row is blank
+							}
+							var cRowSplit = pidInfoRows[i].split(' ');
+							var cPid = cRowSplit[0];
+							var cProcessName = cRowSplit[1];
+							cProcessIdsInfos[cPid] = {
+								processName: cProcessName,
+								pid: cPid
+							};
 						}
 					}
-					
-					var pid = parseInt(redRows[i]);
-					cProcessIdsInfos[pid] = {};
-					
-					cProcessIdsInfos[pid].cmd = cmd;
-					
+				} else {
+					throw new Error('pgrep failed!!!');
 				}
-				
-				/*
-				// method - pgrep
-				var popenFile = ostypes.API('popen')('/bin/bash -c "pgrep -u "$(whoami)" -l ' + (aOptions.firefoxOnly ? 'firefox' : '.') + '"', 'r');
-				console.log('popenFile:', popenFile);
-
-				var popenBufSize = 1000;
-				var popenBuf = ostypes.TYPE.char.array(popenBufSize)(''); // i just picked 1000, you can do however much you want
-				
-				var redChunks = [];
-				var redSize = popenBufSize;
-				var i = 0;
-				while (redSize == popenBufSize) {
-					console.log('i:', i);
-					i++;
-					redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
-					console.log('redSize:', redSize);
-					redChunks.push(popenBuf.readString().substring(0, redSize));
-				}
-				
-				console.log('redChunks:', redChunks.join(''));
-				
-				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
-				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
-				
-				var redRows = redChunks.join('').split('\n');
-				console.log('redRows:', redRows);
-				*/
 				
 			break;
 		default:
