@@ -58,14 +58,14 @@ var WORKER = this;
 self.addEventListener('message', function(aMsgEvent) { // this is what you do if you want SIPWorker mainthread calling ability
 	var aMsgEventData = aMsgEvent.data;
 	if (Array.isArray(aMsgEventData)) {
-		console.error('worker got response for main thread calling SIPWorker functionality:', aMsgEventData)
+		// console.log('worker got response for main thread calling SIPWorker functionality:', aMsgEventData)
 		var funcName = aMsgEventData.shift();
 		if (funcName in WORKER) {
 			var rez_worker_call = WORKER[funcName].apply(null, aMsgEventData);
 		}
 		else { console.error('funcName', funcName, 'not in scope of WORKER') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 	} else {
-		console.error('no this is just regular promise worker message');
+		// console.log('no this is just regular promise worker message');
 		worker.handleMessage(aMsgEvent)
 	}
 });
@@ -303,7 +303,7 @@ function readIni() {
 	   }
 	}
 	
-	console.log('rez_read:', rez_read);
+	// console.log('rez_read:', rez_read);
 	strIniContents = rez_read;
 	
 	if (rez_read.indexOf('ProfilistStatus') == -1) {
@@ -342,7 +342,7 @@ function readIni() {
 
 	var matchIniBlock;
 	while (matchIniBlock = pattIniBlockWithDetails.exec(strIniContents)) {
-		console.log('matchIniBlock:', matchIniBlock);
+		// console.log('matchIniBlock:', matchIniBlock);
 		var cNewEntry = {
 			groupName: matchIniBlock[1]
 		}
@@ -358,6 +358,7 @@ function readIni() {
 	console.log('gIniObj:', gIniObj);
 	
 	formatNoWriteObjs();
+	
 }
 
 function formatNoWriteObjs() {
@@ -441,13 +442,19 @@ function formatNoWriteObjs() {
 	// set running statuses
 	var optsFor_GetIsRunningFromIniFromPlat = {};
 	if (['winnt', 'wince', 'winmo'].indexOf(core.os.mname) > -1) {
-		optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos = getAllPID({firefoxOnly:false});
+		optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos = getAllPID({firefoxOnly:true});
 	}
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path) {
 			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path, optsFor_GetIsRunningFromIniFromPlat);
 		}
 	}
+	
+	// adopt any orphan profiles - which are temp profs obviously - :important: :note: i have to do this AFTER the running statuses of the profiles in the ini are set && BEFORE the exeIconSlug stuff below. because the formatting in adoptOrphanTempProfs is not done throughly, it just adds a noWriteObj with status. which is ok as everything above this line in formatNoWriteObjs is all the formatting done by adoptOrphanTempProfs (set if its temp profile, and set running status). the remaining important part is setting exeIconSlug and populating imgSrcObj_nearest16_forImgSlug etc as its running and the code below this line in the remaining of this function will take care of that  - actually this is a big big big reason why the level of formatting done by adoptOrphanTempProfs is enough link18384394949050
+	var tempProfsAdopted = adoptOrphanTempProfs({
+		dontWriteIni: true,
+		processIdsInfos: optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos ? optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos : getAllPID({firefoxOnly:true})
+	});
 	
 	// set global var telling if dev mode is on or off
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // not really global. i usually use g prefix on real global vars. but here im just using it to idicate that the general etnry if from gIniObj
@@ -516,7 +523,7 @@ function formatNoWriteObjs() {
 		}
 	}
 	
-		// now go through and fetch all the nearest 16 img srcs
+	// now go through and fetch all the nearest 16 img srcs
 	for (var aImgSlug in gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug) {
 		gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[aImgSlug] = getImgSrcForSize(getImgSrcsForImgSlug(aImgSlug), 16);
 	}
@@ -526,6 +533,11 @@ function formatNoWriteObjs() {
 		// need to touch
 		curProfIniEntry.ProfilistStatus = '1';
 		writeIni();
+	} else {
+		// any other reasons to write to ini?
+		if (tempProfsAdopted) {
+			writeIni();
+		}
 	}
 }
 
@@ -952,6 +964,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 		// false - if NOT running
 	// currentProfile must be marked in gIniObj before using this
 
+	console.time('getIsRunningFromIniFromPlat');
 	var cOptionsDefaults = {
 		winProcessIdsInfos: undefined // provide thte return value from getAllPID, it needs to have creation time of the pid in here. then this function will return the pid for windows as well
 	};
@@ -1039,56 +1052,61 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 				console.log('rez_lockFd:', rez_lockFd);
 				if (cutils.jscEqual(rez_lockFd, -1)) {
 					// failed to open
-					// :todo: add test for errno, if it tells me it file doesnt exist then obviously return 0 meaning its not in use
-					console.error('getIsRunningFromIniFromPlat -> ostypes.api.open', {msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',errno: ctypes.errno});
-					throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.open', {
-						msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
-						errno: ctypes.errno
-					});
+					if (ctypes.errno == OS.Constants.libc.ENOENT) {
+						// file doesnt exist. so obviously not running. maybe profile hasnt been made yet.
+						cIsRunning = 0;
+					} else {
+						console.error('should never get here - getIsRunningFromIniFromPlat -> ostypes.api.open', {msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',errno: ctypes.errno});
+						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.open', {
+							msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
+							errno: ctypes.errno
+						});
+					}
 				}
 
-				
-				try {
-					var testlock = ostypes.TYPE.flock();
-					testlock.l_type = OS.Constants.libc.F_WRLCK; //can use F_RDLCK but keep openFd at O_RDWR, it just works
-					testlock.l_start = 0;
-					testlock.l_whence = OS.Constants.libc.SEEK_SET;
-					testlock.l_len = 0;
-					
-					var rez_fcntl = ostypes.API('fcntl')(rez_lockFd, OS.Constants.libc.F_GETLK, testlock.address());
-					console.log('rez_fcntl:', rez_fcntl);
-					if (cutils.jscEqual(rez_fcntl, -1)) {
-						// failed to open
-						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.fcntl', {
-							msg: 'failed to fcntl cParentLockPath: "' + cParentLockPath + '"',
-							errno: ctypes.errno
-						});
+				if (cIsRunning !== 0) {
+					try {
+						var testlock = ostypes.TYPE.flock();
+						testlock.l_type = OS.Constants.libc.F_WRLCK; //can use F_RDLCK but keep openFd at O_RDWR, it just works
+						testlock.l_start = 0;
+						testlock.l_whence = OS.Constants.libc.SEEK_SET;
+						testlock.l_len = 0;
+						
+						var rez_fcntl = ostypes.API('fcntl')(rez_lockFd, OS.Constants.libc.F_GETLK, testlock.address());
+						console.log('rez_fcntl:', rez_fcntl);
+						if (cutils.jscEqual(rez_fcntl, -1)) {
+							// failed to open
+							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.fcntl', {
+								msg: 'failed to fcntl cParentLockPath: "' + cParentLockPath + '"',
+								errno: ctypes.errno
+							});
+						}
+						
+						// l_pid is unchanged if it wasnt locked, and since js-ctypes instatiates the struct at value of 0, i can just return that value, so 0 means its not running
+						cIsRunning = parseInt(cutils.jscGetDeepest(testlock.l_pid));
+						console.info('got cIsRunning:', cIsRunning);
+						
+					} finally {
+						var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
+						console.log('rez_closeLockFd:', rez_closeLockFd);
+						if (!cutils.jscEqual(rez_closeLockFd, 0)) {
+							// failed to close
+							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
+								msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
+								errno: ctypes.errno
+							});
+						}
 					}
 					
-					// l_pid is unchanged if it wasnt locked, and since js-ctypes instatiates the struct at value of 0, i can just return that value, so 0 means its not running
-					cIsRunning = parseInt(cutils.jscGetDeepest(testlock.l_pid));
-					console.info('got cIsRunning:', cIsRunning);
-					
-				} finally {
-					var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
-					console.log('rez_closeLockFd:', rez_closeLockFd);
-					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
-						// failed to close
-						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
-							msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
-							errno: ctypes.errno
-						});
+					if (core.os.mname != 'darwin' && cIsRunning === undefined) {
+						// then its gtk, and cIsRunning was found so break
+						// meaning it still has not determined if the profile is running or not, and it is a (non-mac) unix system
+						var cSymLockPath = OS.Path.join(cProfRootDir, 'lock');
+						// i guess old versions of unix have this symlock path
+						// :todo: find a scenario, i could not find it as of yet, so i havent written this up yet. i just recall i saw this in the code from mxr
+							// so for now just guess its not running
+						cIsRunning = 0;
 					}
-				}
-				
-				if (core.os.mname != 'darwin' && cIsRunning === undefined) {
-					// then its gtk, and cIsRunning was found so break
-					// meaning it still has not determined if the profile is running or not, and it is a (non-mac) unix system
-					var cSymLockPath = OS.Path.join(cProfRootDir, 'lock');
-					// i guess old versions of unix have this symlock path
-					// :todo: find a scenario, i could not find it as of yet, so i havent written this up yet. i just recall i saw this in the code from mxr
-						// so for now just guess its not running
-					cIsRunning = 0;
 				}
 
 			break;
@@ -1100,6 +1118,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 	}
 	// :note: maybe verify or something - there seems to be some platform called vms, but i cant find such an os for virtualmachine - http://mxr.mozilla.org/mozilla-release/source/profile/dirserviceprovider/src/nsProfileLock.cpp#581
 	
+	console.timeEnd('getIsRunningFromIniFromPlat');
 	return cIsRunning;
 }
 function getLastExePathForProfFromFS(aProfPath) {
@@ -3423,13 +3442,16 @@ function readSubdirsInDir(aDirPlatPath) {
 // End - Iconset Picker
 
 function adoptOrphanTempProfs(aOptions={}) {
+	// description: if any firefox processes are found running, but were not in ini, then they are obviously temporary profiles. so usurp them into ini as [TempProfile##]
+	// this function will push the new ini entires into gIniObj. by default it will not write to ini. if you want it to, then set dontWriteIni:false in options
 	// requires that gIniObj have formatted noWriteObj
 	// returns number of new temp profiles found
 	
-	console.time('findNewTempProfs');
+	console.time('adoptOrphanTempProfs');
 	
 	var cOptionsDefaults = {
-		processIdsInfos: null // supply here the return from getAllPID
+		processIdsInfos: null, // supply here the return from getAllPID
+		dontWriteIni: true
 	}
 	validateOptionsObj(aOptions, cOptionsDefaults);
 	
@@ -3451,11 +3473,12 @@ function adoptOrphanTempProfs(aOptions={}) {
 		}
 	}
 	
-	pidsNotInIni = pidsInIni; // :debug:
-	pidsNotInIni.splice(pidsNotInIni.indexOf(core.firefox.pid + ''), 1); // :debug: i have to make sure the current pid is not in there, as WINNT duplicates handle, so it will make the mem all messy
+	// pidsNotInIni = pidsInIni; // :debug:
+	// pidsNotInIni.splice(pidsNotInIni.indexOf(core.firefox.pid + ''), 1); // :debug: i have to make sure the current pid is not in there, as WINNT duplicates handle, so it will make the mem all messy
 	console.log('pidsNotInIni:', pidsNotInIni);
 	
 	if (pidsNotInIni.length == 0) {
+		console.timeEnd('adoptOrphanTempProfs');
 		return 0; // no new temp profiles found
 	}
 	
@@ -3797,6 +3820,10 @@ function adoptOrphanTempProfs(aOptions={}) {
 				
 				for (var i=0; i<pidsNotInIni.length; i++) {
 					var indexOfPid = redContents.indexOf('firefox ' + pidsNotInIni[i]);
+					if (indexOfPid == -1) {
+						// this can happen. like when i ran ```jpm run -b "/usr/lib/firefox/firefox"``` this was found in ps: "node /usr/local/bin/jpm run -b /usr/lib/firefox/firefox"
+						continue;
+					}
 					var indexOfPath = redContents.indexOf(' /', indexOfPid);
 					var indexOfParentlock = redContents.indexOf('/.parentlock', indexOfPath);
 					lockPlatPath[pidsNotInIni[i]] = redContents.substring(indexOfPath + 1, indexOfParentlock + 12);
@@ -3812,16 +3839,18 @@ function adoptOrphanTempProfs(aOptions={}) {
 	console.timeEnd('populate lockPlatPath');
 	console.log('lockPlatPath:', lockPlatPath);
 	
-	// create new ini entry for each
+	// create new ini entry for each and push to gIniObj
 	var nextProfNum = getNextProfNum(gIniObj);
 	nextProfNum--;
+	var cntTempProfsFound = 0;
 	for (var pid in lockPlatPath) {
 		nextProfNum++;
+		cntTempProfsFound++;
 		var cLockPlatPath = lockPlatPath[pid];
 		var cFullPathToProfileDir = OS.Path.dirname(cLockPlatPath);
 		var newIniEntry = {
 			groupName: 'TempProfile' + nextProfNum,
-			Name: OS.Path.basename(lockPlatPath[pid]),
+			Name: OS.Path.basename(cFullPathToProfileDir),
 			IsRelative: OS.Path.dirname(cFullPathToProfileDir) == core.profilist.path.defProfRt ? '1' : '0',
 			// Path: cFullPathToProfileDir // depends on IsRelative
 			noWriteObj: {
@@ -3832,14 +3861,20 @@ function adoptOrphanTempProfs(aOptions={}) {
 
 		newIniEntry.Path = newIniEntry.IsRelative === '0' ? cFullPathToProfileDir : getRelativeDescriptor(cFullPathToProfileDir, OS.Constants.Path.userApplicationDataDir);
 		
-		// no need to format whole gIniObj as per link8393938311
+		// no need to format whole gIniObj as per link8393938311 - ACTUALLY the more important reason for this being enough level of formatting is link18384394949050
 		
 		console.log('newIniEntry:', newIniEntry);
+		
+		gIniObj.push(newIniEntry);
 	}
 	
-	console.timeEnd('findNewTempProfs');
+	if (!aOptions.dontWriteIni) {
+		writeIni();
+	}
 	
-	// add these to ini
+	console.timeEnd('adoptOrphanTempProfs');
+	
+	return cntTempProfsFound;
 }
 
 // platform helpers
@@ -3962,36 +3997,6 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 		if(u16_NTPath.indexOf(js_u16_NtVolume) === 0) {
 			return u16_Drv + u16_NTPath.substr(js_u16_NtVolume.length);
 		}
-	}
-	
-	throw new Error('debug');
-	
-	var u16_Drv = u16_Drives;
-	while (u16_Drv[0]) {
-		var u16_Next = u16_Drv + u16_Drv.length + 1;
-		
-		u16_Drv[2] = 0; // the backslash is not allowed for QueryDosDevice()
-		
-		var u16_NtVolume = ostypes.TYPE.WCHAR.array(1000)();
-		u16_NtVolume[0] = 0;
-		
-        // may return multiple strings!
-        // returns very weird strings for network shares
-		var rez_queryDos = ostypes.API('QueryDosDevice')(u16_Drv, u16_NtVolume, u16_NtVolume.constructor.size / 2);
-		if (cutils.jscEqual(rez_queryDos, 0)) {
-			console.error('failed to query dos device, winLastError:', ctypes.winLastError);
-			throw new Error('failed to query dos device');
-		}
-		
-        // int s32_Len = (int)wcslen(u16_NtVolume);
-        // if (s32_Len > 0 && wcsnicmp(u16_NTPath, u16_NtVolume, s32_Len) == 0)
-        // {
-        //     *ps_DosPath  =  u16_Drv;
-        //     *ps_DosPath += (u16_NTPath + s32_Len);
-        //     return 0;
-        // }
-        // 
-        // u16_Drv = u16_Next;
 	}
 	
 	console.error('ERROR_BAD_PATHNAME');
@@ -4899,8 +4904,9 @@ function getAllPID(aOptions={}) {
 					// createTime - js date object, of time pid was mide
 					// imageName - only present if the process has a name. if it does, then this is a string.
 				// OSX
-				
+					// processName
 				// Linux
+					// processName
 
 	console.time('getAllPID');
 	
@@ -4981,6 +4987,7 @@ function getAllPID(aOptions={}) {
 
 				//
 				/*
+				// method - totally fail
 				if (sA) {
 					var popenFile = ostypes.API('popen')('/bin/bash -c /bin/ps aux > ' + sA.replace(/\W/g, '\\$&'), 'r');
 				} else {
@@ -5008,7 +5015,8 @@ function getAllPID(aOptions={}) {
 				
 				var redRows = redChunks.join('').split('\n');
 				*/
-				
+
+				// method - works does ps to file
 				var redirPlatPath = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist temp dump.txt');
 				
 				var popenFile = ostypes.API('popen')('/bin/bash -c "/bin/ps -x" > "' + redirPlatPath + '"', 'r');
@@ -5034,7 +5042,7 @@ function getAllPID(aOptions={}) {
 						// "  183 ??         0:01.49 /usr/sbin/cfprefsd agent"
 				var startIndexOfCmd = redRows[0].search(/(?:CMD|COMMAND)/i); // ubuntu had it titled command. mac had it titled cmd
 				
-				var fxOnlyPatt = /firefox(?: |$)/m;
+				var fxOnlyPatt = /\/firefox(?: |$)/m;
 				
 				for (var i=1; i<redRows.length; i++) { // dont start at i=0 because thats the header row
 				
@@ -5052,7 +5060,34 @@ function getAllPID(aOptions={}) {
 					
 				}
 				
+				/*
+				// method - pgrep
+				var popenFile = ostypes.API('popen')('/bin/bash -c "pgrep -u "$(whoami)" -l ' + (aOptions.firefoxOnly ? 'firefox' : '.') + '"', 'r');
+				console.log('popenFile:', popenFile);
 
+				var popenBufSize = 1000;
+				var popenBuf = ostypes.TYPE.char.array(popenBufSize)(''); // i just picked 1000, you can do however much you want
+				
+				var redChunks = [];
+				var redSize = popenBufSize;
+				var i = 0;
+				while (redSize == popenBufSize) {
+					console.log('i:', i);
+					i++;
+					redSize = ostypes.API('fread')(popenBuf, 1, popenBufSize, popenFile); // ostypes.TYPE.char.size is 1
+					console.log('redSize:', redSize);
+					redChunks.push(popenBuf.readString().substring(0, redSize));
+				}
+				
+				console.log('redChunks:', redChunks.join(''));
+				
+				var rez_plcose = ostypes.API('pclose')(popenFile); // waits for process to exit
+				console.log('rez_plcose:', cutils.jscGetDeepest(rez_plcose));
+				
+				var redRows = redChunks.join('').split('\n');
+				console.log('redRows:', redRows);
+				*/
+				
 			break;
 		default:
 			throw new MainWorkerError({

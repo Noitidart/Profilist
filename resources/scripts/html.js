@@ -1776,7 +1776,7 @@ var bootstrapMsgListener = {
 	funcScope: bootstrapCallbacks,
 	receiveMessage: function(aMsgEvent) {
 		var aMsgEventData = aMsgEvent.data;
-		console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
+		// console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
 		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
 		
 		var callbackPendingId;
