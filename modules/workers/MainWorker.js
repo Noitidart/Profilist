@@ -412,30 +412,26 @@ function formatNoWriteObjs() {
 	
 	// settle curProfIniEntry - meaning if its temporary profile, and it has no entry in ini, then put one in -- no need to test/set writeIni here, at the end i test if curProfIniEntry is touched, and obviously it wont be so it will get touched and written
 	// update noWriteObj of currentProfile OR if its a temp profile then update gIniObj with it and write it to ini
-	// if (!foundCurrentProfile || (foundCurrentProfile && curProfIniEntry.groupName.indexOf('TempProfile') == 0)) {
+	// if (!foundCurrentProfile || (foundCurrentProfile && curProfIniEntry.groupName.indexOf('TempProfile') === 0)) {
 		// its a temp profile
 		if (!curProfIniEntry) {
-			// find max num
-			var cMaxProfileNum = -1;
-			var pattProfileNum = /\[(?:Temp)?Profile(\d+)\]/;
-			for (var i=0; i<gIniObj.length; i++) {
-				var matchProfileNum = pattProfileNum.exec(gIniObj[i].groupName);
-				if (matchProfileNum) {
-					var cNum = parseInt(matchProfileNum[1]);
-					if (cNum > cMaxProfileNum) {
-						cMaxProfileNum = cNum;
-					}
-				}
-			}
+			// create new ini entry for this profile, to match the level of formatting a ini entry should have up to this point in formatNoWriteObjs
 			curProfIniEntry = {
-				groupName: 'TempProfile' + (cMaxProfileNum + 1)
-			}
+				groupName: 'TempProfile' + getNextProfNum(gIniObj),
+				Name: OS.Path.basename(curProfRt),
+				IsRelative: curProf_isRelative ? '1' : '0',
+				Path: curProf_isRelative ? curProf_relativeDescriptor : curProfRt,
+				noWriteObj: {
+					currentProfile: true
+				}
+			};
+			gIniObj.push(curProfIniEntry);
 		}
 	// }
 
 	// go through and note in noWriteObj if its a temporary profile
 	for (var i=0; i<gIniObj.length; i++) {
-		if (gIniObj[i].groupName.indexOf('[TempProfile') > -1) {
+		if (gIniObj[i].groupName.indexOf('TempProfile') === 0) {
 			gIniObj[i].noWriteObj.temporaryProfile = true;
 		}
 	}
@@ -479,6 +475,7 @@ function formatNoWriteObjs() {
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path && gIniObj[i].noWriteObj.temporaryProfile && !gIniObj[i].noWriteObj.status) {
 			// its a temporary profile that is not running
+			console.log('debug, profile dir ("', getFullPathToProfileDirFromIni(gIniObj[i].Path), '") exists:', OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path)));
 			if (!gJProfilistDev || keyValTemp === '0' /* only gets to this OR if dev mode is on */ || !OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path)) /* only gets to this OR if dev mode is on and persit temp profiles is set to true/1 */) { // link9344656561
 				// dev mode is off SO delete non-running temp profiles EVEN IF the profile directory exists
 				// OR dev mode is on, but setting is to not persist non-running profiles link33223361217 SO delete non-running temp profiles EVEN IF the profile directory exists
@@ -580,7 +577,7 @@ function writeIni() {
 	var thisProfileGroupNum = 0;
 	for (var i=0; i<gIniObj.length; i++) {
 		var indexOfProfile = gIniObj[i].groupName.indexOf('Profile');
-		if (indexOfProfile == 0 /* std profile group */ || indexOfProfile == 4 /* temp profile */) {
+		if (indexOfProfile === 0 /* std profile group */ || indexOfProfile == 4 /* temp profile */) {
 			writeStrArr.push('[' + gIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */) + thisProfileGroupNum + ']'); // i calculate the TempProfile## or the Profile## so when I create or delete a profile I dont have to worry about using right number :note: // link88574221
 			thisProfileGroupNum++;
 		} else {
@@ -2532,20 +2529,38 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 }
 
 function getNextProfNum(aIniObj) {
-	// find next ## for [Profile##]/[TempProfile##]
+	// find next ## for [Profile##]/[TempProfile##] PER the names in the ini. NOT the count of profiles. this is important because the latest added should be the highest number for sorting by created date. writeIni of course writes it per profile count. but that isnt read into gIniObj on write. so just maintain it by as newly added, the number is greater
 	var groupNameNumberNext = 0;
 	for (var i=0; i<aIniObj.length; i++) {
 		if (aIniObj[i].Path) {
 			var indexOfProfile = aIniObj[i].groupName.indexOf('Profile');
-			if (indexOfProfile == 0 /* std profile group [Profile##] */ || indexOfProfile == 4 /* temp profile [TempProfile##] */) {
-				groupNameNumberThis = parseInt(aIniObj[i].groupName.substr(0, indexOfProfile + 7 /* len of word Profile */));
+			if (indexOfProfile === 0 /* std profile group [Profile##] */ || indexOfProfile == 4 /* temp profile [TempProfile##] */) {
+				groupNameNumberThis = parseInt(aIniObj[i].groupName.substr(indexOfProfile + 7 /* len of word Profile */));
+				console.log('found groupNameNumberThis:', groupNameNumberThis);
 				if (groupNameNumberThis >= groupNameNumberNext) {
 					groupNameNumberNext = groupNameNumberThis + 1;
 				}
 			}
 		}
 	}
+	
+	console.log('ok this is next prof type group names number:', groupNameNumberNext);
 	return groupNameNumberNext;
+	
+	/*
+			// find max num
+			var cMaxProfileNum = -1;
+			var pattProfileNum = /\[(?:Temp)?Profile(\d+)\]/;
+			for (var i=0; i<gIniObj.length; i++) {
+				var matchProfileNum = pattProfileNum.exec(gIniObj[i].groupName);
+				if (matchProfileNum) {
+					var cNum = parseInt(matchProfileNum[1]);
+					if (cNum > cMaxProfileNum) {
+						cMaxProfileNum = cNum;
+					}
+				}
+			}
+	*/
 }
 
 function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt) {
