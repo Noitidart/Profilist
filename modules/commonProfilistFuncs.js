@@ -111,7 +111,7 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	
 	// aIniEntry is almost always the curProfIniEntry
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
 	if (gKeyInfoStore[aKeyName].unspecificOnly) {
 		// get profile-unspecific value else null
@@ -172,9 +172,9 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 	
 	// aIniEntry is almost always the curProfIniEntry
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
-	if (aNewSpecifincess_optional !== undefined && (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly)) { console.error('DEV_ERROR - aKeyName is unspecific ONLY or specific ONLY, therefore you cannot pass a aNewSpecifincess_optional, aNewSpecifincess_optional:', aNewSpecifincess_optional, 'gKeyInfoStore[aKeyName]:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
 	// LOGIC
 	// if gKeyInfoStore[aKeyName].unspecificOnly
@@ -190,15 +190,15 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 		
 	if (gKeyInfoStore[aKeyName].unspecificOnly) {
 		aGenIniEntry[aKeyName] = aNewVal;
-		console.log('set unspecificOnly', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+
 	} else if (gKeyInfoStore[aKeyName].specificOnly) {
 		aIniEntry[aKeyName] = aNewVal;
-		console.log('set specificOnly', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+
 	} else {
 		// figure out specificness
 		var specificness;
 		if (aNewSpecifincess_optional !== undefined) {
-			if (aNewSpecifincess_optional !== 1 && aNewSpecifincess_optional !== 2) { console.error('DEV_ERROR - aNewSpecifincess_optional must be 1 or 2! you set it to:', aNewSpecifincess_optional); throw new Error('DEV_ERROR'); }
+
 			// assume that its changing, SO 1)if going to specific, then clear out the general 2)if going to general, then clear out specific, but clearing out specific is not so important per link757483833
 			specificness = aNewSpecifincess_optional;
 		} else {
@@ -209,7 +209,7 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 			if (aNewSpecifincess_optional !== undefined) {
 				// because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
 				// if going to unspecific, then clearing out the specific values is not important, but its good practice per link757483833
-				if (!aIniObj_neededWhenTogglignSpecificness) { console.error('DEV_ERROR, as toggling away from specific, meaning going to unspecific, i need the aIniObj so i can clear out the specific values for good practice, you as a dev did not provide this aIniObj!'); throw new Error('DEV_ERROR'); }
+
 				for (var p in aIniObj_neededWhenTogglignSpecificness) {
 					if (aIniObj_neededWhenTogglignSpecificness[p].Path) {
 						delete aIniObj_neededWhenTogglignSpecificness[p][aKeyName]
@@ -217,7 +217,7 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 				}
 			}
 			aGenIniEntry[aKeyName] = aNewVal;
-			console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+
 		} else {
 			// it is specific
 			if (aNewSpecifincess_optional !== undefined) {
@@ -226,7 +226,7 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 				delete aGenIniEntry[aKeyName];
 			}
 			aIniEntry[aKeyName] = aNewVal;
-			console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+
 		}
 	}
 }
