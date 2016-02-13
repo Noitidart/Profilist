@@ -439,22 +439,27 @@ function formatNoWriteObjs() {
 		}
 	}
 	
+	// fetch all pid - needed for windows to "set running statusses" - and needed for all platforms to adoptOrphanTempProfs
+	console.log('will now fetch fxOnlyPidInfos');
+	var fxOnlyPidInfos = getAllPID({firefoxOnly:true});
+	console.log('got fxOnlyPidInfos:', fxOnlyPidInfos);
+	
 	// set running statuses
-	var optsFor_GetIsRunningFromIniFromPlat = {};
-	if (['winnt', 'wince', 'winmo'].indexOf(core.os.mname) > -1) {
-		optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos = getAllPID({firefoxOnly:true});
-	}
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path) {
-			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path, optsFor_GetIsRunningFromIniFromPlat);
+			gIniObj[i].noWriteObj.status = getIsRunningFromIniFromPlat(gIniObj[i].Path, {
+				winProcessIdsInfos: (['winnt', 'wince', 'winmo'].indexOf(core.os.mname) == -1 ? undefined : fxOnlyPidInfos)
+			});
 		}
 	}
 	
 	// adopt any orphan profiles - which are temp profs obviously - :important: :note: i have to do this AFTER the running statuses of the profiles in the ini are set && BEFORE the exeIconSlug stuff below. because the formatting in adoptOrphanTempProfs is not done throughly, it just adds a noWriteObj with status. which is ok as everything above this line in formatNoWriteObjs is all the formatting done by adoptOrphanTempProfs (set if its temp profile, and set running status). the remaining important part is setting exeIconSlug and populating imgSrcObj_nearest16_forImgSlug etc as its running and the code below this line in the remaining of this function will take care of that  - actually this is a big big big reason why the level of formatting done by adoptOrphanTempProfs is enough link18384394949050
+	console.log('will now try adopting orphans');
 	var tempProfsAdopted = adoptOrphanTempProfs({
 		dontWriteIni: true,
-		processIdsInfos: optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos ? optsFor_GetIsRunningFromIniFromPlat.winProcessIdsInfos : getAllPID({firefoxOnly:true})
+		processIdsInfos: fxOnlyPidInfos
 	});
+	console.log('done adopting orphans');
 	
 	// set global var telling if dev mode is on or off
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // not really global. i usually use g prefix on real global vars. but here im just using it to idicate that the general etnry if from gIniObj
@@ -968,6 +973,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 	var cOptionsDefaults = {
 		winProcessIdsInfos: undefined // provide thte return value from getAllPID, it needs to have creation time of the pid in here. then this function will return the pid for windows as well
 	};
+	// :todo: for profilist purposes winProcessIdsInfos is REQUIRED, its not an option if windows. make it throw if it isnt submitted
 	
 	validateOptionsObj(aOptions, cOptionsDefaults);
 	
@@ -3826,10 +3832,11 @@ function adoptOrphanTempProfs(aOptions={}) {
 						var indexOfParentlock = cReadChunks.contents.indexOf('/.parentlock', indexOfPath);
 						lockPlatPath[pidsNotInIni[i]] = cReadChunks.contents.substring(indexOfPath + 1, indexOfParentlock + 12);
 					}
-				} else {
+				} // else {
 					// on both ubutnu and mac, if i get no results for those pid, it comes back rez_lsof is 256
-					// rez_lsof is like when profile manager is loaded
-				}
+					// this happens, when firefox pid is found for firefox profile manager is open but profile hasnt been selected/started yet
+					// :todo: test on linux (already tested on mac)
+				// }
 					
 			break;
 		default:
@@ -3891,6 +3898,7 @@ function unixSubprocess(aCmd, aOptions={}) {
 	
 	// if the aCmd returns nothing and aOptions.readChunks was supplied, if nothing read, then no `contents` key exists
 	
+	console.log('starting unixSubprocess with aCmd:', aCmd);
 	console.time('unixSubprocess');
 	
 	var cOptionsDefaults = {
@@ -3975,7 +3983,8 @@ function unixSubprocess(aCmd, aOptions={}) {
 	// method - popen fread feof
 	
 	var popenFile = ostypes.API('popen')(aCmd, 'r');
-	console.log('popenFile:', popenFile);
+	// console.log('popenFile:', popenFile);
+	// :todo: error handling if popen fails
 	var cntDidNotReadAnything = 0; // number of times it did not read anything
 	
 	if (aOptions.readChunks) {
@@ -3993,16 +4002,15 @@ function unixSubprocess(aCmd, aOptions={}) {
 			var didReadAnything = false; // can just use the length of aOptions.readChunks.chunks to determine if anything read, but this var name just makes things clearer
 		}
 		while (!reachedEof) {
-			console.log('i:', i);
+			// console.log('i:', i);
 			i++;
 			
 			redSize = ostypes.API('fread')(popenBuf, 1, aOptions.readChunks.chunkSize, popenFile); // ostypes.TYPE.char.size is 1, hence 1 for second arg
-			console.log('redSize:', redSize, redSize.toString());
+			// console.log('redSize:', redSize, redSize.toString());
 			redSize = parseInt(redSize); // have to parseInt as fread returns a ctypes.size_t which is wrapped in UInt64 - at least on my Ubuntu 15.02 testing							
-			console.log('redSize:', redSize);
+			// console.log('redSize:', redSize);
 			
 			if (redSize !== 0) { // i cant do redSize as ctypes.size_t is wrapped in ctypes.UInt64 - at least on ubuntu
-				console.log('pushed');
 				didReadAnything = true;
 				aOptions.readChunks.chunks.push(popenBuf.readString().substring(0, redSize)); // need substring, as i am reusing a buffer, and the read doesnt return null terminated.
 			}
@@ -4030,14 +4038,14 @@ function unixSubprocess(aCmd, aOptions={}) {
 			}
 		}
 		if (aOptions.readChunks.chunks.length) { // synonomous with didReadAnything
-			console.log('aOptions.readChunks.contents:', aOptions.readChunks.chunks.join(''));
+			// console.log('aOptions.readChunks.contents:', aOptions.readChunks.chunks.join(''));
 			aOptions.readChunks.contents = aOptions.readChunks.chunks.join('');
 		}
 	}
 	
 	if (!aOptions.dontWaitExit) {
 		var rez_pclose = ostypes.API('pclose')(popenFile); // waits for process to exit
-		console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
+		// console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
 		
 		console.timeEnd('unixSubprocess');
 		return rez_pclose;
@@ -4045,7 +4053,7 @@ function unixSubprocess(aCmd, aOptions={}) {
 		// as pclose MUST be called per each popen
 		setTimeout(function() {
 			var rez_pclose = ostypes.API('pclose')(popenFile); // waits for process to exit
-			console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
+			// console.log('rez_pclose:', cutils.jscGetDeepest(rez_pclose));
 		}, 0);
 		
 		console.timeEnd('unixSubprocess');
@@ -5080,6 +5088,7 @@ function getAllPID(aOptions={}) {
 					// imageName - only present if the process has a name. if it does, then this is a string.
 				// OSX
 					// processName
+					// exePath - platform path to executable
 				// Linux
 					// processName
 
@@ -5158,7 +5167,7 @@ function getAllPID(aOptions={}) {
 
 			break;
 		case 'gtk':
-		case 'darwin':
+		case 'darwin':  // works on mac as well. with console open and a bunch of console.logging avg of 60ms.
 
 				var cReadChunks = {
 					chunkSize: (aOptions.firefoxOnly ? 200 : 1000)
@@ -5170,7 +5179,7 @@ function getAllPID(aOptions={}) {
 				console.log('cReadChunks:', cReadChunks);
 				
 				if (aOptions.firefoxOnly && rez_pgrep == 256) {
-					// on mac, pgrep does not find itself, so it wont find self pid
+					// on mac, pgrep does not find itself, so it wont find self pid - i dont test specifically for mac, because it might be some random *nix that doesnt either
 					cProcessIdsInfos[core.firefox.pid] = {
 						processName: 'firefox'
 					};
@@ -5213,6 +5222,53 @@ function getAllPID(aOptions={}) {
 				}
 				
 			break;
+		
+		// case 'darwin':
+			
+				/*
+				// this runningAppsArr method takes average of 150ms with console open. with it closed it takes avg 60ms. which his horrendous! so im using the pgrep method of unix for darwin as well
+				// [[NSWorkspace sharedWorkspace] runningApplications];
+				var NSWorkspace = ostypes.HELPER.class('NSWorkspace');
+				var workspace = ostypes.API('objc_msgSend')(NSWorkspace, ostypes.HELPER.sel('sharedWorkspace'));
+				
+				var runningAppsArr = ostypes.API('objc_msgSend')(workspace, ostypes.HELPER.sel('runningApplications'));
+				
+				var runningAppsCnt = ostypes.API('objc_msgSend')(runningAppsArr, ostypes.HELPER.sel('count'));
+				// console.log('runningAppsCnt:', runningAppsCnt, cutils.jscGetDeepest(runningAppsCnt), cutils.jscGetDeepest(runningAppsCnt, 10), cutils.jscGetDeepest(runningAppsCnt, 16));
+				
+				var runningAppsCnt_j = parseInt(cutils.jscGetDeepest(runningAppsCnt, 10));
+				// console.log('runningAppsCnt_j:', runningAppsCnt_j);
+				
+				for (var i=0; i<runningAppsCnt_j; i++) {
+					
+					// console.log('runningApp i:', i);
+					
+					var runningApp = ostypes.API('objc_msgSend')(runningAppsArr, ostypes.HELPER.sel('objectAtIndex:'), ostypes.TYPE.NSUInteger(i));
+					
+					var runningAppPid = ostypes.API('objc_msgSend')(runningApp, ostypes.HELPER.sel('processIdentifier'));
+					// console.log('runningAppPid:', cutils.jscGetDeepest(runningAppPid, 10));
+					
+					var runningAppPid_jStr = cutils.jscGetDeepest(runningAppPid, 10); // about my personal naming of this var: jStr as i exepct pid to be number, but i have it here as string, if i made it parseInt of this I would have just said _j
+					
+					var runningAppExeUrl = ostypes.API('objc_msgSend')(runningApp, ostypes.HELPER.sel('executableURL'));
+					
+					var runningAppExeAbsStr = ostypes.API('objc_msgSend')(runningAppExeUrl, ostypes.HELPER.sel('absoluteString'));
+					var runningAppExeAbsStr_j = ostypes.HELPER.readNSString(runningAppExeAbsStr);
+					// console.log('runningAppExeAbsStr_j:', runningAppExeAbsStr_j); // gives like  "file://localhost/Applications/FirefoxNightly.app/Contents/MacOS/firefox", "file://localhost/System/Library/PrivateFrameworks/Noticeboard.framework/Versions/A/Resources/nbagent.app/Contents/MacOS/nbagent"
+
+					var runningAppExePlatPath = OS.Path.fromFileURI(runningAppExeAbsStr_j); // this converts "file://localhost/Applications/FirefoxNightly.app/Contents/MacOS/firefox" to "/Applications/FirefoxNightly.app/Contents/MacOS/firefox"
+					
+					// var runningAppName = ostypes.API('objc_msgSend')(runningApp, ostypes.HELPER.sel('localizedName'));
+					// console.log('runningAppName:', ostypes.HELPER.readNSString(runningAppName)); // this gives "Nightly" etc not what i want, i want the process name which is Nighlty.app/Contents/MacOS/firefox
+					
+					cProcessIdsInfos[runningAppPid_jStr] = {
+						processName: OS.Path.basename(runningAppExePlatPath),
+						exePath: runningAppExePlatPath
+					};
+				}
+				*/
+			
+			// break;
 		default:
 			throw new MainWorkerError({
 				name: 'addon-error',
