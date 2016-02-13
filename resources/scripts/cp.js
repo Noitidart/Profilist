@@ -206,8 +206,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				type: 'select',
 				key: 'ProfilistTemp',
 				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.enabled'),
-					'1': myServices.sb.GetStringFromName('profilist.cp.disabled')
+					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
+					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
 				}
 			},
 			{

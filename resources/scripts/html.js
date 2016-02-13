@@ -196,7 +196,7 @@ function initPage(isReInit) {
 	
 	initReactComponent()
 	
-	setTimeout(function() {
+	// setTimeout(function() {
 		// get core and config objs
 		console.time('fetchReq');
 		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['fetchCoreAndConfigs'], bootstrapMsgListener.funcScope, function(aObjs) {
@@ -211,7 +211,7 @@ function initPage(isReInit) {
 			window.addEventListener('blur', attachFocusListener, false); // link147928272
 			ifNotFocusedDoOnBlur();
 		});
-	}, 2000);
+	// }, 2000);
 
 }
 

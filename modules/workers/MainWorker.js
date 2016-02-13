@@ -251,14 +251,15 @@ gKeyInfoStore = { //info on the Profilist keys i write into ini // all values mu
 		specificOnly: true
 		// value should be id of something in the ProfilistBuilds.
 	},
-	ProfilistTemp: {			// tells whether (temporary profiles found && that did NOT have profilist installed) into them (so no ProfilistStatus), should remain in ini after it is found to be not running. only way to remove is to delete from menu. // if profilist is installed into that profile, it will be a temporary profile still so group will be [TempProfile#] but it will stay regardless of this key setting
+	// link33223361217 - for actual funcitonality of ProfilistTemp
+	ProfilistTemp: {			// if profilist installed into, its same, treated as a temp profile
 		pref: true,
-		unspecificOnly: true,
+		unspecificOnly: true,	// because if doesnt make sense if profile A has it set to 1, and profile B has it set to 0. if profile A worker builds the gIniObj, then it will delete it, but if profile B builds it then it wont delete it. so thats why this is unspecificOnly
 		// defaultValue: '0',
 		defaultValue: '1',
 		possibleValues: [
-			'0',				// do not keep them in ini, after it is found to be not running
-			'1'					// keep them in ini even after it is found to be not running
+			'0',				// do not keep them in ini, after it is found to be not running. ALSO do not show them in menu if they are not running.
+			'1'					// keep them in ini even after it is found to be not running. BUT the folder must exist, if the folder doesnt exist then it is removed from ini. ALSO show them in the menu even when not running.
 		]
 	},
 	ProfilistBuilds: {			// whether or not to show notifications
@@ -455,16 +456,40 @@ function formatNoWriteObjs() {
 	
 	// adopt any orphan profiles - which are temp profs obviously - :important: :note: i have to do this AFTER the running statuses of the profiles in the ini are set && BEFORE the exeIconSlug stuff below. because the formatting in adoptOrphanTempProfs is not done throughly, it just adds a noWriteObj with status. which is ok as everything above this line in formatNoWriteObjs is all the formatting done by adoptOrphanTempProfs (set if its temp profile, and set running status). the remaining important part is setting exeIconSlug and populating imgSrcObj_nearest16_forImgSlug etc as its running and the code below this line in the remaining of this function will take care of that  - actually this is a big big big reason why the level of formatting done by adoptOrphanTempProfs is enough link18384394949050
 	console.log('will now try adopting orphans');
-	var tempProfsAdopted = adoptOrphanTempProfs({
+	var cntTempProfsAdopted = adoptOrphanTempProfs({
 		dontWriteIni: true,
 		processIdsInfos: fxOnlyPidInfos
 	});
 	console.log('done adopting orphans');
 	
-	// set global var telling if dev mode is on or off
+	// get gGenIniEntry
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // not really global. i usually use g prefix on real global vars. but here im just using it to idicate that the general etnry if from gIniObj
-	gJProfilistDev = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistDev') == '1' ? true : false;
+	
+	// set global var telling if dev mode is on or off
+	var keyValDev = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistDev');
+	gJProfilistDev = keyValDev === '1' ? true : false;
 	console.error('gJProfilistDev:', gJProfilistDev);
+	
+	// check if any of the temporaryProfile are no longer running. if they are no longer running, check if its profile folder exists, if it doesnt, then remove it from ini.
+		// this block needs to go after keyValDev is figured it out because of link9344656561
+		// this block needs to go after setting all running statuses
+		// :important: reason for placing this before the ```IF dev mode is enabled in currentProfile THEN do the appropriate stuff``` block below - i want to do this block before i get exeIconSlug because that needs to check for channel and exePath, which needs to read inside the profile directory, AND SO if profile directory doesnt exist, then its not going to be able to find channel and will error. the channel is checked on link11119831811
+	var keyValTemp = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistTemp');
+	var cntTempProfsRemoved = 0;
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path && gIniObj[i].noWriteObj.temporaryProfile && !gIniObj[i].noWriteObj.status) {
+			// its a temporary profile that is not running
+			if (!gJProfilistDev || keyValTemp === '0' /* only gets to this OR if dev mode is on */ || !OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path)) /* only gets to this OR if dev mode is on and persit temp profiles is set to true/1 */) { // link9344656561
+				// dev mode is off SO delete non-running temp profiles EVEN IF the profile directory exists
+				// OR dev mode is on, but setting is to not persist non-running profiles link33223361217 SO delete non-running temp profiles EVEN IF the profile directory exists
+				// OR profile directory doesnt exist
+				console.log('temporary profile of:', gIniObj[i], ' needs to be deleted from ini, because either 1) dev mode is off 2) dev mode is on and user said to not persist profiles 3) or the profile dir doesnt exist');
+				gIniObj.splice(i, 1);
+				i--;
+				cntTempProfsRemoved++;
+			}
+		}
+	}
 	
 	// IF dev mode is enabled in currentProfile THEN do the appropriate stuff
 	if (gJProfilistDev) {
@@ -487,7 +512,7 @@ function formatNoWriteObjs() {
 				// its profile type tbb with exe needed
 				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
 				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
-				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath);
+				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath); // link11119831811
 				// console.log('cExePathChan:', cExePathChan);
 				var cExeImgSlug = getSlugForExePathFromParams(gIniObj[i].noWriteObj.exePath, gJProfilistDev, gJProfilistBuilds, cExePathChan);// check gJProfilistBuilds if this exePath has a custom icon - IF TRUE then set exeIconSlug to that ELSE then set exeIconSlug to getSlugForChannel(getExeChanForParamsFromFSFromCache(exePath))
 				gIniObj[i].noWriteObj.exeIconSlug = cExeImgSlug
@@ -540,7 +565,7 @@ function formatNoWriteObjs() {
 		writeIni();
 	} else {
 		// any other reasons to write to ini?
-		if (tempProfsAdopted) {
+		if (cntTempProfsAdopted || cntTempProfsRemoved) {
 			writeIni();
 		}
 	}
