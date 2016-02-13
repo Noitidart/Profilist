@@ -199,12 +199,12 @@
 	align-items: center;
 	padding: 0 5px 0 15px;
 	height: 100%;
+	white-space: pre;
 }
 /* state:filter_matched */
 #profilist_menu .profilist-tbb[data-tbb-type=noresultsfor] .profilist-tbb-primary {
 	justify-content: center;
 	padding: 0;
-	white-space: pre;
 }
 /* end - primary_wrap */
 
@@ -264,6 +264,7 @@
 	display: flex;
 	height: 100%; /* link1473722777 - to make position absolut elements, which be centered in the middle */
 	align-items: center; /* link1473722777 - to make position absolut elements, which be centered in the middle */
+	overflow: hidden;
 }
 /* state:picking_clone */
 #profilist_menu.profilist-clone-pick .profilist-tbb[data-tbb-type$=active] .profilist-tbb-primary-squishy {
@@ -320,6 +321,17 @@
 
 
 /**** end - message stuff ****/
+
+/* start - default_toolbarbutton_label */
+/* state:innate */
+/* .profilist-default-tbb-label { } */
+/* end - default_toolbarbutton_label */
+
+/* start - underline_temp_prof_label */
+.profilist-temp-prof-label-wrap {
+	border-bottom: 1px dashed #000;
+}
+/* end - underline_temp_prof_label */
 
 /* start - primary_label_field */
 /* state:innate */

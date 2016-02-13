@@ -473,7 +473,7 @@ function formatNoWriteObjs() {
 	// check if any of the temporaryProfile are no longer running. if they are no longer running, check if its profile folder exists, if it doesnt, then remove it from ini.
 		// this block needs to go after keyValDev is figured it out because of link9344656561
 		// this block needs to go after setting all running statuses
-		// :important: reason for placing this before the ```IF dev mode is enabled in currentProfile THEN do the appropriate stuff``` block below - i want to do this block before i get exeIconSlug because that needs to check for channel and exePath, which needs to read inside the profile directory, AND SO if profile directory doesnt exist, then its not going to be able to find channel and will error. the channel is checked on link11119831811
+		// ACTUALLY NEVER MIND THIS COMMENT TO THE RIGHT because the profile dir is only looked into if the profile is running, which means the profile dir has to exist see link33325356464644387 -------> :important: reason for placing this before the ```IF dev mode is enabled in currentProfile THEN do the appropriate stuff``` block below - i want to do this block before i get exeIconSlug because that needs to check for channel and exePath, which needs to read inside the profile directory, AND SO if profile directory doesnt exist, then its not going to be able to find channel and will error. the channel is checked on link11119831811
 	var keyValTemp = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistTemp');
 	var cntTempProfsRemoved = 0;
 	for (var i=0; i<gIniObj.length; i++) {
@@ -510,7 +510,7 @@ function formatNoWriteObjs() {
 		for (var i=0; i<gIniObj.length; i++) {
 			if (gIniObj[i].noWriteObj.status) { // this loop will for sure hit the curProfIniEntry.noWriteObj.currentProfile entry as it has obviously status
 				// its profile type tbb with exe needed
-				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path);
+				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path); // link33325356464644387
 				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
 				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath); // link11119831811
 				// console.log('cExePathChan:', cExePathChan);
@@ -1197,7 +1197,7 @@ function getLastExePathForProfFromFS(aProfPath) {
 		// ubuntu15.01
 			// "/usr/lib/firefox/firefox"
 
-	var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'});
+	var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'}); // ACTUALLY NEVER MIND THIS COMMENT TO RIGHT WHICH IS TODO becasue link33325356464644387 is the only place it checks this, and it only gets here if the profile is running ----> :todo: :important: if the profile was never launched yet, it has no last exePath so use what it is tied to (if dev mode is on) else use what the currentProfile ini entries build is
 	
 	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
 	if (!cLastPlatformDir) {

@@ -389,12 +389,14 @@ var Menu = React.createClass({
 					if (this.state.sIniObj.length > 0) { // test to make sure its not in "loading" state
 						if (this.state.sSearch) {
 							// search was already in progress, so delete last char
-							if (this.state.sSearch.phrase.length > 0) {
+							if (this.state.sSearch.phrase.length > 0) { // i think this if statement is redundant, as this.state.sSearch is enough i think, but leaving here till i verify :todo:
 								this.executeSearch(this.state.sSearch.phrase.substr(0, this.state.sSearch.phrase.length - 1));
-								// e.preventDefault(); // so page doesnt go back // needed if decide to use div contentEditable. For textbox this is not needed
+								e.preventDefault(); // so page doesnt go back
 							}
 						}
 					}
+					
+					e.preventDefault(); // always disable backspace takes the page back?
 					
 				break;
 			case 'Escape':
@@ -978,6 +980,10 @@ var PrimaryLabel = React.createClass({ // capable of highlighting self
 			// tbbIniEntry - this is 
 			// sSearch - only if tbbIniEntry exists for this one (meaning this is PrimaryLabel for a profile tbb) and search is in progress AND this is a match. if it wasnt a match it would never get sSearch
 		
+		var cProps = {
+			// className:'profilist-default-tbb-label'
+		};
+		
 		var labelChildren = [];
 		if (this.props.tbbIniEntry) {
 			if (this.props.sSearch) {
@@ -1003,11 +1009,23 @@ var PrimaryLabel = React.createClass({ // capable of highlighting self
 			} else {
 				labelChildren.push(this.props.tbbIniEntry.Name);
 			}
+			
+			if (this.props.tbbIniEntry.noWriteObj.temporaryProfile) {
+				// cProps.className += ' profilist-temp-prof-label';
+				
+				var labelSubChildren = labelChildren;
+				labelChildren = [
+					React.createElement('span', {className:'profilist-temp-prof-label-wrap'},
+						labelSubChildren
+					),
+					' ' + myServices.sb.GetStringFromName('temp-prof-label')
+				];
+			}
 		} else {
 			labelChildren.push(myServices.sb.GetStringFromName(this.props.sKey));
 		}
 		
-		return React.createElement('div', {},
+		return React.createElement('div', cProps,
 			labelChildren
 		);
 	}
