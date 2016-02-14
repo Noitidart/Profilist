@@ -239,9 +239,13 @@ select {
 	content: "\e807";
 }
 /* state:mouseover */
-.wrap-react:not(.help-off) .fontello-icon.icon-help::before,
 .fontello-icon.icon-help:hover::before {
 	color: #0874E0;
+}
+/* state:help-off help icon*/
+.wrap-react:not(.help-off) .fontello-icon.icon-help::before {
+	color: #0874E0;
+	content: "\e809";
 }
 /*
 .fontello-icon.icon-specificness-toggler:hover::before {
