@@ -218,7 +218,6 @@ select {
 .fontello-icon.icon-info::before {
 	content: "\e805";
 	margin: 0 5px;
-	transition: color 200ms;
 }
 .fontello-icon.icon-specificness-toggler::before {
 	content: "\e808";
@@ -240,19 +239,21 @@ select {
 	content: "\e807";
 }
 /* state:mouseover */
+.wrap-react:not(.help-off) .fontello-icon.icon-help::before,
 .fontello-icon.icon-help:hover::before {
 	color: #0874E0;
 }
-.fontello-icon.icon-info:hover::before {
-	color: #0874E0;
-}
+/*
 .fontello-icon.icon-specificness-toggler:hover::before {
 	opacity: .45;
 }
+*/
 /* state:isspecific */
+/*
 .fontello-icon.icon-specificness-toggler.is-specific:hover::before {
 	opacity: .8;
 }
+*/
 .fontello-icon.icon-specificness-toggler.is-specific::before {
 	opacity: 1;
 }
@@ -351,6 +352,203 @@ div.builds-widget-row .fontello-icon {
 	margin: 0 2px;
 }
 /* end - builds_widget_textbox */
+
+/***********start deprecate*********/
+/* start - tooltip_parent */
+[data-tooltip] {
+	position: relative;
+}
+/* end - tooltip_parent */
+
+/* start - tooltip_after */
+/* state:innate */
+[data-tooltip]::after {
+	content: attr(data-tooltip);
+	background-color: rgba(0, 0, 0, 0.7);
+	position: absolute;
+	color: white;
+	border-radius: 3px;
+	padding: 6px;
+	transition: margin 200ms, opacity 200ms;
+	opacity: 0;
+	pointer-events: none;
+}
+/* state:size_line for slide right/left */
+[data-tooltip-size=line]::after {
+	white-space: nowrap;
+	/* top: calc(50% - 1.1em); */
+}
+/* state:size_line for width of about 110px */
+[data-tooltip-size=line]::after {
+	white-space: nowrap;
+	left: -55px;
+}
+/* state:slide_left */
+[data-tooltip-slide=left]::after {
+	right: calc(100% + 10px);
+	margin-right: 30px;
+}
+/* state:slide_right */
+[data-tooltip-slide=right]::after {
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+/* state:slide_top */
+[data-tooltip-slide=top]::after {
+	bottom: calc(100% + 10px);
+	margin-bottom: 30px;
+}
+/* state:slide_bottom */
+[data-tooltip-slide=bottom]::after {
+	top: calc(100% + 10px);
+	margin-top: 30px;
+}
+/* state:hover */ /* must go below the data-tooltip-slide::after classes, as margin is taken of one that is lowest */
+[data-tooltip]:hover::after {
+	margin: 0;
+	opacity: 1;
+}
+/* end - tooltip_after */
+/***********end deprecate*********/
+
+/* start - tooltip_parent */
+.profilist-tooltipped {
+	position: relative;
+}
+/* end - tooltip_parent */
+
+/* start - tooltip_after */
+/* state:innate */
+.profilist-tooltipped::after {
+	/*content: attr(data-tooltip);*/ /*content should be provided by the profilist-tooltip-**** as that specific content will also handle the sizing, aligning, and sliding */
+	background-color: rgba(0, 0, 0, 0.7);
+	position: absolute;
+	color: white;
+	border-radius: 3px;
+	padding: 6px;
+	transition: margin 200ms, opacity 200ms;
+	opacity: 0;
+	pointer-events: none;
+	font-size: 12px;
+	z-index: 1;
+	white-space: pre;
+	
+	font-family: arial, fontello;
+	font-style: normal;
+	font-weight: normal;
+}
+
+/* state:help_off */
+.help-off .profilist-tooltipped::after {
+	display: none; /* link35345453727 */
+}
+
+/* state:help */
+.wrap-react:not(.help-off) .profilist-tooltip-help::after {
+	content: 'Hide Help Tooltips';
+}
+.profilist-tooltip-help::after {
+	display: block !important; /* important overrides link35345453727 */
+	content: 'Show Help Tooltips';
+	white-space: nowrap;
+	top: -.25em;
+	
+	/* slide in from left */
+	right: calc(100% + 10px);
+	margin-right: 30px;
+}
+
+/* state:specificity */
+.profilist-tooltip-specificity.is-specific::after {
+	content: 'Affecting just this profile';
+}
+.profilist-tooltip-specificity::after {
+	content: 'Affecting all profiles';
+	white-space: nowrap;
+	top: -5px;
+	
+	/* slide in from left */
+	right: calc(100% + 10px);
+	margin-right: 30px;
+}
+
+/* state:notifications */
+.profilist-tooltip-notifications::after {
+	content: 'Show popups alerts on actions' '\a' 'made (ie: launch profile)' '\a\a' 'Click \e808  to toggle profile specifcity';
+	top: -2em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:launch */
+.profilist-tooltip-launch::after {
+	content: 'Clicking "Create New Profile" will' '\a' 'launch right away' '\a\a' 'Click \e808  to toggle profile specifcity';
+	top: -2em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:sort */
+.profilist-tooltip-sort::after {
+	content: 'Order in which to list out profiles in' '\a' 'the main menu' '\a\a' 'Click \e808  to toggle profile specifcity';
+	top: -2em;
+
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:dev */
+.profilist-tooltip-dev::after {
+	content: 'Show features useful to developers' '\a\a' 'Click \e808  to toggle profile specifcity';
+	top: -1.5em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:badge */
+.profilist-tooltip-badge::after {
+	content: 'Position where badge should be' '\a' 'placed on icon' '\a\a' 'Click \e808  to toggle profile specifcity';
+	top: -2em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:temp */
+.profilist-tooltip-temp::after {
+	content: 'Display temporary profiles even when' '\a' 'they are not running - as long as' '\a' 'the profile directory exists' '\a\a' 'A temporary profile is one that' '\a' 'does not have an entry in the ini file' '\a\a' 'This setting affects all profiles';
+	top: -4em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:builds */
+.profilist-tooltip-builds::after {
+	content: 'Manage the icon, order, and application' '\a' 'to launch/tie profiles to' '\a\a' 'This setting affects all profiles';
+	top: -2em;
+	
+	/* slide in from right */
+	left: calc(100% + 10px);
+	margin-left: 30px;
+}
+
+/* state:hover */ /* must go below the data-tooltip-slide::after classes, as margin is taken of one that is lowest */
+.profilist-tooltipped:hover::after {
+	margin: 0;
+	opacity: 1;
+}
+/* end - tooltip_after */
+
 
 /* start - other_stuff */
 @font-face {

@@ -137,7 +137,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				values: {
 					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'), // :note: '0' because i match it to getPrefLikeValForKeyInIniEntry which returns strings only as i store strings only, as this reads from the stuff in inientry that is not in noWriteObj
 					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
-				}
+				},
+				tooltip_id: 'notifications'
 			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.launch'),
@@ -147,7 +148,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				values: {
 					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
 					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
-				}
+				},
+				tooltip_id: 'launch'
 			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.sort'),
@@ -161,7 +163,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 					// '1': myServices.sb.GetStringFromName('profilist.cp.created-desc'),
 					// '2': myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
 					// '3': myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
-				}
+				},
+				tooltip_id: 'sort'
 			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.dev'),
@@ -171,7 +174,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				values: {
 					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
 					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
-				}
+				},
+				tooltip_id: 'dev'
 			}
 		]
 	},
@@ -188,7 +192,8 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 					'2': myServices.sb.GetStringFromName('profilist.cp.badgeloc-topright'),
 					'3': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomleft'),
 					'4': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomright')
-				}
+				},
+				tooltip_id: 'badge'
 			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.desktop-shortcut'),
@@ -208,13 +213,15 @@ var gDOMInfo = [ // order here is the order it is displayed in, in the dom
 				values: {
 					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
 					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
-				}
+				},
+				tooltip_id: 'temp'
 			},
 			{
 				label: myServices.sb.GetStringFromName('profilist.cp.builds'),
 				desc: myServices.sb.GetStringFromName('profilist.cp.builds-desc'),
 				key: 'ProfilistBuilds',
-				type: 'custom'
+				type: 'custom',
+				tooltip_id: 'builds'
 			}
 		]
 	}
@@ -226,7 +233,8 @@ var ControlPanel = React.createClass({
 	getInitialState: function() {
 		return {
 			sIniObj: [],
-			sBuildsLastRow: {}
+			sBuildsLastRow: {},
+			sHelp: false // enable/disable tooltips
 		};
 	},
 	onComponentChange: function(aNewIniObj, aDelaySetState) {
@@ -284,7 +292,7 @@ var ControlPanel = React.createClass({
 		
 		var children = [];
 		
-		children.push(React.createElement(Row, {gRowInfo:{id:'help', type:'ignore'}})); // otherwise link8484888888 will give a warning
+		children.push(React.createElement(Row, {gRowInfo:{id:'help', type:'ignore'}, sHelp:this.state.sHelp})); // otherwise link8484888888 will give a warning
 		
 		// console.log('gDOMInfo.length:', gDOMInfo.length);
 		
@@ -299,7 +307,11 @@ var ControlPanel = React.createClass({
 			if (gDOMInfo[i].section == myServices.sb.GetStringFromName('profilist.cp.developer') && !jProfilistDev) {
 				continue;
 			}
-			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != myServices.sb.GetStringFromName('profilist.cp.developer') ? undefined : this.state.sBuildsLastRow) }));
+			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != myServices.sb.GetStringFromName('profilist.cp.developer') ? undefined : this.state.sBuildsLastRow), sHelp:this.state.sHelp }));
+		}
+		
+		if (!this.state.sHelp) {
+			aProps.className += ' help-off';
 		}
 		
 		return React.createElement(React.addons.CSSTransitionGroup, aProps,
@@ -316,7 +328,7 @@ var Section = React.createClass({
 		//	sCurProfIniEntry
 		//	sGenIniEntry
 		//	sBuildsLastRow - only if this is gSectionInfo.section == myServices.sb.GetStringFromName('profilist.cp.developer')
-		
+		//	sHelp
 		var aProps = {
 			className: 'section'
 		};
@@ -329,7 +341,7 @@ var Section = React.createClass({
 		));
 		
 		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
-			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != myServices.sb.GetStringFromName('profilist.cp.builds') ? undefined : this.props.sBuildsLastRow) }));
+			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != myServices.sb.GetStringFromName('profilist.cp.builds') ? undefined : this.props.sBuildsLastRow), sHelp:this.props.sHelp }));
 		}
 		
 		return React.createElement('div', aProps,
@@ -367,6 +379,7 @@ var Row = React.createClass({
 		//	sCurProfIniEntry
 		//	sGenIniEntry
 		// sBuildsLastRow - only if  this is gRowInfo.label == myServices.sb.GetStringFromName('profilist.cp.builds')
+		//	sHelp
 		
 		var aProps = {
 			className: 'row'
@@ -383,9 +396,18 @@ var Row = React.createClass({
 			switch (this.props.gRowInfo.id) {
 				case 'help':
 					
+						console.log('this.props.sHelp:', this.props.sHelp);
 						aProps.className += ' row-help';
+						var cHelpIconProps = {
+							className:'fontello-icon icon-help profilist-tooltipped profilist-tooltip-help',
+							onClick: function() {
+								MyStore.setState({
+									sHelp:!this.props.sHelp
+								});
+							}.bind(this)
+						};
 						children.push(
-							React.createElement('span', {className:'fontello-icon icon-help'})
+							React.createElement('span', cHelpIconProps)
 						);
 					
 					break;
@@ -419,7 +441,7 @@ var Row = React.createClass({
 			// console.log('gKeyInfoStore[this.props.gRowInfo.key]:', gKeyInfoStore[this.props.gRowInfo.key]);
 			if (!gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly && !gKeyInfoStore[this.props.gRowInfo.key].specificOnly) {
 				// alert('this one can be toggled:' + this.props.gRowInfo.key);
-				var togglerClassName = 'fontello-icon icon-specificness-toggler';
+				var togglerClassName = 'fontello-icon icon-specificness-toggler profilist-tooltipped profilist-tooltip-specificity';
 				if (getSpecificnessForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key) === 1) {
 					// is specific
 					togglerClassName += ' is-specific';
@@ -437,8 +459,12 @@ var Row = React.createClass({
 		}
 		
 		// add in desc
-		if (this.props.gRowInfo.desc || specificnessDesc) {
-			children.push(React.createElement('span', {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc}));
+		if (this.props.sHelp && (this.props.gRowInfo.desc || specificnessDesc)) {
+			var cChildProps = {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc};
+			if (this.props.gRowInfo.tooltip_id) {
+				cChildProps.className += ' profilist-tooltipped profilist-tooltip-' + this.props.gRowInfo.tooltip_id
+			}
+			children.push(React.createElement('span', cChildProps));
 		}
 		
 		switch (this.props.gRowInfo.type) { // must have type link8484888888 or you get a warning, it doesnt break, but its a warning
