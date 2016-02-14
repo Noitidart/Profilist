@@ -246,6 +246,7 @@ select {
 .wrap-react:not(.help-off) .fontello-icon.icon-help::before {
 	color: #0874E0;
 	content: "\e809";
+	background: transparent url("chrome://profilist/content/resources/images/cp/white-block.png") no-repeat scroll center center;
 }
 /*
 .fontello-icon.icon-specificness-toggler:hover::before {
