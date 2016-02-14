@@ -367,9 +367,9 @@ var Row = React.createClass({
 		var curSpecificness = getSpecificnessForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
 		var curKeyVal = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
 		
-		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
-		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, curKeyVal, curSpecificness == 2 ? 1 : 2, gIniObj);
+		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile in global. need global as it is by reference i make a change on it with setPrefLikeValForKeyInIniEntry
+		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // same with gGenIniEntry, i dont use thsi.props.sGenIniEntry because i might affect it with setPrefLikeValForKeyInIniEntry
+		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, curKeyVal, curSpecificness == 2 ? 1 : 2);
 		MyStore.onComponentChange(gIniObj);
 	},
 	render: function render() {
@@ -1071,46 +1071,6 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		}
 	}
 });
-
-// START - COMMON PROFILIST HELPER FUNCTIONS
-// start - xIniObj helper functions
-
-// start - xIniObj functions with no options
-function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
-	// only for use on non-ONLY values. meaning if key is specificOnly or unspecificOnly it fails, no need to use this function to determine that
-	// RETURNS
-		// 1 for specific
-		// 2 for unspecific
-		
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
-	
-	if (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly) { console.error('DEV_ERROR - aKeyName is ONLY-like, aKeyName:', aKeyName, 'see gKeyInfoStore entry it is either unspecificOnly or specificOnly, dont use this function to determine that:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR'); }
-	
-	// :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific. because of this its important to clear out genearl when going to specific. link757483833
-	if (!(aKeyName in aGenIniEntry) && !(aKeyName in aIniEntry)) {
-		// use defaultSpecificness
-		if (!gKeyInfoStore[aKeyName].defaultSpecificness) {
-			// its unspecific
-			return 2;
-		} else {
-			// its specific
-			return 1;
-		}
-	} else {
-		if (aKeyName in aGenIniEntry) {
-			// it is unspecific
-			return 2;
-		} else if (aKeyName in aIniEntry) {
-			// it is specific
-			return 1;
-		}
-		console.error('DEV_ERROR - should never ever get here');
-		throw new Error('DEV_ERROR - should never ever get here');
-	}
-	
-}
-// end - xIniObj functions with no options
-// END - COMMON PROFILIST HELPER FUNCTIONS
 // End - Page Functionalities
 
 // start - server/framescript comm layer

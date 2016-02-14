@@ -104,6 +104,42 @@ function isSlugInChromeChannelIconsets(aPossibleSlug) {
 }
 // END - slug stuff
 // START - aIniObj actors
+function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
+	// only for use on non-ONLY values. meaning if key is specificOnly or unspecificOnly it fails, no need to use this function to determine that
+	// requires gKeyInfoStore
+	// RETURNS
+		// 1 for specific
+		// 2 for unspecific
+		
+	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+	
+	if (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly) { console.error('DEV_ERROR - aKeyName is ONLY-like, aKeyName:', aKeyName, 'see gKeyInfoStore entry it is either unspecificOnly or specificOnly, dont use this function to determine that:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR - cannot toggle this setting as it is specificOnly or unspecificOnly'); }
+	
+	// :note: :important: this is my NEW determinign factor for specificness of a toggleable (meaning no specificOnly or unspecificOnly). if setting exists in aIniEntry then it is specific. else it is unspecific (regardless if a value exists in aGenIniEntry - as if it doesnt exist it obviously uses the default value) - so therefore it is important to delete key from aIniEntry when togglign to unspecific crossfile-link75748383322222 IGNORE THIS ON RIGHT as this on left ovverides it ---> // :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific. because of this its important to clear out genearl when going to specific. link757483833
+	if (!(aKeyName in aGenIniEntry) && !(aKeyName in aIniEntry)) {
+		// use defaultSpecificness
+		if (!gKeyInfoStore[aKeyName].defaultSpecificness) {
+			// its unspecific
+			return 2;
+		} else {
+			// its specific
+			return 1;
+		}
+	} else {
+		// this if-else statement below is the enacting of crossfile-link75748383322222
+		if (aKeyName in aIniEntry) {
+			// it is specific
+			return 1;
+		} else {
+			// it is unspecific
+			return 2;
+		}
+		console.error('DEV_ERROR - should never ever get here');
+		throw new Error('DEV_ERROR - should never ever get here');
+	}
+	
+}
+
 function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	// RETURNS
 	//	string value if aKeyName found OR not found but has defaultValue
@@ -121,25 +157,32 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
 				return gKeyInfoStore[aKeyName].defaultValue;
 			} else {
+				// should never happen, as all things set to `pref:true` (meaning not `pref` key missing or not `pref:false` in MainWorker.js `gKeyInfoStore`) must have a defaultValue
+				cosnole.error('should never happen, as all things set to `pref:true` (meaning not `pref` key missing or not `pref:false` in MainWorker.js `gKeyInfoStore`) must have a defaultValue, here is the gKeyInfoStore missing the defaultValue:', gKeyInfoStore[aKeyName], 'and aKeyName:', aKeyName);
 				return null;
 			}
 		}
 	} else {
-		// check if profile-unspecific value exists return else continue on
-		if (!gKeyInfoStore[aKeyName].specificOnly) {
+		var specificness = getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName);
+		if (specificness == 2) {
+			// it is unspecific
 			if (aKeyName in aGenIniEntry) {
 				return aGenIniEntry[aKeyName];
-			}
-		}
-		// return profile-specific value else null
-		if (aKeyName in aIniEntry) {
-			return aIniEntry[aKeyName];
-		} else {
-			if ('defaultValue' in gKeyInfoStore[aKeyName]) {
-				return gKeyInfoStore[aKeyName].defaultValue;
 			} else {
-				return null;
+				if ('defaultValue' in gKeyInfoStore[aKeyName]) {
+					return gKeyInfoStore[aKeyName].defaultValue;
+				} else {
+					// should never happen, as all things set to `pref:true` (meaning not `pref` key missing or not `pref:false` in MainWorker.js `gKeyInfoStore`) must have a defaultValue
+					cosnole.error('should never happen, as all things set to `pref:true` (meaning not `pref` key missing or not `pref:false` in MainWorker.js `gKeyInfoStore`) must have a defaultValue, here is the gKeyInfoStore missing the defaultValue:', gKeyInfoStore[aKeyName], 'and aKeyName:', aKeyName);
+					return null;
+				}
 			}
+		} else {
+			// it is specific
+			if (aKeyName in aIniEntry) {
+				return aIniEntry[aKeyName];
+			}
+			else { console.error('this should never happen! as per crossfile-link75748383322222, a setting is defined as specific IF it has an entry in aIniEntry'); throw new Error('DEV ERROR'); } // this should never happen! as per crossfile-link75748383322222, a setting is defined as specific IF it has an entry in aIniEntry
 		}
 	}
 	
@@ -163,9 +206,11 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	}
 }
 
-function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewVal, aNewSpecifincess_optional, aIniObj_neededWhenTogglignSpecificness) {
+function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewVal, aNewSpecifincess_optional) {
 	// aNewSpecifincess_optional is optional arg, if not supplied specificness is unchanged. it must be 2 for unspecific or 1 for specific
 	// aIniEntry and aGenIniEntry must be PASSED BY REFERENCE to the ini obj you want to set in // im thinking it HAS to be gIniObj, so far thats all im doing and it makes sense as i then setState to JSON.parse(JSON.stringify(gIniObj)
+	
+	// aNewVal if toggling specificness to unspecific - added in on 021416 revisit link11194229319
 	
 	// RETURNS
 	//	undefined
@@ -199,7 +244,6 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 		var specificness;
 		if (aNewSpecifincess_optional !== undefined) {
 			if (aNewSpecifincess_optional !== 1 && aNewSpecifincess_optional !== 2) { console.error('DEV_ERROR - aNewSpecifincess_optional must be 1 or 2! you set it to:', aNewSpecifincess_optional); throw new Error('DEV_ERROR'); }
-			// assume that its changing, SO 1)if going to specific, then clear out the general 2)if going to general, then clear out specific, but clearing out specific is not so important per link757483833
 			specificness = aNewSpecifincess_optional;
 		} else {
 			specificness = getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName);
@@ -208,23 +252,20 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 			// it is unspecific
 			if (aNewSpecifincess_optional !== undefined) {
 				// because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
-				// if going to unspecific, then clearing out the specific values is not important, but its good practice per link757483833
-				if (!aIniObj_neededWhenTogglignSpecificness) { console.error('DEV_ERROR, as toggling away from specific, meaning going to unspecific, i need the aIniObj so i can clear out the specific values for good practice, you as a dev did not provide this aIniObj!'); throw new Error('DEV_ERROR'); }
-				for (var p in aIniObj_neededWhenTogglignSpecificness) {
-					if (aIniObj_neededWhenTogglignSpecificness[p].Path) {
-						delete aIniObj_neededWhenTogglignSpecificness[p][aKeyName]
-					}
-				}
+				// if going unspecific, then clearing out specific value is CRITICAL per crossfile-link75748383322222 this overrides my old thinking here ---> // if going to unspecific, then clearing out the specific values is not important, but its good practice per link757483833
+				delete aIniEntry[aKeyName];
+				// aGenIniEntry[aKeyName] = aNewVal; // aNewVal is ignored when toggling to unspecific link11194229319
+			} else {
+				aGenIniEntry[aKeyName] = aNewVal;
+				console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
 			}
-			aGenIniEntry[aKeyName] = aNewVal;
-			console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
 		} else {
 			// it is specific
-			if (aNewSpecifincess_optional !== undefined) {
-				// because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
-				// if going to specific, then clear out the general this is :note: :important: link757483833
-				delete aGenIniEntry[aKeyName];
-			}
+			// // if (aNewSpecifincess_optional !== undefined) {
+				// // because aNewSpecifincess_optional is set, i assume its toggling thus it follows that... see comment on line below
+				// // if going to specific, then leave the general value, but set the ini value crossfile-link75748383322222 this new thinking overrides my old thinkng here at right ---> if going to specific, then clear out the general this is :note: :important: link757483833
+				// // delete aGenIniEntry[aKeyName];
+			// // }
 			aIniEntry[aKeyName] = aNewVal;
 			console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
 		}

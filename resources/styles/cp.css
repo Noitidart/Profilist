@@ -468,7 +468,7 @@ div.builds-widget-row .fontello-icon {
 	content: 'Affecting just this profile';
 }
 .profilist-tooltip-specificity::after {
-	content: 'Affecting all profiles';
+	content: 'Affecting and using across all profiles';
 	white-space: nowrap;
 	top: -5px;
 	
