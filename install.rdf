@@ -17,7 +17,7 @@
 			<Description>
 				<em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
 				<em:minVersion>33.0</em:minVersion> <!-- due to PromiseWorker.jsm -->
-				<em:maxVersion>43.0</em:maxVersion>
+				<em:maxVersion>47.0</em:maxVersion> <!-- I tested up till one of the 47.0 nightlies  -->
 			</Description>
 		</em:targetApplication>
 		
