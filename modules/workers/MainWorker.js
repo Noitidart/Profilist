@@ -662,6 +662,16 @@ function fetchJustIniObjJustRefreshed() {
 				gIniObj[i].noWriteObj.status = 0;
 				delete gIniObj[i].noWriteObj.exePath;
 				delete gIniObj[i].noWriteObj.exeIconSlug;
+				
+				if (gIniObj[i].noWriteObj.temporaryProfile) {
+					// if its a temp prof, make sure the dir exists, if it doesnt then remove it from ini
+					var cTempProfRootDirExists = OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path));
+					if (!cTempProfRootDirExists) {
+						console.log('was temp profile and the dir no longer exists, so remove it, path to root prof dir:', getFullPathToProfileDirFromIni(gIniObj[i].Path));
+						gIniObj.splice(i, 1);
+						i--;
+					}
+				}
 			}
 		}
 	}
@@ -1037,7 +1047,6 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 		// 0 - if NOT running
 	// currentProfile must be marked in gIniObj before using this
 
-	console.time('getIsRunningFromIniFromPlat');
 	var cOptionsDefaults = {
 		winProcessIdsInfos: undefined // provide thte return value from getAllPID, it needs to have creation time of the pid in here. then this function will return the pid for windows as well
 	};
@@ -1056,6 +1065,8 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 		cIsRunning = core.firefox.pid;
 		return cIsRunning;
 	}
+	
+	console.time('getIsRunningFromIniFromPlat');
 	
 	var cProfRootDir = getFullPathToProfileDirFromIni(aProfPath);
 	
