@@ -465,20 +465,34 @@ function formatNoWriteObjs() {
 	var keyValDev = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistDev');
 	gJProfilistDev = keyValDev === '1' ? true : false;
 	console.error('gJProfilistDev:', gJProfilistDev);
+
+	// figure out doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning - for use in next block where temporaryProfile's are deleted from the ini
+	var doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning = false;
+	var generalKeyValTemp = gGenIniEntry.ProfilistTemp;
+	var generalKeyValDev = gGenIniEntry.ProfilistDev;
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path) {
+			if ((!('ProfilistDev' in gIniObj[i]) && generalKeyValDev === '1') || gIniObj[i].ProfilistDev === '1') {
+				if ((!('ProfilistTemp' in gIniObj[i]) && generalKeyValTemp === '1') || gIniObj[i].ProfilistTemp === '1') {
+					doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning = true;
+					break;
+				}
+			}
+		}
+	}
 	
-	// check if any of the temporaryProfile are no longer running. if they are no longer running, check if its profile folder exists, if it doesnt, then remove it from ini.
-		// this block needs to go after keyValDev is figured it out because of link9344656561
+	// check if any of the temporaryProfile are no longer running. if they are no longer running, check if its profile folder exists, if it doesnt, then delete it from ini.
 		// this block needs to go after setting all running statuses
 		// ACTUALLY NEVER MIND THIS COMMENT TO THE RIGHT because the profile dir is only looked into if the profile is running, which means the profile dir has to exist see link33325356464644387 -------> :important: reason for placing this before the ```IF dev mode is enabled in currentProfile THEN do the appropriate stuff``` block below - i want to do this block before i get exeIconSlug because that needs to check for channel and exePath, which needs to read inside the profile directory, AND SO if profile directory doesnt exist, then its not going to be able to find channel and will error. the channel is checked on link11119831811
-	var keyValTemp = getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistTemp');
 	var cntTempProfsRemoved = 0;
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path && gIniObj[i].noWriteObj.temporaryProfile && !gIniObj[i].noWriteObj.status) {
 			// its a temporary profile that is not running
-			console.log('debug, profile dir ("', getFullPathToProfileDirFromIni(gIniObj[i].Path), '") exists:', OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path)));
-			if (!gJProfilistDev || keyValTemp === '0' /* only gets to this OR if dev mode is on */ || !OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path)) /* only gets to this OR if dev mode is on and persit temp profiles is set to true/1 */) { // link9344656561
-				// dev mode is off SO delete non-running temp profiles EVEN IF the profile directory exists
-				// OR dev mode is on, but setting is to not persist non-running profiles link33223361217 SO delete non-running temp profiles EVEN IF the profile directory exists
+			// :todo: this is wrong, if gJProfilistDev in this profile, it will delete it. but what if another profile has it enabled. so i should leave it in but hide it for non-dev profiles enabled
+			var cTempProfRootDirExists = OS.File.exists(getFullPathToProfileDirFromIni(gIniObj[i].Path));
+			console.log('temp prof root dir of ("', getFullPathToProfileDirFromIni(gIniObj[i].Path), '") exists?:', cTempProfRootDirExists);
+			if (!cTempProfRootDirExists || !doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning) { // link9344656561
+				// not a single one of this users profiles (all of them were checked) is (in dev mode && asking for persist of non-running profiles) SO delete non-running temp profiles EVEN IF the profile directory exists
 				// OR profile directory doesnt exist
 				console.log('temporary profile of:', gIniObj[i], ' needs to be deleted from ini, because either 1) dev mode is off 2) dev mode is on and user said to not persist profiles 3) or the profile dir doesnt exist');
 				gIniObj.splice(i, 1);
@@ -498,7 +512,7 @@ function formatNoWriteObjs() {
 		// 	this.debuggedProfilistBuilds = true; // :debug:
 		// } // :debug:
 		/////// debug
-
+		
 		// set gJProfilistBuilds
 		gJProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
 		

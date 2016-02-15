@@ -580,11 +580,23 @@ var Menu = React.createClass({
 			
 
 			
-			// add in the profiles in order
-			var keyValDevMode = getPrefLikeValForKeyInIniEntry(sCurProfIniEntry, sGenIniEntry, 'ProfilistDev');
+			// add in the profiles in order - dont show temporaryProfile if it is not needed
+			
 			var jProfilistBuilds; // j prefix stands for ProfilistBuilds parsed as jvascript with JSON.parse // declared this semi-global do this if so i only have to do JSON.parse on the first time link84727229
 			
+			var keyValDevMode = getPrefLikeValForKeyInIniEntry(sCurProfIniEntry, sGenIniEntry, 'ProfilistDev');
+			var keyValTemp;
+			if (keyValDevMode === '1') {
+				keyValTemp = getPrefLikeValForKeyInIniEntry(sCurProfIniEntry, sGenIniEntry, 'ProfilistTemp');
+			}
+			
 			for (var i=0; i<onlyProfilesIniObj.length; i++) {
+				if (onlyProfilesIniObj[i].noWriteObj.temporaryProfile && !onlyProfilesIniObj[i].noWriteObj.status) {
+					if (keyValDevMode === '0' || keyValTemp === '0') {
+						// this profile is a temp prof and is not running.... and this profile (is not in dev mode) OR (is in dev mode but is not asking to persist temp profiles)
+						continue;
+					}
+				}
 				var aProfTbbProps = {
 					tbbIniEntry: onlyProfilesIniObj[i],
 					sGenIniEntry: sGenIniEntry, // for statedIniObj_GeneralEntry
