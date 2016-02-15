@@ -188,9 +188,36 @@ function fetchJustIniObj() {
 		
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
-		})
+		});
+		
+		gCntRefreshedRunning = 0;
+		setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
 	});
 }
+
+var gCntRefreshedRunning = 0;
+var gMaxCntRefreshRunning = 3;
+var gIntervalRefreshRunning = 2000; // refresh every 1sec for 5 times
+function refreshRunningStatuses() {
+	gCntRefreshedRunning++;
+	
+	sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['fetchJustIniObjJustRefreshed']], bootstrapMsgListener.funcScope, function(aIniObjIfRefreshed) {
+		console.log('ok back from refreshing, aIniObjIfRefreshed:', aIniObjIfRefreshed);
+		
+		if (aIniObjIfRefreshed) {
+			console.log('yes something went to non-running status, so update');
+			gIniObj = aIniObjIfRefreshed;
+			MyStore.setState({
+				sIniObj: JSON.parse(JSON.stringify(gIniObj))
+			});
+		}
+		
+		if (gCntRefreshedRunning < gMaxCntRefreshRunning) {
+			setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
+		}
+	});
+}
+
 function initPage(isReInit) {
 	// if isReInit then it will skip some stuff
 	

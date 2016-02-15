@@ -637,6 +637,38 @@ function fetchJustIniObj() {
 	return gIniObj;
 }
 
+function fetchJustIniObjJustRefreshed() {
+	// goes through gIniObj and checks the status for each profile. if any of them have a changed status, then it will return gIniObj. if none of them have changed it returns null
+	
+	// link1999937887877777 main goal of this, is to just look for things that shutdown. as shutdown is not immediate. so this is why I dont call formatNoWriteObjs if anything changed
+	
+	// var fxOnlyPidInfos = getAllPID({firefoxOnly:true});
+	
+	var anyStatusChanged = false;
+	
+	for (var i=0; i<gIniObj.length; i++) {
+		if (gIniObj[i].Path && gIniObj[i].noWriteObj.status) {
+			console.log(gIniObj[i].Name, 'was running, so check now to see if it is no longer running');
+			var cStatus = getIsRunningFromIniFromPlat(gIniObj[i].Path, {
+				// winProcessIdsInfos: (['winnt', 'wince', 'winmo'].indexOf(core.os.mname) == -1 ? undefined : fxOnlyPidInfos)
+			});
+			
+			// link1999937887877777 i am only looking for things that shutdown. if something new started up, i dont care, user will have to lose focus and refocus the tab or something. but i dont do it because else ill have to run formatNoWriteObjs
+				// link1999937887877777 for this reason I also do not run adoptOrphanTempProfs in here
+			
+			if (!cStatus) {
+				anyStatusChanged = true;
+				console.log('FOUND THAT IT IS NO LONGER RUNNING');
+				gIniObj[i].noWriteObj.status = 0;
+				delete gIniObj[i].noWriteObj.exePath;
+				delete gIniObj[i].noWriteObj.exeIconSlug;
+			}
+		}
+	}
+	
+	return (anyStatusChanged ? [gIniObj] : [undefined]); // is called by callInPromiseWorker so have to wrap in array
+}
+
 function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
 	gIniObj = JSON.parse(aNewIniObjStr);
 	formatNoWriteObjs();
@@ -1002,7 +1034,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 	// does not update ini
 	// RETURNS
 		// 1 or pid (number) - if running - on windows it just returns 1, on nix/mac this returns the pid if its running. ON windows, if run this on the self profile, it will give you the pid.
-		// false - if NOT running
+		// 0 - if NOT running
 	// currentProfile must be marked in gIniObj before using this
 
 	console.time('getIsRunningFromIniFromPlat');
