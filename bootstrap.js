@@ -298,7 +298,23 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 
 function windowListenerForPuiBtn() {
 
-	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:'var newProfilistTab = gBrowser.loadOneTab(\'about:profilist?html\', {inBackground:false}); gBrowser.pinTab(newProfilistTab); gBrowser.moveTabToStart(newProfilistTab)'}]
+	var onclick = `
+		(function() {
+			var cntTabs = gBrowser.tabs.length;
+			for (var i=0; i<cntTabs; i++) {
+				// e10s safe way to check content of tab
+				if (gBrowser.tabs[i].getAttribute('label') == 'Profilist') { // crossfile-link381787872 - i didnt link over there but &profilist.html.page-title; is what this is equal do
+					gBrowser.selectedTab = gBrowser.tabs[i];
+					return;
+				}
+			}
+			var newProfilistTab = gBrowser.loadOneTab(\'about:profilist?html\', {inBackground:false});
+			gBrowser.pinTab(newProfilistTab);
+			gBrowser.moveTabToStart(newProfilistTab)
+		})();
+	`;
+	console.log('onclick:', onclick);
+	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:onclick}]
 
 	var xulCssUri = Services.io.newURI(core.addon.path.styles + 'xul.css', null, null);
 	
