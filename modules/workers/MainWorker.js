@@ -2400,9 +2400,38 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 								console.log('rez_unMinimize:', rez_unMinimize);
 							}
 							// var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
-							var rez_focus = winForceForegroundWindow(matchingWinInfos[i].hwndPtr);
-							console.log('rez_focus:', rez_focus);
-							// setTimeoutSync(100);
+							// var rez_focus = winForceForegroundWindow(matchingWinInfos[i].hwndPtr);
+							
+							while (true) {
+								var rez_focus = ostypes.API('SetForegroundWindow')(matchingWinInfos[i].hwndPtr);
+								console.log('rez_focus:', rez_focus);
+								
+								var hFrom = ostypes.API('GetForegroundWindow')();
+								if (hFrom.isNull()) {
+									// nothing in foreground, so calling process is free to focus anything
+									console.error('nothing in foreground right now');
+									continue;
+								}
+								
+
+								/*
+								console.time('jsc compare');
+								// var comparePointersJsc = (cutils.jscGetDeepest(matchingWinInfos[i].hwndPtr) == cutils.jscGetDeepest(hFrom));
+								var comparePointersJsc = (cutils.jscEqual(matchingWinInfos[i].hwndPtr, hFrom));
+								console.timeEnd('jsc compare');
+								
+								console.time('cutils compare');
+								var comparePointersCutils = (cutils.comparePointers(hFrom, matchingWinInfos[i].hwndPtr) === 0 ? true : false);
+								console.timeEnd('cutils compare');
+								
+								console.log('compare results:', comparePointersJsc, comparePointersCutils); // both methods work, and are equally as fast, nice ah
+								*/
+								
+								if (cutils.comparePointers(hFrom, matchingWinInfos[i].hwndPtr) === 0) {
+									break;
+								}
+								// setTimeoutSync(10);
+							}
 						}
 						
 					break;
