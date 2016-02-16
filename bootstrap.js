@@ -296,6 +296,142 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 };
 // end - icon generator stuff
 
+function windowListenerForPuiBtn() {
+
+	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:'var newProfilistTab = gBrowser.loadOneTab(\'about:profilist?html\', {inBackground:false}); gBrowser.pinTab(newProfilistTab); gBrowser.moveTabToStart(newProfilistTab)'}]
+
+	var xulCssUri = Services.io.newURI(core.addon.path.styles + 'xul.css', null, null);
+	
+	var getPUIMembers = function(aDOMWindow) {
+		// returns null if DNE or the object
+		var PUI = aDOMWindow.PanelUI;
+		if (!PUI) {
+			return {
+				PUI: null,
+				PUIp: null,
+				PUIf: null
+			}
+		}
+		
+		var PUIp;
+		if (!PUI._initialized) {
+			PUIp = aDOMWindow.document.getElementById('PanelUI-popup'); // have to do it this way, doing PanelUI.panel does getElementById anyways so this is no pref loss
+		} else {
+			PUIp = PUI.panel; // PanelUI-popup
+		}
+
+		// console.log('PUI.mainView:', PUI.mainView, PUI.mainView.childNodes);
+		var PUIf = PUI.mainView ? PUI.mainView.childNodes[1] : null; // PanelUI-footer // aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
+		
+		return {
+			PUI: PUI,
+			PUIp: PUIp,
+			PUIf: PUIf
+		};
+	};
+	
+	var insertProfilistBox = function(e) {
+		var aDOMWindow = e.view;
+		
+		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
+		if (!PUI) { return null }
+		
+		PUIp.removeEventListener('popupshowing', insertProfilistBox, false);
+		PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, {}), PUIf.firstChild);
+	};
+	
+	var loadIntoWindow = function(aDOMWindow) {
+		if (!aDOMWindow) { return }
+		
+		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
+		if (!PUI) { return }
+		
+		var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+		domWinUtils.loadSheet(xulCssUri, domWinUtils.AUTHOR_SHEET); 
+		
+		if (PUIp.state == 'open' || PUIp.state == 'showing') {
+			insertProfilistBox({view:aDOMWindow});
+		} else {
+			PUIp.addEventListener('popupshowing', insertProfilistBox, false);
+		}
+		
+	};
+	
+	var unloadFromWindow = function(aDOMWindow) {
+		if (!aDOMWindow) { return }
+		
+		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
+		if (!PUI) { return }
+		
+		var PUIprofilist = aDOMWindow.document.getElementById('PanelUI-profilist-box');
+		if (PUIprofilist) {
+			PUIprofilist.parentNode.removeChild(PUIprofilist);
+			console.error('ok removed it');
+		} else {
+			PUIp.removeEventListener('popupshowing', insertProfilistBox, false);
+			console.error('ok removed listener');
+		}
+		
+		var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+		domWinUtils.removeSheet(xulCssUri, domWinUtils.AUTHOR_SHEET); 
+		
+	};
+	
+	var windowListener = {
+		//DO NOT EDIT HERE
+		onOpenWindow: function (aXULWindow) {
+			// Wait for the window to finish loading
+			var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+			aDOMWindow.addEventListener('load', function () {
+				aDOMWindow.removeEventListener('load', arguments.callee, false);
+				loadIntoWindow(aDOMWindow);
+			}, false);
+		},
+		onCloseWindow: function (aXULWindow) {},
+		onWindowTitleChange: function (aXULWindow, aNewTitle) {}
+		//END - DO NOT EDIT HERE
+	};
+	
+	var register = function() {
+		
+		// Load into any existing windows
+		var DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			var aDOMWindow = DOMWindows.getNext();
+			if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
+				loadIntoWindow(aDOMWindow);
+			} else {
+				aDOMWindow.addEventListener('load', function () {
+					aDOMWindow.removeEventListener('load', arguments.callee, false);
+					loadIntoWindow(aDOMWindow);
+				}, false);
+			}
+		}
+		// Listen to new windows
+		Services.wm.addListener(windowListener);
+	};
+	
+	var unregister = function() {
+		// Unload from any existing windows
+		var DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			var aDOMWindow = DOMWindows.getNext();
+			unloadFromWindow(aDOMWindow);
+		}
+		/*
+		for (var u in unloaders) {
+			unloaders[u]();
+		}
+		*/
+		//Stop listening so future added windows dont get this attached
+		Services.wm.removeListener(windowListener);
+	};
+	
+	register();
+	
+	return unregister;
+}
+
 function install() {}
 
 function uninstall(aData, aReason) {
@@ -304,6 +440,7 @@ function uninstall(aData, aReason) {
 	}
 }
 
+var gWindowListenerForPuiBtn;
 function startup(aData, aReason) {
 	// core.addon.aData = aData;
 	extendCore();
@@ -366,6 +503,8 @@ function startup(aData, aReason) {
 		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
 		// 
 		// testReact();
+		
+		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
 	};
 	
 	/*
@@ -426,6 +565,12 @@ function shutdown(aData, aReason) {
 	
 	// unregister about pages listener
 	Services.mm.removeMessageListener(core.addon.id, fsMsgListener);
+	
+	
+	// unregister gPUIprUnreg
+	if (gWindowListenerForPuiBtn) {
+		gWindowListenerForPuiBtn();
+	}
 	
 	// terminate worker
 	if (typeof(MainWorker) != 'undefined') {
@@ -1229,5 +1374,68 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}
+}
+
+// not my modified version, this is straight from on 021616 - https://developer.mozilla.org/en-US/Add-ons/Overlay_Extensions/XUL_School/DOM_Building_and_HTML_Insertion#JSON_Templating
+jsonToDOM.namespaces = {
+    html: "http://www.w3.org/1999/xhtml",
+    xul: "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+};
+jsonToDOM.defaultNamespace = jsonToDOM.namespaces.html;
+function jsonToDOM(jsonTemplate, doc, nodes) {
+    function namespace(name) {
+        var reElemNameParts = /^(?:(.*):)?(.*)$/.exec(name);
+        return { namespace: jsonToDOM.namespaces[reElemNameParts[1]], shortName: reElemNameParts[2] };
+    }
+
+    // Note that 'elemNameOrArray' is: either the full element name (eg. [html:]div) or an array of elements in JSON notation
+    function tag(elemNameOrArray, elemAttr) {
+        // Array of elements?  Parse each one...
+        if (Array.isArray(elemNameOrArray)) {
+            var frag = doc.createDocumentFragment();
+            Array.forEach(arguments, function(thisElem) {
+                frag.appendChild(tag.apply(null, thisElem));
+            });
+            return frag;
+        }
+
+        // Single element? Parse element namespace prefix (if none exists, default to defaultNamespace), and create element
+        var elemNs = namespace(elemNameOrArray);
+        var elem = doc.createElementNS(elemNs.namespace || jsonToDOM.defaultNamespace, elemNs.shortName);
+
+        // Set element's attributes and/or callback functions (eg. onclick)
+        for (var key in elemAttr) {
+            var val = elemAttr[key];
+            if (nodes && key == "key") {
+                nodes[val] = elem;
+                continue;
+            }
+
+            var attrNs = namespace(key);
+            if (typeof val == "function") {
+                // Special case for function attributes; don't just add them as 'on...' attributes, but as events, using addEventListener
+                elem.addEventListener(key.replace(/^on/, ""), val, false);
+            }
+            else {
+                // Note that the default namespace for XML attributes is, and should be, blank (ie. they're not in any namespace)
+                elem.setAttributeNS(attrNs.namespace || "", attrNs.shortName, val);
+            }
+        }
+
+        // Create and append this element's children
+        var childElems = Array.slice(arguments, 2);
+        childElems.forEach(function(childElem) {
+            if (childElem != null) {
+                elem.appendChild(
+                    childElem instanceof doc.defaultView.Node ? childElem :
+                        Array.isArray(childElem) ? tag.apply(null, childElem) :
+                            doc.createTextNode(childElem));
+            }
+        });
+
+        return elem;
+    }
+
+    return tag.apply(null, jsonTemplate);
 }
 // end - common helper functions
