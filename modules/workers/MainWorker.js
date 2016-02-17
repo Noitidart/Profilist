@@ -468,18 +468,22 @@ function formatNoWriteObjs() {
 
 	// figure out doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning - for use in next block where temporaryProfile's are deleted from the ini
 	var doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning = false;
-	var generalKeyValTemp = gGenIniEntry.ProfilistTemp;
-	var generalKeyValDev = gGenIniEntry.ProfilistDev;
+	var generalKeyValTemp = gGenIniEntry.ProfilistTemp === undefined ? gKeyInfoStore.ProfilistTemp.defaultValue : gGenIniEntry.ProfilistTemp;
+	var generalKeyValDev = gGenIniEntry.ProfilistDev === undefined ? gKeyInfoStore.ProfilistDev.defaultValue : gGenIniEntry.ProfilistDev;
+	console.log('generalKeyValTemp:', generalKeyValTemp, 'generalKeyValDev:', generalKeyValDev);
 	for (var i=0; i<gIniObj.length; i++) {
 		if (gIniObj[i].Path) {
 			if ((!('ProfilistDev' in gIniObj[i]) && generalKeyValDev === '1') || gIniObj[i].ProfilistDev === '1') {
+				console.log('gIniObj entry path:', gIniObj[i], 'has dev mode enabled');
 				if ((!('ProfilistTemp' in gIniObj[i]) && generalKeyValTemp === '1') || gIniObj[i].ProfilistTemp === '1') {
+					console.log('gIniObj entry path:', gIniObj[i], 'has persist temp profiles enabled');
 					doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning = true;
 					break;
 				}
 			}
 		}
 	}
+	console.error('doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning:', doesAnyOtherProfile_haveDevModeOn_andAsksForPresistNonRunning);
 	
 	// check if any of the temporaryProfile are no longer running. if they are no longer running, check if its profile folder exists, if it doesnt, then delete it from ini.
 		// this block needs to go after setting all running statuses
