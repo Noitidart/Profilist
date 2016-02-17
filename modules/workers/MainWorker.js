@@ -4960,7 +4960,7 @@ function getAllWin(aOptions) {
 				var analyzedArr = [];
 				var pushItBlock = function() {
 					if (cWinObj) {
-						
+						// console.log('has cWinObj so do it:', cWinObj);
 						// start - mini algo to find proper x and y. it first gets max x and y. if they are both 0, then it checks if min x and y are negative and then set its to that (as user may have set up window to left or above or something)
 						var minLeft = Math.min.apply(Math, cWinObj.left);
 						var minTop = Math.min.apply(Math, cWinObj.top);
@@ -4981,13 +4981,21 @@ function getAllWin(aOptions) {
 						cWinObj.bottom = cWinObj.top + cWinObj.height;
 						
 						analyzedArr.push(cWinObj);
+					} else {
+						console.warn('no cWinObj so dont:', cWinObj);
 					}
 				}
 
+				console.error('rezWinArr pre proccess:', rezWinArr);
+				
 				var cWinObj = null;
 				for (var i = 0; i < rezWinArr.length; i++) {
-					if (rezWinArr[i].pid || (rezWinArr[i].title && cWinObj.title)) { // apparently sometimes you can hvae a new win title but no pid. like after "browser console" came a "compiz" title but no pid on it
+					// console.log('checking rezWinArr i', i, rezWinArr[i], 'and cWinObj is currently:', cWinObj);
+					if (rezWinArr[i].pid || rezWinArr[i].title) { // apparently sometimes you can hvae a new win title but no pid. like after "browser console" came a "compiz" title but no pid on it
+						// the ```(rezWinArr[i].title && cWinObj && cWinObj.title)``` test if a new title has been encountered. if so then push block of pervious windows
+						// i would think i should use just rezWinArr[i].title however it gets Compiz which is some invisible window so dang weird
 						pushItBlock();
+						// console.log('doing push for i:', i, rezWinArr[i]);
 						cWinObj = {}
 						for (var p in rezWinArr[i]) {
 							cWinObj[p] = rezWinArr[i][p];
@@ -5006,6 +5014,8 @@ function getAllWin(aOptions) {
 				}
 				pushItBlock();
 
+				console.error('rezWinArr post proccess:', analyzedArr);
+				
 				// post pushing analysis
 				// 1) remove all windows who have height and width of 1
 				for (var i = 0; i < analyzedArr.length; i++) {
@@ -5039,6 +5049,8 @@ function getAllWin(aOptions) {
 				}
 				*/
 				// set rezWinArr to analyzedArr
+				
+				console.error('completed analyizing rezWinArr:', analyzedArr);
 				
 				rezWinArr = analyzedArr;
 				// end - post analysis
