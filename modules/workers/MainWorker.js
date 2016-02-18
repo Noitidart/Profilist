@@ -180,24 +180,25 @@ function afterBootstrapInit() {
 		case 'winmo':
 		case 'wince':
 				
-				// this goes here, and not in init, because readIni has to run first, so i can get gCurProfIniEntry
-				// check if should toggle taskbar.grouping.useprofile pref - this should be done "on set of default profile" - but i have to do it here as well as its startup
-				var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-				if (gCurProfIniEntry.Default === '1') {
-					// current profile IS default
-					if (core.firefox.prefs['taskbar.grouping.useprofile']) {
-						// need to set it to false, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
-						console.log('setPref to false');
-						self.postMessage(['setPref', 'taskbar.grouping.useprofile', false]);
-					}
-				} else {
-					// current profile is NOT default
-					if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
-						// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
-						console.log('setPref to true');
-						self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
-					}
-				}
+				// :debug: i commented this block out for now, stilling thinking through window logic
+				// // this goes here, and not in init, because readIni has to run first, so i can get gCurProfIniEntry
+				// // check if should toggle taskbar.grouping.useprofile pref - this should be done "on set of default profile" - but i have to do it here as well as its startup
+				// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+				// if (gCurProfIniEntry.Default === '1') {
+				// 	// current profile IS default
+				// 	if (core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 		// need to set it to false, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+				// 		console.log('setPref to false');
+				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', false]);
+				// 	}
+				// } else {
+				// 	// current profile is NOT default
+				// 	if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 		// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+				// 		console.log('setPref to true');
+				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
+				// 	}
+				// }
 				
 				// start the window listener, needs to just go after readIni - but i like it here after the "taskbar.grouping.useprofile" stuff
 				self.postMessage(['registerWorkerWindowListener']);
@@ -222,6 +223,13 @@ function afterBootstrapInit() {
 }
 
 // Start - Addon Functionality
+
+/*
+### OSStuff breakdown
+### Windows
+* last_iconSlug_appliedToWindows - the last iconSlug (meaning with badge on base) that was applied
+
+*/
 
 function prepForTerminate() {
 	return 'ok ready to terminate';
@@ -573,7 +581,7 @@ function formatNoWriteObjs() {
 		for (var i=0; i<gIniObj.length; i++) {
 			if (gIniObj[i].noWriteObj.status) { // this loop will for sure hit the curProfIniEntry.noWriteObj.currentProfile entry as it has obviously status
 				// its profile type tbb with exe needed
-				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path); // link33325356464644387
+				gIniObj[i].noWriteObj.exePath = getLastExePathForProfFromFS(gIniObj[i].Path); // link33325356464644387 // will never return null here, as for sure at this point the profile is running as noWriteObj.status is not !
 				console.log(gIniObj[i].Name, 'exePath:', gIniObj[i].noWriteObj.exePath);
 				var cExePathChan = getExeChanForParamsFromFSFromCache(gIniObj[i].noWriteObj.exePath); // link11119831811
 				// console.log('cExePathChan:', cExePathChan);
@@ -1261,7 +1269,9 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 function getLastExePathForProfFromFS(aProfPath) {
 	// the difference between this function and ```getCalcdExePathForProfFromIniFromFS``` is explained on link883939272722
 	// RETURNS
-		// string - the last exePath its compatibility.ini was updated to. :note: :assume: i tested awhile back, that the compaitiblity.ini stores the last exePath-like path in there right away on startup :todo: verify this again // :todo: verify - if profile is running, the path in compaitiblity.ini should be the exePath it is running in right now
+		// string or null - the last exePath its compatibility.ini was updated to. :note: :assume: i tested awhile back, that the compaitiblity.ini stores the last exePath-like path in there right away on startup :todo: verify this again // :todo: verify - if profile is running, the path in compaitiblity.ini should be the exePath it is running in right now
+		// 		if could not open compat.ini for any reason it returns `null` meaning it was never launched in any exePath
+		
 	// gIniObj must have currentProfile noted (WITH exePath noted within) before calling this function 
 	
 	var curProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // this is the currently running profiles ini entry
@@ -1303,7 +1313,12 @@ function getLastExePathForProfFromFS(aProfPath) {
 		// ubuntu15.01
 			// "/usr/lib/firefox/firefox"
 
-	var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'}); // ACTUALLY NEVER MIND THIS COMMENT TO RIGHT WHICH IS TODO becasue link33325356464644387 is the only place it checks this, and it only gets here if the profile is running ----> :todo: :important: if the profile was never launched yet, it has no last exePath so use what it is tied to (if dev mode is on) else use what the currentProfile ini entries build is
+	try {
+		var rez_readCompatIni = OS.File.read(cProfCompatIniPath, {encoding:'utf-8'}); // ACTUALLY NEVER MIND THIS COMMENT TO RIGHT WHICH IS TODO becasue link33325356464644387 is the only place it checks this, and it only gets here if the profile is running ----> :todo: :important: if the profile was never launched yet, it has no last exePath so use what it is tied to (if dev mode is on) else use what the currentProfile ini entries build is
+	} catch(OSFileError) {
+		console.error('failed to read compat.ini because it probably doesnt exist, so returning null', 'OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+		return null;
+	}
 	
 	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
 	if (!cLastPlatformDir) {
@@ -3165,7 +3180,149 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 }
 // End - Launching profile and other profile functionality
 
+function winReadShortcutParams(eLauncherPath) {
+	// eLauncherPath should be platform path to a shortcut
+	// reads icon path, icon index
+	// reads target path
+	// reads appUserModelId
+	
+	var shellLinkPtr;
+	var shellLink;
+	var persistFile;
+	var persistFilePtr;
+	var propertyStore;
+	var propertyStorePtr;
+	try {
+		var hr_CoInitializeEx = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
+		console.info('hr_CoInitializeEx:', hr_CoInitializeEx, hr_CoInitializeEx.toString(), uneval(hr_CoInitializeEx));
+		if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInitializeEx)) {
+			console.log('CoInitializeEx says successfully initialized');
+			//shouldUninitialize = true; // no need for this, as i always unit even if this returned false, as per the msdn docs
+		} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInitializeEx)) {
+			console.error('CoInitializeEx says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
+		} else {
+			console.error('Unexpected return value from CoInitializeEx: ' + hr);
+			throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
+		}
+		
+		shellLinkPtr = ostypes.TYPE.IShellLinkW.ptr();
+		var hr_CoCreateInstance = ostypes.API('CoCreateInstance')(ostypes.CONST.CLSID_SHELLLINK.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, ostypes.CONST.IID_ISHELLLINK.address(), shellLinkPtr.address());
+		ostypes.HELPER.checkHRESULT(hr_CoCreateInstance, 'createLauncher -> CoCreateInstance');
+		shellLink = shellLinkPtr.contents.lpVtbl.contents;
+
+		persistFilePtr = ostypes.TYPE.IPersistFile.ptr();
+		var hr_shellLinkQI = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPERSISTFILE.address(), persistFilePtr.address());
+		ostypes.HELPER.checkHRESULT(hr_shellLinkQI, 'createLauncher -> QueryInterface (IShellLink->IPersistFile)');
+		persistFile = persistFilePtr.contents.lpVtbl.contents;
+		
+		if (core.os.version >= 6.1) {
+			// win7 and up
+			propertyStorePtr = ostypes.TYPE.IPropertyStore.ptr();
+			var hr_shellLinkQI2 = shellLink.QueryInterface(shellLinkPtr, ostypes.CONST.IID_IPROPERTYSTORE.address(), propertyStorePtr.address());
+			ostypes.HELPER.checkHRESULT(hr_shellLinkQI2, 'createLauncher -> QueryInterface (IShellLink->IPropertyStore)');
+			propertyStore = propertyStorePtr.contents.lpVtbl.contents;
+		}
+				
+		var hr_Load = persistFile.Load(persistFilePtr, eLauncherPath, 0);
+		ostypes.HELPER.checkHRESULT(hr_Load, 'createLauncher -> Load');
+
+		// step1 - get eLauncherIconSlug
+		// :note: iconSlug is different from imgSlug, as for imgSlug I have to append _##.png to it where the ## is variable. while with iconSlug it is just append .ico or .icns or no extension for linux style
+		
+		var buffer_eLauncherIconPath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+		var c_eIconIndex = ostypes.TYPE.INT();
+		var hr_GetIconLocation = shellLink.GetIconLocation(shellLinkPtr, buffer_eLauncherIconPath/*.address()*/, buffer_eLauncherIconPath.length, c_eIconIndex.address());
+		ostypes.HELPER.checkHRESULT(hr_GetIconLocation, 'createLauncher -> GetIconLocation');
+		
+		var eLauncherIconPath = buffer_eLauncherIconPath.readString();
+		var eIconIndex = c_eIconIndex.value;
+		// var eLauncherIconSlug = OS.Path.basename(eLauncherIconPath).replace('.ico', '');
+		console.log('exeIconPath:', eLauncherIconPath, 'exeIconPath_iconIndex:', eIconIndex);
+		
+		// step2 - get eLauncherExePath
+		var buffer_eLauncherExePath = ostypes.TYPE.LPTSTR.targetType.array(OS.Constants.Win.MAX_PATH)();
+		var hr_GetPath = shellLink.GetPath(shellLinkPtr, buffer_eLauncherExePath/*.address()*/, buffer_eLauncherExePath.length, null, ostypes.CONST.SLGP_RAWPATH);
+		ostypes.HELPER.checkHRESULT(hr_Load, 'createLauncher -> GetPath');
+		
+		var eLauncherExePath = buffer_eLauncherExePath.readString();
+		console.log('exePath:', '"' + eLauncherExePath + '"');
+		
+		if (core.os.version >= 6.1) {
+			// win7 and up
+			var eLauncherAppUserModelId = ostypes.HELPER.IPropertyStore_GetValue(propertyStorePtr, propertyStore, ostypes.CONST.PKEY_APPUSERMODEL_ID.address(), null); // can throw if something goes wrong inside
+			console.log('appUserModelId:', eLauncherAppUserModelId);
+		}
+		
+	} finally {
+		if (persistFile) {
+			var rez_refCntPFile = persistFile.Release(persistFilePtr);
+			console.log('rez_refCntPFile:', rez_refCntPFile);
+		}
+		
+		if (propertyStore) {
+			var rez_refCntPropStore = propertyStore.Release(propertyStorePtr);
+			console.log('rez_refCntPropStore:', rez_refCntPropStore);
+		}
+
+		if (shellLink) {
+			var rez_refCntShelLink = shellLink.Release(shellLinkPtr);
+			console.log('rez_refCntShelLink:', rez_refCntShelLink);
+		}
+		
+		//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
+			ostypes.API('CoUninitialize')(); // return void
+		//}
+	}
+}
+
 // Start - Window watcher
+_cache_getWin7TaskbarId = {};
+function getWin7TaskbarId(aProfPath) {
+	var gProfIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	
+	var cProfIsDefault = gProfIniEntry.Default === '1' ? '1' : '0';
+	
+	var strToHash;
+	if (cProfIsDefault === '0') {
+		strToHash = aProfPath;
+		if (!(strToHash in _cache_getWin7TaskbarId)) {
+			_cache_getWin7TaskbarId[strToHash] = HashString(strToHash);
+		}
+	} else {
+		var cProfIsRunning = gProfIniEntry.noWriteObj.status ? true : false;
+		if (cProfIsRunning) {
+			strToHash = OS.Path.dirname(gProfIniEntry.noWriteObj.exePath);
+		} else {
+			var devWant_lastExePath_or_shouldBeExePath = true; // false for lastExePath, true for shouldBePath
+			// i decided ill take lastExePath, in case shouldBeExePath doesnt exist in registry - i think this is poor decision, but lets try it out
+			// actually i decided on shouldBe - as that takes the running one if there is one
+			// strToHash = ''; // the last exe path it ran in? or the exe path it should be (should be means, if its not tied then it will be launched in this curProfIniEntry.noWriteObj.exePath, or if its tied then what the exePath of that tie is)?
+			if (!devWant_lastExePath_or_shouldBeExePath) {
+				// lastExePath
+				strToHash = getLastExePathForProfFromFS(aProfPath);
+			} else {
+				// shouldBe
+				strToHash = OS.Path.dirname(getCalcdExePathForProfFromIniFromFS(aProfPath));
+			}
+		}
+		if (!(strToHash in _cache_getWin7TaskbarId)) {
+			console.time('winRegistryRead');
+			_cache_getWin7TaskbarId[strToHash] = winRegistryRead('HKEY_CURRENT_USER', 'Software\\Mozilla\\Firefox\\TaskBarIDs', strToHash); // :todo: instead of read from registry, i should CityHash64 like per - ```CityHash::GetCityHash64 "$R9"``` - https://dxr.mozilla.org/mozilla-central/source/toolkit/mozapps/installer/windows/nsis/common.nsh#7295
+			console.timeEnd('winRegistryRead');
+			console.error('just did timeEnd on winRegistryRead');
+			
+			if (_cache_getWin7TaskbarId[strToHash] === null) {
+				// fallback to just HashString of profpath, it just has to be consistent with how profilist handles it. at this point.
+				strToHash = aProfPath;
+				if (!(strToHash in _cache_getWin7TaskbarId)) {
+					_cache_getWin7TaskbarId[strToHash] = HashString(strToHash);
+				}
+			}
+		}
+	}
+	
+	return _cache_getWin7TaskbarId[strToHash];
+}
 function loadIntoWindow(aNativeWindowPtrStr) {
 	console.log('loading into aNativeWindowPtrStr:', aNativeWindowPtrStr);
 	switch (core.os.name) {
@@ -3173,21 +3330,34 @@ function loadIntoWindow(aNativeWindowPtrStr) {
 		case 'winmo':
 		case 'wince':
 				
-				// // check if should toggle taskbar.grouping.useprofile pref - this should be done "on set of default profile" - but i have to do it here as well as its startup
+				
+				// :debug: i commented this block out for now, stilling thinking through window logic
+				// // set application long if it hasnt been set already
 				// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
-				// if (gCurProfIniEntry.Default === '1') {
-				// 	// current profile IS default
-				// 	if (core.firefox.prefs['taskbar.grouping.useprofile']) {
-				// 		// need to set it to false, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
-				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', false]);
+				// if (OSStuff.last_iconSlug_appliedToWindows == gCurProfIniEntry.noWriteObj.exeIcon
+				// 
+				// // figure out if need to set appusermodelid on every window
+				// if (core.os.version >= 6.1) {
+				// 	// win7 and up
+				// 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+				// 	if (gCurProfIniEntry.Default === '1') {
+				// 		// current profile IS default
+				// 		if (core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 			// need to set appUserModelId in window to default one
+				// 			getWin7TaskbarId
+				// 		}
+				// 	} else {
+				// 		// current profile is NOT default
+				// 		if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 			// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+				// 			self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
+				// 		}
 				// 	}
 				// } else {
-				// 	// current profile is NOT default
-				// 	if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
-				// 		// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
-				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
-				// 	}
+                // 
 				// }
+				
+				
 			
 			break;
 		case 'gtk':
@@ -4111,6 +4281,59 @@ function adoptOrphanTempProfs(aOptions={}) {
 // End - Addon Functionality
 
 // START - platform helpers
+function winRegistryRead(aHkeyGroup, aKeyDirPath, aKeyName) {
+	// aHkeyGroup - string; "HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER", no others are supported
+	// aKeyDirPath - string; with double back slash - like "Hardware\\DeviceMap\\SerialComm"
+	// aKeyName - string; like "\\Device\\Serial0"
+	
+	// returns
+		// cKeyValue as string -- curently max length returned is 50 link90000000000
+		// else on error it throws
+		// else if it doesnt exist it returns null
+	
+	var h_Key = ostypes.TYPE.HKEY();
+	var rez_openKey = ostypes.API('RegOpenKeyEx')(ostypes.CONST[aHkeyGroup], aKeyDirPath, 0, ostypes.CONST.KEY_QUERY_VALUE, h_Key.address());
+	if (!cutils.jscEqual(rez_openKey, ostypes.CONST.ERROR_SUCCESS)) {
+		console.error('failed opening registry key:', cutils.jscGetDeepest(rez_openKey));
+		throw new Error('failed opening registry key');
+	}
+	
+	var cKeyValue;
+	try {
+		var u16_cKeyData = ostypes.TYPE.WCHAR.array(50)(); // link90000000000
+		
+		var u32_Type = ostypes.TYPE.DWORD();
+		var u32_Size = ostypes.TYPE.DWORD(u16_cKeyData.constructor.size);
+		
+		var u16_cKeyData_castedAsByte = ctypes.cast(u16_cKeyData.address(), ostypes.TYPE.BYTE.ptr);
+		
+		// var a = ctypes.jschar.array(50)(); // CData { length: 50 }
+		// var ac = ctypes.cast(a.address(), ctypes.char.array(a.constructor.size / ctypes.char.size).ptr).contents; // CData { length: 100 }
+		
+		var rez_queryKey = ostypes.API('RegQueryValueEx')(h_Key, aKeyName, null, u32_Type.address(), u16_cKeyData_castedAsByte, u32_Size.address());
+		if (!cutils.jscEqual(rez_queryKey, ostypes.CONST.ERROR_SUCCESS)) {
+			if (cutils.jscEqual(rez_queryKey, ostypes.CONST.ERROR_FILE_NOT_FOUND)) {
+				// if it is 2 then the value of u16_NTPath doesnt exist in this registry, its common to registry querying
+				console.warn('this aKeyName does not exist at aKeyDirPath in aHkeyGroup so returning null.', aHkeyGroup, aKeyDirPath, aKeyName);
+				cKeyValue = null;
+			} else {
+				console.error('failed querying registry key:', cutils.jscGetDeepest(rez_queryKey));
+				throw new Error('failed querying registry key');
+			}
+		} else {
+			cKeyValue = u16_cKeyData.readString();
+		}
+	} finally {
+		var rez_closeKey = ostypes.API('RegCloseKey')(h_Key);
+		if (!cutils.jscEqual(rez_closeKey, ostypes.CONST.ERROR_SUCCESS)) {
+			console.error('failed closing registry key:', cutils.jscGetDeepest(rez_closeKey));
+			throw new Error('failed closing registry key');
+		}
+		else { console.log('closed key'); }
+	}
+	
+	return cKeyValue;
+}
 function unixSubprocess(aCmd, aOptions={}) {
 	// for unix based systems only
 	

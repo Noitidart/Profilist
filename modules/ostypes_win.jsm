@@ -883,10 +883,12 @@ var winInit = function() {
 		
 		ObjectNameInformation: 1,
 		
+		HKEY_CURRENT_USER: self.TYPE.HKEY(0x80000001), // https://github.com/wine-mirror/wine/blob/9bd963065b1fb7b445d010897d5f84967eadf75b/include/winreg.h#L29
 		HKEY_LOCAL_MACHINE: self.TYPE.HKEY(0x80000002), // https://github.com/wine-mirror/wine/blob/9bd963065b1fb7b445d010897d5f84967eadf75b/include/winreg.h#L30
 		KEY_QUERY_VALUE: 0x00000001,
 		
-		ERROR_SUCCESS: 0x00000000
+		ERROR_SUCCESS: 0x00000000,
+		ERROR_FILE_NOT_FOUND: 0x00000002
 	};
 	
 	var _lib = {}; // cache for lib
