@@ -173,6 +173,54 @@ function init(objCore) { // function name init required for SIPWorker
 	return core; // required for SIPWorker
 }
 
+function afterBootstrapInit() {
+	// OS Specific Init
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				// this goes here, and not in init, because readIni has to run first, so i can get gCurProfIniEntry
+				// check if should toggle taskbar.grouping.useprofile pref - this should be done "on set of default profile" - but i have to do it here as well as its startup
+				var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+				if (gCurProfIniEntry.Default === '1') {
+					// current profile IS default
+					if (core.firefox.prefs['taskbar.grouping.useprofile']) {
+						// need to set it to false, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+						console.log('setPref to false');
+						self.postMessage(['setPref', 'taskbar.grouping.useprofile', false]);
+					}
+				} else {
+					// current profile is NOT default
+					if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
+						// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+						console.log('setPref to true');
+						self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
+					}
+				}
+				
+				// start the window listener, needs to just go after readIni - but i like it here after the "taskbar.grouping.useprofile" stuff
+				self.postMessage(['registerWorkerWindowListener']);
+				
+			break;
+		case 'gtk':
+			
+				// if not unity de, then set up window listener, else dont, for now am setting it up
+				self.postMessage(['registerWorkerWindowListener']);
+			
+			break;
+		case 'darwin':
+				
+				console.log('no need for postInit on mac');
+				
+			break;
+		default:
+			// do nothing special
+	}
+	
+	console.log('ok compelted post init');
+}
+
 // Start - Addon Functionality
 
 function prepForTerminate() {
@@ -3117,6 +3165,51 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 }
 // End - Launching profile and other profile functionality
 
+// Start - Window watcher
+function loadIntoWindow(aNativeWindowPtrStr) {
+	console.log('loading into aNativeWindowPtrStr:', aNativeWindowPtrStr);
+	switch (core.os.name) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				// // check if should toggle taskbar.grouping.useprofile pref - this should be done "on set of default profile" - but i have to do it here as well as its startup
+				// var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+				// if (gCurProfIniEntry.Default === '1') {
+				// 	// current profile IS default
+				// 	if (core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 		// need to set it to false, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', false]);
+				// 	}
+				// } else {
+				// 	// current profile is NOT default
+				// 	if (!core.firefox.prefs['taskbar.grouping.useprofile']) {
+				// 		// need to set it to true, but do not update `core.firefox.prefs['taskbar.grouping.useprofile']` because the new value doesn't take affect till restart
+				// 		self.postMessage(['setPref', 'taskbar.grouping.useprofile', true]);
+				// 	}
+				// }
+			
+			break;
+		case 'gtk':
+		
+				// if not ubuntu, then set window icon
+		
+			break;
+		// case 'darwin':
+		// 		
+		// 		// no need on mac
+		// 		
+		// 	break;
+		default:
+			// do nothing special
+	}
+}
+
+function unloadFromWindow(aNativeWindowPtrStr) {
+	console.log('unloading from aNativeWindowPtrStr:', aNativeWindowPtrStr);
+}
+// End - Windo watcher
+
 // Start - Icon browse picker dialog
 function browseiconInit() {
 	return {
@@ -4015,8 +4108,9 @@ function adoptOrphanTempProfs(aOptions={}) {
 	
 	return cntTempProfsFound;
 }
+// End - Addon Functionality
 
-// platform helpers
+// START - platform helpers
 function unixSubprocess(aCmd, aOptions={}) {
 	// for unix based systems only
 	
@@ -4315,6 +4409,7 @@ function winGetDosPathFromNtPath(u16_NTPath) {
 	console.error('ERROR_BAD_PATHNAME');
 	throw new Error('ERROR_BAD_PATHNAME');
 }
+
 function winForceForegroundWindow(aHwndToFocus) {
 	// windows only!
 	// focus a window even if this process, that is calling this function, is not the foreground window
@@ -4435,6 +4530,7 @@ function resolveSymlinkPath(aSymlinkPlatPath) {
 	}
 
 }
+
 function createHardLink(aCreatePlatformPath, aTargetPlatformPath) {
 	// returns true/false
 	
@@ -5423,7 +5519,7 @@ function getAllPID(aOptions={}) {
 	
 	return cProcessIdsInfos;
 }
-// End - Addon Functionality
+// END - platform helpers
 
 // start - common helper functions
 function getRelativeDescriptor(ofOsPath, fromOsPath) {

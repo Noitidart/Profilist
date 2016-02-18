@@ -40,7 +40,8 @@ var core = {
 	},
 	firefox: {
 		pid: Services.appinfo.processID,
-		version: Services.appinfo.version
+		version: Services.appinfo.version,
+		prefs: {}
 	}
 };
 
@@ -151,6 +152,33 @@ var MainWorkerMainThreadFuncs = {
 	},
 	showNotification: function(aTitle, aBody) {
 		myServices.as.showAlertNotification(core.addon.path.content + 'icon.png', aTitle, aBody, false, null, null, 'Profilist');
+	},
+	registerWorkerWindowListener: function() {
+		gWorkerWindowListener = workerWindowListenerRegister();
+	},
+	setPref: function(aPrefName, aPrefVal) {
+		// aPrefName - string like "taskbar.grouping.useprofile"
+		// aPrefVal - new value
+		
+		switch (typeof(aPrefVal)) {
+			case 'string':
+					
+					Services.prefs.setCharPref(aPrefName, aPrefVal);
+					
+				break;
+			case 'number':
+					
+					Services.prefs.setIntPref(aPrefName, aPrefVal);
+					
+				break;
+			case 'boolean':
+					
+					Services.prefs.setBoolPref(aPrefName, aPrefVal);
+					
+				break;
+			default:
+				console.error('invalid type!!!!');
+		}
 	}
 };
 // End - Launching profile and other profile functionality
@@ -313,7 +341,7 @@ function windowListenerForPuiBtn() {
 			gBrowser.moveTabToStart(newProfilistTab)
 		})();
 	`;
-	console.log('onclick:', onclick);
+	// console.log('onclick:', onclick);
 	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:onclick}]
 
 	var xulCssUri = Services.io.newURI(core.addon.path.styles + 'xul.css', null, null);
@@ -448,6 +476,105 @@ function windowListenerForPuiBtn() {
 	return unregister;
 }
 
+var gWorkerWindowListener;
+function workerWindowListenerRegister() {
+	// returns function - unregisterer
+	
+	var loadIntoWindow = function(aDOMWindow) {
+		var promise_loadIntoWindow = MainWorker.post('loadIntoWindow', [getNativeHandlePtrStr(aDOMWindow)]);
+		promise_loadIntoWindow.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_loadIntoWindow - ', aVal);
+				
+			},
+			genericReject.bind(null, 'promise_loadIntoWindow', 0)
+		).catch(genericCatch.bind(null, 'promise_loadIntoWindow', 0));
+	};
+	
+	var unloadFromWindow = function(aDOMWindow) {
+		var promise_unloadFromWindow = MainWorker.post('unloadFromWindow', [getNativeHandlePtrStr(aDOMWindow)]);
+		promise_unloadFromWindow.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_unloadFromWindow - ', aVal);
+				
+			},
+			genericReject.bind(null, 'promise_unloadFromWindow', 0)
+		).catch(genericCatch.bind(null, 'promise_unloadFromWindow', 0));
+	};
+	
+	var windowListener = {
+		//DO NOT EDIT HERE
+		onOpenWindow: function (aXULWindow) {
+			// Wait for the window to finish loading
+			var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+			aDOMWindow.addEventListener('load', function () {
+				aDOMWindow.removeEventListener('load', arguments.callee, false);
+				loadIntoWindow(aDOMWindow);
+			}, false);
+		},
+		onCloseWindow: function (aXULWindow) {},
+		onWindowTitleChange: function (aXULWindow, aNewTitle) {}
+		//END - DO NOT EDIT HERE
+	};
+	
+	var register = function() {
+		// Load into any existing windows
+		var DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			var aDOMWindow = DOMWindows.getNext();
+			// if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
+				loadIntoWindow(aDOMWindow);
+			// } else {
+			// 	aDOMWindow.addEventListener('load', function () {
+			// 		aDOMWindow.removeEventListener('load', arguments.callee, false);
+			// 		loadIntoWindow(aDOMWindow);
+			// 	}, false);
+			// }
+		}
+		// Listen to new windows
+		Services.wm.addListener(windowListener);
+	};
+	
+	var reLoadIntoWindows = function() {
+		// Load into any existing windows
+		var DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			var aDOMWindow = DOMWindows.getNext();
+			// if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
+				loadIntoWindow(aDOMWindow);
+			// } else {
+			// 	aDOMWindow.addEventListener('load', function () {
+			// 		aDOMWindow.removeEventListener('load', arguments.callee, false);
+			// 		loadIntoWindow(aDOMWindow);
+			// 	}, false);
+			// }
+		}
+	};
+	
+	var unregister = function() {
+		// Unload from any existing windows
+		var DOMWindows = Services.wm.getEnumerator(null);
+		while (DOMWindows.hasMoreElements()) {
+			var aDOMWindow = DOMWindows.getNext();
+			unloadFromWindow(aDOMWindow);
+		}
+		/*
+		for (var u in unloaders) {
+			unloaders[u]();
+		}
+		*/
+		//Stop listening so future added windows dont get this attached
+		Services.wm.removeListener(windowListener);
+	};
+	
+	register();
+	
+	return {
+		unregister: unregister,
+		reLoadIntoWindows: reLoadIntoWindows
+	};
+}
+
 function install() {}
 
 function uninstall(aData, aReason) {
@@ -507,6 +634,18 @@ function startup(aData, aReason) {
 	core.firefox.channel = Services.prefs.getCharPref('app.update.channel'); // esr|release|beta|aurora|dev|nightly|default
 	
 	
+	if (['winnt', 'wince', 'winmo'].indexOf(OS.Constants.Sys.Name.toLowerCase()) > -1) {
+		try {
+			core.firefox.prefs['taskbar.grouping.useprofile'] = Services.prefs.getBoolPref('taskbar.grouping.useprofile');
+		} catch(err) {
+			// probably doesnt exist, this is what throws when it doesnt exist
+				// message:"Component returned failure code: 0x8000ffff (NS_ERROR_UNEXPECTED) [nsIPrefBranch.getBoolPref]"
+				// name:"NS_ERROR_UNEXPECTED"
+				// result:2147549183
+			core.firefox.prefs['taskbar.grouping.useprofile'] = false;
+		}
+	}
+	
 	var afterWorker = function() { // because i init worker, then continue init
 		// register about page
 		initAndRegisterAboutProfilist();
@@ -521,6 +660,15 @@ function startup(aData, aReason) {
 		// testReact();
 		
 		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
+		
+		var promise_afterBootstrapInit = MainWorker.post('afterBootstrapInit');
+		promise_afterBootstrapInit.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
+				
+			},
+			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
+		).catch(genericCatch.bind(null, 'promise_afterBootstrapInit', 0));
 	};
 	
 	/*
@@ -586,6 +734,10 @@ function shutdown(aData, aReason) {
 	// unregister gPUIprUnreg
 	if (gWindowListenerForPuiBtn) {
 		gWindowListenerForPuiBtn();
+	}
+	
+	if (gWorkerWindowListener) {
+		gWorkerWindowListener.unregister();
 	}
 	
 	// terminate worker
@@ -1453,5 +1605,14 @@ function jsonToDOM(jsonTemplate, doc, nodes) {
     }
 
     return tag.apply(null, jsonTemplate);
+}
+function getNativeHandlePtrStr(aDOMWindow) {
+	var aDOMBaseWindow = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+								   .getInterface(Ci.nsIWebNavigation)
+								   .QueryInterface(Ci.nsIDocShellTreeItem)
+								   .treeOwner
+								   .QueryInterface(Ci.nsIInterfaceRequestor)
+								   .getInterface(Ci.nsIBaseWindow);
+	return aDOMBaseWindow.nativeHandle;
 }
 // end - common helper functions
