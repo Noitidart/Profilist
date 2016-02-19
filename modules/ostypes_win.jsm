@@ -95,6 +95,7 @@ var winTypes = function() {
 	this.HDC = this.HANDLE;
 	this.HFONT = this.HANDLE;
 	this.HGDIOBJ = this.HANDLE;
+	this.HGLOBAL = this.HANDLE;
 	this.HHOOK = this.HANDLE;
 	this.HICON = this.HANDLE;
 	this.HINSTANCE = this.HANDLE;
@@ -102,6 +103,7 @@ var winTypes = function() {
 	this.HMENU = this.HANDLE;
 	this.HMONITOR = this.HANDLE;
 	this.HRAWINPUT = this.HANDLE;
+	this.HRSRC = this.HANDLE;
 	this.HWND = this.HANDLE;
 	this.LPCOLESTR = this.OLECHAR.ptr; // typedef [string] const OLECHAR *LPCOLESTR; // https://github.com/wine-mirror/wine/blob/bdeb761357c87d41247e0960f71e20d3f05e40e6/include/wtypes.idl#L288
 	this.LPCTSTR = ifdef_UNICODE ? this.LPCWSTR : this.LPCSTR;
@@ -176,6 +178,19 @@ var winTypes = function() {
 	  { 'Data2': this.USHORT },
 	  { 'Data3': this.USHORT },
 	  { 'Data4': this.BYTE.array(8) }
+	]);
+	this.GROUPICON = ctypes.StructType('_GROUPICON', [ // http://stackoverflow.com/a/22597049/1828637
+		{ Reserved1: this.WORD },		// reserved, must be 0
+		{ ResourceType: this.WORD },	// type is 1 for icons
+		{ ImageCount: this.WORD },		// number of icons in structure (1)
+		{ Width: this.BYTE },			// icon width (32)
+		{ Height: this.BYTE },			// icon height (32)
+		{ Colors: this.BYTE },			// colors (0 means more than 8 bits per pixel)
+		{ Reserved2: this.BYTE },		// reserved, must be 0
+		{ Planes: this.WORD },			// color planes
+		{ BitsPerPixel: this.WORD },	// bit depth
+		{ ImageSize: this.DWORD },		// size of structure
+		{ ResourceID: this.WORD }		// resource ID
 	]);
 	this.IO_STATUS_BLOCK = ctypes.StructType('_IO_STATUS_BLOCK', [ // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550671%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 		{ Pointer: this.PVOID }, // union { NTSTATUS Status; PVOID Pointer; } // i just picked PVOID
@@ -888,7 +903,13 @@ var winInit = function() {
 		KEY_QUERY_VALUE: 0x00000001,
 		
 		ERROR_SUCCESS: 0x00000000,
-		ERROR_FILE_NOT_FOUND: 0x00000002
+		ERROR_FILE_NOT_FOUND: 0x00000002,
+		
+		RT_ICON: '3', // https://github.com/wine-mirror/wine/blob/c266d373deb417abef4883f59daa5d517b77e76c/include/winuser.h#L761
+		RT_GROUP_ICON: '14', // https://github.com/wine-mirror/wine/blob/c266d373deb417abef4883f59daa5d517b77e76c/include/winuser.h#L771
+		
+		LANG_ENGLISH: 0x0C09,
+		SUBLANG_DEFAULT: 0x01
 	};
 	
 	var _lib = {}; // cache for lib
@@ -971,6 +992,19 @@ var winInit = function() {
 				self.TYPE.DWORD,	// idAttach
 				self.TYPE.DWORD,	// idAttachTo
 				self.TYPE.BOOL		// fAttach
+			);
+		},
+		BeginUpdateResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648030%28v=vs.85%29.aspx
+			 * HANDLE WINAPI BeginUpdateResource(
+			 *   __in_ LPCTSTR pFileName,
+			 *   __in_ BOOL    bDeleteExistingResources
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'BeginUpdateResourceW' : 'BeginUpdateResourceA', self.TYPE.ABI,
+				self.TYPE.HANDLE,		// return
+				self.TYPE.LPCTSTR,		// pFileName
+				self.TYPE.BOOL			// bDeleteExistingResources
 			);
 		},
 		BitBlt: function() {
@@ -1247,6 +1281,19 @@ var winInit = function() {
 				self.TYPE.DWORD			// dwOptions
 			);
 		},
+		EndUpdateResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648032%28v=vs.85%29.aspx
+			 * BOOL WINAPI EndUpdateResource(
+			 *   __in_ HANDLE hUpdate,
+			 *   __in_ BOOL   fDiscard
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'EndUpdateResourceW' : 'EndUpdateResourceA', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE,	// hUpdate
+				self.TYPE.BOOL		// fDiscard
+			);
+		},
 		EnumDisplayDevices: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/dd162609%28v=vs.85%29.aspx
 			 * BOOL EnumDisplayDevices(
@@ -1307,6 +1354,49 @@ var winInit = function() {
 				self.TYPE.BOOL,				// return
 				self.TYPE.WNDENUMPROC.ptr,	// lpEnumFunc
 				self.TYPE.LPARAM			// lParam
+			);
+		},
+		FindResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648042%28v=vs.85%29.aspx
+			 * HRSRC WINAPI FindResource(
+			 *   _in_opt_ HMODULE hModule,
+			 *   _in_     LPCTSTR lpName,
+			 *   _in_     LPCTSTR lpType
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'FindResourceW' : 'FindResourceA', self.TYPE.ABI,
+				self.TYPE.HRSRC,		// return
+				self.TYPE.HMODULE,		// hModule
+				self.TYPE.LPCTSTR,		// lpName
+				self.TYPE.LPCTSTR		// lpType
+			);
+		},
+		FindResourceEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648043%28v=vs.85%29.aspx
+			 * HRSRC WINAPI FindResourceEx(
+			 *   __in_opt_ HMODULE hModule,
+			 *   __in_     LPCTSTR lpType,
+			 *   __in_     LPCTSTR lpName,
+			 *   __in_     WORD    wLanguage
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'FindResourceExW' : 'FindResourceExA', self.TYPE.ABI,
+				self.TYPE.HRSRC,		// return
+				self.TYPE.HMODULE,		// hModule
+				self.TYPE.LPCTSTR,		// lpType
+				self.TYPE.LPCTSTR,		// lpName
+				self.TYPE.WORD			// wLanguage
+			);
+		},
+		FreeLibrary: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms683152%28v=vs.85%29.aspx
+			 * BOOL WINAPI FreeLibrary(
+			 *   __in_ HMODULE hModule
+			 * );
+			 */
+			return lib('kernel32').declare('FreeLibrary', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HMODULE	// hModule
 			);
 		},
 		GetClientRect: function() {
@@ -1568,6 +1658,56 @@ var winInit = function() {
 				self.TYPE.BOOL,		// return
 				self.TYPE.HWND,		// hWnd
 				self.TYPE.UINT_PTR	// uIDEvent
+			);
+		},
+		LoadLibrary: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684175%28v=vs.85%29.aspx
+			 * HMODULE WINAPI LoadLibrary(
+			 *   _In_ LPCTSTR lpFileName
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'LoadLibraryW' : 'LoadLibraryA', self.TYPE.ABI,
+				self.TYPE.HMODULE,	// return
+				self.TYPE.LPCTSTR	// lpFileName
+			);
+		},
+		LoadLibraryEx: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684179%28v=vs.85%29.aspx
+			 * HMODULE WINAPI LoadLibraryEx(
+			 *   _in_       LPCTSTR lpFileName,
+			 *   _reserved_ HANDLE  hFile,
+			 *   _in_       DWORD   dwFlags
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'LoadLibraryExW': 'LoadLibraryExA', self.TYPE.ABI,
+				self.TYPE.HMODULE,		// return
+				self.TYPE.LPCTSTR,		// lpFileName
+				self.TYPE.HANDLE,		// hFile
+				self.TYPE.DWORD			// dwFlags
+			);
+		},
+		LoadResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648046%28v=vs.85%29.aspx
+			 * HGLOBAL WINAPI LoadResource(
+			 *   _In_opt_ HMODULE hModule,
+			 *   _In_     HRSRC   hResInfo
+			 * );
+			 */
+			return lib('kernel32').declare('LoadResource', self.TYPE.ABI,
+				self.TYPE.HGLOBAL,		// return
+				self.TYPE.HMODULE,		// hModule
+				self.TYPE.HRSRC			// hResInfo
+			);
+		},
+		LockResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648047%28v=vs.85%29.aspx
+			 * LPVOID WINAPI LockResource(
+			 *   __in_ HGLOBAL hResData
+			 * );
+			 */
+			return lib('kernel32').declare('LockResource', self.TYPE.ABI,
+				self.TYPE.LPVOID,	// return
+				self.TYPE.HGLOBAL	// hResData
 			);
 		},
 		OpenProcess: function() {
@@ -1924,6 +2064,19 @@ var winInit = function() {
 				self.TYPE.LPTSTR.ptr	// *ppwsz
 			); 
 		},
+		SizeofResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648048%28v=vs.85%29.aspx
+			 * DWORD WINAPI SizeofResource(
+			 *   __in_opt_ HMODULE hModule,
+			 *   __in_     HRSRC   hResInfo
+			 * );
+			 */
+			return lib('kernel32').declare('SizeofResource', self.TYPE.ABI,
+				self.TYPE.DWORD,		// return
+				self.TYPE.HMODULE,		// hModule
+				self.TYPE.HRSRC			// hResInfo
+			);
+		},
 		UnregisterClass: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms644899%28v=vs.85%29.aspx
 			 * BOOL WINAPI UnregisterClass(
@@ -1935,6 +2088,27 @@ var winInit = function() {
 				self.TYPE.BOOL,		// return
 				self.TYPE.LPCTSTR,	// lpClassName
 				self.TYPE.HINSTANCE	// hInstance
+			);
+		},
+		UpdateResource: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648049%28v=vs.85%29.aspx
+			 * BOOL WINAPI UpdateResource(
+			 *   __in_     HANDLE  hUpdate,
+			 *   __in_     LPCTSTR lpType,
+			 *   __in_     LPCTSTR lpName,
+			 *   __in_     WORD    wLanguage,
+			 *   __in_opt_ LPVOID  lpData,
+			 *   __in_     DWORD   cbData
+			 * );
+			 */
+			return lib('kernel32').declare(ifdef_UNICODE ? 'UpdateResourceW' : 'UpdateResourceA', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HANDLE,	// hUpdate
+				self.TYPE.LPCTSTR,	// lpType
+				self.TYPE.LPCTSTR,	// lpName
+				self.TYPE.WORD,		// wLanguage
+				self.TYPE.LPVOID,	// lpData
+				self.TYPE.DWORD		// cbData
 			);
 		},
 		////////////////// mousecontrol stuff
@@ -2129,6 +2303,14 @@ var winInit = function() {
 			ppropvar.contents.vt = self.CONST.VT_LPWSTR;
 
 			return hr_SHStrDup;
+		},
+		MAKELANGID: function(p, s) {
+			// MACRO: https://github.com/wine-mirror/wine/blob/b1ee60f22fbd6b854c3810a89603458ec0585369/include/winnt.h#L2180
+			// #define MAKELANGID(p, s) ((((WORD)(s))<<10) | (WORD)(p))
+			
+			// p is js int
+			// s is js int
+			return ((((s))<<10) | (p));
 		}
 	};
 	

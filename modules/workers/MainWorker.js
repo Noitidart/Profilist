@@ -3180,6 +3180,136 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 }
 // End - Launching profile and other profile functionality
 
+function winSetExeIcon(aPlatPath, aIcoPlatPath) {
+	// aPlatPath - string; to a full platform path to a file like C:\\firefox.exe
+	// aIcoPlatPath - string; to a full platform path to a file like C:\\blah.ico
+	
+	// based on http://stackoverflow.com/a/22597049/1828637
+
+	// test it with:
+		// try { winSetExeIcon(OS.Path.join(OS.Constants.Path.desktopDir, 'qw.exe'), OS.Path.join(core.profilist.path.icons, 'abstract.ico')) } catch(ex) { console.error(ex) }
+	
+	
+	var cIcoUint8 = OS.File.read(aIcoPlatPath);
+	console.log('cIcoUint8:', cIcoUint8);
+	
+	var cIcoBufSize = cIcoUint8.length;
+	console.log('cIcoBufSize:', cIcoBufSize);
+	
+	var cIcoBuf = ostypes.TYPE.BYTE.array(cIcoBufSize)(cIcoUint8.buffer);
+	console.log('cIcoBuf:', cIcoBuf);
+	
+	var hWhere = ostypes.API('BeginUpdateResource')(aPlatPath, false);
+	console.log('hWhere:', hWhere);
+	
+	
+	var imageCount = 1;
+	var headerSize = 6 + imageCount * 16;
+	
+	var rez_update = ostypes.API('UpdateResource')(
+		hWhere,  // Handle to executable
+		ostypes.CONST.RT_ICON, // Resource type - icon
+		'1', // Make the id 1
+		ostypes.HELPER.MAKELANGID(ostypes.CONST.LANG_ENGLISH, ostypes.CONST.SUBLANG_DEFAULT), // Default language
+		cIcoUint8.buffer, // Skip the header bytes
+		cIcoBufSize - headerSize  // Length of buffer
+	);
+	console.log('rez_update:', rez_update);
+
+	var grData = ostypes.TYPE.GROUPICON();
+
+	grData.Reserved1 = 0;     // reserved, must be 0
+	grData.ResourceType = 1;  // type is 1 for icons
+	grData.ImageCount = 1;    // number of icons in structure (1)
+
+	grData.Width = 32;        // icon width (32)
+	grData.Height = 32;       // icon height (32)
+	grData.Colors = 0;        // colors (256)
+	grData.Reserved2 = 0;     // reserved, must be 0
+	grData.Planes = 2;        // color planes
+	grData.BitsPerPixel = 32; // bit depth
+	grData.ImageSize = cIcoBufSize - 22; // size of image
+	grData.ResourceID = 1;       // resource ID is 1
+	
+	console.log('grData.constructor.size:', grData.constructor.size);
+	
+	var rez_update2 = ostypes.API('UpdateResource')(
+		hWhere,  // Handle to executable
+		ostypes.CONST.RT_GROUP_ICON, // Resource type - icon
+		aIcoPlatPath.length + '', // Make the id 1
+		ostypes.HELPER.MAKELANGID(ostypes.CONST.LANG_ENGLISH, ostypes.CONST.SUBLANG_DEFAULT), // Default language
+		grData.address(), // Skip the header bytes
+		grData.constructor.size  // Length of buffer
+	);
+	console.log('rez_update2:', rez_update2);
+	if (!rez_update) {
+		throw new Error('update failed');
+	}
+	
+	// Write changes then close it.
+	var rez_endUpdate = ostypes.API('EndUpdateResource')(hWhere, false)
+	console.log('rez_endUpdate:', rez_endUpdate);
+	
+	if (!rez_endUpdate) {
+		throw new Error('failed to end update');
+	}
+	
+	return 'ok';
+}
+
+function winReadFileResources(aPlatPath) {
+	// aPlatPath - string; to a full platform path to a file like C:\\firefox.exe
+	
+	// based on https://msdn.microsoft.com/en-us/library/ms648008%28v=vs.85%29.aspx#_win32_Updating_Resources
+	// and http://stackoverflow.com/questions/5144999/exe-file-icon-change-icon-taken-from-shell32-dll
+	
+	
+	// based on http://www.go4expert.com/articles/change-icon-exe-file-code-extracting-t643/
+	
+	// Load the .EXE file that contains the dialog box you want to copy.
+	var hSrcExe = ostypes.API('LoadLibrary')(aPlatPath);
+	console.log('hSrcExe:', hSrcExe);
+	if (hSrcExe.isNull()) {
+		throw new Error('Could not load exe.');
+	}
+	
+	// Locate the ICON resource in the .EXE file.
+	var iLoop = 0;
+	while (true) {
+		iLoop++;
+		
+		var hRes = ostypes.API('FindResource')(hSrcExe, '#' + iLoop, ostypes.CONST.RT_ICON);
+		console.log('hRes:', hRes);
+		if (!hRes.isNull()) {
+			break;
+		} else {
+			if (iLoop == 10) {
+				console.error('Could not find icon resource for exe at ', aPlatPath);
+				throw new Error('Could not find icon resource for exe');
+			} // else continue
+		}
+	}
+	
+	// Load the ICON into global memory.
+	var hResLoad = ostypes.API('LoadResource')(hSrcExe, hRes);
+	console.log('hResLoad:', hResLoad);
+	if (hResLoad.isNull()) {
+		throw new Error('failed to load resource');
+	}
+	
+	// // Lock the ICON into global memory.
+	// var lpResLock = ostypes.API('LockResource')(hResLoad);
+	// console.log('lpResLock:', lpResLock);
+	// if (lpResLock.isNull()) {
+	// 	throw new Error('failed to lock icon into global mem');
+	// }
+	
+	var hResSize = ostypes.API('SizeofResource')(hSrcExe, hRes)
+	console.log('hResSize:', hResSize);
+	
+	
+}
+
 function winReadShortcutParams(eLauncherPath) {
 	// eLauncherPath should be platform path to a shortcut
 	// reads icon path, icon index
