@@ -3202,6 +3202,10 @@ function winSetExeIcon(aPlatPath, aIcoPlatPath) {
 	var hWhere = ostypes.API('BeginUpdateResource')(aPlatPath, false);
 	console.log('hWhere:', hWhere);
 	
+	// var mainIconEx = ostypes.TYPE.LPWSTR.targetType.array('MAINICON'.length + 1)();
+	// var rez_multiByte = ostypes.API('MultiByteToWideChar')(ostypes.CONST.CP_ACP, 0, 'MAINICON', -1, mainIconEx, 'MAINICON'.length + 1);
+	// console.log('rez_multiByte:', rez_multiByte);
+	
 	
 	var imageCount = 1;
 	var headerSize = 6 + imageCount * 16;
@@ -3236,7 +3240,7 @@ function winSetExeIcon(aPlatPath, aIcoPlatPath) {
 	var rez_update2 = ostypes.API('UpdateResource')(
 		hWhere,  // Handle to executable
 		ostypes.CONST.RT_GROUP_ICON, // Resource type - icon
-		aIcoPlatPath.length + '', // Make the id 1
+		'MAINICON', // mainIconEx,
 		ostypes.HELPER.MAKELANGID(ostypes.CONST.LANG_ENGLISH, ostypes.CONST.SUBLANG_DEFAULT), // Default language
 		grData.address(), // Skip the header bytes
 		grData.constructor.size  // Length of buffer

@@ -909,7 +909,9 @@ var winInit = function() {
 		RT_GROUP_ICON: '14', // https://github.com/wine-mirror/wine/blob/c266d373deb417abef4883f59daa5d517b77e76c/include/winuser.h#L771
 		
 		LANG_ENGLISH: 0x0C09,
-		SUBLANG_DEFAULT: 0x01
+		SUBLANG_DEFAULT: 0x01,
+		
+		CP_ACP: 0
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1772,6 +1774,27 @@ var winInit = function() {
 				self.TYPE.void.ptr,	// *dest
 				self.TYPE.void.ptr,	// *src
 				self.TYPE.size_t	// count
+			);
+		},
+		MultiByteToWideChar: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/dd319072%28v=vs.85%29.aspx
+			 * int MultiByteToWideChar(
+			 *   __in_      UINT   CodePage,
+			 *   __in_      DWORD  dwFlags,
+			 *   __in_      LPCSTR lpMultiByteStr,
+			 *   __in_      int    cbMultiByte,
+			 *   __out_opt_ LPWSTR lpWideCharStr,
+			 *   __in_      int    cchWideChar
+			 * );
+			 */
+			return lib('kernel32').declare('MultiByteToWideChar', self.TYPE.ABI,
+				self.TYPE.int,		// return
+				self.TYPE.UINT,		// CodePage
+				self.TYPE.DWORD,	// dwFlags
+				self.TYPE.LPCSTR,	// lpMultiByteStr
+				self.TYPE.int,		// cbMultiByte
+				self.TYPE.LPWSTR,	// lpWideCharStr
+				self.TYPE.int		// cchWideChar
 			);
 		},
 		MonitorFromPoint: function() {
