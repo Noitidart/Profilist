@@ -24,7 +24,7 @@ var gJProfilistDev;
 // I don't import ostypes_*.jsm yet as I want to init core first, as they use core stuff like core.os.isWinXP etc
 // imported scripts have access to global vars on MainWorker.js
 importScripts(core.addon.path.modules + 'cutils.jsm');
-// importScripts(core.addon.path.modules + 'ctypes_math.jsm');
+importScripts(core.addon.path.modules + 'ctypes_math.jsm');
 importScripts(core.addon.path.modules + 'commonProfilistFuncs.js');
 
 // Setup PromiseWorker
@@ -3210,12 +3210,20 @@ function winSetExeIcon(aPlatPath, aIcoPlatPath) {
 	var imageCount = 1;
 	var headerSize = 6 + imageCount * 16;
 	
+	console.log('cIcoBuf:', cIcoBuf, cIcoBuf.address());
+	console.log('headerSize:', headerSize);
+	
+	var uint64_buf = ctypes.cast(cIcoBuf.address(), ctypes.uintptr_t).value;
+	var uint64_shifted = ctypes_math.UInt64.add(uint64_buf, ctypes.UInt64(headerSize));
+	console.log('uint64_shifted:', uint64_shifted, uint64_shifted.toString());
+	var skipHeaderBytes = ostypes.TYPE.LPVOID(uint64_shifted);
+	
 	var rez_update = ostypes.API('UpdateResource')(
 		hWhere,  // Handle to executable
 		ostypes.CONST.RT_ICON, // Resource type - icon
 		'1', // Make the id 1
 		ostypes.HELPER.MAKELANGID(ostypes.CONST.LANG_ENGLISH, ostypes.CONST.SUBLANG_DEFAULT), // Default language
-		cIcoUint8.buffer, // Skip the header bytes
+		skipHeaderBytes, // cIcoUint8.buffer, // Skip the header bytes
 		cIcoBufSize - headerSize  // Length of buffer
 	);
 	console.log('rez_update:', rez_update);
