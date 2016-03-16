@@ -911,7 +911,14 @@ var winInit = function() {
 		LANG_ENGLISH: 0x0C09,
 		SUBLANG_DEFAULT: 0x01,
 		
-		CP_ACP: 0
+		CP_ACP: 0,
+		
+		GCLP_HICON: -14,
+		GCLP_HICONSM: -34,
+		
+		IMAGE_ICON: 1,
+		LR_DEFAULTSIZE: 0x00000040,
+		LR_LOADFROMFILE: 16
 	};
 	
 	var _lib = {}; // cache for lib
@@ -1236,6 +1243,17 @@ var winInit = function() {
 			return lib('gdi32').declare('DeleteObject', self.TYPE.ABI,
 				self.TYPE.BOOL,		// return
 				self.TYPE.HGDIOBJ	// hObject
+			);
+		},
+		DestroyIcon: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms648063%28v=vs.85%29.aspx
+			 * BOOL WINAPI DestroyIcon(
+			 *   _In_  HICON hIcon
+			 * );
+			 */
+			return lib('user32').declare('DestroyIcon', self.TYPE.ABI,
+				self.TYPE.BOOL,		// return
+				self.TYPE.HICON		// hIcon
 			);
 		},
 		DestroyWindow: function() {
@@ -1662,6 +1680,27 @@ var winInit = function() {
 				self.TYPE.UINT_PTR	// uIDEvent
 			);
 		},
+		LoadImage: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/ms648045%28v=vs.85%29.aspx
+			 * HANDLE WINAPI LoadImage(
+			 *   __in_opt_  HINSTANCE hinst,
+			 *   __in_      LPCTSTR lpszName,
+			 *   __in_      UINT uType,
+			 *   __in_      int cxDesired,
+			 *   __in_      int cyDesired,
+			 *   __in_      UINT fuLoad
+			 * );
+			 */
+			return lib('user32').declare(ifdef_UNICODE ? 'LoadImageW' : 'LoadImageA', self.TYPE.ABI,
+				self.TYPE.HANDLE,		// return
+				self.TYPE.HINSTANCE,	// hinst
+				self.TYPE.LPCTSTR,		// lpszName
+				self.TYPE.UINT,			// uType
+				self.TYPE.int,			// cxDesired
+				self.TYPE.int,			// cyDesired
+				self.TYPE.UINT			// fuLoad
+			);
+		},
 		LoadLibrary: function() {
 			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms684175%28v=vs.85%29.aspx
 			 * HMODULE WINAPI LoadLibrary(
@@ -1999,6 +2038,30 @@ var winInit = function() {
 				self.TYPE.HGDIOBJ // hgdiobj
 			);
 		},
+		SetClassLong: function() {
+			/* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633589%28v=vs.85%29.aspx
+			 * I tried SetClassLongW on 32bit, and it gave me the symbol not found error
+			 * ULONG_PTR WINAPI SetClassLongPtr(
+			 *   __in_  HWND hWnd,
+			 *   __in_  int nIndex,
+			 *   __in_  LONG_PTR dwNewLong
+			 * );
+			 */
+			 /* https://msdn.microsoft.com/en-us/library/windows/desktop/ms633588%28v=vs.85%29.aspx
+			 * I tried SetClassLongW on 32bit, and it gave me the symbol not found error
+			 * DWORD WINAPI SetClassLong(
+			 *   __in_  HWND hWnd,
+			 *   __in_  int nIndex,
+			 *   __in_  LONG dwNewLong
+			 * );
+			 */
+			return lib('user32').declare(is64bit ? (ifdef_UNICODE ? 'SetClassLongPtrW' : 'SetClassLongPtrA') : (ifdef_UNICODE ? 'SetClassLongW' : 'SetClassLongA'), self.TYPE.ABI,
+				is64bit ? self.TYPE.ULONG_PTR : self.TYPE.DWORD,	// return
+				self.TYPE.HWND,										// hWnd
+				self.TYPE.INT,										// nIndex
+				is64bit ? self.TYPE.LONG_PTR : self.TYPE.LONG		// dwNewLong
+			);
+		},
 		SetForegroundWindow: function() {
 			/* http://msdn.microsoft.com/en-us/library/ms633539%28v=vs.85%29.aspx
 			 * BOOL WINAPI SetForegroundWindow(
@@ -2059,6 +2122,21 @@ var winInit = function() {
 			return lib('shell32.dll').declare('ShellExecuteExW', self.TYPE.ABI,
 				self.TYPE.BOOL,					// return
 				self.TYPE.SHELLEXECUTEINFO.ptr	// *pExecInfo
+			);
+		},
+		SHGetPropertyStoreForWindow: function() {
+			/* http://msdn.microsoft.com/en-us/library/windows/desktop/dd378430%28v=vs.85%29.aspx
+			 * HRESULT SHGetPropertyStoreForWindow(
+			 * __in_ HWND hwnd,
+			 * __in_ REFIID riid,
+			 * __out_ void **ppv
+			 * );
+			 */
+			return lib('shell32').declare('SHGetPropertyStoreForWindow', self.TYPE.ABI,
+				self.TYPE.HRESULT,		// return
+				self.TYPE.HWND,			// hwnd
+				self.TYPE.REFIID,		// riid
+				ctypes.voidptr_t		// **ppv // i can set this to `self.TYPE.IPropertyStore.ptr.ptr` // however i cannot set this to ctypes.void_t.ptr.ptr i have no iea why, and i thouh `void **ppv` is either void_t.ptr.ptr or ctypes.voidptr_t.ptr // ctypes.voidptr_t as was one here: `void**` the `QueryInterface` also has out argument `void**` and he used `ctypes.voidptr_t` (https://github.com/west-mt/ssbrowser/blob/452e21d728706945ad00f696f84c2f52e8638d08/chrome/content/modules/WindowsShortcutService.jsm#L74)
 			);
 		},
 		ShowWindow: function() {

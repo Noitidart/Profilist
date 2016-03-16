@@ -159,7 +159,6 @@ var MainWorkerMainThreadFuncs = {
 	setPref: function(aPrefName, aPrefVal) {
 		// aPrefName - string like "taskbar.grouping.useprofile"
 		// aPrefVal - new value
-		
 		switch (typeof(aPrefVal)) {
 			case 'string':
 					
@@ -179,6 +178,9 @@ var MainWorkerMainThreadFuncs = {
 			default:
 				console.error('invalid type!!!!');
 		}
+	},
+	reUpdateIntoAllWindows: function() {
+		gWorkerWindowListener.reLoadIntoWindows();
 	}
 };
 // End - Launching profile and other profile functionality
@@ -481,14 +483,14 @@ function workerWindowListenerRegister() {
 	// returns function - unregisterer
 	
 	var loadIntoWindow = function(aDOMWindow) {
-		var promise_loadIntoWindow = MainWorker.post('loadIntoWindow', [getNativeHandlePtrStr(aDOMWindow)]);
-		promise_loadIntoWindow.then(
+		var promise_updateIntoWindow = MainWorker.post('updateIntoWindow', [getNativeHandlePtrStr(aDOMWindow)]);
+		promise_updateIntoWindow.then(
 			function(aVal) {
-				console.log('Fullfilled - promise_loadIntoWindow - ', aVal);
+				console.log('Fullfilled - promise_updateIntoWindow - ', aVal);
 				
 			},
-			genericReject.bind(null, 'promise_loadIntoWindow', 0)
-		).catch(genericCatch.bind(null, 'promise_loadIntoWindow', 0));
+			genericReject.bind(null, 'promise_updateIntoWindow', 0)
+		).catch(genericCatch.bind(null, 'promise_updateIntoWindow', 0));
 	};
 	
 	var unloadFromWindow = function(aDOMWindow) {

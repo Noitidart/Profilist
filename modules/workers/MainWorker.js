@@ -190,15 +190,16 @@ function init(objCore) { // function name init required for SIPWorker
 	}
 	console.log('brought in ostypes');
 	
-	// OS Specific Init
+	// OS Specific Init	
 	switch (core.os.name) {
-		// case 'winnt':
-		// case 'winmo':
-		// case 'wince':
-		// 		
-		// 		OSStuff.hiiii = true;
-		// 		
-		// 	break;
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+				
+				OSStuff.windowLastSet_ExeIconPath = undefined;
+				OSStuff.windowShouldBe_ExeIconPath = undefined;
+				
+			break;
 		case 'darwin':
 				
 				if (core.profilist.path.XREExeF.indexOf(core.profilist.path.root) === 0) {
@@ -217,8 +218,36 @@ function init(objCore) { // function name init required for SIPWorker
 	console.log('starting profilist specifc init');
 	readIni();
 	
-	console.log('MainWorker init success');
-	return core; // required for SIPWorker
+	// if need the icon, then lets make sures existing - this must go after readIni as that does formatNoWriteObjs
+	if ('windowShouldBe_ExeIconPath' in OSStuff) {
+		// if its in OSStuff then this means needCurProfIconToBeEnsuredExisting AND it needs windowShouldBe_ExeIconPath set
+		
+		var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
+		
+		var cBadgeLoc = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBadgeLoc');
+		var cIconInfosObj = getIconPathInfosForParamsFromIni(core.profilist.path.XREExeF, core.firefox.channel, gCurProfIniEntry.ProfilistBadge, cBadgeLoc);
+		
+		OSStuff.windowShouldBe_ExeIconPath = cIconInfosObj.path;
+		console.log('OSStuff.windowShouldBe_ExeIconPath:', OSStuff.windowShouldBe_ExeIconPath);
+		
+		var deferred_ensureIconMade = new Deferred();
+		
+		var promise_createIcon = createIconForParamsFromFS(cIconInfosObj, cBadgeLoc);
+		promise_createIcon.then(
+			function(aVal) {
+				console.log('Fullfilled - promise_createIcon - ', aVal);
+				console.log('MainWorker init success');
+				deferred_ensureIconMade.resolve(core);
+			},
+			genericReject.bind(null, 'promise_createIcon', 0)
+		).catch(genericCatch.bind(null, 'promise_createIcon', 0));
+		
+		return deferred_ensureIconMade.promise;
+	} else {
+		console.log('MainWorker init success');
+		return core; // required for SIPWorker
+	}
 }
 
 function afterBootstrapInit() {
@@ -227,6 +256,28 @@ function afterBootstrapInit() {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
+				
+				var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+
+				// figure out if the taskbar.grouping.useprofile pref should be set to true or false
+				var groupPrefShouldBe;
+				if (gCurProfIniEntry.Default === '1') {
+					groupPrefShouldBe = false;
+				} else {
+					groupPrefShouldBe = true;
+				}
+				OSStuff.groupPrefShouldBe = groupPrefShouldBe;
+				
+				// check if the group pref that was there on startup is what "should be" was calculated to be
+				var groupPrefStartup = core.firefox.prefs['taskbar.grouping.useprofile'];
+				OSStuff.groupPrefStartup = groupPrefStartup;
+				if (groupPrefStartup != groupPrefShouldBe) {
+					self.postMessage(['setPref', 'taskbar.grouping.useprofile', groupPrefShouldBe]);
+					core.firefox.prefs['taskbar.grouping.useprofile'] = groupPrefShouldBe; // as currently mainthread does not update prefs in the worker, or even in the core. but its not important
+				}
+				
+				// determeine what the window listener - that will be setup by registerWorkerWindowListener - should do
+					// if groupPrefShouldBe is false, then that means this is the default profile
 				
 				// :debug: i commented this block out for now, stilling thinking through window logic
 				// // this goes here, and not in init, because readIni has to run first, so i can get gCurProfIniEntry
@@ -676,6 +727,24 @@ function formatNoWriteObjs() {
 	for (var aImgSlug in gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug) {
 		gGenIniEntry.noWriteObj.imgSrcObj_nearest16_forImgSlug[aImgSlug] = getImgSrcForSize(getImgSrcsForImgSlug(aImgSlug), 16);
 	}
+	
+	// I COMMENTED THIS OUT BECAUSE if another profile updates this current profile, that profile should communicate with this instance as it has profilist installed and tell it to trigger this. rather then i check every time on formatNoWriteObjs, its not right it messes up logic, im thinking
+	// switch (core.os.mname) {
+	// 	case 'winnt':
+	// 	// case 'gtk':
+	// 	
+	// 			// update OSStuff.windowShouldBe_ExeIconPath for this current profile
+	// 			OSStuff.windowShouldBe_ExeIconPath = getIconPathInfosForParamsFromIni(core.profilist.path.XREExeF, core.firefox.channel, curProfIniEntry.ProfilistBadge, getPrefLikeValForKeyInIniEntry(curProfIniEntry, gGenIniEntry, 'ProfilistBadgeLoc'));
+	// 			if (OSStuff.windowLastSet_ExeIconPath !== undefined) { // if its undefined then that means this is the formatNoWriteObjs run due to the readIni on bootstrap `startup`. so the `init` function will take care of `reUpdateIntoAllWindows` which will actually not an update, but first time into windows. but `init` will first ensure the icon is set
+	// 				if (OSStuff.windowLastSet_ExeIconPath != OSStuff.windowShouldBe_ExeIconPath) {
+	// 					// reUpdateIntoAllWindows on all windows
+	// 				}
+	// 			}
+	// 			
+	// 		break;
+	// 	default:
+	// 		// do nothing
+	// }
 	
 	// figure out if need to touch ini for currentProfile, and if have to, then touch it, then write it to ini and inibkp
 	if (!('ProfilistStatus' in curProfIniEntry) || curProfIniEntry.ProfilistStatus !== '1') { // INIOBJ_RULE#3 // even though i store as string, i am doing ```key in``` check instead of !curProfIniEntry.ProfilistStatus - just in case somehow in future ProfilistStatus = "0" gets parsed as int, it should never though
@@ -1256,7 +1325,19 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						});
 					}
 				}
-
+				
+				var closeLockFd = function() {
+					var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
+					console.log('rez_closeLockFd:', rez_closeLockFd);
+					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
+						// failed to close
+						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
+							msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
+							errno: ctypes.errno
+						});
+					}
+				};
+				
 				if (cIsRunning !== 0) {
 					try {
 						var testlock = ostypes.TYPE.flock();
@@ -1280,15 +1361,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						console.info('got cIsRunning:', cIsRunning);
 						
 					} finally {
-						var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
-						console.log('rez_closeLockFd:', rez_closeLockFd);
-						if (!cutils.jscEqual(rez_closeLockFd, 0)) {
-							// failed to close
-							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
-								msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
-								errno: ctypes.errno
-							});
-						}
+						closeLockFd();
 					}
 					
 					if (core.os.mname != 'darwin' && cIsRunning === undefined) {
@@ -1300,6 +1373,8 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 							// so for now just guess its not running
 						cIsRunning = 0;
 					}
+				} else {
+					closeLockFd();
 				}
 
 			break;
@@ -1550,6 +1625,10 @@ function getIconPathInfosForParamsFromIni(aExePath, aExeChannel, aBadgeIconSlug,
 		iconInfosObj.slug += '__' + iconInfosObj.badge.slug + '-';
 		
 		// i spell right as rite as it matches len of left. for no special reason right now
+		if (typeof(aBadgeLocation) == 'string') {
+			aBadgeLocation = parseInt(aBadgeLocation);
+		}
+		
 		switch (aBadgeLocation) {
 			case 1:
 					
@@ -3121,6 +3200,11 @@ function toggleDefaultProfile(aProfPath) {
 		// if it is then it is unset and nothing is left as default
 		// else, then the current default is found, and deleted, then this one is set to default
 
+	// :todo: for windows
+		// win7+
+			// maintain selfs taskbar.grouping.useprofile
+			// somehow tell the one that was changed, to update its own taskbar.grouping.useprofile ---- issue: profilist installed in target is a factor. if its installed then somehow i can tell profilist of that one to toggle (:todo:). if its not installed, there is no way i can tell it to toggle. (:todo:) maybe if the target does not have profilist installed, dont handle it at all
+	
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 
@@ -3467,6 +3551,21 @@ function winReadShortcutParams(eLauncherPath) {
 
 // Start - Window watcher
 _cache_getWin7TaskbarId = {};
+function getWin7TaskbarIdForExePath(aExePath) {
+	// returns string
+	if (!(aExePath in _cache_getWin7TaskbarId)) {
+		console.time('winRegistryRead');
+		_cache_getWin7TaskbarId[strToHash] = winRegistryRead('HKEY_CURRENT_USER', 'Software\\Mozilla\\Firefox\\TaskBarIDs', aExePath); // :todo: instead of read from registry, i should CityHash64 like per - ```CityHash::GetCityHash64 "$R9"``` - https://dxr.mozilla.org/mozilla-central/source/toolkit/mozapps/installer/windows/nsis/common.nsh#7295
+		console.timeEnd('winRegistryRead');
+		
+		if (_cache_getWin7TaskbarId[strToHash] === null) {
+			console.error('should never happen! as this registry entry is made on instal of aExePath, it has to exist!');
+			throw new Error('should never happen! as this registry entry is made on instal of aExePath, it has to exist!');
+		}
+	}
+	return _cache_getWin7TaskbarId[aExePath];
+}
+/*
 function getWin7TaskbarId(aProfPath) {
 	var gProfIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	
@@ -3513,13 +3612,114 @@ function getWin7TaskbarId(aProfPath) {
 	
 	return _cache_getWin7TaskbarId[strToHash];
 }
-function loadIntoWindow(aNativeWindowPtrStr) {
+*/
+function updateIntoWindow(aNativeWindowPtrStr) {
+	// job is to maintain the ICON PER WINDOW
+		// on win7+ it has extra job of having to maintain RELAUNCH PROPERTIES
+	
+	// :IMPORTANT: this function assumes that the icon that needs to be applied is readymade/exists
+	
+	// this does not care about other windows. :todo: something else will have to decide if it needs to run updateIntoWindow on all windows again.
+	// this function just applies the proper state to the window it was called on - therefore function renamed from loadIntoWindow to updateIntoWindow
+		// even when this runs SetWindowLongPtr to update all icons. this function is only thinking about this window, on whether it needs to apply it to this one. if it happens it needs to apply it to this one then it will apply it and record that it was applied in OSStuff. and a side affect of this is all other windows are maintained
+		
 	console.log('loading into aNativeWindowPtrStr:', aNativeWindowPtrStr);
 	switch (core.os.name) {
 		case 'winnt':
 		case 'winmo':
 		case 'wince':
 				
+				var cNativeWindowPtr = ostypes.TYPE.HWND(ctypes.UInt64(aNativeWindowPtrStr));
+				
+				// should we set window ptr long on this window?
+				var shouldSetWindowPtr = false;
+				if (OSStuff.windowLastSet_ExeIconPath != OSStuff.windowShouldBe_ExeIconPath) {
+					shouldSetWindowPtr = true;
+				}
+				
+				// ok lets set it
+				if (shouldSetWindowPtr) {
+					//load hicon
+					var hIconBig;
+					/*
+					if (core.os.version == 6.1) {
+						//win7
+						hIconBig = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, IMAGE_ICON, 256, 256, LR_LOADFROMFILE);
+					} else if (cOSVersion == 5.1) {
+						//winXP
+						hIconBig = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE); 
+					} else {
+						//just do 256 as fallback
+						hIconBig = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, IMAGE_ICON, 256, 256, LR_LOADFROMFILE);
+					}
+					*/
+					hIconBig = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, ostypes.CONST.IMAGE_ICON, 0, 0, ostypes.CONST.LR_DEFAULTSIZE | ostypes.CONST.LR_LOADFROMFILE); // per http://stackoverflow.com/a/2237192/1828637 - "(For the large icon, you can also just pass LR_DEFAULTSIZE to LoadImage with 0 size)"
+					
+					var hIconSmall = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
+					
+					// set class long
+					var iconSmallCastedForSetLong = ctypes.cast(hIconSmall, ostypes.IS64Bit ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+					var iconBigCastedForSetLong = ctypes.cast(hIconBig, ostypes.IS64Bit ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
+					
+					var oldBigIcon = ostypes.API('SetClassLong')(cNativeWindowPtr, ostypes.CONST.GCLP_HICON, iconBigCastedForSetLong);
+					console.log('oldBigIcon:', oldBigIcon);
+					if (cutils.jscEqual(oldBigIcon, 0)) {
+						console.error('Failed to apply BIG icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+					
+					// tested and verified with the ostypes.TYPE.HWND(ctypes.UInt64('0x310b38')) above, that if oldBigIcon causes winLastError to go to non-0, then if oldSmallIcon call succeeds, winLastError is set back to 0
+					var oldSmallIcon = ostypes.API('SetClassLong')(cNativeWindowPtr, ostypes.CONST.GCLP_HICONSM, iconSmallCastedForSetLong);
+					console.log('oldSmallIcon:', oldSmallIcon);
+					if (cutils.jscEqual(oldSmallIcon, 0)) {
+						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
+					}
+					
+					var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig);
+					console.log('rez_destroyBig:', rez_destroyBig);
+					var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall);
+					console.log('rez_destroySmall:', rez_destroySmall);
+					
+					// update last
+					OSStuff.windowLastSet_ExeIconPath = OSStuff.windowShouldBe_ExeIconPath;
+				}
+				
+				if (core.os.version >= 6.1) {
+					// win7 and up - we have to set it for every window regardless of OSStuff.windowLastSet_ExeIconPath
+					var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
+					
+					var ppsPtr = ostypes.TYPE.IPropertyStore.ptr();
+					var hr_SHGetPropertyStoreForWindow = ostypes.API('SHGetPropertyStoreForWindow')(cNativeWindowPtr, ostypes.CONST.IID_IPROPERTYSTORE.address(), ppsPtr.address());
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'SHGetPropertyStoreForWindow');
+					
+					var pps = ppsPtr.contents.lpVtbl.contents;
+					
+					// set icon
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_RELAUNCHICONRESOURCE.address(), OSStuff.windowLastSet_ExeIconPath + ',-2'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'RelaunchIconResource');
+					
+					// set display name
+					var launcherName = getLauncherNameFromParams(core.firefox.channel, gCurProfIniEntry.Name);
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_RELAUNCHDISPLAYNAMERESOURCE.address(), launcherName);
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'RelaunchDisplayNameResource');
+					
+					// set launcher path - to the path in the profilist_data exes folder
+					var launcherPath = OS.Path.join(getLauncherDirPathFromParams(gCurProfIniEntry.Path), launcherName);
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_RELAUNCHCOMMAND.address(), launcherPath);
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'RelaunchCommand');
+					
+					// set AppUserModelId - depends on if the profile is default or not
+					var cAppUserModelID;
+					if (gCurProfIniEntry.Default === '1') {
+						cAppUserModelID = getWin7TaskbarIdForExePath(core.profilist.path.XREExeF);
+					} else {
+						cAppUserModelID = HashString(gCurProfIniEntry.Path) + ''; // make it a string as it needs to be a string to get passed into the ctypes. else i get error "can't pass the number 741175429 to argument 1 of long SHStrDupW(char16_t*, char16_t**)"
+					}
+					console.log('cAppUserModelID:', cAppUserModelID);
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_ID.address(), 'PROFILISTDUMMY'); // need to set it away, as the above 3 IPropertyStore_SetValue's only take affect on ID change per msdn docs // :todo: i think this moves the group to the end of the taskbar if there is only one left and its not pinned, so MAYBE try to figure out a way to do this without change spot if not pinned
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'ID dummy');
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_ID.address(), cAppUserModelID); // set it to what it really should be
+					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'ID real');
+				}
 				
 				// :debug: i commented this block out for now, stilling thinking through window logic
 				// // set application long if it hasnt been set already
@@ -5972,6 +6172,8 @@ function getTxtEncodr() {
 }
 
 // rev3 - _ff-addon-snippet-mfbtHashString - https://gist.github.com/Noitidart/d4bbbf56250a9c3f88ce
+// modded it for caching
+var _cache_HashString = {};
 var HashString = (function (){
 	/**
 	 * Javascript implementation of
@@ -6009,14 +6211,17 @@ var HashString = (function (){
 	return function(text) {
 		// Convert to utf-8.
 		// Also decomposes the string into uint8_t values already.
-		var data = encoder.encode(text);
+		if (!(text in _cache_HashString)) {
+			var data = encoder.encode(text);
 
-		// Compute the actual hash
-		var rv = 0;
-		for (var c of data) {
-			rv = add(rv, c | 0);
+			// Compute the actual hash
+			var rv = 0;
+			for (var c of data) {
+				rv = add(rv, c | 0);
+			}
+			_cache_HashString[text] = rv;
 		}
-		return rv;
+		return _cache_HashString[text];
 	};
 })();
 
