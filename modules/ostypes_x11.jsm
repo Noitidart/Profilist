@@ -493,22 +493,70 @@ var x11Init = function() {
 			switch (path) {
 				case 'gdk2':
 				
-						_lib[path] = ctypes.open('libgdk-x11-2.0.so.0');
-				
-					break;
-				case 'gio':
-				
-						_lib[path] = ctypes.open('libgio-2.0.so.0');
+						var possibles = ['libgdk-x11-2.0.so.0'];
+						
+						var preferred;
+						// all values of preferred MUST exist in possibles reason is link123543939
+						switch (core.os.name) {
+							case 'linux':
+								preferred = 'libgdk-x11-2.0.so.0';
+								break;
+							default:
+								// do nothing
+						}
+						
+						libAttempter(path, preferred, possibles);
 				
 					break;
 				case 'gdk3':
 				
-						_lib[path] = ctypes.open('libgdk-3.so.0');
+						var possibles = ['libgdk-3.so.0'];
+						
+						var preferred;
+						// all values of preferred MUST exist in possibles reason is link123543939
+						switch (core.os.name) {
+							case 'linux':
+								preferred = 'libgdk-3.so.0';
+								break;
+							default:
+								// do nothing
+						}
+						
+						libAttempter(path, preferred, possibles);
+				
+					break;
+				case 'gio':
+				
+						var possibles = ['libgio-2.0.so.0'];
+						
+						var preferred;
+						// all values of preferred MUST exist in possibles reason is link123543939
+						switch (core.os.name) {
+							case 'linux':
+								preferred = 'libgio-2.0.so.0';
+								break;
+							default:
+								// do nothing
+						}
+						
+						libAttempter(path, preferred, possibles);
 				
 					break;
 				case 'gtk2':
 				
-						_lib[path] = ctypes.open('libgtk-x11-2.0.so.0');
+						var possibles = ['libgtk-x11-2.0.so.0'];
+						
+						var preferred;
+						// all values of preferred MUST exist in possibles reason is link123543939
+						switch (core.os.name) {
+							case 'linux':
+								preferred = 'libgtk-x11-2.0.so.0';
+								break;
+							default:
+								// do nothing
+						}
+						
+						libAttempter(path, preferred, possibles);
 				
 					break;
 				case 'xcb':
@@ -602,7 +650,7 @@ var x11Init = function() {
 						libAttempter(path, preferred, possibles);
 
 					break;
-					case 'xrandr':
+				case 'xrandr':
 					
 						var possibles = ['libXrandr.so.2'];
 						var preferred;

@@ -28,15 +28,26 @@ importScripts(core.addon.path.modules + 'ctypes_math.jsm');
 importScripts(core.addon.path.modules + 'commonProfilistFuncs.js');
 
 // Setup PromiseWorker
-// SIPWorker - rev2 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
+// SIPWorker - rev9 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
 var PromiseWorker = require('resource://gre/modules/workers/PromiseWorker.js');
 
 // Instantiate AbstractWorker (see below).
 var worker = new PromiseWorker.AbstractWorker()
 
-worker.dispatch = function(method, args = []) {
+// worker.dispatch = function(method, args = []) {
+worker.dispatch = function(method, args = []) {// start - noit hook to allow PromiseWorker methods to return promises
   // Dispatch a call to method `method` with args `args`
-  return self[method](...args);
+  // start - noit hook to allow PromiseWorker methods to return promises
+  // return self[method](...args);
+  console.log('dispatch args:', args);
+  var earlierResult = gEarlyDispatchResults[args[0]]; // i change args[0] to data.id
+  delete gEarlyDispatchResults[args[0]];
+  if (Array.isArray(earlierResult) && earlierResult[0] == 'noit::throw::') {
+	  console.error('ok need to throw but i want to ensure .constructor.name is in promiseworker.js"s EXCEPTION_NAMES, it is:', earlierResult[1].constructor.name);
+	  throw earlierResult[1];
+  }
+  return earlierResult;
+  // end - noit hook to allow PromiseWorker methods to return promises
 };
 worker.postMessage = function(...args) {
   // Post a message to the main thread
@@ -55,6 +66,7 @@ worker.log = function(...args) {
 // self.addEventListener('message', msg => worker.handleMessage(msg)); // this is what you do if you want PromiseWorker without mainthread calling ability
 // start - setup SIPWorker
 var WORKER = this;
+var gEarlyDispatchResults = {};
 self.addEventListener('message', function(aMsgEvent) { // this is what you do if you want SIPWorker mainthread calling ability
 	var aMsgEventData = aMsgEvent.data;
 	if (Array.isArray(aMsgEventData)) {
@@ -66,22 +78,58 @@ self.addEventListener('message', function(aMsgEvent) { // this is what you do if
 		else { console.error('funcName', funcName, 'not in scope of WORKER') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 	} else {
 		// console.log('no this is just regular promise worker message');
-		worker.handleMessage(aMsgEvent)
+		var earlyDispatchErr;
+		var earlyDispatchRes;
+		try {
+			earlyDispatchRes = self[aMsgEvent.data.fun](...aMsgEvent.data.args);
+			console.error('earlyDispatchRes:', earlyDispatchRes);
+		} catch(earlyDispatchErr) {
+			earlyDispatchRes = ['noit::throw::', earlyDispatchErr];
+			console.error('error in earlyDispatchRes:', earlyDispatchErr);
+			// throw new Error('blah');
+		}
+		aMsgEvent.data.args.splice(0, 0, aMsgEvent.data.id)
+		if (earlyDispatchRes && earlyDispatchRes.constructor.name == 'Promise') { // as earlyDispatchRes may be undefined
+			console.log('in earlyDispatchRes as promise block');
+			earlyDispatchRes.then(
+				function(aVal) {
+					console.log('earlyDispatchRes resolved:', aVal);
+					gEarlyDispatchResults[aMsgEvent.data.id] = aVal;
+					worker.handleMessage(aMsgEvent);
+				},
+				function(aReason) {
+					console.warn('earlyDispatchRes rejected:', aReason);
+				}
+			).catch(
+				function(aCatch) {
+					console.error('earlyDispatchRes caught:', aCatch);
+					gEarlyDispatchResults[aMsgEvent.data.id] = ['noit::throw::', aCatch];
+					console.error('aCatch:', aCatch);
+				}
+			);
+		} else {
+			console.log('not a promise so setting it to gEarlyDispatchResults, it is:', earlyDispatchRes);
+			if (earlyDispatchRes) {
+				console.log('not undefined or null so constructor is:', earlyDispatchRes.constructor.name);
+			}
+			gEarlyDispatchResults[aMsgEvent.data.id] = earlyDispatchRes;
+			worker.handleMessage(aMsgEvent);
+		}
 	}
 });
 
 const SIP_CB_PREFIX = '_a_gen_cb_';
 const SIP_TRANS_WORD = '_a_gen_trans_';
-var sic_last_cb_id = -1;
+var sip_last_cb_id = -1;
 self.postMessageWithCallback = function(aPostMessageArr, aCB, aPostMessageTransferList) {
 	var aFuncExecScope = WORKER;
 	
-	sic_last_cb_id++;
-	var thisCallbackId = SIP_CB_PREFIX + sic_last_cb_id;
-	aFuncExecScope[thisCallbackId] = function() {
+	sip_last_cb_id++;
+	var thisCallbackId = SIP_CB_PREFIX + sip_last_cb_id;
+	aFuncExecScope[thisCallbackId] = function(aResponseArgsArr) {
 		delete aFuncExecScope[thisCallbackId];
-		console.log('in worker callback trigger wrap, will apply aCB with these arguments:', arguments);
-		aCB.apply(null, arguments[0]);
+		console.log('in worker callback trigger wrap, will apply aCB with these arguments:', aResponseArgsArr);
+		aCB.apply(null, aResponseArgsArr);
 	};
 	aPostMessageArr.push(thisCallbackId);
 	self.postMessage(aPostMessageArr, aPostMessageTransferList);
@@ -1193,7 +1241,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 				var cParentLockPath = OS.Path.join(cProfRootDir, '.parentlock');
 				console.log('cParentLockPath:', cParentLockPath);
 				
-				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR | OS.Constants.libc.O_CREAT); //setting this to O_RDWR fixes errno of 9 on fcntl
+				var rez_lockFd = ostypes.API('open')(cParentLockPath, OS.Constants.libc.O_RDWR); //setting this to O_RDWR fixes errno of 9 on fcntl
 				console.log('rez_lockFd:', rez_lockFd);
 				if (cutils.jscEqual(rez_lockFd, -1)) {
 					// failed to open
