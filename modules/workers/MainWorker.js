@@ -1327,14 +1327,19 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 				}
 				
 				var closeLockFd = function() {
-					var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
-					console.log('rez_closeLockFd:', rez_closeLockFd);
-					if (!cutils.jscEqual(rez_closeLockFd, 0)) {
-						// failed to close
-						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
-							msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
-							errno: ctypes.errno
-						});
+					if (!cutils.jscEqual(rez_lockFd, -1)) {
+						console.info('CLOSING LOCKFD');
+						var rez_closeLockFd = ostypes.API('close')(rez_lockFd);
+						console.log('rez_closeLockFd:', rez_closeLockFd);
+						if (!cutils.jscEqual(rez_closeLockFd, 0)) {
+							// failed to close
+							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
+								msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
+								errno: ctypes.errno
+							});
+						}
+					} else {
+						console.info('NO NEED TO CLOSE LOCKFD');
 					}
 				};
 				
@@ -3675,7 +3680,8 @@ function updateIntoWindow(aNativeWindowPtrStr) {
 					if (cutils.jscEqual(oldSmallIcon, 0)) {
 						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
 					}
-					
+
+					// free mem of old icons
 					if (!cutils.jscEqual(oldBigIcon, 0)) {
 						var oldBigHICON;
 						if (ostypes.IS64Bit) {

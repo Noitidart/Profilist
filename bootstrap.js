@@ -80,16 +80,25 @@ function initAndRegisterAboutProfilist() {
 			return Ci.nsIAboutModule.ALLOW_SCRIPT | Ci.nsIAboutModule.URI_CAN_LOAD_IN_CHILD;
 		},
 
-		newChannel: function(aURI, aSecurity) {
-
-			// var channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
-			var channel;
+		newChannel: function(aURI, aSecurity_or_aLoadInfo) {
+			var redirUrl;
 			if (aURI.path.toLowerCase().indexOf('?html') > -1) {
-				channel = Services.io.newChannel(core.addon.path.pages + 'html.xhtml', null, null);
+				redirUrl = core.addon.path.pages + 'html.xhtml';
 			} else {
-				channel = Services.io.newChannel(core.addon.path.pages + 'cp.xhtml', null, null);
+				redirUrl = core.addon.path.pages + 'cp.xhtml';
+			}
+			
+			var channel;
+			if (Services.vc.compare(core.firefox.version, '47.*') > 0) {
+				console.error('trying new way!!!!!!!!!!!');
+				var redirURI = Services.io.newURI(redirUrl, null, null);
+				channel = Services.io.newChannelFromURIWithLoadInfo(redirURI, aSecurity_or_aLoadInfo);
+			} else {
+				console.error('doing old way');
+				channel = Services.io.newChannel(redirUrl, null, null);
 			}
 			channel.originalURI = aURI;
+			
 			return channel;
 		}
 	});
