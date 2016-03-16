@@ -3654,8 +3654,10 @@ function updateIntoWindow(aNativeWindowPtrStr) {
 					}
 					*/
 					hIconBig = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, ostypes.CONST.IMAGE_ICON, 0, 0, ostypes.CONST.LR_DEFAULTSIZE | ostypes.CONST.LR_LOADFROMFILE); // per http://stackoverflow.com/a/2237192/1828637 - "(For the large icon, you can also just pass LR_DEFAULTSIZE to LoadImage with 0 size)"
+					console.log('hIconBig:', hIconBig);
 					
 					var hIconSmall = ostypes.API('LoadImage')(null, OSStuff.windowShouldBe_ExeIconPath, ostypes.CONST.IMAGE_ICON, 16, 16, ostypes.CONST.LR_LOADFROMFILE);
+					console.log('hIconSmall:', hIconSmall);
 					
 					// set class long
 					var iconSmallCastedForSetLong = ctypes.cast(hIconSmall, ostypes.IS64Bit ? ostypes.TYPE.LONG_PTR : ostypes.TYPE.LONG);
@@ -3674,10 +3676,26 @@ function updateIntoWindow(aNativeWindowPtrStr) {
 						console.error('Failed to apply SMALL icon with setClassLong, winLastError:', ctypes.winLastError);
 					}
 					
-					var rez_destroyBig = ostypes.API('DestroyIcon')(hIconBig);
-					console.log('rez_destroyBig:', rez_destroyBig);
-					var rez_destroySmall = ostypes.API('DestroyIcon')(hIconSmall);
-					console.log('rez_destroySmall:', rez_destroySmall);
+					if (!cutils.jscEqual(oldBigIcon, 0)) {
+						var oldBigHICON;
+						if (ostypes.IS64Bit) {
+							oldBigHICON = ctypes.cast(ostypes.TYPE.ULONG_PTR(cutils.jscGetDeepest(oldBigIcon)), ostypes.TYPE.HICON);
+						} else {
+							oldBigHICON = ctypes.cast(ostypes.TYPE.DWORD(cutils.jscGetDeepest(oldBigIcon)), ostypes.TYPE.HICON);
+						}
+						var rez_destroyBig = ostypes.API('DestroyIcon')(oldBigHICON);
+						console.log('rez_destroyBig:', rez_destroyBig);
+					}
+					if (!cutils.jscEqual(oldSmallIcon, 0)) {
+						var oldSmallHICON;
+						if (ostypes.IS64Bit) {
+							oldSmallHICON = ctypes.cast(ostypes.TYPE.ULONG_PTR(cutils.jscGetDeepest(oldSmallIcon)), ostypes.TYPE.HICON);
+						} else {
+							oldSmallHICON = ctypes.cast(ostypes.TYPE.DWORD(cutils.jscGetDeepest(oldSmallIcon)), ostypes.TYPE.HICON);
+						}
+						var rez_destroySmall = ostypes.API('DestroyIcon')(oldSmallHICON);
+						console.log('rez_destroySmall:', rez_destroySmall);
+					}
 					
 					// update last
 					OSStuff.windowLastSet_ExeIconPath = OSStuff.windowShouldBe_ExeIconPath;
