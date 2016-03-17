@@ -111,9 +111,9 @@ function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 		// 1 for specific
 		// 2 for unspecific
 		
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
-	if (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly) { console.error('DEV_ERROR - aKeyName is ONLY-like, aKeyName:', aKeyName, 'see gKeyInfoStore entry it is either unspecificOnly or specificOnly, dont use this function to determine that:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR - cannot toggle this setting as it is specificOnly or unspecificOnly'); }
+
 	
 	// :note: :important: this is my NEW determinign factor for specificness of a toggleable (meaning no specificOnly or unspecificOnly). if setting exists in aIniEntry then it is specific. else it is unspecific (regardless if a value exists in aGenIniEntry - as if it doesnt exist it obviously uses the default value) - so therefore it is important to delete key from aIniEntry when togglign to unspecific crossfile-link75748383322222 IGNORE THIS ON RIGHT as this on left ovverides it ---> // :note: :important: this is my determining factor for specificness of non-only pref-like's - if key exists in aGenIniEntry then it is unspecific. because of this its important to clear out genearl when going to specific. link757483833
 	if (!(aKeyName in aGenIniEntry) && !(aKeyName in aIniEntry)) {
@@ -134,7 +134,7 @@ function getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 			// it is unspecific
 			return 2;
 		}
-		console.error('DEV_ERROR - should never ever get here');
+
 		throw new Error('DEV_ERROR - should never ever get here');
 	}
 	
@@ -147,7 +147,7 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 	
 	// aIniEntry is almost always the curProfIniEntry
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
 	if (gKeyInfoStore[aKeyName].unspecificOnly) {
 		// get profile-unspecific value else null
@@ -182,7 +182,7 @@ function getPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName) {
 			if (aKeyName in aIniEntry) {
 				return aIniEntry[aKeyName];
 			}
-			else { console.error('this should never happen! as per crossfile-link75748383322222, a setting is defined as specific IF it has an entry in aIniEntry'); throw new Error('DEV ERROR'); } // this should never happen! as per crossfile-link75748383322222, a setting is defined as specific IF it has an entry in aIniEntry
+
 		}
 	}
 	
@@ -217,9 +217,9 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 	
 	// aIniEntry is almost always the curProfIniEntry
 	
-	if (!(aKeyName in gKeyInfoStore)) { console.error('DEV_ERROR - aKeyName does not exist in gKeyInfoStore, aKeyName:', aKeyName); throw new Error('DEV_ERROR'); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
-	if (aNewSpecifincess_optional !== undefined && (gKeyInfoStore[aKeyName].unspecificOnly || gKeyInfoStore[aKeyName].specificOnly)) { console.error('DEV_ERROR - aKeyName is unspecific ONLY or specific ONLY, therefore you cannot pass a aNewSpecifincess_optional, aNewSpecifincess_optional:', aNewSpecifincess_optional, 'gKeyInfoStore[aKeyName]:', gKeyInfoStore[aKeyName]); throw new Error('DEV_ERROR'); } // console message intentionaly on same line with if, as this is developer error only so on release this is removed
+
 	
 	// LOGIC
 	// if gKeyInfoStore[aKeyName].unspecificOnly
@@ -235,15 +235,15 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 		
 	if (gKeyInfoStore[aKeyName].unspecificOnly) {
 		aGenIniEntry[aKeyName] = aNewVal;
-		console.log('set unspecificOnly', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+
 	} else if (gKeyInfoStore[aKeyName].specificOnly) {
 		aIniEntry[aKeyName] = aNewVal;
-		console.log('set specificOnly', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+
 	} else {
 		// figure out specificness
 		var specificness;
 		if (aNewSpecifincess_optional !== undefined) {
-			if (aNewSpecifincess_optional !== 1 && aNewSpecifincess_optional !== 2) { console.error('DEV_ERROR - aNewSpecifincess_optional must be 1 or 2! you set it to:', aNewSpecifincess_optional); throw new Error('DEV_ERROR'); }
+
 			specificness = aNewSpecifincess_optional;
 		} else {
 			specificness = getSpecificnessForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName);
@@ -257,7 +257,7 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 				// aGenIniEntry[aKeyName] = aNewVal; // aNewVal is ignored when toggling to unspecific link11194229319
 			} else {
 				aGenIniEntry[aKeyName] = aNewVal;
-				console.log('set unspecific calcd', 'key:', aKeyName, 'aGenIniEntry:', aGenIniEntry);
+
 			}
 		} else {
 			// it is specific
@@ -267,7 +267,7 @@ function setPrefLikeValForKeyInIniEntry(aIniEntry, aGenIniEntry, aKeyName, aNewV
 				// // delete aGenIniEntry[aKeyName];
 			// // }
 			aIniEntry[aKeyName] = aNewVal;
-			console.log('set specific calcd', 'key:', aKeyName, 'aIniEntry:', aIniEntry);
+
 		}
 	}
 }
