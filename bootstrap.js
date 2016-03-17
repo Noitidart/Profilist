@@ -2,7 +2,7 @@
 const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
 Cm.QueryInterface(Ci.nsIComponentRegistrar);
 Cu.import('resource://gre/modules/AddonManager.jsm');
-
+Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 const PromiseWorker = Cu.import('resource://gre/modules/PromiseWorker.jsm').BasePromiseWorker;
@@ -31,7 +31,7 @@ var core = {
 			fonts: 'chrome://profilist/content/resources/styles/fonts/',
 			pages: 'chrome://profilist/content/resources/pages/'
 		},
-		cache_key: 'v3.0b4' // set to version on release
+		cache_key: Math.random() // set to version on release
 	},
 	os: {
 		name: OS.Constants.Sys.Name.toLowerCase(),
@@ -90,11 +90,11 @@ function initAndRegisterAboutProfilist() {
 			
 			var channel;
 			if (Services.vc.compare(core.firefox.version, '47.*') > 0) {
-
+				console.error('trying new way!!!!!!!!!!!');
 				var redirURI = Services.io.newURI(redirUrl, null, null);
 				channel = Services.io.newChannelFromURIWithLoadInfo(redirURI, aSecurity_or_aLoadInfo);
 			} else {
-
+				console.error('doing old way');
 				channel = Services.io.newChannel(redirUrl, null, null);
 			}
 			channel.originalURI = aURI;
@@ -128,26 +128,26 @@ function AboutFactory(component) {
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
 	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
-
+		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
 		// return ['hi arr 1']; // :note: this is how to return no promise
 		// :note: this is how to return with promise
 		var deferredMain_createIcon = new Deferred();
 		
 		// deferredMain_createIcon.resolve(['hi arr 1 from promise']);
 		var triggerCreation = function() {
-
+			console.log('in triggerCreation');
 			ICGenWorker.postMessageWithCallback(['returnIconset', aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions], function(aStatusObj) {
-
+				console.log('returnIconset completed, aStatusObj:', aStatusObj);
 				deferredMain_createIcon.resolve([aStatusObj]);
 			});
 		};
 		
 		if (typeof(ICGenWorker) == 'undefined') {
-
+			console.log('sicing icgenworker');
 			var promise_getICGenWorker = SICWorker('ICGenWorker', core.addon.path.modules + 'ICGenWorker/worker.js?' + core.addon.cache_key, ICGenWorkerFuncs);
 			promise_getICGenWorker.then(
 				function(aVal) {
-
+					console.log('Fullfilled - promise_getICGenWorker - ', aVal);
 					triggerCreation();
 				},
 				genericReject.bind(null, 'promise_getICGenWorker', deferredMain_createIcon)
@@ -185,7 +185,7 @@ var MainWorkerMainThreadFuncs = {
 					
 				break;
 			default:
-
+				console.error('invalid type!!!!');
 		}
 	},
 	reUpdateIntoAllWindows: function() {
@@ -217,7 +217,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	fwInstances: {}, // frameworker instances, obj with id is aId which is arg of setupFrameworker
 	setupFrameworker: function(aId) {
 		// aId is the id to create frameworker with
-
+		console.log('mainthread: setupFrameworker, aId:', aId);
 
 		var deferredMain_setupFrameworker = new Deferred();
 		
@@ -244,11 +244,11 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 			};
 			
 			aDocument.documentElement.appendChild(aBrowser);
-
+			console.log('aBrowser.messageManager:', aBrowser.messageManager);
 			aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);			
 			
 			// ICGenWorkerFuncs.fwInstances[aId].browser.messageManager.IconContainerGenerator_id = aId; // doesnt work
-
+			// console.log('ICGenWorkerFuncs.fwInstances[aId].browser.messageManager:', ICGenWorkerFuncs.fwInstances[aId].browser.messageManager);
 			
 		};
 		
@@ -269,7 +269,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 		// var aTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
 		// aTimer.initWithCallback({
 			// notify: function() {
-
+					console.log('will now destory remote browser, i hope this will trigger the framescript unload event, because that removes the listener, otherwise i think that the attached message listener from that framescript stays alive somehow');
 					ICGenWorkerFuncs.fwInstances[aId].browser.parentNode.removeChild(ICGenWorkerFuncs.fwInstances[aId].browser); // im hoping this triggers the unload event on framescript
 					delete ICGenWorkerFuncs.fwInstances[aId];
 			// }
@@ -280,7 +280,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	tellFrameworkerLoadImg: function(aProvidedPath, aLoadPath, aId) {
 		var deferredMain_tellFrameworkerLoadImg = new Deferred();
 		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['loadImg', aProvidedPath, aLoadPath], fsMsgListener.funcScope, function(aImgDataObj) {
-
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			deferredMain_tellFrameworkerLoadImg.resolve([aImgDataObj]);
 		});
 		return deferredMain_tellFrameworkerLoadImg.promise;
@@ -288,7 +288,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	tellFrameworkerDrawScaled: function(aImgPath, aDrawAtSize, aId) {
 		var deferredMain_tellFrameworkerDrawScaled = new Deferred();
 		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled', aImgPath, aDrawAtSize], fsMsgListener.funcScope, function(aImgDataObj) {
-
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			var resolveWithArr = [aImgDataObj];
 			if (aImgDataObj.arrbuf) {
 				resolveWithArr.push([aImgDataObj.arrbuf]);
@@ -301,7 +301,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	tellFrameworker_dSoBoOOSb: function(aImgPath, aDrawAtSize, optBuf, optOverlapObj, aId) {
 		var deferredMain_tellFrameworker_dSoBoOOSb = new Deferred();
 		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled_optBuf_optOverlapOptScaled_buf', aImgPath, aDrawAtSize, optBuf, optOverlapObj], fsMsgListener.funcScope, function(aImgDataObj) {
-
+			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			var resolveWithArr = [aImgDataObj];
 			var bufTrans = [];
 			if (aImgDataObj.optBuf) {
@@ -326,7 +326,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 			for (var p in aObjOfBufs) {
 				resolveWithArr[1].push(aObjOfBufs[p]);
 			}
-
+			console.log('in bootstrap callback of tellFrameworkerGetImgDatasOfFinals, resolving with:', resolveWithArr);
 
 			deferredMain_tellFrameworker_gIDOF.resolve(resolveWithArr);	
 		});
@@ -352,7 +352,7 @@ function windowListenerForPuiBtn() {
 			gBrowser.moveTabToStart(newProfilistTab)
 		})();
 	`;
-
+	// console.log('onclick:', onclick);
 	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:onclick}]
 
 	var xulCssUri = Services.io.newURI(core.addon.path.styles + 'xul.css', null, null);
@@ -375,7 +375,7 @@ function windowListenerForPuiBtn() {
 			PUIp = PUI.panel; // PanelUI-popup
 		}
 
-
+		// console.log('PUI.mainView:', PUI.mainView, PUI.mainView.childNodes);
 		var PUIf = PUI.mainView ? PUI.mainView.childNodes[1] : null; // PanelUI-footer // aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
 		
 		return {
@@ -421,10 +421,10 @@ function windowListenerForPuiBtn() {
 		var PUIprofilist = aDOMWindow.document.getElementById('PanelUI-profilist-box');
 		if (PUIprofilist) {
 			PUIprofilist.parentNode.removeChild(PUIprofilist);
-
+			console.error('ok removed it');
 		} else {
 			PUIp.removeEventListener('popupshowing', insertProfilistBox, false);
-
+			console.error('ok removed listener');
 		}
 		
 		var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
@@ -495,7 +495,7 @@ function workerWindowListenerRegister() {
 		var promise_updateIntoWindow = MainWorker.post('updateIntoWindow', [getNativeHandlePtrStr(aDOMWindow)]);
 		promise_updateIntoWindow.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_updateIntoWindow - ', aVal);
 				
 			},
 			genericReject.bind(null, 'promise_updateIntoWindow', 0)
@@ -506,7 +506,7 @@ function workerWindowListenerRegister() {
 		var promise_unloadFromWindow = MainWorker.post('unloadFromWindow', [getNativeHandlePtrStr(aDOMWindow)]);
 		promise_unloadFromWindow.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_unloadFromWindow - ', aVal);
 				
 			},
 			genericReject.bind(null, 'promise_unloadFromWindow', 0)
@@ -675,7 +675,7 @@ function startup(aData, aReason) {
 		var promise_afterBootstrapInit = MainWorker.post('afterBootstrapInit', []);
 		promise_afterBootstrapInit.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
 				
 			},
 			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
@@ -692,7 +692,7 @@ function startup(aData, aReason) {
 	while (l10ns.hasMoreElements()) {
 		var l10nProp = l10ns.getNext();
 		var l10nPropEl = l10nProp.QueryInterface(Ci.nsIPropertyElement);
-
+		// doing console.log(propEl) shows the object has some fields that interest us
 
 		var l10nPropKey = l10nPropEl.key;
 		var l10nPropStr = l10nPropEl.value;
@@ -705,7 +705,7 @@ function startup(aData, aReason) {
 	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js', core, MainWorkerMainThreadFuncs).post();
 	promise_initMainWorker.then(
 		function(aVal) {
-
+			console.log('Fullfilled - promise_initMainWorker - ', aVal);
 			// start - do stuff here - promise_initMainWorker
 			core = aVal;
 			setupMainWorkerCustomErrors();
@@ -717,7 +717,7 @@ function startup(aData, aReason) {
 				name: 'promise_initMainWorker',
 				aReason: aReason
 			};
-
+			console.warn('Rejected - promise_initMainWorker - ', rejObj);
 		}
 	).catch(
 		function(aCaught) {
@@ -725,7 +725,7 @@ function startup(aData, aReason) {
 				name: 'promise_initMainWorker',
 				aCaught: aCaught
 			};
-
+			console.error('Caught - promise_initMainWorker - ', rejObj);
 		}
 	);
 	
@@ -756,9 +756,9 @@ function shutdown(aData, aReason) {
 		var promise_prepForTerm = MainWorker.post('prepForTerminate', []);
 		promise_prepForTerm.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_prepForTerm - ', aVal);
 				MainWorker._worker.terminate();
-
+				console.log('mainworker terminated');
 			},
 			genericReject.bind(null, 'promise_prepForTerm', 0)
 		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));
@@ -775,9 +775,9 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 	// fsReturnIconset.js functions
 	frameworkerReady: function(aMsgEvent) {
 		var aBrowser = aMsgEvent.target;
-
+		console.info('fwInstancesId:', aBrowser);
 		var fwInstancesId = aBrowser.getAttribute('data-icon-container-generator-fwinstance-id');
-
+		console.info('fwInstancesId:', fwInstancesId);
 		
 		ICGenWorkerFuncs.fwInstances[fwInstancesId].deferredMain_setupFrameworker.resolve(['ok send me imgs now baby']);
 	},
@@ -785,12 +785,12 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 	fetchCoreAndConfigs: function() {
 		var deferredMain_fetchConfigObjs = new Deferred();
 		
-
+		console.log('sending over fetchCoreAndConfigs');
 		
 		var promise_fetch = MainWorker.post('fetchAll', []);
 		promise_fetch.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_fetch - ', aVal);
 				// start - do stuff here - promise_fetch
 				deferredMain_fetchConfigObjs.resolve([aVal]);
 				// end - do stuff here - promise_fetch
@@ -806,7 +806,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_fetch = MainWorker.post('fetchJustIniObj', []);
 		promise_fetch.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_fetch - ', aVal);
 				// start - do stuff here - promise_fetch
 				deferredMain_fetchJustIniObj.resolve([aVal]);
 				// end - do stuff here - promise_fetch
@@ -817,12 +817,12 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 	},
 	userManipulatedIniObj_updateIniFile: function(aNewIniObjStr) {
 		var deferredMain_userManipulatedIniObj_updateIniFile = new Deferred();
-
+		console.log('telling mainworker userManipulatedIniObj_updateIniFile');
 		
 		var promise_updateini = MainWorker.post('userManipulatedIniObj_updateIniFile', [aNewIniObjStr]);
 		promise_updateini.then(
 			function(aNewlyFormattedIniObj) {
-
+				console.log('Fullfilled - promise_updateini - ', aNewlyFormattedIniObj);
 				// start - do stuff here - promise_updateini
 				deferredMain_userManipulatedIniObj_updateIniFile.resolve([aNewlyFormattedIniObj]);
 				// end - do stuff here - promise_updateini
@@ -837,7 +837,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_launchfocus = MainWorker.post('launchOrFocusProfile', [aProfPath]);
 		promise_launchfocus.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_launchfocus - ', aVal);
 				deferredMain_launchOrFocusProfile.resolve([aVal]);
 			},
 			genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile)
@@ -853,7 +853,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_workerCreate = MainWorker.post('createNewProfile', [aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt]);
 		promise_workerCreate.then(
 			function(aIniObj) {
-
+				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
 				
 				var aBrowser = aMsgEvent.target;
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aIniObj, true]);
@@ -866,7 +866,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_workerRename = MainWorker.post('renameProfile', [aProfPath, aNewProfName]);
 		promise_workerRename.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_workerRename - ', aVal);
 				
 			},
 			function(aReason) {
@@ -874,7 +874,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 					name: 'promise_workerRename',
 					aReason: aReason
 				};
-
+				console.error('Rejected - promise_workerRename - ', rejObj);
 				// push aIniObj back to content, as it had premptively renamed
 				var aBrowser = aMsgEvent.target;
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
@@ -885,7 +885,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_workerDel = MainWorker.post('deleteProfile', [aProfPath]);
 		promise_workerDel.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_workerDel - ', aVal);
 				
 			},
 			function(aReason) {
@@ -893,7 +893,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 					name: 'promise_workerDel',
 					aReason: aReason
 				};
-
+				console.error('Rejected - promise_workerDel - ', rejObj);
 				// push aIniObj back to content, as it had premptively deleted
 				var aBrowser = aMsgEvent.target;
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
@@ -904,7 +904,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_workerTogDefault = MainWorker.post('toggleDefaultProfile', [aProfPath]);
 		promise_workerTogDefault.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_workerTogDefault - ', aVal);
 				
 			},
 			function(aReason) {
@@ -912,7 +912,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 					name: 'promise_workerTogDefault',
 					aReason: aReason
 				};
-
+				console.error('Rejected - promise_workerTogDefault - ', rejObj);
 				// push aIniObj back to content, as it had premptively toggled default 
 				var aBrowser = aMsgEvent.target;
 				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
@@ -927,7 +927,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		gCreateDesktopShortcutId++;
 		var thisCreateDesktopShortcutId = 'createDesktopShortcut_callback_' + gCreateDesktopShortcutId;
 		MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] = function() {
-
+			console.error('ok in mainthread callback for createDesktopShortcut');
 			delete MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId];
 			deferredMain_createDesktopShortcut.resolve();
 		};
@@ -935,7 +935,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_workerCreateDeskCut = MainWorker.post('createDesktopShortcut', [aProfPath, thisCreateDesktopShortcutId]);
 		promise_workerCreateDeskCut.then(
 			function(aVal) {
-
+				console.log('Fullfilled - promise_workerCreateDeskCut - ', aVal);
 				// dont do anything, as this calls in mainworker launchOrFocusProfile which does async stuff, that will call MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] when it finishes
 			},
 			genericReject.bind(null, 'promise_workerCreateDeskCut', 0)
@@ -1047,7 +1047,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 
 		fsFuncs.gBIPanel.addEventListener('popuphiding', function () {
 			fsFuncs.gBIPanel.parentNode.removeChild(fsFuncs.gBIPanel);
-
+			console.log('fsFuncs:', fsFuncs);
 			fsFuncs.biFinalize();
 		}, false);
 		
@@ -1076,7 +1076,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var promise_fetch = MainWorker.post('browseiconInit', []);
 		promise_fetch.then(
 			function(aObjs) {
-
+				console.log('Fullfilled - promise_fetch - ', aObjs);
 				// start - do stuff here - promise_fetch
 				deferredMain_biInit.resolve([aObjs]);
 				// end - do stuff here - promise_fetch
@@ -1095,7 +1095,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var rez_pwcall = MainWorker.post(aArrOfFuncnameThenArgs.shift(), aArrOfFuncnameThenArgs);
 		rez_pwcall.then(
 			function(aVal) {
-
+				console.log('Fullfilled - rez_pwcall - ', aVal);
 				if (Array.isArray(aVal)) {
 					mainDeferred_callInPromiseWorker.resolve(aVal);
 				} else {
@@ -1107,7 +1107,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 					name: 'rez_pwcall',
 					aReason: aReason
 				};
-
+				console.error('Rejected - rez_pwcall - ', rejObj);
 				mainDeferred_callInPromiseWorker.resolve([rejObj]);
 			}
 		).catch(
@@ -1116,7 +1116,7 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 					name: 'rez_pwcall',
 					aCaught: aCaught
 				};
-
+				console.error('Caught - rez_pwcall - ', rejObj);
 				mainDeferred_callInPromiseWorkerr.resolve([rejObj]);
 			}
 		);
@@ -1138,7 +1138,7 @@ var fsMsgListener = {
 	funcScope: fsFuncs,
 	receiveMessage: function(aMsgEvent) {
 		var aMsgEventData = aMsgEvent.data;
-
+		console.log('fsMsgListener getting aMsgEventData:', aMsgEventData, 'aMsgEvent:', aMsgEvent);
 		// aMsgEvent.data should be an array, with first item being the unfction name in bootstrapCallbacks
 		
 		var callbackPendingId;
@@ -1161,12 +1161,12 @@ var fsMsgListener = {
 							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
 						},
 						function(aReason) {
-
+							console.error('aReject:', aReason);
 							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
 						}
 					).catch(
 						function(aCatch) {
-
+							console.error('aCatch:', aCatch);
 							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
 						}
 					);
@@ -1176,7 +1176,7 @@ var fsMsgListener = {
 				}
 			}
 		}
-
+		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 		
 	}
 };
@@ -1245,7 +1245,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 		var afterInitListener = function(aMsgEvent) {
 			// note:all msgs from bootstrap must be postMessage([nameOfFuncInWorker, arg1, ...])
 			var aMsgEventData = aMsgEvent.data;
-
+			console.log('mainthread receiving message:', aMsgEventData);
 			
 			// postMessageWithCallback from worker to mt. so worker can setup callbacks after having mt do some work
 			var callbackPendingId;
@@ -1264,7 +1264,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 							function(aVal) {
 								if (aVal.length >= 2 && aVal[aVal.length-1] == SIC_TRANS_WORD && Array.isArray(aVal[aVal.length-2])) {
 									// to transfer in callback, set last element in arr to SIC_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
-
+									console.error('doing transferrrrr');
 									aVal.pop();
 									bootstrap[workerScopeName].postMessage([callbackPendingId, aVal], aVal.pop());
 								} else {
@@ -1272,12 +1272,12 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 								}
 							},
 							function(aReason) {
-
+								console.error('aReject:', aReason);
 								bootstrap[workerScopeName].postMessage([callbackPendingId, ['promise_rejected', aReason]]);
 							}
 						).catch(
 							function(aCatch) {
-
+								console.error('aCatch:', aCatch);
 								bootstrap[workerScopeName].postMessage([callbackPendingId, ['promise_rejected', aCatch]]);
 							}
 						);
@@ -1293,7 +1293,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 					}
 				}
 			}
-
+			else { console.warn('funcName', funcName, 'not in scope of aFuncExecScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 
 		};
 		
@@ -1317,11 +1317,11 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 			var thisCallbackId = SIC_CB_PREFIX + sic_last_cb_id; // + lastCallbackId; // link8888881
 			aFuncExecScope[thisCallbackId] = function() {
 				delete aFuncExecScope[thisCallbackId];
-
+				// console.log('in mainthread callback trigger wrap, will apply aCB with these arguments:', arguments, 'turned into array:', Array.prototype.slice.call(arguments));
 				aCB.apply(null, arguments[0]);
 			};
 			aPostMessageArr.push(thisCallbackId);
-
+			// console.log('aPostMessageArr:', aPostMessageArr);
 			bootstrap[workerScopeName].postMessage(aPostMessageArr, aPostMessageTransferList);
 		};
 		
@@ -1372,7 +1372,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 					var promise_initWorker = bootstrap[workerScopeName].post('init', [aCore]);
 					promise_initWorker.then(
 						function(aVal) {
-
+							console.log('Fullfilled - promise_initWorker - ', aVal);
 							// start - do stuff here - promise_initWorker
 							if (pFun) {
 								doOrigPost();
@@ -1390,7 +1390,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 					var promise_origPosted = bootstrap[workerScopeName].post(pFun, pArgs, pCosure, pTransfers);
 					promise_origPosted.then(
 						function(aVal) {
-
+							console.log('Fullfilled - promise_origPosted - ', aVal);
 							deferredMain_post.resolve(aVal);
 						},
 						genericReject.bind(null, 'promise_origPosted', deferredMain_post)
@@ -1412,22 +1412,22 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 				// got an error that PromiseWorker did not know how to serialize. so we didnt get a {fail:.....} postMessage. so in onerror it does pop of the deferred. however with allowing promiseworker to return async, we cant simply pop if there are more then 1 promises pending
 				var cQueue = bootstrap[workerScopeName]._queue._array;
 				if (cQueue.length === 1) {
-
+					// console.log('its fine for origOnerror it will just pop the only one there, which is the one to reject for sure as there are no other promises');
 					// DO NOTE THOUGH - .onerror message might come in from any error, it is innate to worker to send this message on error, so it will pop out the promise early, so maybe i might run this origOnerror before the actual promise rejects due to catch
 					origOnerror(onErrorEvent);
 				} else {
 					onErrorEvent.preventDefault(); // as they do this in origOnerror so i prevent here too
-
+					console.error('queue has more then one promises in there, i dont know which one to reject', 'onErrorEvent:', onErrorEvent, 'queue:', bootstrap[workerScopeName]._queue._array);
 				}
 			};
 			
 			bootstrap[workerScopeName]._worker.onmessage = function(aMsgEvent) {
 				////// start - my custom stuff
 				var aMsgEventData = aMsgEvent.data;
-
+				console.log('promiseworker receiving msg:', aMsgEventData);
 				if (Array.isArray(aMsgEventData)) {
 					// my custom stuff, PromiseWorker did self.postMessage to call a function from here
-
+					console.log('promsieworker is trying to execute function in mainthread');
 					
 					var callbackPendingId;
 					if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SIP_CB_PREFIX) == 0) {
@@ -1444,7 +1444,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 									function(aVal) {
 										if (aVal.length >= 2 && aVal[aVal.length-1] == SIP_TRANS_WORD && Array.isArray(aVal[aVal.length-2])) {
 											// to transfer in callback, set last element in arr to SIP_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
-
+											console.error('doing transferrrrr');
 											aVal.pop();
 											bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, aVal], aVal.pop());
 										} else {
@@ -1452,12 +1452,12 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 										}
 									},
 									function(aReason) {
-
+										console.error('aReject:', aReason);
 										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aReason]]);
 									}
 								).catch(
 									function(aCatch) {
-
+										console.error('aCatch:', aCatch);
 										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aCatch]]);
 									}
 								);
@@ -1466,7 +1466,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 								if (rez_mainthread_call.length > 2 && rez_mainthread_call[rez_mainthread_call.length-1] == SIP_TRANS_WORD && Array.isArray(rez_mainthread_call[rez_mainthread_call.length-2])) {
 									// to transfer in callback, set last element in arr to SIP_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
 									rez_mainthread_call.pop();
-
+									console.log('doiing traansfer');
 									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call], rez_mainthread_call.pop());
 								} else {
 									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call]);
@@ -1474,7 +1474,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 							}
 						}
 					}
-
+					else { console.error('funcName', funcName, 'not in scope of aFuncExecScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 					////// end - my custom stuff
 				} else {
 					// find the entry in queue that matches this id, and move it to first position, otherwise i get the error `Internal error: expecting msg " + handler.id + ", " + " got " + data.id + ` --- this guy uses pop and otherwise might get the wrong id if i have multiple promises pending
@@ -1485,16 +1485,16 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 							cQueueItemFound = true;
 							if (i !== 0) {
 								// move it to first position
-
+								var wasQueue = cQueue.slice(); // console.log('remove on production');
 								cQueue.splice(0, 0, cQueue.splice(i, 1)[0]);
-
+								console.log('ok moved q item from position', i, 'to position 0, this should fix that internal error, aMsgEvent.data.id:', aMsgEvent.data.id, 'queue is now:', cQueue, 'queue was:', wasQueue);
 							}
-
+							else { console.log('no need to reorder queue, the element of data.id:', aMsgEvent.data.id, 'is already in first position:', bootstrap[workerScopeName]._queue._array); }
 							break;
 						}
 					}
 					if (!cQueueItemFound) {
-
+						console.error('errrrror: how on earth can it not find the item with this id in the queue? i dont throw here as the .pop will throw the internal error, aMsgEvent.data.id:', aMsgEvent.data.id, 'cQueue:', cQueue);
 					}
 					origOnmessage(aMsgEvent);
 				}
@@ -1599,7 +1599,7 @@ function genericReject(aPromiseName, aPromiseToReject, aReason) {
 		name: aPromiseName,
 		aReason: aReason
 	};
-
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}
@@ -1609,7 +1609,7 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 		name: aPromiseName,
 		aCaught: aCaught
 	};
-
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
 	if (aPromiseToReject) {
 		aPromiseToReject.reject(rejObj);
 	}

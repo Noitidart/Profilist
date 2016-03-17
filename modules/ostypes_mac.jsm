@@ -1314,7 +1314,7 @@ var macInit = function() {
 		sel: function(jsStrSEL) {
 			if (!(jsStrSEL in self.HELPER._selLC)) {
 				self.HELPER._selLC[jsStrSEL] = self.API('sel_registerName')(jsStrSEL);
-
+				// console.info('sel c got', jsStrSEL, self.HELPER._selLC[jsStrSEL].toString());
 			}
 			return self.HELPER._selLC[jsStrSEL];
 		},
@@ -1322,7 +1322,7 @@ var macInit = function() {
 		class: function(jsStrCLASS) {
 			if (!(jsStrCLASS in self.HELPER._classLC)) {
 				self.HELPER._classLC[jsStrCLASS] = self.API('objc_getClass')(jsStrCLASS);
-
+				// console.info('class c got', jsStrCLASS, self.HELPER._classLC[jsStrCLASS].toString());
 			}
 			return self.HELPER._classLC[jsStrCLASS];
 		},
@@ -1331,21 +1331,21 @@ var macInit = function() {
 			// if get and it doesnt exist then it makes and stores it
 			// if get and already exists then it returns that lazy
 			// can releaseAll on it
-
+			// console.error('nssstringColll');
 			this.coll = {};
 			this.class = {};
 			this.get = function(jsStr) {
-
+				// console.error('enter get');
 				if (!(jsStr in this.coll)) {
-
+					// console.error('here');
 					this.class[jsStr] = self.API('objc_msgSend')(self.HELPER.class('NSString'), self.HELPER.sel('alloc'));;
-
+					// console.info('pre init this.class[jsStr]:', jsStr, this.class[jsStr].toString());
 					
 					var rez_initWithUTF8String = self.API('objc_msgSend')(this.class[jsStr], self.HELPER.sel('initWithUTF8String:'), self.TYPE.char.array()(jsStr));
 					this.coll[jsStr] = rez_initWithUTF8String;
-
+					// console.info('post init this.class:', jsStr, this.class[jsStr].toString(), 'this.coll[jsStr]:', this.coll[jsStr].toString());
 				}
-
+				// else { console.error('jsStr already in coll', jsStr); }
 				return this.coll[jsStr];
 			};
 			
@@ -1353,7 +1353,7 @@ var macInit = function() {
 				for (var nsstring in this.coll) {
 					var rez_relNSS = self.API('objc_msgSend')(this.coll[nsstring], self.HELPER.sel('release'));
 					var rez_relCLASS = self.API('objc_msgSend')(this.class[nsstring], self.HELPER.sel('release'));
-
+					// console.info(nsstring, 'rez_relNSS:', rez_relNSS.toString(), 'rez_relCLASS:', rez_relCLASS.toString());
 				}
 				this.coll = null;
 			};

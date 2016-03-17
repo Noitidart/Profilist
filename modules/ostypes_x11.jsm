@@ -1902,7 +1902,7 @@ var x11Init = function() {
 				var atom = self.API('XInternAtom')(self.HELPER.cachedXOpenDisplay(), aAtomName, createAtomIfDne ? self.CONST.False : self.CONST.True); //passing 3rd arg of false, means even if atom doesnt exist it returns a created atom, this can be used with GetProperty to see if its supported etc, this is how Chromium does it
 				if (!createAtomIfDne) {
 					if (atom == self.CONST.None) { // if i pass 3rd arg as False, it will will never equal self.CONST.None it gets creatd if it didnt exist on line before
-
+						console.warn('No atom with name:', aAtomName, 'return val of atom:', atom.toString());
 						throw new Error('No atom with name "' + aAtomName + '"), return val of atom:"' +  atom.toString() + '"');
 					}
 				}
@@ -1914,23 +1914,23 @@ var x11Init = function() {
 			// devUserRequestedType is req_type arg passed to XGetWindowProperty
 			// this tells us what the return of XGetWindowProperty means and if it needs XFree'ing
 			// returns < 0 if nitems_return is empty and no need for XFree. > 0 if needs XFree as there are items. 0 if no items but needs XFree, i have never seen this situation and so have not set up this to return 0 // actually scratch this xfree thing it seems i have to xfree it everytime: // XGetWindowProperty() always allocates one extra byte in prop_return (even if the property is zero length) and sets it to zero so that simple properties consisting of characters do not have to be copied into yet another string before use.  // wait tested it, and i was getting some weird errors so only XFree when not empty, interesting
-
-
-
+				// -1 - console.log('The specified property does not exist for the specified window. The delete argument was ignored. The nitems_return argument will be empty.');
+				// -2 - must set dontThrowOnDevTypeMismatch to true else it throws - console.log('Specified property/atom exists on window but here because returns actual type does not match the specified type (the xgwpArg.req_type) you supplied to function. The delete argument was ignored. The nitems_return argument will be empty.');
+				// 1 - console.log('The specified property exists and either you assigned AnyPropertyType to the req_type argument or the specified type matched the actual property type of the returned data.');
 			
 			if (cutils.jscEqual(funcReturnedType, self.CONST.None) && cutils.jscEqual(funcReturnedFormat, 0) && cutils.jscEqual(funcBytesAfterReturned, 0)) {
-
+				// console.log('The specified property does not exist for the specified window. The delete argument was ignored. The nitems_return argument will be empty.');
 				return -1;
 			} else if (!cutils.jscEqual(devUserRequestedType, self.CONST.AnyPropertyType) && !cutils.jscEqual(devUserRequestedType, funcReturnedType)) {
-
-
-
+				// console.log('Specified property/atom exists on window but here because returns actual type does not match the specified type (the xgwpArg.req_type) you supplied to function. The delete argument was ignored. The nitems_return argument will be empty.');
+				console.info('devUserRequestedType:', cutils.jscGetDeepest(devUserRequestedType));
+				console.info('funcReturnedType:', cutils.jscGetDeepest(funcReturnedType));
 				if (!dontThrowOnDevTypeMismatch) {
 					throw new Error('devuser supplied wrong type for title, fix it stupid, or maybe not a throw? maybe intentionally wrong? to just check if it exists on the window but dont want any data returend as dont want to XFree?');
 				}
 				return -2;
 			} else if (cutils.jscEqual(devUserRequestedType, self.CONST.AnyPropertyType) || cutils.jscEqual(devUserRequestedType, funcReturnedType)) {
-
+				// console.log('The specified property exists and either you assigned AnyPropertyType to the req_type argument or the specified type matched the actual property type of the returned data.');
 				return 1;
 			}  else {
 				throw new Error('should never get here')
@@ -2005,15 +2005,15 @@ var x11Init = function() {
 		fd_set_set: function(fdset, fd) {
 			// https://github.com/pioneers/tenshi/blob/9b3273298c34b9615e02ac8f021550b8e8291b69/angel-player/src/chrome/content/common/serport_posix.js#L497
 			let { elem8, bitpos8 } = self.HELPER.fd_set_get_idx(fd);
-
-
+			console.info('elem8:', elem8.toString());
+			console.info('bitpos8:', bitpos8.toString());
 			fdset[elem8] = 1 << bitpos8;
 		},
 		fd_set_isset: function(fdset, fd) {
 			// https://github.com/pioneers/tenshi/blob/9b3273298c34b9615e02ac8f021550b8e8291b69/angel-player/src/chrome/content/common/serport_posix.js#L497
 			let { elem8, bitpos8 } = self.HELPER.fd_set_get_idx(fd);
-
-
+			console.info('elem8:', elem8.toString());
+			console.info('bitpos8:', bitpos8.toString());
 			return !!(fdset[elem8] & (1 << bitpos8));
 		}
 	};
