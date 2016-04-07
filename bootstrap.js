@@ -657,10 +657,7 @@ function startup(aData, aReason) {
 		}
 	}
 	
-	var afterWorker = function() { // because i init worker, then continue init
-		// register about page
-		initAndRegisterAboutProfilist();
-		
+	var afterWorker = function() { // because i init worker, then continue init		
 		// register about pages listener
 		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
 		
@@ -671,6 +668,25 @@ function startup(aData, aReason) {
 		// testReact();
 		
 		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
+		
+		// Services.wm.getMostRecentWindow('navigator:browser').setTimeout(function() {
+			// register about page
+			initAndRegisterAboutProfilist();
+			
+			// go through all tabs and see if profilist is open, if it is then reload it
+			var DOMWindows = Services.wm.getEnumerator('navigator:browser');
+			while (DOMWindows.hasMoreElements()) {
+				var DOMWindow = DOMWindows.getNext();
+				if (DOMWindow.gBrowser) {
+					var browsers = DOMWindow.gBrowser.browsers;
+					for (var i=0; i<browsers.length; i++) {
+						if (browsers[i].currentURI.spec.toLowerCase().indexOf('about:profilist') === 0) {
+							browsers[i].reload();
+						}
+					}
+				}
+			}
+		// }, 5000);
 		
 		var promise_afterBootstrapInit = MainWorker.post('afterBootstrapInit', []);
 		promise_afterBootstrapInit.then(

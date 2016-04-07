@@ -3718,7 +3718,7 @@ function updateIntoWindow(aNativeWindowPtrStr) {
 					var pps = ppsPtr.contents.lpVtbl.contents;
 					
 					// set icon
-					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_RELAUNCHICONRESOURCE.address(), OSStuff.windowLastSet_ExeIconPath + ',-2'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
+					var hr_IPSSetValue = ostypes.HELPER.IPropertyStore_SetValue(ppsPtr, pps, ostypes.CONST.PKEY_APPUSERMODEL_RELAUNCHICONRESOURCE.address(), OSStuff.windowLastSet_ExeIconPath + ',0'); // it works ine withou reource id, i actually am just guessing -2 is pointing to the 48x48 icon im no sure but whaever number i put after - it looks like is 48x48 so its weird but looking right
 					ostypes.HELPER.checkHRESULT(hr_SHGetPropertyStoreForWindow, 'RelaunchIconResource');
 					
 					// set display name
