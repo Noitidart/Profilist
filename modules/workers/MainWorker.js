@@ -3560,10 +3560,10 @@ function getWin7TaskbarIdForExePath(aExePath) {
 	// returns string
 	if (!(aExePath in _cache_getWin7TaskbarId)) {
 		console.time('winRegistryRead');
-		_cache_getWin7TaskbarId[strToHash] = winRegistryRead('HKEY_CURRENT_USER', 'Software\\Mozilla\\Firefox\\TaskBarIDs', aExePath); // :todo: instead of read from registry, i should CityHash64 like per - ```CityHash::GetCityHash64 "$R9"``` - https://dxr.mozilla.org/mozilla-central/source/toolkit/mozapps/installer/windows/nsis/common.nsh#7295
+		_cache_getWin7TaskbarId[aExePath] = winRegistryRead('HKEY_CURRENT_USER', 'Software\\Mozilla\\Firefox\\TaskBarIDs', aExePath); // :todo: instead of read from registry, i should CityHash64 like per - ```CityHash::GetCityHash64 "$R9"``` - https://dxr.mozilla.org/mozilla-central/source/toolkit/mozapps/installer/windows/nsis/common.nsh#7295
 		console.timeEnd('winRegistryRead');
 		
-		if (_cache_getWin7TaskbarId[strToHash] === null) {
+		if (_cache_getWin7TaskbarId[aExePath] === null) {
 			console.error('should never happen! as this registry entry is made on instal of aExePath, it has to exist!');
 			throw new Error('should never happen! as this registry entry is made on instal of aExePath, it has to exist!');
 		}
