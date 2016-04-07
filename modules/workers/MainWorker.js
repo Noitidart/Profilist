@@ -3734,7 +3734,10 @@ function updateIntoWindow(aNativeWindowPtrStr) {
 					// set AppUserModelId - depends on if the profile is default or not
 					var cAppUserModelID;
 					if (gCurProfIniEntry.Default === '1') {
-						cAppUserModelID = getWin7TaskbarIdForExePath(core.profilist.path.XREExeF);
+						cAppUserModelID = getWin7TaskbarIdForExePath(OS.Path.dirname(core.profilist.path.XREExeF));
+						if (!cAppUserModelID) {
+							throw new Error('should never happen!!!!! registry entry must exist for ' + OS.Path.dirname(core.profilist.path.XREExeF));
+						}
 					} else {
 						cAppUserModelID = HashString(gCurProfIniEntry.Path) + ''; // make it a string as it needs to be a string to get passed into the ctypes. else i get error "can't pass the number 741175429 to argument 1 of long SHStrDupW(char16_t*, char16_t**)"
 					}
