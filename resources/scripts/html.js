@@ -218,8 +218,9 @@ function refreshRunningStatuses() {
 	});
 }
 
-function initPage(isReInit) {
-	// if isReInit then it will skip some stuff
+function initPage() {
+	
+	bootstrapCallbacks.testConnUpdate('init');
 	
 	initReactComponent()
 	
@@ -1814,6 +1815,15 @@ var bootstrapCallbacks = { // can use whatever, but by default it uses this
 		MyStore.setState({
 			sIniObj: JSON.parse(JSON.stringify(gIniObj))
 		});
+	},
+	testConnUpdate: function(newContent) {
+		var tcDomEl = document.getElementById('testconn');
+		if (!tcDomEl) {
+			tcDomEl = document.createElement('div');
+			tcDomEl.setAttribute('id', 'testconn');
+			document.body.appendChild(tcDomEl);
+		}
+		tcDomEl.textContent = newContent;
 	}
 };
 const SAM_CB_PREFIX = '_sam_gen_cb_';

@@ -334,6 +334,12 @@ function prepForTerminate() {
 	return 'ok ready to terminate';
 }
 
+function testConnInit() {
+	setInterval(function() {
+		self.postMessage(['testConnUpdate', (new Date()).toLocaleString()])
+	}, 1000);
+}
+
 gKeyInfoStore = { //info on the Profilist keys i write into ini // all values must be strings as i writing and reading from file
 	ProfilistStatus: {
 		// pref: false		// i dont need this key. i can just test for lack of any of the keys only for prefs. but anyways fallse/missing means not a preference. means its programtically set

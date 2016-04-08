@@ -127,6 +127,9 @@ function AboutFactory(component) {
 
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
+	testConnUpdate: function(aNewContent) {
+		gTestConnMM.sendAsyncMessage(core.addon.id, ['testConnUpdate', aNewContent]);
+	},
 	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
 		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
 		// return ['hi arr 1']; // :note: this is how to return no promise
@@ -787,6 +790,7 @@ function shutdown(aData, aReason) {
 // END - Addon Functionalities
 // start - server/framescript comm layer
 // functions for framescripts to call in main thread
+var gTestConnMM;
 var fsFuncs = { // can use whatever, but by default its setup to use this
 	// fsReturnIconset.js functions
 	frameworkerReady: function(aMsgEvent) {
@@ -800,6 +804,8 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 	// end - fsReturnIconset.js functions
 	fetchCoreAndConfigs: function() {
 		var deferredMain_fetchConfigObjs = new Deferred();
+		gTestConnMM = arguments[0].target.messageManager;
+		MainWorker._worker.postMessage(['testConnInit']);
 		
 		console.log('sending over fetchCoreAndConfigs');
 		
