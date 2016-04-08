@@ -97,9 +97,9 @@ function sendAsyncMessageWithCallback(aMessageManager, aGroupId, aMessageArr, aC
 	sam_last_cb_id++;
 	var thisCallbackId = SAM_CB_PREFIX + sam_last_cb_id;
 	aCallbackScope = aCallbackScope ? aCallbackScope : bootstrap; // :todo: figure out how to get global scope here, as bootstrap is undefined
-	aCallbackScope[thisCallbackId] = function(aMessageArr) {
+	aCallbackScope[thisCallbackId] = function(aMessageReceivedArr) {
 		delete aCallbackScope[thisCallbackId];
-		aCallback.apply(null, aMessageArr);
+		aCallback.apply(null, aMessageReceivedArr);
 	}
 	aMessageArr.push(thisCallbackId);
 	aMessageManager.sendAsyncMessage(aGroupId, aMessageArr);
