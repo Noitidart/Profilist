@@ -1819,6 +1819,10 @@ var bootstrapCallbacks = { // can use whatever, but by default it uses this
 	testConnUpdate: function(newContent) {
 		var tcDomEl = document.getElementById('testconn');
 		if (!tcDomEl) {
+			var tcInitDomEl = document.createElement('div');
+			document.body.appendChild(tcInitDomEl);
+			tcInitDomEl.textContent = 'initted at ' + (new Date()).toLocaleString() + ' -- ' + (new Date()).getTime();
+			
 			tcDomEl = document.createElement('div');
 			tcDomEl.setAttribute('id', 'testconn');
 			document.body.appendChild(tcDomEl);

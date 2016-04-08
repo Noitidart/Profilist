@@ -336,7 +336,7 @@ function prepForTerminate() {
 
 function testConnInit() {
 	setInterval(function() {
-		self.postMessage(['testConnUpdate', (new Date()).toLocaleString()])
+		self.postMessage(['testConnUpdate', (new Date()).toLocaleString() + ' -- ' + (new Date()).getTime()])
 	}, 1000);
 }
 
