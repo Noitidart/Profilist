@@ -149,7 +149,7 @@ function doOnBeforeUnload() {
 }
 
 function doOnContentLoad() {
-	setTimeout(initPage, 1000);
+	setTimeout(initPage, 0);
 }
 
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
