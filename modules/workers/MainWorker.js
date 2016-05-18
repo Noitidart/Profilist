@@ -168,6 +168,15 @@ function init(objCore) { // function name init required for SIPWorker
 	core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // mname stands for modified-name	
 	core.os.filesystem_seperator = platformFilePathSeperator();
 	
+	// load all localization pacakages
+	formatStringFromName('blah', 'bootstrap');
+	formatStringFromName('blah', 'browseicon');
+	formatStringFromName('blah', 'cp');
+	formatStringFromName('blah', 'html');
+	formatStringFromName('blah', 'iconsetpicker');
+	formatStringFromName('blah', 'mainworker');
+	core.addon.l10n = _cache_formatStringFromName_packages;
+	
 	// I import ostypes_*.jsm in init as they may use things like core.os.isWinXp etc
 	console.log('bringing in ostypes');
 	switch (core.os.mname) {
@@ -6658,5 +6667,54 @@ function longestCommonSubstringInArr(aArrOfStrs) {
 function setTimeoutSync(aMilliseconds) {
 	var breakDate = Date.now() + aMilliseconds;
 	while (Date.now() < breakDate) {}
+}
+
+// rev4 - https://gist.github.com/Noitidart/6d8a20739b9a4a97bc47
+var _cache_formatStringFromName_packages = {}; // holds imported packages
+function formatStringFromName(aKey, aLocalizedPackageName, aReplacements) {
+	// depends on ```core.addon.path.locale``` it must be set to the path to your locale folder
+
+	// aLocalizedPackageName is name of the .properties file. so mainworker.properties you would provide mainworker // or if it includes chrome:// at the start then it fetches that
+	// aKey - string for key in aLocalizedPackageName
+	// aReplacements - array of string
+	
+	// returns null if aKey not found in pacakage
+
+	var packagePath;
+	var packageName;
+	if (aLocalizedPackageName.indexOf('chrome:') === 0 || aLocalizedPackageName.indexOf('resource:') === 0) {
+		packagePath = aLocalizedPackageName;
+		packageName = aLocalizedPackageName.substring(aLocalizedPackageName.lastIndexOf('/') + 1, aLocalizedPackageName.indexOf('.properties'));
+	} else {
+		packagePath = core.addon.path.locale + aLocalizedPackageName + '.properties';
+		packageName = aLocalizedPackageName;
+	}
+	
+	if (!_cache_formatStringFromName_packages[packageName]) {
+		var packageStr = xhr(packagePath).response;
+		var packageJson = {};
+		
+		var propPatt = /(.*?)=(.*?)$/gm;
+		var propMatch;
+		while (propMatch = propPatt.exec(packageStr)) {
+			packageJson[propMatch[1]] = propMatch[2];
+		}
+		
+		_cache_formatStringFromName_packages[packageName] = packageJson;
+		
+		console.log('packageJson:', packageJson);
+	}
+	
+	var cLocalizedStr = _cache_formatStringFromName_packages[packageName][aKey];
+	if (!cLocalizedStr) {
+		return null;
+	}
+	if (aReplacements) {
+		for (var i=0; i<aReplacements.length; i++) {
+			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+		}
+	}
+	
+	return cLocalizedStr;
 }
 // end - common helper functions

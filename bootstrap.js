@@ -1,6 +1,6 @@
 // Imports
 const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-Cm.QueryInterface(Ci.nsIComponentRegistrar);
+// Cm.QueryInterface(Ci.nsIComponentRegistrar);
 Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/devtools/Console.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
@@ -64,66 +64,6 @@ XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.stri
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
 
 // START - Addon Functionalities	
-// start - about module
-var aboutFactory_profilist;
-function AboutProfilist() {}
-
-function initAndRegisterAboutProfilist() {
-	// init it
-	AboutProfilist.prototype = Object.freeze({
-		classDescription: myServices.sb.GetStringFromName('about-page-class-description'),
-		contractID: '@mozilla.org/network/protocol/about;1?what=profilist',
-		classID: Components.ID('{f7b6f390-a0c2-11e5-a837-0800200c9a66}'),
-		QueryInterface: XPCOMUtils.generateQI([Ci.nsIAboutModule]),
-
-		getURIFlags: function(aURI) {
-			return Ci.nsIAboutModule.ALLOW_SCRIPT;
-		},
-
-		newChannel: function(aURI, aSecurity_or_aLoadInfo) {
-			var redirUrl;
-			if (aURI.path.toLowerCase().indexOf('?html') > -1) {
-				redirUrl = core.addon.path.pages + 'html.xhtml';
-			} else {
-				redirUrl = core.addon.path.pages + 'cp.xhtml';
-			}
-			
-			var channel;
-			if (Services.vc.compare(core.firefox.version, '47.*') > 0) {
-				console.error('trying new way!!!!!!!!!!!');
-				var redirURI = Services.io.newURI(redirUrl, null, null);
-				channel = Services.io.newChannelFromURIWithLoadInfo(redirURI, aSecurity_or_aLoadInfo);
-			} else {
-				console.error('doing old way');
-				channel = Services.io.newChannel(redirUrl, null, null);
-			}
-			channel.originalURI = aURI;
-			
-			return channel;
-		}
-	});
-	
-	// register it
-	aboutFactory_profilist = new AboutFactory(AboutProfilist);
-}
-
-function AboutFactory(component) {
-	this.createInstance = function(outer, iid) {
-		if (outer) {
-			throw Cr.NS_ERROR_NO_AGGREGATION;
-		}
-		return new component();
-	};
-	this.register = function() {
-		Cm.registerFactory(component.prototype.classID, component.prototype.classDescription, component.prototype.contractID, this);
-	};
-	this.unregister = function() {
-		Cm.unregisterFactory(component.prototype.classID, this);
-	}
-	Object.freeze(this);
-	this.register();
-}
-// end - about module
 
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
@@ -661,9 +601,12 @@ function startup(aData, aReason) {
 	}
 	
 	var afterWorker = function() { // because i init worker, then continue init		
-		// register about pages listener
+		// register framescript listener
 		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
 		
+		// register framescript injector
+		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
+
 		// // bring in react
 		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
 		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
@@ -671,25 +614,6 @@ function startup(aData, aReason) {
 		// testReact();
 		
 		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
-		
-		// Services.wm.getMostRecentWindow('navigator:browser').setTimeout(function() {
-			// register about page
-			initAndRegisterAboutProfilist();
-			
-			// go through all tabs and see if profilist is open, if it is then reload it
-			var DOMWindows = Services.wm.getEnumerator('navigator:browser');
-			while (DOMWindows.hasMoreElements()) {
-				var DOMWindow = DOMWindows.getNext();
-				if (DOMWindow.gBrowser) {
-					var browsers = DOMWindow.gBrowser.browsers;
-					for (var i=0; i<browsers.length; i++) {
-						if (browsers[i].currentURI.spec.toLowerCase().indexOf('about:profilist') === 0) {
-							browsers[i].reload();
-						}
-					}
-				}
-			}
-		// }, 5000);
 		
 		var promise_afterBootstrapInit = MainWorker.post('afterBootstrapInit', []);
 		promise_afterBootstrapInit.then(
@@ -754,12 +678,14 @@ function shutdown(aData, aReason) {
 	
 	if (aReason == APP_SHUTDOWN) { return }
 	
-	// an issue with this unload is that framescripts are left over, i want to destory them eventually
-	aboutFactory_profilist.unregister();
-	
 	// unregister about pages listener
 	Services.mm.removeMessageListener(core.addon.id, fsMsgListener);
 	
+	// unregister framescript injector
+	Services.mm.removeDelayedFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key);
+	
+	// kill framescripts
+	Services.mm.broadcastAsyncMessage(core.addon.id, ['destroySelf']);
 	
 	// unregister gPUIprUnreg
 	if (gWindowListenerForPuiBtn) {
@@ -820,6 +746,11 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_fetchConfigObjs.promise;
+	},
+	fetchCore: function() {
+		return [{
+			core
+		}];
 	},
 	fetchJustIniObj: function() {
 		// just gets gIniObj

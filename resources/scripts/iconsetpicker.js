@@ -127,7 +127,7 @@ var IPStore = {
 		if (!sDirListHistory.length || sDirListHistory[i - 1] != aDirPlatPath) {
 			new_sDirListHistory.push(aDirPlatPath);
 		}
-		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], bootstrapMsgListener.funcScope, function(aSubdirsArr) {
+		sendAsyncMessageWithCallback(['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], function(aSubdirsArr) {
 			console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
 			if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
 				// errored
@@ -146,7 +146,7 @@ var IPStore = {
 		});
 	},
 	readImgsInDir: function(aReadImgsInDirArg, a_cDirSelected) {
-		sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['readImgsInDir', aReadImgsInDirArg]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+		sendAsyncMessageWithCallback(['callInPromiseWorker', ['readImgsInDir', aReadImgsInDirArg]], function(aErrorOrImgObj) {
 			if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
 				IPStore.setState({
 					sPreview: 'failed-read'
@@ -369,7 +369,7 @@ var IPStore = {
 						
 						if (needToReleaseOldImgObj) {
 							console.log('ok releeasing old obj urls');
-							sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['releaseBlobsAndUrls', urlsInPrevState]], bootstrapMsgListener.funcScope, function(aErrorOrImgObj) {
+							sendAsyncMessageWithCallback(['callInPromiseWorker', ['releaseBlobsAndUrls', urlsInPrevState]], function(aErrorOrImgObj) {
 								console.error('ok back from releaseBlobsAndUrls. so now in framescript');
 							});
 						}
@@ -615,7 +615,7 @@ var IPStore = {
 			clickSelect: function() {
 					// this.state.sPreview.imgObj must be valid (gui disables button if it is not valid)
 					// setTimeout(function() { // :debug: wrapping in setTimeout to test if it will work after uninit has been called. im worried this.props might be dead, not sure ----- results of test, yes it worked, which makes wonder when does it get gc'ed, how does it know? interesting stuff. i would think on unmount this object is destroyed
-						sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], bootstrapMsgListener.funcScope, function(aImgSlug, aImgObj) {
+						sendAsyncMessageWithCallback(['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], function(aImgSlug, aImgObj) {
 							console.error('ok back from saveAsIconset. so now in framescript');
 							if (this.props.select_callback) {
 								this.props.select_callback(aImgSlug, aImgObj);
@@ -648,7 +648,7 @@ var IPStore = {
 					sDirSubdirs: new_sDirSubdirs
 				});
 					
-				sendAsyncMessageWithCallback(contentMMFromContentWindow_Method2(window), core.addon.id, ['callInPromiseWorker', ['deleteIconset', cImgSlug]], bootstrapMsgListener.funcScope, function(aErrorObjOrIni) {
+				sendAsyncMessageWithCallback(['callInPromiseWorker', ['deleteIconset', cImgSlug]], function(aErrorObjOrIni) {
 					console.error('ok back from deleteIconset. so now in framescript');
 					// if gIniObj was updated, then aErrorObjOrIni is gIniObj
 					// else it is null
