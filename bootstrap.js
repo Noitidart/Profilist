@@ -56,6 +56,7 @@ const NS_XUL = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 var bootstrap = this;
 var BOOTSTRAP = this;
 var ADDON_MANAGER_ENTRY;
+var gMainFsComm;
 
 // Lazy Imports
 const myServices = {};
@@ -68,7 +69,7 @@ XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
 	testConnUpdate: function(aNewContent) {
-		gTestConnMM.sendAsyncMessage(core.addon.id, ['testConnUpdate', aNewContent]);
+		gMainFsComm.transcribeMessage(gTestConnMM, 'testConnUpdate', aNewContent);
 	},
 	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
 		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
@@ -602,7 +603,7 @@ function startup(aData, aReason) {
 	
 	var afterWorker = function() { // because i init worker, then continue init		
 		// register framescript listener
-		new framescriptComm(core.addon.id);
+		gMainFsComm = new framescriptComm(core.addon.id);
 		
 		// register framescript injector
 		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
@@ -739,7 +740,7 @@ var gTestConnMM;
 			function(aVal) {
 				console.log('Fullfilled - promise_fetch - ', aVal);
 				// start - do stuff here - promise_fetch
-				deferredMain_fetchConfigObjs.resolve([aVal]);
+				deferredMain_fetchConfigObjs.resolve(aVal);
 				// end - do stuff here - promise_fetch
 			}
 		);
@@ -806,7 +807,7 @@ var gTestConnMM;
 			function(aIniObj) {
 				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
 				
-				aComm.transcribeMessage('pushIniObj', {
+				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
 					aIniObj: aIniObj,
 					aDoTbbEnterAnim: true
 				});
@@ -830,7 +831,7 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerRename - ', rejObj);
 				// push aIniObj back to content, as it had premptively renamed
-				aComm.transcribeMessage('pushIniObj', {
+				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
 					aIniObj: aReason.msg.aIniObj
 				});
 			}
@@ -850,7 +851,7 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerDel - ', rejObj);
 				// push aIniObj back to content, as it had premptively deleted
-				aComm.transcribeMessage('pushIniObj', {
+				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
 					aIniObj: aReason.msg.aIniObj
 				});
 			}
@@ -870,7 +871,7 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerTogDefault - ', rejObj);
 				// push aIniObj back to content, as it had premptively toggled default 
-				aComm.transcribeMessage('pushIniObj', {
+				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
 					aIniObj: aReason.msg.aIniObj
 				});
 			}

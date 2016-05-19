@@ -180,19 +180,26 @@ function doOnFocus() {
 // End - DOM Event Attachments
 // Start - Page Functionalities
 function fetchJustIniObj() {
-	transcribeMessage('fetchJustIniObj', null, function(aIniObj) {
-		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
-		// alert('ok got new ini obj, will now set global nad update react component');
-		gIniObj = aIniObj;
-		console.error('ok setting up new gIniObj to this:', aIniObj);
-		
-		MyStore.setState({
-			sIniObj: JSON.parse(JSON.stringify(gIniObj))
-		});
-		
-		gCntRefreshedRunning = 0;
-		setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
-	});
+	gFsComm.postMessage(
+		'callInBootstrap',
+		{
+			method: 'fetchJustIniObj'
+		},
+		null, 
+		function(aIniObj) {
+			console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
+			// alert('ok got new ini obj, will now set global nad update react component');
+			gIniObj = aIniObj;
+			console.error('ok setting up new gIniObj to this:', aIniObj);
+			
+			MyStore.setState({
+				sIniObj: JSON.parse(JSON.stringify(gIniObj))
+			});
+			
+			gCntRefreshedRunning = 0;
+			setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
+		}
+	);
 }
 
 var gCntRefreshedRunning = 0;
@@ -201,21 +208,29 @@ var gIntervalRefreshRunning = 2000; // refresh every 1sec for 5 times
 function refreshRunningStatuses() {
 	gCntRefreshedRunning++;
 	
-	transcribeMessage('callInPromiseWorker', ['fetchJustIniObjJustRefreshed'], function(aIniObjIfRefreshed) {
-		console.log('ok back from refreshing, aIniObjIfRefreshed:', aIniObjIfRefreshed);
-		
-		if (aIniObjIfRefreshed) {
-			console.log('yes something went to non-running status, so update');
-			gIniObj = aIniObjIfRefreshed;
-			MyStore.setState({
-				sIniObj: JSON.parse(JSON.stringify(gIniObj))
-			});
+	gFsComm.postMessage(
+		'callInBootstrap',
+		{
+			method: 'callInPromiseWorker',
+			arg: ['fetchJustIniObjJustRefreshed']
+		},
+		null,
+		function(aIniObjIfRefreshed) {
+			console.log('ok back from refreshing, aIniObjIfRefreshed:', aIniObjIfRefreshed);
+			
+			if (aIniObjIfRefreshed) {
+				console.log('yes something went to non-running status, so update');
+				gIniObj = aIniObjIfRefreshed;
+				MyStore.setState({
+					sIniObj: JSON.parse(JSON.stringify(gIniObj))
+				});
+			}
+			
+			if (gCntRefreshedRunning < gMaxCntRefreshRunning) {
+				setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
+			}
 		}
-		
-		if (gCntRefreshedRunning < gMaxCntRefreshRunning) {
-			setTimeout(refreshRunningStatuses, gIntervalRefreshRunning);
-		}
-	});
+	);
 }
 
 function initPage() {
@@ -227,18 +242,24 @@ function initPage() {
 	// setTimeout(function() {
 		// get core and config objs
 		console.time('fetchReq');
-		transcribeMessage('fetchCoreAndConfigs', null, function(aObjs) {
-			console.timeEnd('fetchReq');
-			console.log('got core and configs:', aObjs);
-			core = aObjs.aCore;
-			gIniObj = aObjs.aIniObj;
-			gKeyInfoStore = aObjs.aKeyInfoStore;
-			
-			MyStore.updateStatedIniObj();
-			
-			window.addEventListener('blur', attachFocusListener, false); // link147928272
-			ifNotFocusedDoOnBlur();
-		});
+		
+		gFsComm.postMessage(
+			'callInBootstrap',
+			{method:'fetchCoreAndConfigs'},
+			null, 
+			function(aObjs) {
+				console.timeEnd('fetchReq');
+				console.log('got core and configs:', aObjs);
+				core = aObjs.aCore;
+				gIniObj = aObjs.aIniObj;
+				gKeyInfoStore = aObjs.aKeyInfoStore;
+				
+				MyStore.updateStatedIniObj();
+				
+				window.addEventListener('blur', attachFocusListener, false); // link147928272
+				ifNotFocusedDoOnBlur();
+			}
+		);
 	// }, 2000);
 
 }
@@ -718,11 +739,14 @@ var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
 	
 	console.error('ok create here are args:', 'aKeyForClone:', aKeyForClone, 'e:', e);
 	
-	transcribeMessage('createNewProfile', {
-		aNewProfName: newProfileName,
-		aCloneProfPath: aKeyForClone,
-		aNameIsPlatPath: cNameIsPlatPath,
-		aLaunchIt: cLaunchIt
+	gFsComm.postMessage('callInBootstrap', {
+		method: 'createNewProfile',
+		arg: {
+			aNewProfName: newProfileName,
+			aCloneProfPath: aKeyForClone,
+			aNameIsPlatPath: cNameIsPlatPath,
+			aLaunchIt: cLaunchIt
+		}
 	});
 	// send message to worker to create it
 }
@@ -754,11 +778,14 @@ var ToolbarButton = React.createClass({
 			} else {
 				// keyValLaunchOnCreate === '1'
 				// launch right away
-				transcribeMessage('createNewProfile', {
-					aNewProfName: null,
-					aCloneProfPath: null,
-					aNameIsPlatPath: false,
-					aLaunchIt: true
+				gFsComm.postMessage('callInBootstrap', {
+					method: 'createNewProfile',
+					arg: {
+						aNewProfName: null,
+						aCloneProfPath: null,
+						aNameIsPlatPath: false,
+						aLaunchIt: true
+					}
 				});
 				// alert('create profile with predefined name "Unnamed Profile ##" and then launch it right away');
 			}
@@ -832,11 +859,14 @@ var ToolbarButton = React.createClass({
 				} else {
 					// keyValLaunchOnCreate === '1'
 					// launch right away
-					transcribeMessage('createNewProfile', {
-						aNewProfName: null,
-						aCloneProfPath: this.props.sKey,
-						aNameIsPlatPath: false,
-						aLaunchIt: true
+					gFsComm.postMessage('callInBootstrap', {
+						method: 'createNewProfile',
+						arg: {
+							aNewProfName: null,
+							aCloneProfPath: this.props.sKey,
+							aNameIsPlatPath: false,
+							aLaunchIt: true
+						}
 					});
 					
 					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
@@ -853,11 +883,22 @@ var ToolbarButton = React.createClass({
 			} else {
 				// launch this profile
 				// alert('launch profile');
-				// transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path);
-				transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path, function() {
-					console.error('okkkk back from launching');
-					// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
-				});
+				// gFsComm.postMessage('callInBootstrap', {
+				// 	method:'launchOrFocusProfile',
+				// 	arg: this.props.tbbIniEntry.Path
+				// });
+				gFsComm.postMessage(
+					'callInBootstrap',
+					{
+						method: 'launchOrFocusProfile',
+						arg: this.props.tbbIniEntry.Path
+					},
+					null,
+					function() {
+						console.error('okkkk back from launching');
+						// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
+					}
+				);
 			}
 		}
 		else { console.log('dev_info - clicked something other then create new profile or launch profile'); }
@@ -1181,8 +1222,41 @@ var PrimaryIcon = React.createClass({
 			IPStoreInitWithSlug = this.props.tbbIniEntry.ProfilistBadge;
 			IPStoreInitWithUnselectCallback = function() {
 				console.log('ok user removed badge');
-				transcribeMessage('callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, null], function(aErrorOrNewIniObj) {
-					console.log('back from removing badge');
+				gFsComm.postMessage(
+					'callInBootstrap',
+					{
+						method: 'callInPromiseWorker',
+						arg: ['replaceBadgeForProf', this.props.sKey, null]
+					},
+					null,
+					function(aErrorOrNewIniObj) {
+						console.log('back from removing badge');
+						// aErrorOrNewIniObj is null if nothing was set
+						if (Array.isArray(aErrorOrNewIniObj)) {
+							gIniObj = aErrorOrNewIniObj;
+							MyStore.setState({
+								sIniObj: JSON.parse(JSON.stringify(gIniObj))
+							});
+						} else {
+							console.error('some error occured when trying to remove badge', aErrorOrNewIniObj);
+							throw new Error('some error occured when trying to remove badge');
+						}
+					}
+				);
+			}.bind(this);
+		}
+		
+		var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
+			console.error('ok picked new badge, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method:'callInPromiseWorker', 
+					arg: ['replaceBadgeForProf', this.props.sKey, aImgSlug]
+				},
+				null,
+				function(aErrorOrNewIniObj) {
+					console.log('back from setting badge');
 					// aErrorOrNewIniObj is null if nothing was set
 					if (Array.isArray(aErrorOrNewIniObj)) {
 						gIniObj = aErrorOrNewIniObj;
@@ -1190,28 +1264,11 @@ var PrimaryIcon = React.createClass({
 							sIniObj: JSON.parse(JSON.stringify(gIniObj))
 						});
 					} else {
-						console.error('some error occured when trying to remove badge', aErrorOrNewIniObj);
-						throw new Error('some error occured when trying to remove badge');
+						console.error('some error occured when trying to set new badge', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to set new badge');
 					}
-				});
-			}.bind(this);
-		}
-		
-		var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
-			console.error('ok picked new badge, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
-			transcribeMessage('callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, aImgSlug], function(aErrorOrNewIniObj) {
-				console.log('back from setting badge');
-				// aErrorOrNewIniObj is null if nothing was set
-				if (Array.isArray(aErrorOrNewIniObj)) {
-					gIniObj = aErrorOrNewIniObj;
-					MyStore.setState({
-						sIniObj: JSON.parse(JSON.stringify(gIniObj))
-					});
-				} else {
-					console.error('some error occured when trying to set new badge', aErrorOrNewIniObj);
-					throw new Error('some error occured when trying to set new badge');
 				}
-			});
+			);
 		}.bind(this);
 		
 		var elPickerTarget = e.target;
@@ -1359,9 +1416,12 @@ var SubiconRename = React.createClass({
 						}
 						var gTbbIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.sKey);
 						gTbbIniEntry.Name = gInteractiveRefs.textbox.value;
-						transcribeMessage('renameProfile', {
-							aProfPath: this.props.sKey,
-							aNewProfName: gTbbIniEntry.Name
+						gFsComm.postMessage('callInBootstrap', {
+							method:'renameProfile',
+							arg: {
+								aProfPath: this.props.sKey,
+								aNewProfName: gTbbIniEntry.Name
+							}
 						}); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 						return {
 							sIniObj: JSON.parse(JSON.stringify(gIniObj))
@@ -1427,7 +1487,7 @@ var SubiconSetDefault = React.createClass({
 			gIniEntry_toSetDefault.Default = '1';
 		}
 		
-		transcribeMessage('toggleDefaultProfile', this.props.sKey); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+		gFsComm.postMessage('callInBootstrap', {method:'toggleDefaultProfile', arg:this.props.sKey}); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 		
 		// need to wrap this in a setTimeout of 0 as hoverOffSetDefault has a setTimeout of 0 in there . otherwise setState happens first and then this.refs.Submenu_IsDefault is changed so it wont succesfully pull off the setTimeout 0 in hoverOffSetDefault
 		
@@ -1524,12 +1584,12 @@ var SubiconSafe = React.createClass({
 		console.error('SAFE CLICKED');
 		
 		if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
-			transcribeMessage('restartInSafemode');
+			gFsComm.postMessage('callInBootstrap', {method:'restartInSafemode'});
 		} else {
 			// launch this profile
 			// alert('launch profile');
-			// transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path);
-			transcribeMessage('callInPromiseWorker', ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}], function() {
+			// gFsComm.postMessage('callInBootstrap', {method:'launchOrFocusProfile', arg:this.props.tbbIniEntry.Path});
+			gFsComm.postMessage('callInBootstrap', {method:'callInPromiseWorker', arg:['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]}, null, function() {
 				console.error('ok back from launching in safe mode');
 				// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
 			});
@@ -1592,7 +1652,7 @@ var SubiconDel = React.createClass({
 						if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
 							gIniObj.splice(i, 1);
 							gDoTbbLeaveAnim = true;
-							transcribeMessage(deleteProfile, this.props.sKey); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+							gFsComm.postMessage('callInBootstrap', {method:'deleteProfile', arg:this.props.sKey}); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 							return {
 								sIniObj: JSON.parse(JSON.stringify(gIniObj))
 							}; // because i want to the global accepter to take this and do setState with it link331266162
@@ -1744,7 +1804,7 @@ var SubiconTie = React.createClass({
 		// this.uiTieId is not equal to this.props.tbbIniEntry.ProfilistTie then send message to worker, which will write to file and send message back which will MyStore.setState
 		if (this.uiTieId != this.uiTieId_onRender) {
 			// alert('telling mainworker to save tie using uiTieId: ' + this.uiTieId + ' uiTieId_onRender: ' + this.uiTieId_onRender);
-			transcribeMessage('callInPromiseWorker', ['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId], function(aErrorOrNewIniObj) {
+			gFsComm.postMessage('callInBootstrap', {method:'callInPromiseWorker', arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]}, null, function(aErrorOrNewIniObj) {
 				console.log('back from saving tie for prof');
 				// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
 				if (Array.isArray(aErrorOrNewIniObj)) {
@@ -1910,13 +1970,13 @@ function msgchanComm(aPort) {
 	aPort.onmessage = this.listener;
 	this.callbackReceptacle = {};
 	
-	// test
-	this.postMessage('callInBootstrap', {
-		method: 'fetchCore',
-		arg: null
-	}, null, function(aArg, aComm) {
-		console.log('back from calling in bootstrap, aArg:', aArg);
-	});
+	// // test
+	// gFsComm.postMessage('callInBootstrap', {
+	// 	method: 'fetchCore',
+	// 	arg: null
+	// }, null, function(aArg, aComm) {
+	// 	console.log('back from calling in bootstrap, aArg:', aArg);
+	// });
 }
 
 var gFsComm; // works with gWinComm in framescript
@@ -1927,6 +1987,7 @@ window.addEventListener('message', function(e) {
 		case 'msgchanComm_handshake':
 			
 				gFsComm = new msgchanComm(data.port2);
+				initPage();
 			
 			break;
 		default:
@@ -1934,9 +1995,6 @@ window.addEventListener('message', function(e) {
 	}
 }, false);
 
-// function transcribeMessage(aMethod, aCallback) {
-	
-// }
 // end - message channel module
 
 // start - common helper functions
