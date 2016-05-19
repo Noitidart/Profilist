@@ -7,7 +7,7 @@ var core = {
 		id: 'Profilist@jetpack'
 	}
 };
-
+console.error('this:', this);
 var gCFMM = this;
 var gMainComm;
 

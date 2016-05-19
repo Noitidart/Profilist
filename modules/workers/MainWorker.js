@@ -4029,9 +4029,9 @@ function deleteIconset(aImgSlug) {
 	if (doWriteIni) {
 		// formatNoWriteObjs(); // i dont have to format it as things were just removed
 		writeIni();
-		return [gIniObj];
+		return gIniObj;
 	} else {
-		return [null];
+		return null;
 	}
 }
 
@@ -4156,7 +4156,7 @@ function readImgsInDir(aDirPlatPath) {
 		rezObj = getImgSrcsForImgSlug(aDirPlatPath.profilist_imgslug);
 	}
 	
-	return [rezObj]; // need to return array because am going through my custom communication stuff
+	return rezObj; // need to return array because am going through my custom communication stuff
 }
 
 var allProfilistUserImages = []; // for use when generating slug, and verifying rename is acceptable. holds all the dir names in the profilist_user_images directory which is core.profilist.path.images
@@ -4268,7 +4268,7 @@ function readSubdirsInDir(aDirPlatPath) {
 		}
 	}
 	
-	return [rezArr]; // because this goes through callInPromiseWorker
+	return rezArr; // because this goes through callInPromiseWorker
 }
 // End - Iconset Picker
 

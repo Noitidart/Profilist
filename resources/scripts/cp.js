@@ -46,11 +46,96 @@ function doOnBeforeUnload() {
 
 function doOnContentLoad() {
 	console.log('in doOnContentLoad');
-	setTimeout(initPage, 0);
+	// setTimeout(initPage, 0);
 }
 
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
 window.addEventListener('beforeunload', doOnBeforeUnload, false);
+
+// start - message channel module
+function msgchanComm(aPort) {
+	
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('incoming msgchan to window, payload:', payload, 'e:', e, 'this:', this);
+		
+		if (payload.method) {
+			if (!(payload.method in window)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
+			var rez_win_call = window[payload.method](payload.arg, this);
+			console.log('rez_win_call:', rez_win_call);
+			if (payload.cbid) {
+				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
+					rez_win_call.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_win_call - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_win_call', 0)
+					).catch(genericCatch.bind(null, 'rez_win_call', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_win_call:', rez_win_call);
+					this.postMessage(payload.cbid, rez_win_call);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
+		}
+	}.bind(this);
+	
+	this.nextcbid = 1; //next callback id
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		aPort.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? [aTransfers] : undefined);
+	}
+	aPort.onmessage = this.listener;
+	this.callbackReceptacle = {};
+	
+	// // test
+	// gFsComm.postMessage('callInBootstrap', {
+	// 	method: 'fetchCore',
+	// 	arg: null
+	// }, null, function(aArg, aComm) {
+	// 	console.log('back from calling in bootstrap, aArg:', aArg);
+	// });
+}
+var gFsComm; // works with gWinComm in framescript
+window.addEventListener('message', function(e) {
+	var data = e.data;
+	console.log('incoming message to HTML, data:', data, 'source:', e.source, 'ports:', e.ports);
+	switch (data.topic) {
+		case 'msgchanComm_handshake':
+			
+				gFsComm = new msgchanComm(data.port2);
+				initPage();
+			
+			break;
+		default:
+			console.error('unknown topic to HTML, data:', data);
+	}
+}, false);
 
 // :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
 function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
@@ -71,15 +156,22 @@ function detachFocusListener() {
 function doOnFocus() {
 	detachFocusListener();
 	// fetch prefs from bootstrap, and update dom
-	sendAsyncMessageWithCallback(['fetchJustIniObj'], function(aIniObj) {
-		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
-		// alert('ok got new ini obj, will now set global nad update react component');
-		gIniObj = aIniObj;
-		
-		MyStore.setState({
-			sIniObj: gIniObj
-		})
-	});
+	gFsComm.postMessage(
+		'callInBootstrap',
+		{
+			method: 'fetchJustIniObj',
+		},
+		null,
+		function(aIniObj, aComm) {
+			console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
+			// alert('ok got new ini obj, will now set global nad update react component');
+			gIniObj = aIniObj;
+			
+			MyStore.setState({
+				sIniObj: gIniObj
+			})
+		}
+	);
 }
 
 // End - DOM Event Attachments
@@ -90,18 +182,24 @@ function initPage() {
 	console.log('in init');
 	
 	// get core and config objs
-	sendAsyncMessageWithCallback(['fetchCoreAndConfigs'], function(aObjs) {
-		console.log('got core and configs:', aObjs);
-		core = aObjs.aCore;
-		gIniObj = aObjs.aIniObj;
-		gKeyInfoStore = aObjs.aKeyInfoStore;
-		
-		initReactComponent();
-		
-		window.addEventListener('blur', attachFocusListener, false); // link147928272
-		ifNotFocusedDoOnBlur();
-	});
-
+	gFsComm.postMessage(
+		'callInBootstrap',
+		{
+			method: 'fetchCoreAndConfigs'
+		},
+		null,
+		function (aObjs, aComm) {
+			console.log('got core and configs:', aObjs);
+			core = aObjs.aCore;
+			gIniObj = aObjs.aIniObj;
+			gKeyInfoStore = aObjs.aKeyInfoStore;
+			
+			initReactComponent();
+			
+			window.addEventListener('blur', attachFocusListener, false); // link147928272
+			ifNotFocusedDoOnBlur();
+		}
+	);
 }
 
 var MyStore = {};
@@ -243,26 +341,34 @@ var ControlPanel = React.createClass({
 		// onChange of each row, should call this
 		
 		// var fetchTimeSt = Date.now();
-		sendAsyncMessageWithCallback(['userManipulatedIniObj_updateIniFile', JSON.stringify(aNewIniObj)], function(aNewlyFormattedIniObj) {
-			console.log('userManipulatedIniObj_updateIniFile completed');
-			
-			gIniObj = JSON.parse(aNewlyFormattedIniObj);
-			
-			if (aDelaySetState) {
-				// :todo: from aDelaySetState remove the time it took to get back here
-				// var fetchTimeTotal = Date.now() - fetchTimeSt;
-				// console.info('will wait a modified time of:', aDelaySetState - fetchTimeTotal, 'as it took fetchTimeTotal of:', fetchTimeTotal);
-				setTimeout(function() {
+		gFsComm.postMessage(
+			'callInBootstrap',
+			{
+				method: 'userManipulatedIniObj_updateIniFile',
+				arg: JSON.stringify(aNewIniObj)
+			},
+			null,
+			function (aNewlyFormattedIniObj, aComm) {
+				console.log('userManipulatedIniObj_updateIniFile completed');
+				
+				gIniObj = JSON.parse(aNewlyFormattedIniObj);
+				
+				if (aDelaySetState) {
+					// :todo: from aDelaySetState remove the time it took to get back here
+					// var fetchTimeTotal = Date.now() - fetchTimeSt;
+					// console.info('will wait a modified time of:', aDelaySetState - fetchTimeTotal, 'as it took fetchTimeTotal of:', fetchTimeTotal);
+					setTimeout(function() {
+						this.setState({
+							sIniObj: JSON.parse(aNewlyFormattedIniObj) // this should always be gIniObj
+						});
+					}.bind(this), aDelaySetState);
+				} else {
 					this.setState({
 						sIniObj: JSON.parse(aNewlyFormattedIniObj) // this should always be gIniObj
 					});
-				}.bind(this), aDelaySetState);
-			} else {
-				this.setState({
-					sIniObj: JSON.parse(aNewlyFormattedIniObj) // this should always be gIniObj
-				});
-			}
-		}.bind(this));
+				}
+			}.bind(this)
+		);
 		
 	},
 	componentDidMount: function() {
@@ -520,17 +626,24 @@ var Row = React.createClass({
 							refsLoader.style.opacity = 1;
 							refsSelect.setAttribute('disabled', 'disabled');
 							// alert(refsSelect.value);
-							
-							sendAsyncMessageWithCallback(['createDesktopShortcut', refsSelect.value], function() {
-								// this callback doesnt handle errors, errors notification comes from mainworker doing showNotification
-								refsLoader.setAttribute('src', core.addon.path.images + 'cp/loading-done.gif');
-								
-								setTimeout(function() {
-									refsLoader.style.opacity = 0;
-									refsSelect.removeAttribute('disabled');
-									refsSelect.selectedIndex = '0'; // this does not trigger the aSelectProps.onChange event
-								}, 500);
-							});
+							gFsComm.postMessage(
+								'callInBootstrap',
+								{
+									method: 'createDesktopShortcut',
+									arg: refsSelect.value
+								},
+								null,
+								function (aArg, aComm) {
+									// this callback doesnt handle errors, errors notification comes from mainworker doing showNotification
+									refsLoader.setAttribute('src', core.addon.path.images + 'cp/loading-done.gif');
+									
+									setTimeout(function() {
+										refsLoader.style.opacity = 0;
+										refsSelect.removeAttribute('disabled');
+										refsSelect.selectedIndex = '0'; // this does not trigger the aSelectProps.onChange event
+									}, 500);
+								}
+							);
 						}.bind(this);
 					} else {
 						for (var o in this.props.gRowInfo.values) {
@@ -823,12 +936,19 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
     displayName: 'BuildsWidgetRow',
 	clickIcon: function(e) {
 		/*
-		sendAsyncMessageWithCallback(['browseiconRequest'], function(aAction, aImgObj) {
-			console.log('browseicon dialog action == ', aAction);
-			if (aAction == 'accept') {
-				console.log('because accepted there is aImgObj:', aImgObj);
+		gFsComm.postMessage(
+			'callInBootstrap',
+			{
+				method: 'browseiconRequest'
+			},
+			null,
+			function (aArg, aComm) {
+				console.log('browseicon dialog action == ', aAction);
+				if (aAction == 'accept') {
+					console.log('because accepted there is aImgObj:', aImgObj);
+				}
 			}
-		}.bind(this));
+		);
 		*/
 		if (!this.props.jProfilistBuildsEntry) {
 			// its last row (well or head, but head doesnt have clickDel so its definitely last row)
@@ -863,20 +983,28 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
 				console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
 				new_jProfilistBuildEntry.i = aImgSlug;
-				
-				sendAsyncMessageWithCallback(['callInPromiseWorker', ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]], function(aErrorOrNewIniObj) {
-					console.log('back from replaceBuildEntry');
-					if (Array.isArray(aErrorOrNewIniObj)) {
-						gIniObj = aErrorOrNewIniObj;
-						MyStore.setState({
-							sIniObj: JSON.parse(JSON.stringify(gIniObj)),
-							sBuildsLastRow: {}
-						});
-					} else {
-						console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
-						throw new Error('some error occured when trying to add new build');
+
+				gFsComm.postMessage(
+					'callInBootstrap',
+					{
+						method: 'callInPromiseWorker',
+						arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]
+					},
+					null,
+					function (aErrorOrNewIniObj, aComm) {
+						console.log('back from replaceBuildEntry');
+						if (Array.isArray(aErrorOrNewIniObj)) {
+							gIniObj = aErrorOrNewIniObj;
+							MyStore.setState({
+								sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+								sBuildsLastRow: {}
+							});
+						} else {
+							console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+							throw new Error('some error occured when trying to add new build');
+						}
 					}
-				});
+				);
 			}.bind(this);
 			
 			IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
@@ -891,19 +1019,27 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			// alert('ok clearing sBuildsLastRow');
 			MyStore.setState({sBuildsLastRow:{}});
 		} else {
-			console.log('hi:', this.props.jProfilistBuildsEntry)
-			sendAsyncMessageWithCallback(['callInPromiseWorker', ['removeBuild', this.props.jProfilistBuildsEntry.id, false]], function(aErrorOrNewIniObj) {
-				if (Array.isArray(aErrorOrNewIniObj)) {
-					gIniObj = aErrorOrNewIniObj;
-					MyStore.setState({
-						sIniObj: JSON.parse(JSON.stringify(gIniObj)),
-						sBuildsLastRow: {}
-					});
-				} else {
-					console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
-					throw new Error('some error occured when trying to add new build');
+			console.log('hi:', this.props.jProfilistBuildsEntry);
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method: 'callInPromiseWorker',
+					arg: ['removeBuild', this.props.jProfilistBuildsEntry.id, false]
+				},
+				null,
+				function (aErrorOrNewIniObj, aComm) {
+					if (Array.isArray(aErrorOrNewIniObj)) {
+						gIniObj = aErrorOrNewIniObj;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+							sBuildsLastRow: {}
+						});
+					} else {
+						console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to add new build');
+					}
 				}
-			});
+			);
 		}
 		// alert('clicked del');
 	},
@@ -911,36 +1047,51 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		alert('clicked user current profile path');
 	},
 	clickBrowse: function() {
-		sendAsyncMessageWithCallback(['browseExe'], function(aBrowsedPlatPath) {
-			if (aBrowsedPlatPath) {
-				if (core.os.mname == 'darwin') {
-					aBrowsedPlatPath += '/Contents/MacOS/firefox';
-				}
-				if (!this.props.jProfilistBuildsEntry) {
-					// its last row (well or head, but head doesnt have clickDel so its definitely last row)
-					this.userInputLastRow(aBrowsedPlatPath);
-				} else {
-					// not last row
-					var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
-					console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
-					new_jProfilistBuildEntry.p = aBrowsedPlatPath;
-					
-					sendAsyncMessageWithCallback(['callInPromiseWorker', ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]], function(aErrorOrNewIniObj) {
-						console.log('back from replaceBuildEntry');
-						if (Array.isArray(aErrorOrNewIniObj)) {
-							gIniObj = aErrorOrNewIniObj;
-							MyStore.setState({
-								sIniObj: JSON.parse(JSON.stringify(gIniObj)),
-								sBuildsLastRow: {}
-							});
-						} else {
-							console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
-							throw new Error('some error occured when trying to add new build');
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method: 'browseExe'
+				},
+				null,
+				function(aBrowsedPlatPath, aComm) {
+					if (aBrowsedPlatPath) {
+						if (core.os.mname == 'darwin') {
+							aBrowsedPlatPath += '/Contents/MacOS/firefox';
 						}
-					});
-				}
-			} // else cancelled
-		}.bind(this));
+						if (!this.props.jProfilistBuildsEntry) {
+							// its last row (well or head, but head doesnt have clickDel so its definitely last row)
+							this.userInputLastRow(aBrowsedPlatPath);
+						} else {
+							// not last row
+							var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
+							console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
+							new_jProfilistBuildEntry.p = aBrowsedPlatPath;
+
+							gFsComm.postMessage(
+								'callInBootstrap',
+								{
+									method: 'callInPromiseWorker',
+									arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]
+								},
+								null,
+								function(aErrorOrNewIniObj, aComm) {
+									console.log('back from replaceBuildEntry');
+									if (Array.isArray(aErrorOrNewIniObj)) {
+										gIniObj = aErrorOrNewIniObj;
+										MyStore.setState({
+											sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+											sBuildsLastRow: {}
+										});
+									} else {
+										console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+										throw new Error('some error occured when trying to add new build');
+									}
+								}
+							);
+						}
+					} // else cancelled
+				}.bind(this)
+			);
 	},
 	userInputLastRow(aExePath, aImgSlug, aImgObj) {
 		// either aBrowsePath is set, or aImgSlug/aImgObj
@@ -982,18 +1133,26 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		} else {
 			// add new row
 			// alert('add new row: ' + uneval(newRowInfo));
-			sendAsyncMessageWithCallback(['callInPromiseWorker', ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false]], function(aErrorOrNewIniObj) {
-				if (Array.isArray(aErrorOrNewIniObj)) {
-					gIniObj = aErrorOrNewIniObj;
-					MyStore.setState({
-						sIniObj: JSON.parse(JSON.stringify(gIniObj)),
-						sBuildsLastRow: {}
-					});
-				} else {
-					console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
-					throw new Error('some error occured when trying to add new build');
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method: 'callInPromiseWorker',
+					arg: ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false]
+				},
+				null,
+				function(aErrorOrNewIniObj, aComm) {
+					if (Array.isArray(aErrorOrNewIniObj)) {
+						gIniObj = aErrorOrNewIniObj;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(gIniObj)),
+							sBuildsLastRow: {}
+						});
+					} else {
+						console.error('some error occured when trying to add new build', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to add new build');
+					}
 				}
-			});
+			);
 		}
 	},
 	contextMenuBrowse: function() {

@@ -127,155 +127,171 @@ var IPStore = {
 		if (!sDirListHistory.length || sDirListHistory[i - 1] != aDirPlatPath) {
 			new_sDirListHistory.push(aDirPlatPath);
 		}
-		sendAsyncMessageWithCallback(['callInPromiseWorker', ['readSubdirsInDir', aDirPlatPath]], function(aSubdirsArr) {
-			console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
-			if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
-				// errored
-				IPStore.setState({
-					sDirSubdirs: 'error',
-					sDirListHistory: new_sDirListHistory
-				});
-				throw new Error('readSubdirsInDir failed!!');
-			} else {
-				
-				IPStore.setState({
-					sDirSubdirs: aSubdirsArr,
-					sDirListHistory: new_sDirListHistory
-				});
-			}
-		});
-	},
-	readImgsInDir: function(aReadImgsInDirArg, a_cDirSelected) {
-		sendAsyncMessageWithCallback(['callInPromiseWorker', ['readImgsInDir', aReadImgsInDirArg]], function(aErrorOrImgObj) {
-			if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
-				IPStore.setState({
-					sPreview: 'failed-read'
-				});
-				throw new Error('readImgsInDir failed with OSFileError!!');
-			} else if (typeof(aErrorOrImgObj) == 'string') {
-				IPStore.setState({
-					sPreview: aErrorOrImgObj
-				});
-				throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
-			} else {
-				if (typeof(aReadImgsInDirArg) == 'string' && aReadImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
-					var aPartialImgObj = aErrorOrImgObj;
-					console.log('got aPartialImgObj:', aPartialImgObj);
-					var cPathKeyImgObj = {};
-					var promiseAllArr_loadImgs = [];
-					for (var i=0; i<aPartialImgObj.length; i++) {
-						cPathKeyImgObj[aPartialImgObj[i]] = {
-							img: new Image(),
-							size: 0,
-							deferred: new Deferred(), // img loading defer
-							imgloadreason: ''
-						};
-						cPathKeyImgObj[aPartialImgObj[i]].img.onload = function() {
-							if (this.img.naturalWidth == this.img.naturalHeight) {
-								this.size = this.img.naturalWidth;
-								this.imgloadreason = 'ok';
-								this.deferred.resolve('ok');
-							} else {
-								this.imgloadreason = 'not-square';
-								this.deferred.resolve('not-square');
-							}
-							console.log('loaded img:', uneval(this));
-						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-						cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
-							this.imgloadreason = 'abort';
-							console.log('abort img:', uneval(this));
-							this.deferred.resolve('abort');
-						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-						cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
-							this.imgloadreason = 'not-img';
-							console.log('error img:', uneval(this));
-							this.deferred.resolve('not-img');
-						}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
-						cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
-						promiseAllArr_loadImgs.push(cPathKeyImgObj[aPartialImgObj[i]].deferred.promise);
-					}
-					var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
-					promiseAll_loadImgs.then(
-						function(aVal) {
-							console.log('Fullfilled - promiseAll_loadImgs - ', uneval(aVal));
-							// check if duplicate sizes
-							
-							// create cImgObj
-							var dupeSize = {}; // key is size, value is array of img src's having same size
-							var notSquare = []; // array of paths not having square sizes
-							var cImgObj = {};
-							for (var imgSrcPath in cPathKeyImgObj) {
-								var cPKImgEntry = cPathKeyImgObj[imgSrcPath]
-								var cSize = cPKImgEntry.size;
-								if (cSize in cImgObj) {
-									if (!(cSize in dupeSize)) {
-										dupeSize[cSize] = [
-											cImgObj[cSize]
-										];
-									}
-									dupeSize[cSize].push(imgSrcPath);
-								}
-								if (cPKImgEntry.imgloadreason == 'not-square') {
-									notSquare.push({
-										src: imgSrcPath,
-										w: cPKImgEntry.img.naturalWidth,
-										h: cPKImgEntry.img.naturalHeight
-									});
-								}
-								if (cPKImgEntry.imgloadreason == 'not-img') {
-									// this doesnt happen right now
-								}
-								if (cPKImgEntry.imgloadreason == 'abort') {
-									// this should never happen
-								}
-								cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
-							}
-							
-							var errObj = {};
-							if (notSquare.length) {
-								errObj.notSquare = notSquare;
-							}
-							if (Object.keys(dupeSize).length) {
-								errObj.dupeSize = dupeSize;
-							}
-							if (Object.keys(errObj).length > 0) {
-								IPStore.setState({
-									sPreview: {
-										path: a_cDirSelected,
-										errObj: errObj
-									}
-								});
-							} else {
-								IPStore.setState({
-									sPreview: {
-										path: a_cDirSelected,
-										imgObj: cImgObj
-									}
-								});
-							}
-						} // no need for reject as i never reject any of the this.deferred
-					).catch(
-						function(aCaught) {
-							var rejObj = {
-								name: 'promiseAll_loadImgs',
-								aCaught: aCaught
-							};
-							console.error('Caught - promiseAll_loadImgs - ', uneval(rejObj));
-						}
-					);
-				} else {
-					// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
-					var aImgObj = aErrorOrImgObj;
-					console.log('got aImgObj:', uneval(aImgObj));
+		gFsComm.postMessage(
+			'callInBootstrap',
+			{
+				method: 'callInPromiseWorker',
+				arg: ['readSubdirsInDir', aDirPlatPath]
+			},
+			null,
+			function(aSubdirsArr, aComm) {
+				console.log('back from readSubdirsInDir, aSubdirsArr:', aSubdirsArr);
+				if (Object.keys(aSubdirsArr).indexOf('aReason') > -1) {
+					// errored
 					IPStore.setState({
-						sPreview: {
-							path: a_cDirSelected,
-							imgObj: aImgObj
-						}
+						sDirSubdirs: 'error',
+						sDirListHistory: new_sDirListHistory
+					});
+					throw new Error('readSubdirsInDir failed!!');
+				} else {
+					
+					IPStore.setState({
+						sDirSubdirs: aSubdirsArr,
+						sDirListHistory: new_sDirListHistory
 					});
 				}
 			}
-		});
+		);
+	},
+	readImgsInDir: function(aReadImgsInDirArg, a_cDirSelected) {
+		gFsComm.postMessage(
+			'callInBootstrap',
+			{
+				method: 'callInPromiseWorker',
+				arg: ['readImgsInDir', aReadImgsInDirArg]
+			},
+			null,
+			function(aErrorOrImgObj, aComm) {
+				if (Object.keys(aErrorOrImgObj).indexOf('aReason') > -1) {
+					IPStore.setState({
+						sPreview: 'failed-read'
+					});
+					throw new Error('readImgsInDir failed with OSFileError!!');
+				} else if (typeof(aErrorOrImgObj) == 'string') {
+					IPStore.setState({
+						sPreview: aErrorOrImgObj
+					});
+					throw new Error('readImgsInDir faield with message: ' + aErrorOrImgObj);
+				} else {
+					if (typeof(aReadImgsInDirArg) == 'string' && aReadImgsInDirArg.indexOf('/Noitidart/Firefox-PNG-Icon-Collections') == -1) {
+						var aPartialImgObj = aErrorOrImgObj;
+						console.log('got aPartialImgObj:', aPartialImgObj);
+						var cPathKeyImgObj = {};
+						var promiseAllArr_loadImgs = [];
+						for (var i=0; i<aPartialImgObj.length; i++) {
+							cPathKeyImgObj[aPartialImgObj[i]] = {
+								img: new Image(),
+								size: 0,
+								deferred: new Deferred(), // img loading defer
+								imgloadreason: ''
+							};
+							cPathKeyImgObj[aPartialImgObj[i]].img.onload = function() {
+								if (this.img.naturalWidth == this.img.naturalHeight) {
+									this.size = this.img.naturalWidth;
+									this.imgloadreason = 'ok';
+									this.deferred.resolve('ok');
+								} else {
+									this.imgloadreason = 'not-square';
+									this.deferred.resolve('not-square');
+								}
+								console.log('loaded img:', uneval(this));
+							}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+							cPathKeyImgObj[aPartialImgObj[i]].img.onabort = function() {
+								this.imgloadreason = 'abort';
+								console.log('abort img:', uneval(this));
+								this.deferred.resolve('abort');
+							}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+							cPathKeyImgObj[aPartialImgObj[i]].img.onerror = function() {
+								this.imgloadreason = 'not-img';
+								console.log('error img:', uneval(this));
+								this.deferred.resolve('not-img');
+							}.bind(cPathKeyImgObj[aPartialImgObj[i]]);
+							cPathKeyImgObj[aPartialImgObj[i]].img.src = aPartialImgObj[i];
+							promiseAllArr_loadImgs.push(cPathKeyImgObj[aPartialImgObj[i]].deferred.promise);
+						}
+						var promiseAll_loadImgs = Promise.all(promiseAllArr_loadImgs);
+						promiseAll_loadImgs.then(
+							function(aVal) {
+								console.log('Fullfilled - promiseAll_loadImgs - ', uneval(aVal));
+								// check if duplicate sizes
+								
+								// create cImgObj
+								var dupeSize = {}; // key is size, value is array of img src's having same size
+								var notSquare = []; // array of paths not having square sizes
+								var cImgObj = {};
+								for (var imgSrcPath in cPathKeyImgObj) {
+									var cPKImgEntry = cPathKeyImgObj[imgSrcPath]
+									var cSize = cPKImgEntry.size;
+									if (cSize in cImgObj) {
+										if (!(cSize in dupeSize)) {
+											dupeSize[cSize] = [
+												cImgObj[cSize]
+											];
+										}
+										dupeSize[cSize].push(imgSrcPath);
+									}
+									if (cPKImgEntry.imgloadreason == 'not-square') {
+										notSquare.push({
+											src: imgSrcPath,
+											w: cPKImgEntry.img.naturalWidth,
+											h: cPKImgEntry.img.naturalHeight
+										});
+									}
+									if (cPKImgEntry.imgloadreason == 'not-img') {
+										// this doesnt happen right now
+									}
+									if (cPKImgEntry.imgloadreason == 'abort') {
+										// this should never happen
+									}
+									cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
+								}
+								
+								var errObj = {};
+								if (notSquare.length) {
+									errObj.notSquare = notSquare;
+								}
+								if (Object.keys(dupeSize).length) {
+									errObj.dupeSize = dupeSize;
+								}
+								if (Object.keys(errObj).length > 0) {
+									IPStore.setState({
+										sPreview: {
+											path: a_cDirSelected,
+											errObj: errObj
+										}
+									});
+								} else {
+									IPStore.setState({
+										sPreview: {
+											path: a_cDirSelected,
+											imgObj: cImgObj
+										}
+									});
+								}
+							} // no need for reject as i never reject any of the this.deferred
+						).catch(
+							function(aCaught) {
+								var rejObj = {
+									name: 'promiseAll_loadImgs',
+									aCaught: aCaught
+								};
+								console.error('Caught - promiseAll_loadImgs - ', uneval(rejObj));
+							}
+						);
+					} else {
+						// if profilist_github (meaning /Noitidart/Firefox-PNG-Icon-Collections) then it also returns a full imgObj
+						var aImgObj = aErrorOrImgObj;
+						console.log('got aImgObj:', uneval(aImgObj));
+						IPStore.setState({
+							sPreview: {
+								path: a_cDirSelected,
+								imgObj: aImgObj
+							}
+						});
+					}
+				}
+			}
+		);
 	},
 	component: {
 		IconsetPicker: React.createClass({
@@ -369,9 +385,17 @@ var IPStore = {
 						
 						if (needToReleaseOldImgObj) {
 							console.log('ok releeasing old obj urls');
-							sendAsyncMessageWithCallback(['callInPromiseWorker', ['releaseBlobsAndUrls', urlsInPrevState]], function(aErrorOrImgObj) {
-								console.error('ok back from releaseBlobsAndUrls. so now in framescript');
-							});
+							gFsComm.postMessage(
+								'callInBootstrap',
+								{
+									method: 'callInPromiseWorker',
+									arg: ['releaseBlobsAndUrls', urlsInPrevState]
+								},
+								null,
+								function(aArg, aComm) {
+									console.error('ok back from releaseBlobsAndUrls. so now in framescript');
+								}
+							);
 						}
 					} else {
 						console.log('no blob urls in previous so no need to worry about checking if its time to release');
@@ -615,12 +639,21 @@ var IPStore = {
 			clickSelect: function() {
 					// this.state.sPreview.imgObj must be valid (gui disables button if it is not valid)
 					// setTimeout(function() { // :debug: wrapping in setTimeout to test if it will work after uninit has been called. im worried this.props might be dead, not sure ----- results of test, yes it worked, which makes wonder when does it get gc'ed, how does it know? interesting stuff. i would think on unmount this object is destroyed
-						sendAsyncMessageWithCallback(['callInPromiseWorker', ['saveAsIconset', this.props.sPreview.imgObj]], function(aImgSlug, aImgObj) {
-							console.error('ok back from saveAsIconset. so now in framescript');
-							if (this.props.select_callback) {
-								this.props.select_callback(aImgSlug, aImgObj);
-							}
-						}.bind(this));
+						gFsComm.postMessage(
+							'callInBootstrap',
+							{
+								method: 'callInPromiseWorker',
+								arg: ['saveAsIconset', this.props.sPreview.imgObj]
+							},
+							null,
+							function(aArg, aComm) {
+								var {aImgSlug, aImgObj} = aArg;
+								console.error('ok back from saveAsIconset. so now in framescript');
+								if (this.props.select_callback) {
+									this.props.select_callback(aImgSlug, aImgObj);
+								}
+							}.bind(this)
+						);
 					// }.bind(this), 2000);
 				this.props.uninit(null, true);
 			},
@@ -648,17 +681,25 @@ var IPStore = {
 					sDirSubdirs: new_sDirSubdirs
 				});
 					
-				sendAsyncMessageWithCallback(['callInPromiseWorker', ['deleteIconset', cImgSlug]], function(aErrorObjOrIni) {
-					console.error('ok back from deleteIconset. so now in framescript');
-					// if gIniObj was updated, then aErrorObjOrIni is gIniObj
-					// else it is null
-					if (Array.isArray(aErrorObjOrIni)) {
-						gIniObj = aErrorObjOrIni;
-						MyStore.setState({
-							sIniObj: JSON.parse(JSON.stringify(aErrorObjOrIni))
-						})
+				gFsComm.postMessage(
+					'callInBootstrap',
+					{
+						method: 'callInPromiseWorker',
+						arg: ['deleteIconset', cImgSlug]
+					},
+					null,
+					function(aErrorObjOrIni, aComm) {
+						console.error('ok back from deleteIconset. so now in framescript');
+						// if gIniObj was updated, then aErrorObjOrIni is gIniObj
+						// else it is null
+						if (Array.isArray(aErrorObjOrIni)) {
+							gIniObj = aErrorObjOrIni;
+							MyStore.setState({
+								sIniObj: JSON.parse(JSON.stringify(aErrorObjOrIni))
+							})
+						}
 					}
-				});
+				);
 			},
 			render: function() {
 				// props

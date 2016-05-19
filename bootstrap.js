@@ -775,7 +775,7 @@ var gTestConnMM;
 			function(aNewlyFormattedIniObj) {
 				console.log('Fullfilled - promise_updateini - ', aNewlyFormattedIniObj);
 				// start - do stuff here - promise_updateini
-				deferredMain_userManipulatedIniObj_updateIniFile.resolve([aNewlyFormattedIniObj]);
+				deferredMain_userManipulatedIniObj_updateIniFile.resolve(aNewlyFormattedIniObj);
 				// end - do stuff here - promise_updateini
 			}
 		);
@@ -789,7 +789,7 @@ var gTestConnMM;
 		promise_launchfocus.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_launchfocus - ', aVal);
-				deferredMain_launchOrFocusProfile.resolve([aVal]);
+				deferredMain_launchOrFocusProfile.resolve(aVal);
 			},
 			genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile)
 		).catch(genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile));
