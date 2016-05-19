@@ -731,7 +731,7 @@ var gTestConnMM;
 	function fetchCoreAndConfigs(aArg, aMessageManager, aBrowser, aComm) {
 		var deferredMain_fetchConfigObjs = new Deferred();
 		gTestConnMM = aMessageManager;
-		// MainWorker._worker.postMessage(['testConnInit']);
+		MainWorker._worker.postMessage(['testConnInit']);
 		
 		console.log('sending over fetchCoreAndConfigs');
 		
