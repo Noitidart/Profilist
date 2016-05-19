@@ -149,7 +149,7 @@ function doOnBeforeUnload() {
 }
 
 function doOnContentLoad() {
-	setTimeout(initPage, 0);
+	// setTimeout(initPage, 0);
 }
 
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
@@ -1848,6 +1848,45 @@ function testConnUpdate(newContent) {
 	tcDomEl.textContent = newContent;
 }
 // end - functions called by bootstrap, through framescript comm
+
+// start - message channel module
+function msgchanComm(aPort) {
+	
+	this.listener = function(e) {
+		var data = e.data;
+		console.log('incoming msgchan to window, data:', data, 'e:', e);
+	};
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		aPort.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid: null
+		}, aTransfers ? [aTransfers] : undefined);
+	}
+	aPort.onmessage = this.listener;
+	
+	this.postMessage('handshake_done', 'ya');
+}
+
+var gFsComm; // works with gWinComm in framescript
+window.addEventListener('message', function(e) {
+	var data = e.data;
+	console.log('incoming message to HTML, data:', data, 'source:', e.source, 'ports:', e.ports);
+	switch (data.topic) {
+		case 'msgchanComm_handshake':
+			
+				gWinComm = new msgchanComm(data.port2);
+			
+			break;
+		default:
+			console.error('unknown topic to HTML, data:', data);
+	}
+}, false);
+
+// function transcribeMessage(aMethod, aCallback) {
+	
+// }
+// end - message channel module
 
 // start - common helper functions
 function Deferred() {

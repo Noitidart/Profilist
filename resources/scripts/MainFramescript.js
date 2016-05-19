@@ -159,6 +159,42 @@ function bootstrapComm(aChannelID) {
 	addMessageListener(this.id, this.listener);
 }
 
+var gWinComm;  // works with gFsComm in content
+function msgchanComm(aContentWindow) {
+	var portWorker = new Worker(core.addon.path.scripts + 'msgchanWorker.js');
+	
+	this.listener = function(e) {
+		var data = e.data;
+		console.log('incoming msgchan to framescript, data:', data, 'e:', e);
+	}
+	
+	portWorker.onmessage = function(e) {
+		portWorker.terminate();
+		var port = e.data.port1;
+		var port2 = e.data.port2;
+		console.log('port:', port, 'port2:', port2);
+
+		
+		this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+			port.postMessage({
+				method: aMethod,
+				arg: aArg,
+				cbid: null
+			}, aTransfers ? [aTransfers] : undefined);
+		}
+		
+		this.port = port;
+		port.onmessage = this.listener;
+
+		aContentWindow.postMessage({
+			topic: 'msgchanComm_handshake',
+			port2: port2
+		}, '*', [port2]);
+		
+	}.bind(this);
+	
+}
+
 // start - pageLoader
 var pageLoader = {
 	// start - devuser editable
@@ -173,13 +209,19 @@ var pageLoader = {
 		// triggered for each frame if IGNORE_FRAMES is false
 		// to test if frame do `if (aContentWindow.frameElement)`
 		
+		var contentWindow = aContentWindow;
 		console.log('reallyReady enter');
 		
-		// aContentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
-		// var waivedWindow = Components.utils.waiveXrays(aContentWindow);
-		Cu.exportFunction(gMainComm.transcribeMessage, aContentWindow, {
-			defineAs: 'transcribeMessage'
-		});
+		// contentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
+		// var waivedWindow = Components.utils.waiveXrays(contentWindow);
+		// Cu.exportFunction(gMainComm.transcribeMessage, contentWindow, {
+			// defineAs: 'transcribeMessage'
+		// });
+		
+		// contentWindow.postMessage({
+			// test: true
+		// }, '*')
+		gWinComm = new msgchanComm(contentWindow);
 		
 		console.log('reallyReady done');
 	},
