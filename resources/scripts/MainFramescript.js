@@ -159,14 +159,56 @@ function bootstrapComm(aChannelID) {
 	addMessageListener(this.id, this.listener);
 }
 
+var msgChanFuncs = {
+	// funcs called my gFsComm from content
+	callInBootstrap: function(aArg, aComm) {
+		var { method, arg } = aArg;
+		
+		var deferred_callInBootstrap = new Deferred();
+		gMainComm.transcribeMessage(method, arg, function(aArg, aComm) {
+			console.log('callInBootstrap transcribe complete, aArg:', aArg);
+			deferred_callInBootstrap.resolve(aArg);
+		});
+		return deferred_callInBootstrap.promise;
+	}
+}
+
 var gWinComm;  // works with gFsComm in content
 function msgchanComm(aContentWindow) {
 	var portWorker = new Worker(core.addon.path.scripts + 'msgchanWorker.js');
 	
 	this.listener = function(e) {
-		var data = e.data;
-		console.log('incoming msgchan to framescript, data:', data, 'e:', e);
-	}
+		var payload = e.data;
+		console.log('incoming msgchan to framescript, payload:', payload, 'e:', e);
+		
+		if (payload.method) {
+			if (!(payload.method in msgChanFuncs)) { console.error('method of "' + payload.method + '" not in MSGCHANFUNCS'); throw new Error('method of "' + payload.method + '" not in MSGCHANFUNCS') } // dev line remove on prod
+			var rez_fs_call_for_win = msgChanFuncs[payload.method](payload.arg, this);
+			console.log('rez_fs_call_for_win:', rez_fs_call_for_win);
+			if (payload.cbid) {
+				if (rez_fs_call_for_win && rez_fs_call_for_win.constructor.name == 'Promise') {
+					rez_fs_call_for_win.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_fs_call_for_win - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_fs_call_for_win', 0)
+					).catch(genericCatch.bind(null, 'rez_fs_call_for_win', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_fs_call_for_win:', rez_fs_call_for_win, 'this:', this);
+					this.postMessage(payload.cbid, rez_fs_call_for_win);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
+		}
+	}.bind(this);
+	
+	this.nextcbid = 1; //next callback id
 	
 	portWorker.onmessage = function(e) {
 		portWorker.terminate();
@@ -176,16 +218,33 @@ function msgchanComm(aContentWindow) {
 
 		
 		this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-			port.postMessage({
+			
+			// aMethod is a string - the method to call in framescript
+			// aCallback is a function - optional - it will be triggered when aMethod is done calling
+			var cbid = null;
+			if (typeof(aMethod) == 'number') {
+				// this is a response to a callack waiting in framescript
+				cbid = aMethod;
+				aMethod = null;
+			} else {
+				if (aCallback) {
+					cbid = this.nextcbid++;
+					this.callbackReceptacle[cbid] = aCallback;
+				}
+			}
+			
+			// return;
+			this.port.postMessage({
 				method: aMethod,
 				arg: aArg,
-				cbid: null
+				cbid
 			}, aTransfers ? [aTransfers] : undefined);
 		}
 		
 		this.port = port;
 		port.onmessage = this.listener;
-
+		this.callbackReceptacle = {};
+		
 		aContentWindow.postMessage({
 			topic: 'msgchanComm_handshake',
 			port2: port2
@@ -321,3 +380,47 @@ function uninit() { // link4757484773732
 	bootstrapComm_unregAll();
 }
 init();
+
+
+// start - common helper functions
+function Deferred() {
+	try {
+		this.resolve = null;
+
+
+		this.reject = null;
+
+
+		this.promise = new Promise(function(resolve, reject) {
+			this.resolve = resolve;
+			this.reject = reject;
+		}.bind(this));
+		Object.freeze(this);
+	} catch (ex) {
+		console.log('Promise not available!', ex);
+		throw new Error('Promise not available!');
+	}
+}
+
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+
+// end - common helper functions

@@ -1853,19 +1853,70 @@ function testConnUpdate(newContent) {
 function msgchanComm(aPort) {
 	
 	this.listener = function(e) {
-		var data = e.data;
-		console.log('incoming msgchan to window, data:', data, 'e:', e);
-	};
+		var payload = e.data;
+		console.log('incoming msgchan to window, payload:', payload, 'e:', e, 'this:', this);
+		
+		if (payload.method) {
+			if (!(payload.method in window)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
+			var rez_win_call = window[payload.method](payload.arg, this);
+			console.log('rez_win_call:', rez_win_call);
+			if (payload.cbid) {
+				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
+					rez_win_call.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_win_call - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_win_call', 0)
+					).catch(genericCatch.bind(null, 'rez_win_call', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_win_call:', rez_win_call);
+					this.postMessage(payload.cbid, rez_win_call);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
+		}
+	}.bind(this);
+	
+	this.nextcbid = 1; //next callback id
 	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
 		aPort.postMessage({
 			method: aMethod,
 			arg: aArg,
-			cbid: null
+			cbid
 		}, aTransfers ? [aTransfers] : undefined);
 	}
 	aPort.onmessage = this.listener;
+	this.callbackReceptacle = {};
 	
-	this.postMessage('handshake_done', 'ya');
+	// test
+	this.postMessage('callInBootstrap', {
+		method: 'fetchCore',
+		arg: null
+	}, null, function(aArg, aComm) {
+		console.log('back from calling in bootstrap, aArg:', aArg);
+	});
 }
 
 var gFsComm; // works with gWinComm in framescript
@@ -1875,7 +1926,7 @@ window.addEventListener('message', function(e) {
 	switch (data.topic) {
 		case 'msgchanComm_handshake':
 			
-				gWinComm = new msgchanComm(data.port2);
+				gFsComm = new msgchanComm(data.port2);
 			
 			break;
 		default:
@@ -1907,6 +1958,28 @@ function Deferred() {
 		throw new Error('Promise not available!');
 	}
 }
+
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+
 function escapeRegExp(text) {
 	if (!arguments.callee.sRE) {
 		var specials = ['/', '.', '*', '+', '?', '|', '(', ')', '[', ']', '{', '}', '\\'];
