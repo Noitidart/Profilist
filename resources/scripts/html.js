@@ -180,7 +180,7 @@ function doOnFocus() {
 // End - DOM Event Attachments
 // Start - Page Functionalities
 function fetchJustIniObj() {
-	sendAsyncMessageWithCallback(['fetchJustIniObj'], function(aIniObj) {
+	transcribeMessage('fetchJustIniObj', null, function(aIniObj) {
 		console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
 		// alert('ok got new ini obj, will now set global nad update react component');
 		gIniObj = aIniObj;
@@ -201,7 +201,7 @@ var gIntervalRefreshRunning = 2000; // refresh every 1sec for 5 times
 function refreshRunningStatuses() {
 	gCntRefreshedRunning++;
 	
-	sendAsyncMessageWithCallback(['callInPromiseWorker', ['fetchJustIniObjJustRefreshed']], function(aIniObjIfRefreshed) {
+	transcribeMessage('callInPromiseWorker', ['fetchJustIniObjJustRefreshed'], function(aIniObjIfRefreshed) {
 		console.log('ok back from refreshing, aIniObjIfRefreshed:', aIniObjIfRefreshed);
 		
 		if (aIniObjIfRefreshed) {
@@ -220,14 +220,14 @@ function refreshRunningStatuses() {
 
 function initPage() {
 	
-	bootstrapCallbacks.testConnUpdate('init');
+	testConnUpdate('init');
 	
 	initReactComponent()
 	
 	// setTimeout(function() {
 		// get core and config objs
 		console.time('fetchReq');
-		sendAsyncMessageWithCallback(['fetchCoreAndConfigs'], function(aObjs) {
+		transcribeMessage('fetchCoreAndConfigs', null, function(aObjs) {
 			console.timeEnd('fetchReq');
 			console.log('got core and configs:', aObjs);
 			core = aObjs.aCore;
@@ -718,7 +718,12 @@ var nameThenCreateProfileAcceptor = function(aKeyForClone, e) {
 	
 	console.error('ok create here are args:', 'aKeyForClone:', aKeyForClone, 'e:', e);
 	
-	sendAsyncMessage(['createNewProfile', newProfileName, aKeyForClone, cNameIsPlatPath, cLaunchIt]);
+	transcribeMessage('createNewProfile', {
+		aNewProfName: newProfileName,
+		aCloneProfPath: aKeyForClone,
+		aNameIsPlatPath: cNameIsPlatPath,
+		aLaunchIt: cLaunchIt
+	});
 	// send message to worker to create it
 }
 
@@ -749,7 +754,12 @@ var ToolbarButton = React.createClass({
 			} else {
 				// keyValLaunchOnCreate === '1'
 				// launch right away
-				sendAsyncMessage(['createNewProfile', null, null, false, true]);
+				transcribeMessage('createNewProfile', {
+					aNewProfName: null,
+					aCloneProfPath: null,
+					aNameIsPlatPath: false,
+					aLaunchIt: true
+				});
 				// alert('create profile with predefined name "Unnamed Profile ##" and then launch it right away');
 			}
 		} else if (this.props.tbbIniEntry) {
@@ -822,7 +832,12 @@ var ToolbarButton = React.createClass({
 				} else {
 					// keyValLaunchOnCreate === '1'
 					// launch right away
-					sendAsyncMessage(['createNewProfile', null, this.props.sKey, false, true]);
+					transcribeMessage('createNewProfile', {
+						aNewProfName: null,
+						aCloneProfPath: this.props.sKey,
+						aNameIsPlatPath: false,
+						aLaunchIt: true
+					});
 					
 					var new_sMessage = JSON.parse(JSON.stringify(this.props.sMessage));
 					new_sMessage.interactive = {}; // link38181 its ok to set interactive here, as i am clearing gInteractiveCallbacks
@@ -838,8 +853,8 @@ var ToolbarButton = React.createClass({
 			} else {
 				// launch this profile
 				// alert('launch profile');
-				// sendAsyncMessage(['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
-				sendAsyncMessageWithCallback(['launchOrFocusProfile', this.props.tbbIniEntry.Path], function() {
+				// transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path);
+				transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path, function() {
 					console.error('okkkk back from launching');
 					// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
 				});
@@ -1166,7 +1181,7 @@ var PrimaryIcon = React.createClass({
 			IPStoreInitWithSlug = this.props.tbbIniEntry.ProfilistBadge;
 			IPStoreInitWithUnselectCallback = function() {
 				console.log('ok user removed badge');
-				sendAsyncMessageWithCallback(['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, null]], function(aErrorOrNewIniObj) {
+				transcribeMessage('callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, null], function(aErrorOrNewIniObj) {
 					console.log('back from removing badge');
 					// aErrorOrNewIniObj is null if nothing was set
 					if (Array.isArray(aErrorOrNewIniObj)) {
@@ -1184,7 +1199,7 @@ var PrimaryIcon = React.createClass({
 		
 		var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
 			console.error('ok picked new badge, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
-			sendAsyncMessageWithCallback(['callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, aImgSlug]], function(aErrorOrNewIniObj) {
+			transcribeMessage('callInPromiseWorker', ['replaceBadgeForProf', this.props.sKey, aImgSlug], function(aErrorOrNewIniObj) {
 				console.log('back from setting badge');
 				// aErrorOrNewIniObj is null if nothing was set
 				if (Array.isArray(aErrorOrNewIniObj)) {
@@ -1344,7 +1359,10 @@ var SubiconRename = React.createClass({
 						}
 						var gTbbIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', this.props.sKey);
 						gTbbIniEntry.Name = gInteractiveRefs.textbox.value;
-						sendAsyncMessage(['renameProfile', this.props.sKey, gTbbIniEntry.Name]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+						transcribeMessage('renameProfile', {
+							aProfPath: this.props.sKey,
+							aNewProfName: gTbbIniEntry.Name
+						}); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 						return {
 							sIniObj: JSON.parse(JSON.stringify(gIniObj))
 						};
@@ -1409,7 +1427,7 @@ var SubiconSetDefault = React.createClass({
 			gIniEntry_toSetDefault.Default = '1';
 		}
 		
-		sendAsyncMessage(['toggleDefaultProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+		transcribeMessage('toggleDefaultProfile', this.props.sKey); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 		
 		// need to wrap this in a setTimeout of 0 as hoverOffSetDefault has a setTimeout of 0 in there . otherwise setState happens first and then this.refs.Submenu_IsDefault is changed so it wont succesfully pull off the setTimeout 0 in hoverOffSetDefault
 		
@@ -1506,12 +1524,12 @@ var SubiconSafe = React.createClass({
 		console.error('SAFE CLICKED');
 		
 		if (this.props.tbbIniEntry.noWriteObj.currentProfile) {
-			sendAsyncMessage(['restartInSafemode']);
+			transcribeMessage('restartInSafemode');
 		} else {
 			// launch this profile
 			// alert('launch profile');
-			// sendAsyncMessage(['launchOrFocusProfile', this.props.tbbIniEntry.Path]);
-			sendAsyncMessageWithCallback(['callInPromiseWorker', ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]], function() {
+			// transcribeMessage('launchOrFocusProfile', this.props.tbbIniEntry.Path);
+			transcribeMessage('callInPromiseWorker', ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}], function() {
 				console.error('ok back from launching in safe mode');
 				// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
 			});
@@ -1574,7 +1592,7 @@ var SubiconDel = React.createClass({
 						if (gIniObj[i].Path && gIniObj[i].Path == this.props.sKey) {
 							gIniObj.splice(i, 1);
 							gDoTbbLeaveAnim = true;
-							sendAsyncMessage(['deleteProfile', this.props.sKey]); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
+							transcribeMessage(deleteProfile, this.props.sKey); // i already rename in my gIniObj and sIniObj, so i dont expect callback. however if it fails to rename, it will call pushIniObj
 							return {
 								sIniObj: JSON.parse(JSON.stringify(gIniObj))
 							}; // because i want to the global accepter to take this and do setState with it link331266162
@@ -1726,7 +1744,7 @@ var SubiconTie = React.createClass({
 		// this.uiTieId is not equal to this.props.tbbIniEntry.ProfilistTie then send message to worker, which will write to file and send message back which will MyStore.setState
 		if (this.uiTieId != this.uiTieId_onRender) {
 			// alert('telling mainworker to save tie using uiTieId: ' + this.uiTieId + ' uiTieId_onRender: ' + this.uiTieId_onRender);
-			sendAsyncMessageWithCallback(['callInPromiseWorker', ['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]], function(aErrorOrNewIniObj) {
+			transcribeMessage('callInPromiseWorker', ['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId], function(aErrorOrNewIniObj) {
 				console.log('back from saving tie for prof');
 				// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
 				if (Array.isArray(aErrorOrNewIniObj)) {
@@ -1803,7 +1821,8 @@ var SubiconTie = React.createClass({
 
 // start - functions called by bootstrap, through framescript comm
 // cross-file-link3922222222222 - must be defined globally
-function pushIniObj(aIniObj, aDoTbbEnterAnim) {
+function pushIniObj(aArg) {
+	var {aIniObj, aDoTbbEnterAnim} = aArg;
 	// updates gIniObj with aIniObj and also react component
 	gIniObj = aIniObj;
 	

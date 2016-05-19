@@ -717,20 +717,19 @@ function shutdown(aData, aReason) {
 // start - server/framescript comm layer
 // functions for framescripts to call in main thread
 var gTestConnMM;
-var fsFuncs = { // can use whatever, but by default its setup to use this
+// start - functions called by framescripts
 	// fsReturnIconset.js functions
-	frameworkerReady: function(aMsgEvent) {
-		var aBrowser = aMsgEvent.target;
+	function frameworkerReady(aArg, aMessageManager, aBrowser, aComm) {
 		console.info('fwInstancesId:', aBrowser);
 		var fwInstancesId = aBrowser.getAttribute('data-icon-container-generator-fwinstance-id');
 		console.info('fwInstancesId:', fwInstancesId);
 		
 		ICGenWorkerFuncs.fwInstances[fwInstancesId].deferredMain_setupFrameworker.resolve(['ok send me imgs now baby']);
-	},
+	}
 	// end - fsReturnIconset.js functions
-	fetchCoreAndConfigs: function() {
+	function fetchCoreAndConfigs(aArg, aMessageManager, aBrowser, aComm) {
 		var deferredMain_fetchConfigObjs = new Deferred();
-		gTestConnMM = arguments[0].target.messageManager;
+		gTestConnMM = aMessageManager;
 		MainWorker._worker.postMessage(['testConnInit']);
 		
 		console.log('sending over fetchCoreAndConfigs');
@@ -746,13 +745,11 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_fetchConfigObjs.promise;
-	},
-	fetchCore: function() {
-		return [{
-			core
-		}];
-	},
-	fetchJustIniObj: function() {
+	}
+	function fetchCore(aArg, aMessageManager, aBrowser, aComm) {
+		return core;
+	}
+	function fetchJustIniObj(aArg, aMessageManager, aBrowser, aComm) {
 		// just gets gIniObj
 		var deferredMain_fetchJustIniObj = new Deferred();
 		
@@ -767,8 +764,8 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_fetchJustIniObj.promise;
-	},
-	userManipulatedIniObj_updateIniFile: function(aNewIniObjStr) {
+	}
+	function userManipulatedIniObj_updateIniFile(aNewIniObjStr, aMessageManager, aBrowser, aComm) {
 		var deferredMain_userManipulatedIniObj_updateIniFile = new Deferred();
 		console.log('telling mainworker userManipulatedIniObj_updateIniFile');
 		
@@ -783,8 +780,8 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return deferredMain_userManipulatedIniObj_updateIniFile.promise;
-	},
-	launchOrFocusProfile: function(aProfPath) {
+	}
+	function launchOrFocusProfile(aProfPath, aMessageManager, aBrowser, aComm) {
 		// launch profile - this will create launcher if it doesnt exist already
 		var deferredMain_launchOrFocusProfile = new Deferred();
 		var promise_launchfocus = MainWorker.post('launchOrFocusProfile', [aProfPath]);
@@ -797,8 +794,9 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		).catch(genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile));
 		
 		return deferredMain_launchOrFocusProfile.promise;
-	},
-	createNewProfile: function(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt, aMsgEvent) {
+	}
+	function createNewProfile(aArg, aMessageManager, aBrowser, aComm) {
+		var {aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunchIt} = aArg;
 		// aNewProfName - string for new profile that will be made. OR set to null to use preset name "Unnamed Profile ##"
 		// aCloneProfPath - the path of the profile to clone. `null` if this is not a clone
 		// aLaunchIt - set to false, if you want to just create. set to true if you want to create it then launch it soon after creation
@@ -808,14 +806,17 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 			function(aIniObj) {
 				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
 				
-				var aBrowser = aMsgEvent.target;
-				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aIniObj, true]);
+				aComm.transcribeMessage('pushIniObj', {
+					aIniObj: aIniObj,
+					aDoTbbEnterAnim: true
+				});
 			},
 			genericReject.bind(null, 'promise_workerCreate', 0)
 		).catch(genericCatch.bind(null, 'promise_workerCreate', 0));
 
-	},
-	renameProfile: function(aProfPath, aNewProfName, aMsgEvent) {
+	}
+	function renameProfile(aArg, aMessageManager, aBrowser, aComm) {
+		var {aProfPath, aNewProfName} = aArg;
 		var promise_workerRename = MainWorker.post('renameProfile', [aProfPath, aNewProfName]);
 		promise_workerRename.then(
 			function(aVal) {
@@ -829,12 +830,13 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				};
 				console.error('Rejected - promise_workerRename - ', rejObj);
 				// push aIniObj back to content, as it had premptively renamed
-				var aBrowser = aMsgEvent.target;
-				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+				aComm.transcribeMessage('pushIniObj', {
+					aIniObj: aReason.msg.aIniObj
+				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerRename', 0));
-	},
-	deleteProfile: function(aProfPath, aMsgEvent) {
+	}
+	function deleteProfile(aProfPath, aMessageManager, aBrowser, aComm) {
 		var promise_workerDel = MainWorker.post('deleteProfile', [aProfPath]);
 		promise_workerDel.then(
 			function(aVal) {
@@ -848,12 +850,13 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				};
 				console.error('Rejected - promise_workerDel - ', rejObj);
 				// push aIniObj back to content, as it had premptively deleted
-				var aBrowser = aMsgEvent.target;
-				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+				aComm.transcribeMessage('pushIniObj', {
+					aIniObj: aReason.msg.aIniObj
+				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerDel', 0));
-	},
-	toggleDefaultProfile: function(aProfPath, aMsgEvent) {
+	}
+	function toggleDefaultProfile(aProfPath, aMessageManager, aBrowser, aComm) {
 		var promise_workerTogDefault = MainWorker.post('toggleDefaultProfile', [aProfPath]);
 		promise_workerTogDefault.then(
 			function(aVal) {
@@ -867,12 +870,13 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 				};
 				console.error('Rejected - promise_workerTogDefault - ', rejObj);
 				// push aIniObj back to content, as it had premptively toggled default 
-				var aBrowser = aMsgEvent.target;
-				aBrowser.messageManager.sendAsyncMessage(core.addon.id, ['pushIniObj', aReason.msg.aIniObj]);
+				aComm.transcribeMessage('pushIniObj', {
+					aIniObj: aReason.msg.aIniObj
+				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerTogDefault', 0));
-	},
-	createDesktopShortcut: function(aProfPath) {
+	}
+	function createDesktopShortcut(aProfPath, aMessageManager, aBrowser, aComm) {
 
 		
 		var deferredMain_createDesktopShortcut = new Deferred();
@@ -895,8 +899,8 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		).catch(genericCatch.bind(null, 'promise_workerCreateDeskCut', 0));
 		
 		return deferredMain_createDesktopShortcut.promise;
-	},
-	browseExe: function() {
+	}
+	function browseExe(aArg, aMessageManager, aBrowser, aComm) {
 
 		var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
 		
@@ -958,89 +962,14 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		var rv = fp.show();
 		if (rv == Ci.nsIFilePicker.returnOK) {
 			
-			return [fp.file.path];
+			return fp.file.path;
 
 		}// else { // cancelled	}
 		
-		return [undefined]; // cancelled
-	},
-	// start - browse icon stuff
-	gBIWin: null,
-	gBIPanel: null,
-	gBIDeferred: null,
-	browseiconRequest: function() {
-		// framescript messages fsFuncs, telling it wants to do a browse, so fsFuncs is entry point
-		if (fsFuncs.gBIPanel) {
-			throw new Error('browse icon dialog already there and in progress');
-		}
-		fsFuncs.gBIDeferred = new Deferred();
-		
-		fsFuncs.gBIWin = Services.wm.getMostRecentWindow('navigator:browser');
-		fsFuncs.gBIPanel = fsFuncs.gBIWin.document.createElementNS(NS_XUL, 'panel');
-
-		var props = {
-			id: 'profilist-browseicon-panel',
-			noautohide: false,
-			noautofocus: false,
-			level: 'parent',
-			style: 'padding:0; margin:0; width:100px; height:100px; background-color:steelblue;',
-			type: 'arrow'
-		}
-		for (var p in props) {
-			fsFuncs.gBIPanel.setAttribute(p, props[p]);
-		}
-
-		var cIframe = fsFuncs.gBIWin.document.createElementNS(NS_XUL, 'iframe');
-		cIframe.setAttribute('type', 'chrome');
-		cIframe.setAttribute('src', core.addon.path.content_remote + 'browseicon.htm');
-		fsFuncs.gBIPanel.appendChild(cIframe);
-		
-		fsFuncs.gBIWin.document.getElementById('mainPopupSet').appendChild(fsFuncs.gBIPanel);
-
-
-		fsFuncs.gBIPanel.addEventListener('popuphiding', function () {
-			fsFuncs.gBIPanel.parentNode.removeChild(fsFuncs.gBIPanel);
-			console.log('fsFuncs:', fsFuncs);
-			fsFuncs.biFinalize();
-		}, false);
-		
-		return fsFuncs.gBIDeferred.promise;
-	},
-	biShow: function() {
-		// after browseicon.htm loads it will call fsFuncs
-		fsFuncs.gBIPanel.openPopup(fsFuncs.gBIWin.gBrowser, 'overlap', 10, 10);
-	},
-	biFinalize: function() {
-		fsFuncs.gBIPanel = null;
-		fsFuncs.gBIWin = null;
-		fsFuncs.gBIDeferred = null;
-	},
-	biCancel: function() {
-		fsFuncs.gBIDeferred.resolve(['cancel']);
-		fsFuncs.gBIPanel.hide();
-	},
-	biAccept: function(aImgObj) {
-		fsFuncs.gBIDeferred.resolve(['accept', aImgObj]);
-		fsFuncs.gBIPanel.hide();
-	},
-	biInit: function() {
-		var deferredMain_biInit = new Deferred();
-		
-		var promise_fetch = MainWorker.post('browseiconInit', []);
-		promise_fetch.then(
-			function(aObjs) {
-				console.log('Fullfilled - promise_fetch - ', aObjs);
-				// start - do stuff here - promise_fetch
-				deferredMain_biInit.resolve([aObjs]);
-				// end - do stuff here - promise_fetch
-			}
-		);
-		
-		return deferredMain_biInit.promise;		
-	},
-	// end - browse icon stuff
+		return undefined; // cancelled
+	}
 	// start - iconpicker set
-	callInPromiseWorker: function(aArrOfFuncnameThenArgs) {
+	function callInPromiseWorker(aArrOfFuncnameThenArgs, aMessageManager, aBrowser, aComm) {
 		// for use with sendAsyncMessageWithCallback from framescripts
 		
 		var mainDeferred_callInPromiseWorker = new Deferred();
@@ -1075,9 +1004,9 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		);
 		
 		return mainDeferred_callInPromiseWorker.promise;
-	},
+	}
 	// end - iconpicker set
-	restartInSafemode: function() {
+	function restartInSafemode(aArg, aMessageManager, aBrowser, aComm) {
 		// restarts self in safe mode
 		var cancelQuit = Cc['@mozilla.org/supports-PRBool;1'].createInstance(Ci.nsISupportsPRBool);
 		Services.obs.notifyObservers(cancelQuit, 'quit-application-requested', 'restart');
@@ -1085,12 +1014,6 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 			Services.startup.restartInSafeMode(Ci.nsIAppStartup.eAttemptQuit);
 		}
 	}
-};
-
-// start - functions called by framescripts
-function fetchCore(aArg, aMessageManager, aBrowser, aComm) {
-	return core;
-}
 // end - functions called by framescripts
 
 

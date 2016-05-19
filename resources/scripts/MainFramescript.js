@@ -174,15 +174,13 @@ var pageLoader = {
 		// to test if frame do `if (aContentWindow.frameElement)`
 		
 		console.log('reallyReady enter');
+		
 		// aContentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
 		// var waivedWindow = Components.utils.waiveXrays(aContentWindow);
-		Cu.exportFunction(sendAsyncMessageWithCallback, aContentWindow, {
-			defineAs: 'sendAsyncMessageWithCallback'
+		Cu.exportFunction(gMainComm.transcribeMessage, aContentWindow, {
+			defineAs: 'transcribeMessage'
 		});
 		
-		Cu.exportFunction(idedSendAsyncMessage, aContentWindow, {
-			defineAs: 'sendAsyncMessage'
-		})
 		console.log('reallyReady done');
 	},
 	load: function(aContentWindow) {
@@ -220,7 +218,7 @@ var pageLoader = {
 		var href = contentWindow.location.href.toLowerCase();
 		if (pageLoader.matches(href, contentWindow.location)) {
 			// ok its our intended, lets make sure its not an error page
-			var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIwebNavigation);
+			var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIWebNavigation);
 			var docURI = webNav.document.documentURI;
 			// console.info('docURI:', docURI);
 			
