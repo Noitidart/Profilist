@@ -2892,7 +2892,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			if (!aCloneProfPath) {
 				// get next available number for "New Profile ##"
 				// start original block link37371017111
-				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name', ['DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name', 'mainworker', ['DIGITS_REP_REP_REP_HERE_NOIDA']));
 				presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
 				var presetPatt = new RegExp(presetPattStr);
 				var presetNextNumber = 1;
@@ -2908,12 +2908,12 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 						}
 					}
 				}
-				aNewProfName = formatStringFromName('preset-profile-name', [presetNextNumber], 'mainworker');
+				aNewProfName = formatStringFromName('preset-profile-name', 'mainworker', [presetNextNumber]);
 				// end original block link37371017111
 			} else {
 				// assume that non-multiple form is taken, so calc for next preset number
 				// start modded copy of block link37371017111
-				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 'mainworker'));
+				var presetPattStr = escapeRegExp(formatStringFromName('preset-profile-name-clone-multiple', 'mainworker', [gCloneIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA']));
 				presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
 				var presetPatt = new RegExp(presetPattStr);
 				var presetNextNumber = 1;
@@ -2930,13 +2930,13 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 					}
 				}
 				if (presetNextNumber == 1) {
-					aNewProfName = formatStringFromName('preset-profile-name-clone', [gCloneIniEntry.Name], 'mainworker');
+					aNewProfName = formatStringFromName('preset-profile-name-clone', 'mainworker', [gCloneIniEntry.Name]);
 					var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
 					if (gPrexistingNameEntry) {
-						aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, 2], 'mainworker');
+						aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', 'mainworker', [gCloneIniEntry.Name, 2]);
 					}
 				} else {
-					aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', [gCloneIniEntry.Name, presetNextNumber], 'mainworker');
+					aNewProfName = formatStringFromName('preset-profile-name-clone-multiple', 'mainworker', [gCloneIniEntry.Name, presetNextNumber]);
 				}
 				// end copy of block link37371017111
 			}
@@ -2961,7 +2961,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 				// check if someone already has this name
 				var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
 				if (gPrexistingNameEntry) {
-					cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
+					cFailedReason = formatStringFromName('reason_name-taken', 'mainworker', [aNewProfName]);
 				}
 			}
 		}
@@ -2988,7 +2988,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			// directory must NOT exist
 			var rez_nonRelPathExists = OS.File.exists(newIniEntry.Path);
 			if (rez_nonRelPathExists) {
-				cFailedReason = formatStringFromName('reason_custom-path-exists', [newIniEntry.Path], 'mainworker');
+				cFailedReason = formatStringFromName('reason_custom-path-exists', 'mainworker', [newIniEntry.Path]);
 			}
 		} else {
 			newIniEntry.IsRelative = '1';
@@ -3005,7 +3005,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 				OS.File.makeDir(cProfPlatPathToRootDir);
 			} catch(OSFileError) {
 				if (OSFileError.becauseNoSuchFile) { // this will only happen if aNameIsPlatPath because if it is a relative path the userApplicationDataDir/Profiles always exists
-					cFailedReason = formatStringFromName('reason_parent-dir-missing', [OS.Path.dirname(cProfPlatPathToRootDir)], 'mainworker');
+					cFailedReason = formatStringFromName('reason_parent-dir-missing', 'mainworker', [OS.Path.dirname(cProfPlatPathToRootDir)]);
 				}
 			}
 		} // else dont make dir, as copyDirRecursive makes the dir for me
@@ -3022,7 +3022,7 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			// DO NOT COPY: parent.lock/.parentlock
 			
 			if (keyValNotif == '1') {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-started', null, 'mainworker'), formatStringFromName('notif-body_clone-started', [], 'mainworker')]);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-started', 'mainworker'), formatStringFromName('notif-body_clone-started', 'mainworker')]);
 			}
 			var cCloneProfPlatPathToRootDir = getFullPathToProfileDirFromIni(aCloneProfPath);
 			copyDirRecursive(cCloneProfPlatPathToRootDir, OS.Path.dirname(cProfPlatPathToRootDir), {
@@ -3072,10 +3072,10 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
 			if (!aCloneProfPath) {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-failed', null, 'mainworker'), formatStringFromName('notif-body_create-failed', [cFailedReason], 'mainworker')]);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_create-failed', 'mainworker'), formatStringFromName('notif-body_create-failed', 'mainworker', [cFailedReason])]);
 			} else {
 				// clone
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-failed', null, 'mainworker'), formatStringFromName('notif-body_clone-failed', [cFailedReason], 'mainworker')]);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-failed', 'mainworker'), formatStringFromName('notif-body_clone-failed', 'mainworker', [cFailedReason])]);
 			}
 		}
 		throw new MainWorkerError('something-bad-happend', {
@@ -3086,9 +3086,9 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 		/*
 		if (keyValNotif == '1') {
 			if (!aCloneProfPath) {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_create-profile', null, 'mainworker'), formatStringFromName('notif-body_create-profile', [aNewProfName], 'mainworker')]);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_create-profile', 'mainworker'), formatStringFromName('notif-body_create-profile', 'mainworker', [aNewProfName])]);
 			} else {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-profile', null, 'mainworker'), formatStringFromName('notif-body_clone-profile', [gCloneIniEntry.Name, aNewProfName], 'mainworker')]);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-profile', 'mainworker'), formatStringFromName('notif-body_clone-profile', 'mainworker', [gCloneIniEntry.Name, aNewProfName])]);
 			}
 		}
 		*/
@@ -3125,7 +3125,7 @@ function renameProfile(aProfPath, aNewProfName) {
 		// check if someone already has this name
 		var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aNewProfName);
 		if (gPrexistingNameEntry) {
-			cFailedReason = formatStringFromName('reason_name-taken', [aNewProfName], 'mainworker');
+			cFailedReason = formatStringFromName('reason_name-taken', 'mainworker', [aNewProfName]);
 		} else {
 			// ok no errors, go ahead and rename
 			gTargetIniEntry.Name = aNewProfName;
@@ -3135,7 +3135,7 @@ function renameProfile(aProfPath, aNewProfName) {
 	
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', null, 'mainworker'), formatStringFromName('notif-body_rename-failed', [gTargetIniEntry.Name, aNewProfName, cFailedReason], 'mainworker')]);
+			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', 'mainworker'), formatStringFromName('notif-body_rename-failed', 'mainworker', [gTargetIniEntry.Name, aNewProfName, cFailedReason])]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
 			reason: cFailedReason,
@@ -3206,7 +3206,7 @@ function deleteProfile(aProfPath) {
 	
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', null, 'mainworker'), formatStringFromName('notif-body_delete-failed', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason], 'mainworker')]);
+			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', 'mainworker'), formatStringFromName('notif-body_delete-failed', 'mainworker', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason])]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
 			reason: cFailedReason,
@@ -3257,7 +3257,7 @@ function toggleDefaultProfile(aProfPath) {
 
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + formatStringFromName('notif-title_default-failed', null, 'mainworker'), formatStringFromName('notif-body_default-failed', [cFailedReason], 'mainworker')]);
+			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_default-failed', 'mainworker'), formatStringFromName('notif-body_default-failed', 'mainworker', [cFailedReason])]);
 		}
 		throw new MainWorkerError('something-bad-happend', {
 			reason: cFailedReason,
@@ -3270,7 +3270,7 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 	
 	var deferred_ensureLauncher = new Deferred();
 	
-	self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'creating deskcut', 'for aProfPath of ' + aProfPath]);
+	self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut', 'for aProfPath of ' + aProfPath]);
 	
 	deferred_ensureLauncher.promise.then(
 		function(aPathToLauncher) {
@@ -3316,11 +3316,11 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 			var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 			var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
 			if (keyValNotif) {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'created desktop shortcut', 'ok destop shortcut was successfully made']);
+				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'created desktop shortcut', 'ok destop shortcut was successfully made']);
 			}
 		},
 		function() {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', null, 'mainworker') + ' - ' + 'creating deskcut failed', 'failed ensuring launcher']);
+			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut failed', 'failed ensuring launcher']);
 			self.postMessage([aCbIdToResolveToFramescript]);
 		}
 	);
@@ -6412,39 +6412,6 @@ function xhr(aUrlOrFileUri, aOptions={}) {
 	
 	// console.error('done xhr!!!');
 	return cRequest;
-}
-
-var _cache_formatStringFromName_packages = {}; // holds imported packages
-function formatStringFromName(aKey, aReplacements, aLocalizedPackageName) {
-	// depends on ```core.addon.path.locale``` it must be set to the path to your locale folder
-
-	// aLocalizedPackageName is name of the .properties file. so mainworker.properties you would provide mainworker
-	// aKey - string for key in aLocalizedPackageName
-	// aReplacements - array of string
-	
-	if (!_cache_formatStringFromName_packages[aLocalizedPackageName]) {
-		var packageStr = xhr(core.addon.path.locale + aLocalizedPackageName + '.properties').response;
-		var packageJson = {};
-		
-		var propPatt = /(.*?)=(.*?)$/gm;
-		var propMatch;
-		while (propMatch = propPatt.exec(packageStr)) {
-			packageJson[propMatch[1]] = propMatch[2];
-		}
-		
-		_cache_formatStringFromName_packages[aLocalizedPackageName] = packageJson;
-		
-		console.log('packageJson:', packageJson);
-	}
-	
-	var cLocalizedStr = _cache_formatStringFromName_packages[aLocalizedPackageName][aKey];
-	if (aReplacements) {
-		for (var i=0; i<aReplacements.length; i++) {
-			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
-		}
-	}
-	
-	return cLocalizedStr;
 }
 
 function mozSaltName(aName) {
