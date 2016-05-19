@@ -868,7 +868,7 @@ function fetchJustIniObjJustRefreshed() {
 		}
 	}
 	
-	return (anyStatusChanged ? [gIniObj] : [undefined]); // is called by callInPromiseWorker so have to wrap in array
+	return (anyStatusChanged ? gIniObj : undefined);
 }
 
 function userManipulatedIniObj_updateIniFile(aNewIniObjStr) {
@@ -1178,9 +1178,9 @@ function replaceBadgeForProf(aProfPath, aNewBadge) {
 	if (needToUpdate) {
 		formatNoWriteObjs(); // have to do this so it brings in the imgSrcObj_nearest16_forImgSlug for the new one
 		writeIni();
-		return [gIniObj];
+		return gIniObj;
 	} else {
-		return [null];
+		return null;
 	}
 }
 
@@ -1221,9 +1221,9 @@ function saveTieForProf(aProfPath, aNewTieId) {
 		
 		writeIni();
 		
-		return [gIniObj];
+		return gIniObj;
 	} else {
-		return [null];
+		return null;
 	}
 	
 	

@@ -1589,10 +1589,18 @@ var SubiconSafe = React.createClass({
 			// launch this profile
 			// alert('launch profile');
 			// gFsComm.postMessage('callInBootstrap', {method:'launchOrFocusProfile', arg:this.props.tbbIniEntry.Path});
-			gFsComm.postMessage('callInBootstrap', {method:'callInPromiseWorker', arg:['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]}, null, function() {
-				console.error('ok back from launching in safe mode');
-				// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
-			});
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method: 'callInPromiseWorker',
+					arg: ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]
+				},
+				null,
+				function() {
+					console.error('ok back from launching in safe mode');
+					// setTimeout(fetchJustIniObj, 3000); // this is for updating the running status a bit overkill
+				}
+			);
 		}
 		
 	},
@@ -1804,19 +1812,27 @@ var SubiconTie = React.createClass({
 		// this.uiTieId is not equal to this.props.tbbIniEntry.ProfilistTie then send message to worker, which will write to file and send message back which will MyStore.setState
 		if (this.uiTieId != this.uiTieId_onRender) {
 			// alert('telling mainworker to save tie using uiTieId: ' + this.uiTieId + ' uiTieId_onRender: ' + this.uiTieId_onRender);
-			gFsComm.postMessage('callInBootstrap', {method:'callInPromiseWorker', arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]}, null, function(aErrorOrNewIniObj) {
-				console.log('back from saving tie for prof');
-				// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
-				if (Array.isArray(aErrorOrNewIniObj)) {
-					gIniObj = aErrorOrNewIniObj;
-					MyStore.setState({
-						sIniObj: JSON.parse(JSON.stringify(gIniObj))
-					});
-				} else {
-					console.error('some error occured when trying to save the tie', aErrorOrNewIniObj);
-					throw new Error('some error occured when trying to save the tie');
+			gFsComm.postMessage(
+				'callInBootstrap',
+				{
+					method:'callInPromiseWorker',
+					arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]
+				},
+				null, 
+				function(aErrorOrNewIniObj) {
+					console.log('back from saving tie for prof');
+					// aErrorOrNewIniObj is null if no update was made, else if an update was made then it is gIniObj. but it should never return null, because i would never get to this point (to send message to worker) unless the tie was changed (meaning uiTieId is different from uiTieId_onRender)
+					if (Array.isArray(aErrorOrNewIniObj)) {
+						gIniObj = aErrorOrNewIniObj;
+						MyStore.setState({
+							sIniObj: JSON.parse(JSON.stringify(gIniObj))
+						});
+					} else {
+						console.error('some error occured when trying to save the tie', aErrorOrNewIniObj);
+						throw new Error('some error occured when trying to save the tie');
+					}
 				}
-			});
+			);
 		}
 	},
 	componentDidMount: function() {

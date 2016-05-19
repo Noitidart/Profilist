@@ -759,7 +759,7 @@ var gTestConnMM;
 			function(aVal) {
 				console.log('Fullfilled - promise_fetch - ', aVal);
 				// start - do stuff here - promise_fetch
-				deferredMain_fetchJustIniObj.resolve([aVal]);
+				deferredMain_fetchJustIniObj.resolve(aVal);
 				// end - do stuff here - promise_fetch
 			}
 		);
@@ -979,11 +979,7 @@ var gTestConnMM;
 		rez_pwcall.then(
 			function(aVal) {
 				console.log('Fullfilled - rez_pwcall - ', aVal);
-				if (Array.isArray(aVal)) {
-					mainDeferred_callInPromiseWorker.resolve(aVal);
-				} else {
-					mainDeferred_callInPromiseWorker.resolve([aVal]);
-				}
+				mainDeferred_callInPromiseWorker.resolve(aVal);
 			},
 			function(aReason) {
 				var rejObj = {
@@ -991,7 +987,7 @@ var gTestConnMM;
 					aReason: aReason
 				};
 				console.error('Rejected - rez_pwcall - ', rejObj);
-				mainDeferred_callInPromiseWorker.resolve([rejObj]);
+				mainDeferred_callInPromiseWorker.resolve(rejObj);
 			}
 		).catch(
 			function(aCaught) {
@@ -1000,7 +996,7 @@ var gTestConnMM;
 					aCaught: aCaught
 				};
 				console.error('Caught - rez_pwcall - ', rejObj);
-				mainDeferred_callInPromiseWorkerr.resolve([rejObj]);
+				mainDeferred_callInPromiseWorkerr.resolve(rejObj);
 			}
 		);
 		
