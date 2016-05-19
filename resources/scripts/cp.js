@@ -1073,13 +1073,10 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 });
 // End - Page Functionalities
 
-// start - server/framescript comm layer
-// sendAsyncMessageWithCallback - rev3
-var bootstrapCallbacks = { // can use whatever, but by default it uses this
-	// put functions you want called by bootstrap/server here
-	
-};
-// end - server/framescript comm layer
+// start - functions called by bootstrap, through framescript comm
+// cross-file-link3922222222222 - must be defined globally
+// end - functions called by bootstrap, through framescript comm
+
 // start - common helper functions
 function Deferred() {
 	try {

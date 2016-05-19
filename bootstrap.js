@@ -602,7 +602,7 @@ function startup(aData, aReason) {
 	
 	var afterWorker = function() { // because i init worker, then continue init		
 		// register framescript listener
-		Services.mm.addMessageListener(core.addon.id, fsMsgListener);
+		new framescriptComm(core.addon.id);
 		
 		// register framescript injector
 		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
@@ -679,7 +679,7 @@ function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) { return }
 	
 	// unregister about pages listener
-	Services.mm.removeMessageListener(core.addon.id, fsMsgListener);
+	framescriptComm_unregAll();
 	
 	// unregister framescript injector
 	Services.mm.removeDelayedFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key);
@@ -1086,54 +1086,102 @@ var fsFuncs = { // can use whatever, but by default its setup to use this
 		}
 	}
 };
-var gCreateDesktopShortcutId = -1;
-var fsMsgListener = {
-	funcScope: fsFuncs,
-	receiveMessage: function(aMsgEvent) {
-		var aMsgEventData = aMsgEvent.data;
-		console.log('fsMsgListener getting aMsgEventData:', aMsgEventData, 'aMsgEvent:', aMsgEvent);
-		// aMsgEvent.data should be an array, with first item being the unfction name in bootstrapCallbacks
+
+// start - functions called by framescripts
+function fetchCore(aArg, aMessageManager, aBrowser, aComm) {
+	return core;
+}
+// end - functions called by framescripts
+
+
+var gFramescriptComms = [];
+function framescriptComm_unregAll() {
+	var l = gFramescriptComms.length;
+	for (var i=0; i<l; i++) {
+		gFramescriptComms[i].unregister();
+	}
+}
+function framescriptComm(aChannelID) {
+	this.id = aChannelID;
+	
+	gFramescriptComms.push(this);
+	
+	this.unregister = function() {
+		Services.mm.addMessageListener(this.id, this.listener);
 		
-		var callbackPendingId;
-		if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SAM_CB_PREFIX) == 0) {
-			callbackPendingId = aMsgEventData.pop();
-		}
-		
-		aMsgEventData.push(aMsgEvent); // this is special for server side, so the function can do aMsgEvent.target.messageManager to send a response
-		
-		var funcName = aMsgEventData.shift();
-		if (funcName in this.funcScope) {
-			var rez_parentscript_call = this.funcScope[funcName].apply(null, aMsgEventData);
-			
-			if (callbackPendingId) {
-				// rez_parentscript_call must be an array or promise that resolves with an array
-				if (rez_parentscript_call.constructor.name == 'Promise') {
-					rez_parentscript_call.then(
-						function(aVal) {
-							// aVal must be an array
-							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
-						},
-						function(aReason) {
-							console.error('aReject:', aReason);
-							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
-						}
-					).catch(
-						function(aCatch) {
-							console.error('aCatch:', aCatch);
-							aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
-						}
-					);
-				} else {
-					// assume array
-					aMsgEvent.target.messageManager.sendAsyncMessage(core.addon.id, [callbackPendingId, rez_parentscript_call]);
-				}
+		var l = gFramescriptComms.length;
+		for (var i=0; i<l; i++) {
+			if (gFramescriptComms[i] == this) {
+				gFramescriptComms.splice(i, 1);
+				break;
 			}
 		}
-		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+	};
+	
+	this.listener = {
+		receiveMessage: function(e) {
+			var messageManager = e.target.messageManager;
+			var browser = e.target;
+			var payload = e.data;
+			console.log('incoming message to bootstrap, payload:', payload);
+			// console.log('this in receiveMessage bootstrap:', this);
+			
+			if (payload.method) {
+				if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') }  // dev line remove on prod
+				var rez_bs_call = BOOTSTRAP[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
+				if (payload.cbid) {
+					if (rez_bs_call && rez_bs_call.constructor.name == 'Promise') {
+						rez_bs_call.then(
+							function(aVal) {
+								console.log('Fullfilled - rez_bs_call - ', aVal);
+								this.transcribeMessage(messageManager, payload.cbid, aVal);
+							}.bind(this),
+							genericReject.bind(null, 'rez_bs_call', 0)
+						).catch(genericCatch.bind(null, 'rez_bs_call', 0));
+					} else {
+						console.log('calling transcribeMessage for callbck with args:', payload.cbid, rez_bs_call);
+						this.transcribeMessage(messageManager, payload.cbid, rez_bs_call);
+					}
+				}
+			} else if (!payload.method && payload.cbid) {
+				// its a cbid
+				this.callbackReceptacle[payload.cbid](payload.arg, messageManager, browser, this);
+				delete this.callbackReceptacle[payload.cbid];
+			} else {
+				throw new Error('invalid combination');
+			}
+		}.bind(this)
+	};
+	this.nextcbid = 1; //next callback id
+	this.transcribeMessage = function(aMessageManager, aMethod, aArg, aCallback) {
+		// console.log('bootstrap sending message to framescript', aMethod, aArg);
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
 		
-	}
-};
-// end - server/framescript comm layer
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		aMessageManager.sendAsyncMessage(this.id, {
+			method: aMethod,
+			arg: aArg,
+			cbid
+		});
+	};
+	this.callbackReceptacle = {};
+
+	Services.mm.addMessageListener(this.id, this.listener);
+}
+var gCreateDesktopShortcutId = -1;
 // start - common helper functions
 function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3cb7390
 	// update 062115 for typeof

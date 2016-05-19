@@ -1800,37 +1800,35 @@ var SubiconTie = React.createClass({
 // end - react components
 
 // End - Page Functionalities
-// start - server/framescript comm layer
-var bootstrapCallbacks = { // can use whatever, but by default it uses this
-	// put functions you want called by bootstrap/server here,
-	pushIniObj: function(aIniObj, aDoTbbEnterAnim) {
-		// updates gIniObj with aIniObj and also react component
-		gIniObj = aIniObj;
-		
-		if (aDoTbbEnterAnim) {
-			gDoTbbEnterAnim = true;
-		}
-		
-		MyStore.setState({
-			sIniObj: JSON.parse(JSON.stringify(gIniObj))
-		});
-	},
-	testConnUpdate: function(newContent) {
-		var tcDomEl = document.getElementById('testconn');
-		if (!tcDomEl) {
-			var tcInitDomEl = document.createElement('div');
-			document.body.appendChild(tcInitDomEl);
-			tcInitDomEl.textContent = 'initted at ' + (new Date()).toLocaleString() + ' -- ' + (new Date()).getTime();
-			
-			tcDomEl = document.createElement('div');
-			tcDomEl.setAttribute('id', 'testconn');
-			document.body.appendChild(tcDomEl);
-		}
-		tcDomEl.textContent = newContent;
-	}
-};
-// end - server/framescript comm layer
 
+// start - functions called by bootstrap, through framescript comm
+// cross-file-link3922222222222 - must be defined globally
+function pushIniObj(aIniObj, aDoTbbEnterAnim) {
+	// updates gIniObj with aIniObj and also react component
+	gIniObj = aIniObj;
+	
+	if (aDoTbbEnterAnim) {
+		gDoTbbEnterAnim = true;
+	}
+	
+	MyStore.setState({
+		sIniObj: JSON.parse(JSON.stringify(gIniObj))
+	});
+}
+function testConnUpdate(newContent) {
+	var tcDomEl = document.getElementById('testconn');
+	if (!tcDomEl) {
+		var tcInitDomEl = document.createElement('div');
+		document.body.appendChild(tcInitDomEl);
+		tcInitDomEl.textContent = 'initted at ' + (new Date()).toLocaleString() + ' -- ' + (new Date()).getTime();
+		
+		tcDomEl = document.createElement('div');
+		tcDomEl.setAttribute('id', 'testconn');
+		document.body.appendChild(tcDomEl);
+	}
+	tcDomEl.textContent = newContent;
+}
+// end - functions called by bootstrap, through framescript comm
 
 // start - common helper functions
 function Deferred() {

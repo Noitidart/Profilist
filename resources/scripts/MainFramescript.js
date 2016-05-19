@@ -8,6 +8,9 @@ var core = {
 	}
 };
 
+var gCFMM = this;
+var gMainComm;
+
 // start - about module
 var aboutFactory_profilist;
 function AboutProfilist() {}
@@ -67,156 +70,214 @@ function AboutFactory(component) {
 	this.register();
 }
 // end - about module
-// start - server/framescript comm layer
-// sendAsyncMessageWithCallback - rev3
-var bootstrapCallbacks = { // can use whatever, but by default it uses this
-	pushIniObj: function(aIniObj, aDoTbbEnterAnim) {
-		content.bootstrapCallbacks.pushIniObj(aIniObj, aDoTbbEnterAnim);
-	},
-	testConnUpdate: function(newContent) {
-		content.bootstrapCallbacks.testConnUpdate(newContent);
-	},
-	destroySelf: function() {
-		removeEventListener('unload', unload, false);
-		removeEventListener('DOMContentLoaded', onPageReady, false);
+var gBootstrapComms = [];
+function bootstrapComm_unregAll() {
+	var l = gBootstrapComms.length;
+	for (var i=0; i<l; i++) {
+		gBootstrapComms[i].unregister();
 	}
-};
-const SAM_CB_PREFIX = '_sam_gen_cb_';
-var sam_last_cb_id = -1;
-var gCFMM = this;
-function sendAsyncMessageWithCallback(aMessageArr, aCallback) {
-	var aMessageManager = gCFMM;
-	var aGroupId = core.addon.id;
-	var aCallbackScope = bootstrapMsgListener.funcScope;
-	
-	sam_last_cb_id++;
-	var thisCallbackId = SAM_CB_PREFIX + sam_last_cb_id;
-	aCallbackScope = aCallbackScope ? aCallbackScope : bootstrap; // :todo: figure out how to get global scope here, as bootstrap is undefined
-	aCallbackScope[thisCallbackId] = function(aMessageReceivedArr) {
-		delete aCallbackScope[thisCallbackId];
-		aCallback.apply(null, aMessageReceivedArr);
-	}
-	aMessageArr.push(thisCallbackId);
-	aMessageManager.sendAsyncMessage(aGroupId, aMessageArr);
 }
-var bootstrapMsgListener = {
-	funcScope: bootstrapCallbacks,
-	receiveMessage: function(aMsgEvent) {
-		var aMsgEventData = aMsgEvent.data;
-		// console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
-		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
+function bootstrapComm(aChannelID) {
+	this.id = aChannelID;
+	gBootstrapComms.push(this);
+	
+	this.unregister = function() {
+		removeMessageListener(this.id, this.listener);
 		
-		var callbackPendingId;
-		if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SAM_CB_PREFIX) == 0) {
-			callbackPendingId = aMsgEventData.pop();
-		}
-		
-		var funcName = aMsgEventData.shift();
-		if (funcName in this.funcScope) {
-			var rez_fs_call = this.funcScope[funcName].apply(null, aMsgEventData);
-			
-			if (callbackPendingId) {
-				// rez_fs_call must be an array or promise that resolves with an array
-				if (rez_fs_call.constructor.name == 'Promise') {
-					rez_fs_call.then(
-						function(aVal) {
-							// aVal must be an array
-							this.sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
-						},
-						function(aReason) {
-							console.error('aReject:', aReason);
-							this.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
-						}
-					).catch(
-						function(aCatch) {
-							console.error('aCatch:', aCatch);
-							this.sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
-						}
-					);
-				} else {
-					// assume array
-					this.sendAsyncMessage(core.addon.id, [callbackPendingId, rez_fs_call]);
-				}
+		var l = gBootstrapComms.length;
+		for (var i=0; i<l; i++) {
+			if (gBootstrapComms[i] == this) {
+				gBootstrapComms.splice(i, 1);
+				break;
 			}
 		}
-		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+	};
+	this.listener = {
+		receiveMessage: function(e) {
+			var payload = e.data;
+			console.log('incoming message to framescript, payload:', payload);
+			// console.log('this in receiveMessage framescript:', this);
+			
+			if (payload.method) {
+				if (payload.method == 'UNINIT_FRAMESCRIPT') {
+					uninit(); // link4757484773732
+					return;
+				}
+				if (!(payload.method in content)) { console.error('method of "' + payload.method + '" not in CONTENT'); throw new Error('method of "' + payload.method + '" not in CONTENT') } // dev line remove on prod
+				var rez_fs_call = content[payload.method](payload.arg, this);
+				console.log('rez_fs_call:', rez_fs_call);
+				if (payload.cbid) {
+					if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
+						rez_fs_call.then(
+							function(aVal) {
+								console.log('Fullfilled - rez_fs_call - ', aVal);
+								this.transcribeMessage(payload.cbid, aVal);
+							}.bind(this),
+							genericReject.bind(null, 'rez_fs_call', 0)
+						).catch(genericCatch.bind(null, 'rez_fs_call', 0));
+					} else {
+						console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
+						this.transcribeMessage(payload.cbid, rez_fs_call);
+					}
+				}
+			} else if (!payload.method && payload.cbid) {
+				// its a cbid
+				this.callbackReceptacle[payload.cbid](payload.arg, this);
+				delete this.callbackReceptacle[payload.cbid];
+			} else {
+				throw new Error('invalid combination');
+			}
+		}.bind(this)
+	};
+	this.nextcbid = 1; //next callback id
+	this.transcribeMessage = function(aMethod, aArg, aCallback) {
+		// console.log('framescript sending message to bootstrap', aMethod, aArg);
 		
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		gCFMM.sendAsyncMessage(this.id, {
+			method: aMethod,
+			arg: aArg,
+			cbid
+		});
+	};
+	this.callbackReceptacle = {};
+	
+	addMessageListener(this.id, this.listener);
+}
+
+// start - pageLoader
+var pageLoader = {
+	// start - devuser editable
+	IGNORE_FRAMES: true,
+	IGNORE_LOAD: true,
+	matches: function(aHREF, aLocation) {
+		// do your tests on aHREF, which is aLocation.href.toLowerCase(), return true if it matches
+		return (aHREF.indexOf('about:profilist') === 0);
+	},
+	ready: function(aContentWindow) {
+		// triggered on page ready
+		// triggered for each frame if IGNORE_FRAMES is false
+		// to test if frame do `if (aContentWindow.frameElement)`
+		
+		console.log('reallyReady enter');
+		// aContentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
+		// var waivedWindow = Components.utils.waiveXrays(aContentWindow);
+		Cu.exportFunction(sendAsyncMessageWithCallback, aContentWindow, {
+			defineAs: 'sendAsyncMessageWithCallback'
+		});
+		
+		Cu.exportFunction(idedSendAsyncMessage, aContentWindow, {
+			defineAs: 'sendAsyncMessage'
+		})
+		console.log('reallyReady done');
+	},
+	load: function(aContentWindow) {
+		// triggered on page load if IGNORE_LOAD is false
+	},
+	error: function(aContentWindow, aDocURI) {
+		// triggered when page fails to load due to error
+		console.warn('hostname page ready, but an error page loaded, so like offline or something, aHref:', aContentWindow.location.href, 'aDocURI:', aDocURI);
+	},
+	// not yet supported
+	// timeout: function(aContentWindow) {
+	// 	// triggered on timeout
+	// },
+	// end - devuser editable
+	// start - BOILERLATE - DO NOT EDIT
+	register: function() {
+		// DO NOT EDIT - boilerplate
+		addEventListener('DOMContentLoaded', pageLoader.onPageReady, false);
+	},
+	unregister: function() {
+		// DO NOT EDIT - boilerplate
+		removeEventListener('DOMContentLoaded', pageLoader.onPageReady, false);
+	},
+	onPageReady: function(e) {
+		// DO NOT EDIT
+		// boilerpate triggered on DOMContentLoaded
+		// frames are skipped if IGNORE_FRAMES is true
+		
+		var contentWindow = e.target.defaultView;
+		console.log('page ready, contentWindow.location.href:', contentWindow.location.href);
+		
+		// i can skip frames, as DOMContentLoaded is triggered on frames too
+		if (pageLoader.IGNORE_FRAMES && contentWindow.frameElement) { return }
+		
+		var href = contentWindow.location.href.toLowerCase();
+		if (pageLoader.matches(href, contentWindow.location)) {
+			// ok its our intended, lets make sure its not an error page
+			var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIwebNavigation);
+			var docURI = webNav.document.documentURI;
+			// console.info('docURI:', docURI);
+			
+			if (docURI.indexOf('about:neterror') === 0) {
+				pageLoader.error(contentWindow, docURI);
+			} else {
+				// our page ready without error
+				
+				if (!pageLoader.IGNORE_LOAD) {
+					// i can attach the load listener here, and remove it on trigger of it, because for sure after this point the load will fire
+					contentWindow.addEventListener('load', pageLoader.onPageLoad, false);
+				}
+				
+				pageLoader.ready(contentWindow);
+			}
+		} else {
+			console.log('page ready, but its not about:profilist so do nothing:', uneval(contentWindow.location));
+			return;
+		}
+	},
+	onPageLoad: function(e) {
+		// DO NOT EDIT
+		// boilerplate triggered on load if IGNORE_LOAD is false
+		var contentWindow = e.target.defaultView;
+		contentWindow.removeEventListener('load', pageLoader.load, false);
+		pageLoader.load(contentWindow);
 	}
+	// end - BOILERLATE - DO NOT EDIT
 };
-this.addMessageListener(core.addon.id, bootstrapMsgListener);
-// end - server/framescript comm layer
+// end - pageLoader
 
 function init() {
-	sendAsyncMessageWithCallback(['fetchCore'], function(aObj) {
-		core = aObj.core;
-		addEventListener('unload', unload, false);
-		addEventListener('DOMContentLoaded', onPageReady, false);
+	gMainComm = new bootstrapComm(core.addon.id);
+	
+	gMainComm.transcribeMessage('fetchCore', null, function(aCore, aComm) {
+		core = aCore;
+		console.log('ok updated core to:', core);
+		
+		addEventListener('unload', uninit, false);
+		
+		pageLoader.register(); // pageLoader boilerpate
+		
 		try {
 			initAndRegisterAboutProfilist();
 		} catch(ignore) {} // its non-e10s so it will throw saying already registered
 	});
 }
 
-function unload() {
+function uninit() { // link4757484773732
 	// an issue with this unload is that framescripts are left over, i want to destory them eventually
-	aboutFactory_profilist.unregister();
-}
-
-
-function onPageReady(aEvent) {
-	var aContentWindow = aEvent.target.defaultView;
-	console.log('MainFramescript.js page ready, aContentWindow.location.href:', aContentWindow.location.href);
-	doOnReady(aContentWindow);
-}
-
-function doOnReady(aContentWindow) {
-
-	if (aContentWindow.frameElement) {
-		// console.warn('frame element DOMContentLoaded, so dont respond yet:', aContentWindow.location.href);
-		return;
-	} else {
-		// parent window loaded (not frame)
-		if (aContentWindow.location.href.toLowerCase().indexOf('about:profilist') === 0) {
-			// ok twitter page ready, lets make sure its not an error page
-			// check if got error loading page:
-			var webnav = aContentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIWebNavigation);
-			var docuri = webnav.document.documentURI;
-			// console.info('docuri:', docuri);
-			if (docuri.indexOf('about:') === 0 && docuri.indexOf('about:profilist') !== 0) {
-				// twitter didnt really load, it was an error page
-				console.log('about:profilist hostname page ready, but an error page loaded, so like offline or something:', aContentWindow.location.href, 'docuri:', docuri);
-				// unregReason = 'error-loading';
-				return;
-			} else {
-				// twitter actually loaded
-				// twitterReady = true;
-				console.log('ok about:profilist page ready, lets ensure page loaded finished');
-				reallyReady(aContentWindow);
-				// ensureLoaded(aContentWindow); // :note: commented out as not needing content script right now
-			}
-		} else {
-			console.log('page ready, but its not about:profilist so do nothing:', uneval(aContentWindow.location));
-			return;
-		}
+	if (aboutFactory_profilist) {
+		aboutFactory_profilist.unregister();
 	}
-}
-
-function idedSendAsyncMessage(aPayload) {
-	this.sendAsyncMessage(core.addon.id, aPayload);
-}
-
-function reallyReady(aContentWindow) {
-	console.log('reallyReady enter');
-	// aContentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
-	// var waivedWindow = Components.utils.waiveXrays(aContentWindow);
-	Cu.exportFunction(sendAsyncMessageWithCallback, aContentWindow, {
-		defineAs: 'sendAsyncMessageWithCallback'
-	});
+	removeEventListener('unload', uninit, false);
 	
-	Cu.exportFunction(idedSendAsyncMessage, aContentWindow, {
-		defineAs: 'sendAsyncMessage'
-	})
-	console.log('reallyReady done');
+	pageLoader.unregister(); // pageLoader boilerpate
+	
+	bootstrapComm_unregAll();
 }
-
 init();
