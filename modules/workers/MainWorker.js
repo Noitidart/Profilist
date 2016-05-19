@@ -1071,7 +1071,7 @@ function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 		if (j_gProfilistBuilds[i].p == aExePath) {
 			console.error('this aExePath is already in ProfilistBuilds');
 			// throw new Error('this aExePath is already in ProfilistBuilds');
-			return [gIniObj];
+			return gIniObj;
 		}
 	}
 	console.error('maxBuildIdmaxBuildIdmaxBuildIdmaxBuildIdmaxBuildId:', maxBuildId);
@@ -1090,7 +1090,7 @@ function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 		
 		writeIni();
 		
-		return [gIniObj];
+		return gIniObj;
 	} else {
 		return j_gProfilistBuilds[j_gProfilistBuilds.length - 1];
 	}
@@ -1128,7 +1128,7 @@ function removeBuild(aBuildId, aBool_doNotPostProcess) {
 		}
 	}
 	
-	return [gIniObj];
+	return gIniObj;
 }
 function replaceBuildEntry(aBuildId, aNewBuildEntry) {
 	// aBuildId - number 
@@ -1154,12 +1154,13 @@ function replaceBuildEntry(aBuildId, aNewBuildEntry) {
 		}
 	}
 	
-	return [gIniObj];
+	return gIniObj;
 }
 
 function replaceBadgeForProf(aProfPath, aNewBadge) {
 	// aNewBadge - string which is new imgSlug to apply, or null/undefined t oremove it
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
+	console.log('replaceBadgeForProf:', aProfPath, aNewBadge, 'cIniEntry:', cIniEntry);
 	
 	var needToUpdate = false;
 	
@@ -3981,7 +3982,10 @@ function saveAsIconset(aImgObj) {
 	
 	// apply imgSlug
 	
-	return [cImgSlug, cImgObj];
+	return {
+		aImgSlug: cImgSlug,
+		aImgObj: cImgObj
+	};
 }
 function deleteIconset(aImgSlug) {
 	if (isSlugInChromeChannelIconsets(aImgSlug)) {
@@ -4191,7 +4195,7 @@ function readSubdirsInDir(aDirPlatPath) {
 			});
 		}
 		
-		return [rezGithub];
+		return rezGithub;
 	}
 	switch(aDirPlatPath) {
 		case 'profilist_user_images':
