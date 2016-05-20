@@ -111,7 +111,8 @@ function bootstrapComm(aChannelID) {
 				// var rez_fs_call = content[payload.method](payload.arg, this);
 				var cWinCommCb = undefined;
 				if (payload.cbid) {
-					cWinCommCb = function(aWinCommRez) {
+					cWinCommCb = function(rez_fs_call) {
+						console.log('rez_fs_call:', rez_fs_call);
 						if (payload.cbid) {
 							if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
 								rez_fs_call.then(
@@ -128,9 +129,7 @@ function bootstrapComm(aChannelID) {
 						}
 					}.bind(this);
 				}
-				gWinComm.postMessage(payload.arg, payload.arg, undefined, cWinCommCb);
-				console.log('rez_fs_call:', rez_fs_call);
-
+				gWinComm.postMessage(payload.method, payload.arg, undefined, cWinCommCb);
 			} else if (!payload.method && payload.cbid) {
 				// its a cbid
 				this.callbackReceptacle[payload.cbid](payload.arg, this);
