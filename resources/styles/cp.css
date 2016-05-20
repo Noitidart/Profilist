@@ -438,7 +438,7 @@ div.builds-widget-row .fontello-icon {
 	z-index: 1;
 	white-space: pre;
 	
-	font-family: fontello;
+	font-family: arial, helvetica, sans-serif, fontello;
 	font-style: normal;
 	font-weight: normal;
 }
