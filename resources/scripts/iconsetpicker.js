@@ -2,7 +2,6 @@
 	//	justFormatStringFromName
 	//	validateOptionsObj
 	
-XPCOMUtils.defineLazyGetter(myServices, 'sb_ip', function () { return Services.strings.createBundle(core.addon.path.locale + 'iconsetpicker.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 const gGithubDownloadPrefix = 'prflst-_-dl_-_'; // cross file link1110238471
 
 var IPStore = {
@@ -525,16 +524,16 @@ var IPStore = {
 					cChildren.push(React.createElement(React.addons.CSSTransitionGroup, {component:'div', className:'iconsetpicker-browsequicklist-animwrap', transitionName:'iconsetpicker-quicklist', transitionEnterTimeout:200, transitionLeaveTimeout:200},
 						!(cChildProps.sNavItem == 'browse' && cChildProps.selected) ? undefined : React.createElement('div', {className:'iconsetpicker-browsequicklist'},
 							React.createElement('div', {onClick:IPStore.readSubdirsInDir.bind(null, 'desktop', true, this.props.sDirListHistory)},
-								myServices.sb_ip.GetStringFromName('desktop')
+								formatStringFromNameCore('desktop', 'iconsetpicker')
 							),
 							React.createElement('div', {onClick:IPStore.readSubdirsInDir.bind(null, 'pictures', true, this.props.sDirListHistory)},
-								myServices.sb_ip.GetStringFromName('pictures')
+								formatStringFromNameCore('pictures', 'iconsetpicker')
 							),
 							React.createElement('div', {onClick:IPStore.readSubdirsInDir.bind(null, 'downloads', true, this.props.sDirListHistory)},
-								myServices.sb_ip.GetStringFromName('downloads')
+								formatStringFromNameCore('downloads', 'iconsetpicker')
 							),
 							React.createElement('div', {onClick:IPStore.readSubdirsInDir.bind(null, 'documents', true, this.props.sDirListHistory)},
-								myServices.sb_ip.GetStringFromName('documents')
+								formatStringFromNameCore('documents', 'iconsetpicker')
 							)
 						)
 					));
@@ -597,7 +596,7 @@ var IPStore = {
 				}
 				
 				return React.createElement('div', cProps,
-					myServices.sb_ip.GetStringFromName(this.props.sNavItem)
+					formatStringFromNameCore(this.props.sNavItem, 'iconsetpicker')
 				);
 			}
 		}),
@@ -743,18 +742,18 @@ var IPStore = {
 									console.error('imgSlugOfSelectedDir:', imgSlugOfSelectedDir);
 									if (getBuildEntryByKeyValue(j_gProfilistBuilds, 'i', imgSlugOfSelectedDir)) {
 										disbleRenameDelete = true;
-										specialTxtNote = myServices.sb_ip.GetStringFromName('inuse');
+										specialTxtNote = formatStringFromNameCore('inuse', 'iconsetpicker');
 									}
 								}
 							}
 							
-							// cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('rename'), disabled:((disbleRenameDelete) ? true : false)}));
+							// cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('rename', 'iconsetpicker'), disabled:((disbleRenameDelete) ? true : false)}));
 
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('delete') + (specialTxtNote ? ' ' + specialTxtNote : ''), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
+							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('delete', 'iconsetpicker') + (specialTxtNote ? ' ' + specialTxtNote : ''), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
 							if (this.props.sAppliedSlugDir && this.props.sDirSelected && this.props.sAppliedSlugDir == this.props.sDirSelected) {
 								disableApply = true;
 								if (this.props.unselect_callback) {
-									cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('unselect'), onClick:this.clickUnselect}));
+									cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('unselect', 'iconsetpicker'), onClick:this.clickUnselect}));
 								}
 							}
 							
@@ -763,7 +762,7 @@ var IPStore = {
 					case 'browse':
 						
 							// browse
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
+							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('back', 'iconsetpicker'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Forward'}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Up'}));
 						
@@ -771,7 +770,7 @@ var IPStore = {
 					case 'download':
 						
 							// download
-							cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('back'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
+							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('back', 'iconsetpicker'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
 						
 						break;
 					default:
@@ -783,8 +782,8 @@ var IPStore = {
 				}
 				
 				cChildren.push(React.createElement('div', {style:{flex:'1 0 auto'}})); // spacer, to keep the cancel/ok buttons on far right
-				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('cancel'), onClick:this.props.uninit}));
-				cChildren.push(React.createElement('input', {type:'button', value:myServices.sb_ip.GetStringFromName('select'), disabled:(disableApply ? true : false), onClick:this.clickSelect}));
+				cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('cancel', 'iconsetpicker'), onClick:this.props.uninit}));
+				cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('select', 'iconsetpicker'), disabled:(disableApply ? true : false), onClick:this.clickSelect}));
 				
 				// return React.createElement.apply(this, ['div', cProps].concat(inner));
 				return React.createElement('div', cProps,
@@ -831,12 +830,12 @@ var IPStore = {
 					cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
 				} else if (this.props.sDirSubdirs == 'error') {
 					cChildren.push(React.createElement('span', {},
-						myServices.sb_ip.GetStringFromName('failed-read')
+						formatStringFromNameCore('failed-read', 'iconsetpicker')
 					));
 				} else {
 					if (!this.props.sDirSubdirs.length) {
 						cChildren.push(React.createElement('span', {},
-							myServices.sb_ip.GetStringFromName('no-dirs')
+							formatStringFromNameCore('no-dirs', 'iconsetpicker')
 						));
 					} else {
 						for (var i=0; i<this.props.sDirSubdirs.length; i++) {
@@ -865,7 +864,7 @@ var IPStore = {
 				
 				if (!this.props.sDirSelected) {
 					cChildren.push(React.createElement('span', {},
-						myServices.sb_ip.GetStringFromName('preview-desc')
+						formatStringFromNameCore('preview-desc', 'iconsetpicker')
 					));
 				} else {
 					if (!this.props.sPreview) {
@@ -874,7 +873,7 @@ var IPStore = {
 					} else {
 						console.log('this.props.sPreview:', uneval(this.props.sPreview));
 						if (typeof(this.props.sPreview) == 'string') {
-							var previewTxt = myServices.sb_ip.GetStringFromName(this.props.sPreview);
+							var previewTxt = formatStringFromNameCore(this.props.sPreview, 'iconsetpicker');
 							cChildren.push(React.createElement('span', {},
 								previewTxt
 							));
@@ -884,7 +883,7 @@ var IPStore = {
 								var errChildren = [];
 								
 								errChildren.push(React.createElement('h4', {},
-									myServices.sb_ip.GetStringFromName('invalid-img-dir')
+									formatStringFromNameCore('invalid-img-dir', 'iconsetpicker')
 								));
 								
 								if (errObj.dupeSize) {
@@ -904,7 +903,7 @@ var IPStore = {
 										
 										var sizeUl = React.createElement('ul', {},
 											React.createElement('li', {},
-												justFormatStringFromName(myServices.sb_ip.GetStringFromName('dimensions-no-dash'), [aSize, aSize]),
+												justFormatStringFromName(formatStringFromNameCore('dimensions-no-dash', 'iconsetpicker'), [aSize, aSize]),
 												React.createElement('ul', {},
 													sizeLis
 												)
@@ -916,7 +915,7 @@ var IPStore = {
 									
 									var topUl = React.createElement('ul', {},
 										React.createElement('li', {},
-											justFormatStringFromName(myServices.sb_ip.GetStringFromName('dupe-sizes-err')),
+											justFormatStringFromName(formatStringFromNameCore('dupe-sizes-err', 'iconsetpicker')),
 											allSizesUls
 										)
 									);
@@ -931,7 +930,7 @@ var IPStore = {
 									
 									for (var i=0; i<notSquare.length; i++) {
 										sizeLis.push(React.createElement('li', {},
-											justFormatStringFromName(myServices.sb_ip.GetStringFromName('dimensions'), [notSquare[i].w, notSquare[i].h]) + ' ',
+											justFormatStringFromName(formatStringFromNameCore('dimensions', 'iconsetpicker'), [notSquare[i].w, notSquare[i].h]) + ' ',
 											React.createElement('a', {href:notSquare[i].src, target:'_blank'},
 												notSquare[i].src.substr(notSquare[i].src.lastIndexOf('/') + 1)
 											)
@@ -940,7 +939,7 @@ var IPStore = {
 									
 									var topUl = React.createElement('ul', {},
 										React.createElement('li', {},
-											justFormatStringFromName(myServices.sb_ip.GetStringFromName('not-square-err')),
+											justFormatStringFromName(formatStringFromNameCore('not-square-err', 'iconsetpicker')),
 											React.createElement('ul', {},
 												sizeLis
 											)
@@ -964,7 +963,7 @@ var IPStore = {
 							// show preview-desc
 							// really shouldnt get here though. as if sDirSelected changes, then sPreview should be null'ed
 							cChildren.push(React.createElement('span', {},
-								myServices.sb_ip.GetStringFromName('preview-desc')
+								formatStringFromNameCore('preview-desc', 'iconsetpicker')
 							));
 						}
 					}

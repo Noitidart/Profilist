@@ -1,10 +1,6 @@
 /*start - chrome stuff*/
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-Cm.QueryInterface(Ci.nsIComponentRegistrar);
+const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;;
 Cu.import('resource://gre/modules/devtools/Console.jsm');
-Cu.import('resource://gre/modules/osfile.jsm');
-Cu.import('resource://gre/modules/Services.jsm');
-Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 
 if (!Ci.nsIDOMFileReader) {
 	Cu.importGlobalProperties(['FileReader']);

@@ -1,17 +1,11 @@
-// Imports
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-Cu.import('resource://gre/modules/osfile.jsm');
-Cu.import('resource://gre/modules/Services.jsm');
-Cu.import('resource://gre/modules/XPCOMUtils.jsm');
-
 // Globals
-var core = {
+var core = { // stuff i need before core is fleshed out on initPage
 	addon: {
-		id: 'Profilist@jetpack',
-		path: {
-			locale: 'chrome://profilist/locale/'
-		},
-		cache_key: Math.random() // set to version on release
+		l10n: {
+			html: {
+				'loading': 'Loading'
+			}
+		}
 	}
 };
 
@@ -19,11 +13,6 @@ var gIniObj;
 var gKeyInfoStore;
 
 var gCFMM; // needed for contentMMFromContentWindow_Method2
-
-// Lazy imports
-var myServices = {};
-XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'html.properties?' + core.addon.cache_key); });
-
 /*
 :TODO:
 1. When rename profile, consider updating launcher right away
@@ -157,7 +146,7 @@ window.addEventListener('beforeunload', doOnBeforeUnload, false);
 
 // :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
 function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
-	if (!isFocused(window)) {
+	if (!document.hasFocus()) {
 		attachFocusListener();
 	}
 }
@@ -691,7 +680,7 @@ var Menu = React.createClass({
 		}
 		
 		var cClassList = [];
-		if (this.state.sMessage.interactive.sKey && this.state.sMessage.interactive.sKey == 'createnewprofile' && this.state.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
+		if (this.state.sMessage.interactive.sKey && this.state.sMessage.interactive.sKey == 'createnewprofile' && this.state.sMessage.interactive.details.text == formatStringFromNameCore('pick-to-clone', 'html')) {
 			// i have to test the text, because if it can be interactive but in typing profile name, or showing an error message due to like "already used profile name" etc
 			cClassList.push('profilist-clone-pick');
 		}
@@ -803,7 +792,7 @@ var ToolbarButton = React.createClass({
 				}
 				return;
 			}
-			if (this.props.sMessage.interactive.sKey == 'createnewprofile' && this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('pick-to-clone')) {
+			if (this.props.sMessage.interactive.sKey == 'createnewprofile' && this.props.sMessage.interactive.details.text == formatStringFromNameCore('pick-to-clone', 'html')) {
 				// this was picked for clone
 				// check if should create with preset name, or allow naming field
 				var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // have to do this because i dont pass in sCurProfIniEntry when dev mode is off
@@ -812,7 +801,7 @@ var ToolbarButton = React.createClass({
 				if (keyValLaunchOnCreate === '0') {
 					// assume that non-multiple form is taken, so calc for next preset number
 					// start modded copy of block link37371017111 - this link is in mainworker.js
-					var presetPattStr = escapeRegExp(myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA'], 2));
+					var presetPattStr = escapeRegExp(formatStringFromNameCore('preset-profile-name-clone-multiple', 'html', [this.props.tbbIniEntry.Name, 'DIGITS_REP_REP_REP_HERE_NOIDA']));
 					presetPattStr = presetPattStr.replace('DIGITS_REP_REP_REP_HERE_NOIDA', '(\\d+)');
 					console.log('presetPattStr:', presetPattStr);
 					var presetPatt = new RegExp(presetPattStr);
@@ -831,13 +820,13 @@ var ToolbarButton = React.createClass({
 					}
 					var aPresetCloneName;
 					if (presetNextNumber == 1) {
-						aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone', [this.props.tbbIniEntry.Name], 1);
+						aPresetCloneName = formatStringFromNameCore('preset-profile-name-clone', 'html', [this.props.tbbIniEntry.Name]);
 						var gPrexistingNameEntry = getIniEntryByKeyValue(gIniObj, 'Name', aPresetCloneName);
 						if (gPrexistingNameEntry) {
-							aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, 2], 2);
+							aPresetCloneName = formatStringFromNameCore('preset-profile-name-clone-multiple', 'html', [this.props.tbbIniEntry.Name, 2]);
 						}
 					} else {
-						aPresetCloneName = myServices.sb.formatStringFromName('preset-profile-name-clone-multiple', [this.props.tbbIniEntry.Name, presetNextNumber], 2);
+						aPresetCloneName = formatStringFromNameCore('preset-profile-name-clone-multiple', 'html', [this.props.tbbIniEntry.Name, presetNextNumber]);
 					}
 					// end copy of block link37371017111 - this link is in mainworker.js
 					
@@ -992,7 +981,7 @@ var ToolbarButton = React.createClass({
 				if (this.props.sMessage.interactive.details.type == 'textbox') {
 					// is interacting with rename
 					submenuInInteractiveMode = true;
-				} else if (this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('confirm-delete')) {
+				} else if (this.props.sMessage.interactive.details.text == formatStringFromNameCore('confirm-delete', 'html')) {
 					// interacting with delete
 					submenuInInteractiveMode = true;
 				}
@@ -1007,7 +996,7 @@ var ToolbarButton = React.createClass({
 			React.createElement('div', {className: 'profilist-tbb-primary'},
 				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? undefined : React.createElement('div', {className: 'profilist-tbb-hover'}),
 				this.props.sKey == 'noresultsfor' ? undefined: React.createElement(PrimaryIcon, {tbbIniEntry: this.props.tbbIniEntry, sKey: this.props.sKey, sMessage:this.props.sMessage, sGenIniEntry:(!this.props.tbbIniEntry ? undefined : this.props.sGenIniEntry)}),
-				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? myServices.sb.formatStringFromName(this.props.sKey, [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)], 1) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
+				this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' ? formatStringFromNameCore(this.props.sKey, 'html', [(!hideDueToSearch && this.props.sKey == 'noresultsfor' ? this.props.sSearch.phrase : undefined)]) : React.createElement(PrimarySquishy, {sKey:this.props.sKey, tbbIniEntry:this.props.tbbIniEntry, sSearch:(hideDueToSearch ? undefined : this.props.sSearch), sMessage:this.props.sMessage}) // :note: reason squishy is needed: so i can stack stuff over each other with position absolute div which has contents within so textbox doesnt take 100% is so as submenu expands in decreases the width of the contents in here (like full width textbox) // :note: only ONE thing in squish must be visible at any time. all things inside are position absolute. should be within a div. all must be pointer-events none UNLESS it needs interactive like a textbox
 			),
 			this.props.sKey == 'noresultsfor' || this.props.sKey == 'loading' /* link8857467674 must be -- create new profile button or a profile button -- this.props.sKey != 'createnewprofile' && !this.props.tbbIniEntry */ ? undefined : React.createElement('div', {className: 'profilist-tbb-submenu' + (buildHintImg16Obj ? ' profilist-hasbuildhint' : '') + (submenuInInteractiveMode ? ' profilist-interacting' : ''), style:{width:(cntSubicons * widSubicon)+'px'}, ref:((!this.props.tbbIniEntry || !this.props.tbbIniEntry.Default) ? undefined : 'Submenu_IsDefault') },
 				this.props.sKey != 'createnewprofile' ? undefined : React.createElement(SubiconClone, {sMessage: this.props.sMessage, sKey: this.props.sKey}),
@@ -1114,11 +1103,11 @@ var PrimaryLabel = React.createClass({ // capable of highlighting self
 					React.createElement('span', {className:'profilist-temp-prof-label-wrap'},
 						labelSubChildren
 					),
-					' ' + myServices.sb.GetStringFromName('temp-prof-label')
+					' ' + formatStringFromNameCore('temp-prof-label', 'html')
 				];
 			}
 		} else {
-			labelChildren.push(myServices.sb.GetStringFromName(this.props.sKey));
+			labelChildren.push(formatStringFromNameCore(this.props.sKey, 'html'));
 		}
 		
 		return React.createElement('div', cProps,
@@ -1289,9 +1278,9 @@ var PrimaryIcon = React.createClass({
 				this,
 				function() {
 					if (!this.props.tbbIniEntry.ProfilistBadge) {
-						return myServices.sb.GetStringFromName('badgeify')
+						return formatStringFromNameCore('badgeify', 'html')
 					} else {
-						return myServices.sb.GetStringFromName('badgeify-or-remove')
+						return formatStringFromNameCore('badgeify-or-remove', 'html')
 					}
 				}.bind(this)
 			);
@@ -1652,7 +1641,7 @@ var SubiconDel = React.createClass({
 		setInteractiveMsg(new_sMessage, this.props.sKey,
 			{
 				type: 'label',
-				text: myServices.sb.GetStringFromName('confirm-delete')
+				text: formatStringFromNameCore('confirm-delete', 'html')
 			},
 			{
 				onAccept: function() {
@@ -1688,7 +1677,7 @@ var SubiconDel = React.createClass({
 		
 		// is submenu interactive message with something? // link22345531115122
 		if (this.props.sMessage.interactive && this.props.sMessage.interactive.sKey && this.props.sMessage.interactive.sKey == this.props.sKey) {
-			if (this.props.sMessage.interactive.details.text == myServices.sb.GetStringFromName('confirm-delete')) {
+			if (this.props.sMessage.interactive.details.text == formatStringFromNameCore('confirm-delete', 'html')) {
 				// interacting with delete
 				aProps.className += ' profilist-interacting-with-this';
 			}
@@ -1707,7 +1696,7 @@ var SubiconClone = React.createClass({
 		setInteractiveMsg(new_sMessage, 'createnewprofile',
 			{
 				type: 'label',
-				text: myServices.sb.GetStringFromName('pick-to-clone')
+				text: formatStringFromNameCore('pick-to-clone', 'html')
 			},
 			{
 				onAccept: function() {
@@ -1721,7 +1710,7 @@ var SubiconClone = React.createClass({
 		
 	},
 	componentDidMount: function() {
-		hoverListenerMessage(this, myServices.sb.GetStringFromName('clone-profile'));
+		hoverListenerMessage(this, formatStringFromNameCore('clone-profile', 'html'));
 	},
 	render: function() {
 		// incomping props
@@ -2079,20 +2068,6 @@ function compareAlphaNumeric(a, b) {
     }
 }
 
-function isFocused(window) {
-    var childTargetWindow = {};
-    Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
-    childTargetWindow = childTargetWindow.value;
-
-    var focusedChildWindow = {};
-    if (Services.focus.activeWindow) {
-        Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
-        focusedChildWindow = focusedChildWindow.value;
-    }
-
-    return (focusedChildWindow === childTargetWindow);
-}
-
 function validateOptionsObj(aOptions, aOptionsDefaults) {
 	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
 	for (var aOptKey in aOptions) {
@@ -2109,17 +2084,23 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 		}
 	}
 }
+function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements) {
+	// 051916 update - made it core.addon.l10n based
+    // formatStringFromNameCore is formating only version of the worker version of formatStringFromName, it is based on core.addon.l10n cache
+	
+	// try {
+	// 	var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n];
+	// } catch (ex) {
+	// 	console.error('formatStringFromNameCore error:', ex, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
+	// }
+	var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr];
+	// console.log('cLocalizedStr:', cLocalizedStr, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
+    if (aReplacements) {
+        for (var i=0; i<aReplacements.length; i++) {
+            cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+        }
+    }
 
-function justFormatStringFromName(aLocalizableStr, aReplacements) {
-	// justFormatStringFromName is formating only ersion of the worker version of formatStringFromName
-	
-	var cLocalizedStr = aLocalizableStr;
-	if (aReplacements) {
-		for (var i=0; i<aReplacements.length; i++) {
-			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
-		}
-	}
-	
-	return cLocalizedStr;
+    return cLocalizedStr;
 }
 // end - common helper functions

@@ -6075,12 +6075,14 @@ function getAllPID(aOptions={}) {
 				console.log('rez_pgrep:', rez_pgrep);
 				console.log('cReadChunks:', cReadChunks);
 				
-				if (aOptions.firefoxOnly && rez_pgrep == 256) {
+				if (aOptions.firefoxOnly && (rez_pgrep == 256 || !cReadChunks.contents || !cReadChunks.contents.trim())) {
+					// 256 means no results. as tested on ubuntu and mac
 					// on mac, pgrep does not find itself, so it wont find self pid - i dont test specifically for mac, because it might be some random *nix that doesnt either
 					cProcessIdsInfos[core.firefox.pid] = {
 						processName: 'firefox'
 					};
-				} else if (rez_pgrep === 0) {
+				} else if (rez_pgrep === 0 || cReadChunks.contents) {
+					// for some weird reason, on ubuntu 15.01 i am getting rez_pgrep of -1 sometimes, even though contents does exist
 					var pidInfoRows = cReadChunks.contents.split('\n');
 					console.log('pidInfoRows:', pidInfoRows);
 					if (aOptions.firefoxOnly) {
