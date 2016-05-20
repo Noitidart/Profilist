@@ -103,23 +103,34 @@ function bootstrapComm(aChannelID) {
 					uninit(); // link4757484773732
 					return;
 				}
-				if (!(payload.method in content)) { console.error('method of "' + payload.method + '" not in CONTENT'); throw new Error('method of "' + payload.method + '" not in CONTENT') } // dev line remove on prod
-				var rez_fs_call = content[payload.method](payload.arg, this);
-				console.log('rez_fs_call:', rez_fs_call);
-				if (payload.cbid) {
-					if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
-						rez_fs_call.then(
-							function(aVal) {
-								console.log('Fullfilled - rez_fs_call - ', aVal);
-								this.transcribeMessage(payload.cbid, aVal);
-							}.bind(this),
-							genericReject.bind(null, 'rez_fs_call', 0)
-						).catch(genericCatch.bind(null, 'rez_fs_call', 0));
-					} else {
-						console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
-						this.transcribeMessage(payload.cbid, rez_fs_call);
-					}
+				if (!gWinComm) {
+					console.warn('no currently connected window');
+					return 'no currently connected window';
 				}
+				// if (!(payload.method in content)) { console.error('method of "' + payload.method + '" not in CONTENT'); throw new Error('method of "' + payload.method + '" not in CONTENT') } // dev line remove on prod
+				// var rez_fs_call = content[payload.method](payload.arg, this);
+				var cWinCommCb = undefined;
+				if (payload.cbid) {
+					cWinCommCb = function(aWinCommRez) {
+						if (payload.cbid) {
+							if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
+								rez_fs_call.then(
+									function(aVal) {
+										console.log('Fullfilled - rez_fs_call - ', aVal);
+										this.transcribeMessage(payload.cbid, aVal);
+									}.bind(this),
+									genericReject.bind(null, 'rez_fs_call', 0)
+								).catch(genericCatch.bind(null, 'rez_fs_call', 0));
+							} else {
+								console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
+								this.transcribeMessage(payload.cbid, rez_fs_call);
+							}
+						}
+					}.bind(this);
+				}
+				gWinComm.postMessage(payload.arg, payload.arg, undefined, cWinCommCb);
+				console.log('rez_fs_call:', rez_fs_call);
+
 			} else if (!payload.method && payload.cbid) {
 				// its a cbid
 				this.callbackReceptacle[payload.cbid](payload.arg, this);
@@ -259,6 +270,7 @@ var pageLoader = {
 	// start - devuser editable
 	IGNORE_FRAMES: true,
 	IGNORE_LOAD: true,
+	IGNORE_NONMATCH: false,
 	matches: function(aHREF, aLocation) {
 		// do your tests on aHREF, which is aLocation.href.toLowerCase(), return true if it matches
 		return (aHREF.indexOf('about:profilist') === 0);
@@ -284,15 +296,23 @@ var pageLoader = {
 		
 		console.log('reallyReady done');
 	},
-	load: function(aContentWindow) {
-		// triggered on page load if IGNORE_LOAD is false
-	},
+	load: function(aContentWindow) {}, // triggered on page load if IGNORE_LOAD is false
 	error: function(aContentWindow, aDocURI) {
 		// triggered when page fails to load due to error
 		console.warn('hostname page ready, but an error page loaded, so like offline or something, aHref:', aContentWindow.location.href, 'aDocURI:', aDocURI);
 	},
+	readyNonmatch: function(aContentWindow) {
+		gWinComm = null;
+	},
+	loadNonmatch: function(aContentWindow) {},
+	errorNonmatch: function(aContentWindow, aDocURI) {
+		gWinComm = null;
+	},
 	// not yet supported
 	// timeout: function(aContentWindow) {
+	// 	// triggered on timeout
+	// },
+	// timeoutNonmatch: function(aContentWindow) {
 	// 	// triggered on timeout
 	// },
 	// end - devuser editable
@@ -336,16 +356,40 @@ var pageLoader = {
 				pageLoader.ready(contentWindow);
 			}
 		} else {
-			console.log('page ready, but its not about:profilist so do nothing:', uneval(contentWindow.location));
-			return;
+			if (!this.IGNORE_NONMATCH) {
+				console.log('page ready, but its not match:', uneval(contentWindow.location));
+				var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIWebNavigation);
+				var docURI = webNav.document.documentURI;
+				// console.info('docURI:', docURI);
+				
+				if (docURI.indexOf('about:neterror') === 0) {
+					pageLoader.errorNonmatch(contentWindow, docURI);
+				} else {
+					// our page ready without error
+					
+					if (!pageLoader.IGNORE_LOAD) {
+						// i can attach the load listener here, and remove it on trigger of it, because for sure after this point the load will fire
+						contentWindow.addEventListener('load', pageLoader.onPageLoadNonmatch, false);
+					}
+					
+					pageLoader.readyNonmatch(contentWindow);
+				}
+			}
 		}
 	},
 	onPageLoad: function(e) {
 		// DO NOT EDIT
 		// boilerplate triggered on load if IGNORE_LOAD is false
 		var contentWindow = e.target.defaultView;
-		contentWindow.removeEventListener('load', pageLoader.load, false);
+		contentWindow.removeEventListener('load', pageLoader.onPageLoad, false);
 		pageLoader.load(contentWindow);
+	},
+	onPageLoadNonmatch: function(e) {
+		// DO NOT EDIT
+		// boilerplate triggered on load if IGNORE_LOAD is false
+		var contentWindow = e.target.defaultView;
+		contentWindow.removeEventListener('load', pageLoader.onPageLoadNonmatch, false);
+		pageLoader.loadNonmatch(contentWindow);
 	}
 	// end - BOILERLATE - DO NOT EDIT
 };

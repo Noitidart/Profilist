@@ -159,7 +159,9 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 		// this will load the images, then draw to canvas, then get get image data, then get array buffer/Bytedata for each image, and transfer object back it to the worker
 	},
 	fwInstances: {}, // frameworker instances, obj with id is aId which is arg of setupFrameworker
-	setupFrameworker: function(aId) {
+	setupFrameworker: function(aArg) {
+		var {aId, aBootPort, aFwPort} = aArg;
+		
 		// aId is the id to create frameworker with
 		console.log('mainthread: setupFrameworker, aId:', aId);
 
@@ -170,26 +172,41 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 		
 		var doAfterAppShellDomWinReady = function() {
 			var aBrowser = aDocument.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'browser');
-			aBrowser.setAttribute('data-icon-container-generator-fwinstance-id', aId);
-			if (core.os.mname != 'darwin') {
-				aBrowser.setAttribute('remote', 'true');
-			}
-			// aBrowser.setAttribute('disablesecurity', true);
-			// aBrowser.setAttribute('disablehistory', 'true');
+			// aBrowser.setAttribute('data-icon-container-generator-fwinstance-id', aId);
+
+
 			aBrowser.setAttribute('type', 'content');
 			// aBrowser.setAttribute('style', 'height:100px;border:10px solid steelblue;');
 			aBrowser.setAttribute('style', 'display:none;');
-			// aBrowser.setAttribute('src', 'data:text/html,back to content');
-			aBrowser.setAttribute('src', core.addon.path.content_remote + 'frameworker.htm');
+
+			
+			var initFw = function(aComm) {
+				aComm.postMessage('initFw', aId);
+			};
+			
 			
 			ICGenWorkerFuncs.fwInstances[aId] = {
 				browser: aBrowser,
+				// comm is added in DOMContentLoaded
 				deferredMain_setupFrameworker: deferredMain_setupFrameworker
 			};
 			
+			aBrowser.addEventListener('DOMContentLoaded', function(e) { // cross-file-link381743613524242 - need this because there is no aBrowser.contentWindow until the page loads
+				// for now im going with assumption of this test - this DOMContentLoaded is triggering after the DOMContentLoaded in fsReturnIconset.js of fsReturnIconset.htm
+				aBrowser.removeEventListener('DOMContentLoaded', arguments.callee, false);
+				console.error('content loaded in aBrowser!, aBrowser.contentWindow.location.href:', aBrowser.contentWindow.location.href)
+				
+				ICGenWorkerFuncs.fwInstances[aId].comm = new msgchanComm(aBrowser.contentWindow, aBootPort, aFwPort, initFw);
+			}, false);
+			
+			aBrowser.setAttribute('src', core.addon.path.pages + 'fsReturnIconset.htm');
+			
+
+
+			
 			aDocument.documentElement.appendChild(aBrowser);
-			console.log('aBrowser.messageManager:', aBrowser.messageManager);
-			aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);			
+			// console.log('aBrowser.messageManager:', aBrowser.messageManager);
+			// aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);			
 			
 			// ICGenWorkerFuncs.fwInstances[aId].browser.messageManager.IconContainerGenerator_id = aId; // doesnt work
 			// console.log('ICGenWorkerFuncs.fwInstances[aId].browser.messageManager:', ICGenWorkerFuncs.fwInstances[aId].browser.messageManager);
@@ -223,7 +240,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	},
 	tellFrameworkerLoadImg: function(aProvidedPath, aLoadPath, aId) {
 		var deferredMain_tellFrameworkerLoadImg = new Deferred();
-		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['loadImg', aProvidedPath, aLoadPath], fsMsgListener.funcScope, function(aImgDataObj) {
+		ICGenWorkerFuncs.fwInstances[aId].comm.postMessage('loadImg', {aProvidedPath, aLoadPath}, null, function(aImgDataObj, aComm) {
 			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			deferredMain_tellFrameworkerLoadImg.resolve([aImgDataObj]);
 		});
@@ -231,20 +248,20 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	},
 	tellFrameworkerDrawScaled: function(aImgPath, aDrawAtSize, aId) {
 		var deferredMain_tellFrameworkerDrawScaled = new Deferred();
-		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled', aImgPath, aDrawAtSize], fsMsgListener.funcScope, function(aImgDataObj) {
+		ICGenWorkerFuncs.fwInstances[aId].comm.postMessage('drawScaled', {aProvidedPath:aImgPath, aDrawAtSize}, null, function(aImgDataObj, aComm) {
 			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			var resolveWithArr = [aImgDataObj];
 			if (aImgDataObj.arrbuf) {
 				resolveWithArr.push([aImgDataObj.arrbuf]);
 				resolveWithArr.push(SIC_TRANS_WORD);
 			}
-			deferredMain_tellFrameworkerDrawScaled.resolve(resolveWithArr);		
+			deferredMain_tellFrameworkerDrawScaled.resolve(resolveWithArr);
 		});
 		return deferredMain_tellFrameworkerDrawScaled.promise;
 	},
 	tellFrameworker_dSoBoOOSb: function(aImgPath, aDrawAtSize, optBuf, optOverlapObj, aId) {
 		var deferredMain_tellFrameworker_dSoBoOOSb = new Deferred();
-		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['drawScaled_optBuf_optOverlapOptScaled_buf', aImgPath, aDrawAtSize, optBuf, optOverlapObj], fsMsgListener.funcScope, function(aImgDataObj) {
+		ICGenWorkerFuncs.fwInstances[aId].comm.postMessage('drawScaled_optBuf_optOverlapOptScaled_buf', {aProvidedPath: aImgPath, aDrawAtSize, optBuf, optOverlapObj}, null, function(aImgDataObj, aComm) {
 			console.log('in bootstrap callback of tellFrameworkerLoadImg, resolving');
 			var resolveWithArr = [aImgDataObj];
 			var bufTrans = [];
@@ -264,7 +281,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	},
 	tellFrameworkerGetImgDatasOfFinals: function(reqObj, aId) {
 		var deferredMain_tellFrameworker_gIDOF = new Deferred();
-		sendAsyncMessageWithCallback(ICGenWorkerFuncs.fwInstances[aId].browser.messageManager, core.addon.id, ['getImgDatasOfFinals', reqObj], fsMsgListener.funcScope, function(aObjOfBufs) {
+		ICGenWorkerFuncs.fwInstances[aId].comm.postMessage('getImgDatasOfFinals', reqObj, null, function(aObjOfBufs, aComm) {
 			
 			var resolveWithArr = [aObjOfBufs, [], SIC_TRANS_WORD];
 			for (var p in aObjOfBufs) {
@@ -720,12 +737,11 @@ function shutdown(aData, aReason) {
 var gTestConnMM;
 // start - functions called by framescripts
 	// fsReturnIconset.js functions
-	function frameworkerReady(aArg, aMessageManager, aBrowser, aComm) {
-		console.info('fwInstancesId:', aBrowser);
-		var fwInstancesId = aBrowser.getAttribute('data-icon-container-generator-fwinstance-id');
-		console.info('fwInstancesId:', fwInstancesId);
+	function fsReturnIconsetReady(aArg, aComm) {
+		var {id} = aArg; // id is fwInstanceId
+		console.info('fwInstanceId:', id);
 		
-		ICGenWorkerFuncs.fwInstances[fwInstancesId].deferredMain_setupFrameworker.resolve(['ok send me imgs now baby']);
+		ICGenWorkerFuncs.fwInstances[id].deferredMain_setupFrameworker.resolve([true]); // 'ok send me imgs now baby'
 	}
 	// end - fsReturnIconset.js functions
 	function fetchCoreAndConfigs(aArg, aMessageManager, aBrowser, aComm) {
@@ -1013,131 +1029,20 @@ var gTestConnMM;
 	}
 // end - functions called by framescripts
 
-
-var gFramescriptComms = [];
-function framescriptComm_unregAll() {
-	var l = gFramescriptComms.length;
-	for (var i=0; i<l; i++) {
-		gFramescriptComms[i].unregister();
-	}
-}
-function framescriptComm(aChannelID) {
-	this.id = aChannelID;
-	
-	gFramescriptComms.push(this);
-	
-	this.unregister = function() {
-		Services.mm.addMessageListener(this.id, this.listener);
-		
-		var l = gFramescriptComms.length;
-		for (var i=0; i<l; i++) {
-			if (gFramescriptComms[i] == this) {
-				gFramescriptComms.splice(i, 1);
-				break;
-			}
-		}
-	};
-	
-	this.listener = {
-		receiveMessage: function(e) {
-			var messageManager = e.target.messageManager;
-			var browser = e.target;
-			var payload = e.data;
-			console.log('incoming message to bootstrap, payload:', payload);
-			// console.log('this in receiveMessage bootstrap:', this);
-			
-			if (payload.method) {
-				if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') }  // dev line remove on prod
-				var rez_bs_call = BOOTSTRAP[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
-				if (payload.cbid) {
-					if (rez_bs_call && rez_bs_call.constructor.name == 'Promise') {
-						rez_bs_call.then(
-							function(aVal) {
-								console.log('Fullfilled - rez_bs_call - ', aVal);
-								this.transcribeMessage(messageManager, payload.cbid, aVal);
-							}.bind(this),
-							genericReject.bind(null, 'rez_bs_call', 0)
-						).catch(genericCatch.bind(null, 'rez_bs_call', 0));
-					} else {
-						console.log('calling transcribeMessage for callbck with args:', payload.cbid, rez_bs_call);
-						this.transcribeMessage(messageManager, payload.cbid, rez_bs_call);
-					}
-				}
-			} else if (!payload.method && payload.cbid) {
-				// its a cbid
-				this.callbackReceptacle[payload.cbid](payload.arg, messageManager, browser, this);
-				delete this.callbackReceptacle[payload.cbid];
-			} else {
-				throw new Error('invalid combination');
-			}
-		}.bind(this)
-	};
-	this.nextcbid = 1; //next callback id
-	this.transcribeMessage = function(aMessageManager, aMethod, aArg, aCallback) {
-		// console.log('bootstrap sending message to framescript', aMethod, aArg);
-		// aMethod is a string - the method to call in framescript
-		// aCallback is a function - optional - it will be triggered when aMethod is done calling
-		
-		var cbid = null;
-		if (typeof(aMethod) == 'number') {
-			// this is a response to a callack waiting in framescript
-			cbid = aMethod;
-			aMethod = null;
-		} else {
-			if (aCallback) {
-				cbid = this.nextcbid++;
-				this.callbackReceptacle[cbid] = aCallback;
-			}
-		}
-		
-		// return;
-		aMessageManager.sendAsyncMessage(this.id, {
-			method: aMethod,
-			arg: aArg,
-			cbid
-		});
-	};
-	this.callbackReceptacle = {};
-
-	Services.mm.addMessageListener(this.id, this.listener);
-}
 var gCreateDesktopShortcutId = -1;
 // start - common helper functions
 function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3cb7390
-	// update 062115 for typeof
-	if (typeof(Promise) != 'undefined' && Promise.defer) {
-		//need import of Promise.jsm for example: Cu.import('resource:/gree/modules/Promise.jsm');
-		return Promise.defer();
-	} else if (typeof(PromiseUtils) != 'undefined'  && PromiseUtils.defer) {
-		//need import of PromiseUtils.jsm for example: Cu.import('resource:/gree/modules/PromiseUtils.jsm');
-		return PromiseUtils.defer();
-	} else {
-		/* A method to resolve the associated Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} value : This value is used to resolve the promise
-		 * If the value is a Promise then the associated promise assumes the state
-		 * of Promise passed as value.
-		 */
+	try {
 		this.resolve = null;
-
-		/* A method to reject the assocaited Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} reason: The reason for the rejection of the Promise.
-		 * Generally its an Error object. If however a Promise is passed, then the Promise
-		 * itself will be the reason for rejection no matter the state of the Promise.
-		 */
 		this.reject = null;
-
-		/* A newly created Pomise object.
-		 * Initially in pending state.
-		 */
 		this.promise = new Promise(function(resolve, reject) {
 			this.resolve = resolve;
 			this.reject = reject;
 		}.bind(this));
 		Object.freeze(this);
+	} catch (ex) {
+		console.log('Promise not available!', ex);
+		throw new Error('Promise not available!');
 	}
 }
 
@@ -1447,22 +1352,6 @@ function aReasonMax(aReason) {
 	return deepestReason;
 }
 
-// sendAsyncMessageWithCallback - rev3
-const SAM_CB_PREFIX = '_sam_gen_cb_';
-var sam_last_cb_id = -1;
-function sendAsyncMessageWithCallback(aMessageManager, aGroupId, aMessageArr, aCallbackScope, aCallback) {
-	sam_last_cb_id++;
-	var thisCallbackId = SAM_CB_PREFIX + sam_last_cb_id;
-	aCallbackScope = aCallbackScope ? aCallbackScope : bootstrap;
-	aCallbackScope[thisCallbackId] = function(aMessageArr) {
-		delete aCallbackScope[thisCallbackId];
-		aCallback.apply(null, aMessageArr);
-	}
-	aMessageArr.push(thisCallbackId);
-	aMessageManager.sendAsyncMessage(aGroupId, aMessageArr);
-}
-
-
 function extendCore() {
 	// adds some properties i use to core based on the current operating system, it needs a switch, thats why i couldnt put it into the core obj at top
 	switch (core.os.name) {
@@ -1606,5 +1495,187 @@ function getNativeHandlePtrStr(aDOMWindow) {
 								   .QueryInterface(Ci.nsIInterfaceRequestor)
 								   .getInterface(Ci.nsIBaseWindow);
 	return aDOMBaseWindow.nativeHandle;
+}
+
+
+/////// framescript comm
+var gFramescriptComms = [];
+function framescriptComm_unregAll() {
+	var l = gFramescriptComms.length;
+	for (var i=0; i<l; i++) {
+		gFramescriptComms[i].unregister();
+	}
+}
+function framescriptComm(aChannelID) {
+	this.id = aChannelID;
+	
+	gFramescriptComms.push(this);
+	
+	this.unregister = function() {
+		Services.mm.addMessageListener(this.id, this.listener);
+		
+		var l = gFramescriptComms.length;
+		for (var i=0; i<l; i++) {
+			if (gFramescriptComms[i] == this) {
+				gFramescriptComms.splice(i, 1);
+				break;
+			}
+		}
+	};
+	
+	this.listener = {
+		receiveMessage: function(e) {
+			var messageManager = e.target.messageManager;
+			var browser = e.target;
+			var payload = e.data;
+			console.log('incoming message to bootstrap, payload:', payload);
+			// console.log('this in receiveMessage bootstrap:', this);
+			
+			if (payload.method) {
+				if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') }  // dev line remove on prod
+				var rez_bs_call = BOOTSTRAP[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
+				if (payload.cbid) {
+					if (rez_bs_call && rez_bs_call.constructor.name == 'Promise') {
+						rez_bs_call.then(
+							function(aVal) {
+								console.log('Fullfilled - rez_bs_call - ', aVal);
+								this.transcribeMessage(messageManager, payload.cbid, aVal);
+							}.bind(this),
+							genericReject.bind(null, 'rez_bs_call', 0)
+						).catch(genericCatch.bind(null, 'rez_bs_call', 0));
+					} else {
+						console.log('calling transcribeMessage for callbck with args:', payload.cbid, rez_bs_call);
+						this.transcribeMessage(messageManager, payload.cbid, rez_bs_call);
+					}
+				}
+			} else if (!payload.method && payload.cbid) {
+				// its a cbid
+				this.callbackReceptacle[payload.cbid](payload.arg, messageManager, browser, this);
+				delete this.callbackReceptacle[payload.cbid];
+			} else {
+				throw new Error('invalid combination');
+			}
+		}.bind(this)
+	};
+	this.nextcbid = 1; //next callback id
+	this.transcribeMessage = function(aMessageManager, aMethod, aArg, aCallback) {
+		// console.log('bootstrap sending message to framescript', aMethod, aArg);
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		aMessageManager.sendAsyncMessage(this.id, {
+			method: aMethod,
+			arg: aArg,
+			cbid
+		});
+	};
+	this.callbackReceptacle = {};
+
+	Services.mm.addMessageListener(this.id, this.listener);
+}
+
+function msgchanComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
+	// cross-file-link0048958576532536411 - this is the bootstrap side msgchanComm
+	// onHandshakeComplete is triggered when handshake is complete
+
+	var handshakeComplete = false; // indicates this.postMessage will now work i think. it might work even before though as the messages might be saved till a listener is setup? i dont know i should ask
+	
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers;
+	};
+	
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('incoming msgchan to bootstrap, payload:', payload, 'e:', e);
+		
+		if (payload.method) {
+			if (payload.method == 'msgchanComm_handshake_finalized') {
+				handshakeComplete = false;
+				if (onHandshakeComplete) {
+					onHandshakeComplete(this);
+				}
+				return;
+			}
+			if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') } // dev line remove on prod
+			var rez_bs_call_for_win = BOOTSTRAP[payload.method](payload.arg, this);
+			console.log('rez_bs_call_for_win:', rez_bs_call_for_win);
+			if (payload.cbid) {
+				if (rez_bs_call_for_win && rez_bs_call_for_win.constructor.name == 'Promise') {
+					rez_bs_call_for_win.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_bs_call_for_win - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_bs_call_for_win', 0)
+					).catch(genericCatch.bind(null, 'rez_bs_call_for_win', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_bs_call_for_win:', rez_bs_call_for_win, 'this:', this);
+					this.postMessage(payload.cbid, rez_bs_call_for_win);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
+		}
+	}.bind(this);
+	
+	this.nextcbid = 1; //next callback id
+	
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		aPort1.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	}
+	
+	aPort1.onmessage = this.listener;
+	this.callbackReceptacle = {};
+	
+	aContentWindow.postMessage({
+		topic: 'msgchanComm_handshake',
+		port2: aPort2
+	}, '*', [aPort2]);
+	
 }
 // end - common helper functions

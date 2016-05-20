@@ -1,29 +1,11 @@
-/*start - chrome stuff*/
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;;
-Cu.import('resource://gre/modules/devtools/Console.jsm');
-
-if (!Ci.nsIDOMFileReader) {
-	Cu.importGlobalProperties(['FileReader']);
-}
-
-// Globals
-const core = {
-	addon: {
-		id: 'Profilist@jetpack',
-		path: {
-			name: 'profilist',
-		},
-		cache_key: Math.random() // set to version on release
-	}
-};
-var gCFMM;
-const NS_HTML = 'http://www.w3.org/1999/xhtml';
+var timeStart1 = new Date();
 
 // start - functionalities
 var imgPathData = {}; //keys are image path, and value is object holding data
 
-var bootstrapCallbacks = {
-	loadImg: function(aProvidedPath, aLoadPath) {
+// var bootstrapCallbacks = {
+	function loadImg(aArg, aComm) {
+		var {aProvidedPath, aLoadPath} = aArg;
 		// aProvidedPath must be file uri, or chrome path, or http NOT os path
 		console.log('in loadImg');
 		
@@ -37,40 +19,41 @@ var bootstrapCallbacks = {
 		
 		imgPathData[aProvidedPath] = {};
 		
-		imgPathData[aProvidedPath].Image = new content.Image();
+		imgPathData[aProvidedPath].Image = new Image();
 		
 		imgPathData[aProvidedPath].Image.onload = function() {
-			// imgPathData[aProvidedPath].Canvas = content.document.createElementNS(NS_HTML, 'canvas')
+			// imgPathData[aProvidedPath].Canvas = document.createElementNS(NS_HTML, 'canvas')
 			// imgPathData[aProvidedPath].Ctx = imgPathData[aProvidedPath].Canvas.getContext('2d');
 			imgPathData[aProvidedPath].w = this.naturalWidth;
 			imgPathData[aProvidedPath].h = this.naturalHeight;
 			imgPathData[aProvidedPath].status = 'img-ok';
-			deferredMain_loadImg.resolve([{
+			deferredMain_loadImg.resolve({
 				status: 'img-ok',
 				w: imgPathData[aProvidedPath].w,
 				h: imgPathData[aProvidedPath].h
-			}]);
+			});
 		};
 		
 		imgPathData[aProvidedPath].Image.onabort = function() {
 			imgPathData[aProvidedPath].status = 'img-abort';
-			deferredMain_loadImg.resolve([{
+			deferredMain_loadImg.resolve({
 				status: 'img-abort'
-			}]);
+			});
 		};
 		
 		imgPathData[aProvidedPath].Image.onerror = function() {
 			imgPathData[aProvidedPath].status = 'img-error';
-			deferredMain_loadImg.resolve([{
+			deferredMain_loadImg.resolve({
 				status: 'img-error'
-			}]);
+			});
 		};
 		
 		imgPathData[aProvidedPath].Image.src = aLoadPath;
 		
 		return deferredMain_loadImg.promise;
-	},
-	drawScaled: function(aProvidedPath, aDrawAtSize) {
+	}
+	function drawScaled(aArg, aComm) {
+		var {aProvidedPath, aDrawAtSize} = aArg;
 		// aProvidedPath is one of keys in imgPathData, so its devuser provided path
 		// must be square obiouvsly, i am assuming it is
 		// aDrawAtSize is what the width and height will be set to
@@ -84,7 +67,7 @@ var bootstrapCallbacks = {
 		
 		if (!(aDrawAtSize in imgPathData[aProvidedPath].scaleds)) {
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize] = {};
-			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = content.document.createElement('canvas');
+			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = document.createElement('canvas');
 			var Ctx = imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.getContext('2d');
 			
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.width = aDrawAtSize;
@@ -98,32 +81,33 @@ var bootstrapCallbacks = {
 		}
 		
 		(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlobHD || imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlob).call(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can, function(blob) {
-			var reader = Ci.nsIDOMFileReader ? Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader) : new FileReader();
+			var reader = new FileReader();
 			reader.onloadend = function() {
 				// reader.result contains the ArrayBuffer.
-				deferredMain_drawScaled.resolve([{
+				deferredMain_drawScaled.resolve(new aComm.CallbackTransferReturn({
 					status: 'ok',
 					arrbuf: reader.result
-				}]);
+				}, [reader.result]));
 			};
 			reader.onabort = function() {
-				deferredMain_drawScaled.resolve([{
+				deferredMain_drawScaled.resolve({
 					status: 'fail',
 					reason: 'Abortion on nsIDOMFileReader, failed reading blob of provided path: "' + aProvidedPath + '"'
-				}]);
+				});
 			};
 			reader.onerror = function() {
-				deferredMain_drawScaled.resolve([{
+				deferredMain_drawScaled.resolve({
 					status: 'fail',
 					reason: 'Error on nsIDOMFileReader, failed reading blob of provided path: "' + aProvidedPath + '"'
-				}]);
+				});
 			};
 			reader.readAsArrayBuffer(blob);
 		}, 'image/png');
 		
 		return deferredMain_drawScaled.promise;
-	},
-	drawScaled_optBuf_optOverlapOptScaled_buf: function(aProvidedPath, aDrawAtSize, optBuf, optOverlapObj) {
+	}
+	function drawScaled_optBuf_optOverlapOptScaled_buf(aArg, aComm) {
+		var {aProvidedPath, aDrawAtSize, optBuf, optOverlapObj} = aArg;
 		// this method will polute the imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can with the overlap // link165151
 		
 		// aProvidedPath
@@ -138,10 +122,10 @@ var bootstrapCallbacks = {
 		var deferredMain_dSoBoOOSb = new Deferred();
 		
 		if (optBuf && !optOverlapObj) {
-			deferredMain_dSoBoOOSb.resolve([{
+			deferredMain_dSoBoOOSb.resolve({
 				status: 'fail',
 				reason: 'devusre asking for optBuf but they arent overlapping, so this is redudant, as optBuf will be same as final buf'
-			}]);
+			});
 			return deferredMain_dSoBoOOSb.promise;
 		}
 		
@@ -159,7 +143,7 @@ var bootstrapCallbacks = {
 			
 			if (!(aDrawAtSize in imgPathData[aProvidedPath].scaleds)) {
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize] = {};
-				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = content.document.createElement('canvas');
+				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = document.createElement('canvas');
 				Ctx = imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.getContext('2d');
 				
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.width = aDrawAtSize;
@@ -194,20 +178,20 @@ var bootstrapCallbacks = {
 						var rejObj = {name:'deferred_optBuf', aReason:aReason};
 						console.warn('Rejected - deferred_optBuf - ', rejObj);
 						// deferred_createProfile.reject(rejObj);
-						deferredMain_dSoBoOOSb.resolve([{
+						deferredMain_dSoBoOOSb.resolve({
 							status: 'fail',
 							reason: aReason
-						}]);
+						});
 					}
 				).catch(
 					function(aCaught) {
 						var rejObj = {name:'deferred_optBuf', aCaught:aCaught};
 						console.error('Caught - deferred_optBuf - ', rejObj);
 						// deferred_createProfile.reject(rejObj);
-						deferredMain_dSoBoOOSb.resolve([{
+						deferredMain_dSoBoOOSb.resolve({
 							status: 'fail',
 							aCaught: aCaught
-						}]);
+						});
 					}
 				);
 			} else {
@@ -242,27 +226,27 @@ var bootstrapCallbacks = {
 					// start - do stuff here - deferred_finalBuf
 					rezObj.finalBuf = aVal;
 					rezObj.status = 'ok';
-					deferredMain_dSoBoOOSb.resolve([rezObj]);
+					deferredMain_dSoBoOOSb.resolve(new aComm.CallbackTransferReturn(rezObj, [rezObj.finalBuf]));
 					// end - do stuff here - deferred_finalBuf
 				},
 				function(aReason) {
 					var rejObj = {name:'deferred_finalBuf', aReason:aReason};
 					console.warn('Rejected - deferred_finalBuf - ', rejObj);
 					// deferred_createProfile.reject(rejObj);
-					deferredMain_dSoBoOOSb.resolve([{
+					deferredMain_dSoBoOOSb.resolve({
 						status: 'fail',
 						reason: aReason
-					}]);
+					});
 				}
 			).catch(
 				function(aCaught) {
 					var rejObj = {name:'deferred_finalBuf', aCaught:aCaught};
 					console.error('Caught - deferred_finalBuf - ', rejObj);
 					// deferred_createProfile.reject(rejObj);
-					deferredMain_dSoBoOOSb.resolve([{
+					deferredMain_dSoBoOOSb.resolve({
 						status: 'fail',
 						aCaught: aCaught
-					}]);
+					});
 				}
 			);
 		};
@@ -271,23 +255,25 @@ var bootstrapCallbacks = {
 		//////
 		
 		return deferredMain_dSoBoOOSb.promise;
-	},
-	getImgDatasOfFinals: function(reqObj) {
+	}
+	function getImgDatasOfFinals(reqObj, aComm) {
 		var rezObj = {}; // key is output size, value is image data arrbuf
+		var transfers = [];
 		for (var i=0; i<reqObj.length; i++) {
 			var providedImgPath = reqObj[i].aProvidedPath;
 			var outputSize = reqObj[i].aOutputSize;
 			rezObj[outputSize] = imgPathData[providedImgPath].scaleds[outputSize].Can.getContext('2d').getImageData(0, 0, outputSize, outputSize).data.buffer;
+			transfers.push(rezObj[outputSize]);
 		}
-		return [rezObj];
+		return new aComm.CallbackTransferReturn(rezObj, transfers);
 	}
-};
+// };
 
 		
 function blobCb(aProvidedPath, aDeferred_blobCb, blob) {
 	// gets arrbuf
 	
-	var reader = Ci.nsIDOMFileReader ? Cc['@mozilla.org/files/filereader;1'].createInstance(Ci.nsIDOMFileReader) : new FileReader();
+	var reader = new FileReader();
 	reader.onloadend = function() {
 		// reader.result contains the ArrayBuffer.
 		aDeferred_blobCb.resolve(reader.result);
@@ -302,41 +288,33 @@ function blobCb(aProvidedPath, aDeferred_blobCb, blob) {
 }
 // end - functionalities
 
-// start - common helper functions
-function contentMMFromContentWindow_Method2(aContentWindow) {
-	if (!gCFMM) {
-		gCFMM = aContentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
-							  .getInterface(Ci.nsIDocShell)
-							  .QueryInterface(Ci.nsIInterfaceRequestor)
-							  .getInterface(Ci.nsIContentFrameMessageManager);
-	}
-	return gCFMM;
+// end - common helper functions
 
+// start - load unload stuff
+function onPageReady(aEvent) {
+	var aContentWindow = aEvent.target.defaultView;
+	console.info('domcontentloaded time:', (new Date().getTime() - timeStart1));
+	console.log('fsReturnIconset.js page ready, window.location:', window.location.href, 'aContentWindow.location:', aContentWindow.location.href);
+}
+var gBsComm = new msgchanComm(); // handshake doesnt happen till after DOMContentLoaded so i dont need to use onPageReady. this is becaseu aBrowser.addEventListener for DOMContentLoaded see cross-file-link381743613524242
+var gId;
+
+function initFw(aId) {
+	// will not fire till after onPageReady because i dont register msgchanComm till onPageReady
+	gId = aId;
+	gBsComm.postMessage('fsReturnIconsetReady', {
+		id: aId
+	});
 }
 
+window.addEventListener('DOMContentLoaded', onPageReady, false);
+// end - load unload stuff
+
+// start - common helper functions
 function Deferred() {
 	try {
-		/* A method to resolve the associated Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} value : This value is used to resolve the promise
-		 * If the value is a Promise then the associated promise assumes the state
-		 * of Promise passed as value.
-		 */
 		this.resolve = null;
-
-		/* A method to reject the assocaited Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} reason: The reason for the rejection of the Promise.
-		 * Generally its an Error object. If however a Promise is passed, then the Promise
-		 * itself will be the reason for rejection no matter the state of the Promise.
-		 */
 		this.reject = null;
-
-		/* A newly created Pomise object.
-		 * Initially in pending state.
-		 */
 		this.promise = new Promise(function(resolve, reject) {
 			this.resolve = resolve;
 			this.reject = reject;
@@ -348,90 +326,125 @@ function Deferred() {
 	}
 }
 
-// end - common helper functions
-
-// start - comm layer with server
-const SAM_CB_PREFIX = '_sam_gen_cb_';
-var sam_last_cb_id = -1;
-function sendAsyncMessageWithCallback(aMessageManager, aGroupId, aMessageArr, aCallbackScope, aCallback) {
-	sam_last_cb_id++;
-	var thisCallbackId = SAM_CB_PREFIX + sam_last_cb_id;
-	aCallbackScope = aCallbackScope ? aCallbackScope : bootstrap; // todo: figure out how to get global scope here, as bootstrap is undefined
-	aCallbackScope[thisCallbackId] = function(aMessageReceivedArr) {
-		delete aCallbackScope[thisCallbackId];
-		aCallback.apply(null, aMessageReceivedArr);
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
 	}
-	aMessageArr.push(thisCallbackId);
-	aMessageManager.sendAsyncMessage(aGroupId, aMessageArr);
 }
-var bootstrapMsgListener = {
-	funcScope: bootstrapCallbacks,
-	receiveMessage: function(aMsgEvent) {
-		var aMsgEventData = aMsgEvent.data;
-		console.log('framescript getting aMsgEvent, unevaled:', uneval(aMsgEventData));
-		// aMsgEvent.data should be an array, with first item being the unfction name in this.funcScope
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+
+function msgchanComm(onHandshakeComplete) {
+	// cross-file-link0048958576532536411 - this is the contentWindow/html side msgchanComm
+	
+	// onHandshakeComplete is triggerd when handshake completed and this.postMessage becomes usable
+	var handshakeComplete = false; // indicates this.postMessage will now work
+	
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers
+	};
+	
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('incoming msgchan to window, payload:', payload, 'e:', e, 'this:', this);
 		
-		var callbackPendingId;
-		if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SAM_CB_PREFIX) == 0) {
-			callbackPendingId = aMsgEventData.pop();
-		}
-		
-		var funcName = aMsgEventData.shift();
-		if (funcName in this.funcScope) {
-			var rez_fs_call = this.funcScope[funcName].apply(null, aMsgEventData);
-			
-			if (callbackPendingId) {
-				// rez_fs_call must be an array or promise that resolves with an array
-				if (rez_fs_call.constructor.name == 'Promise') {
-					rez_fs_call.then(
+		if (payload.method) {
+			if (!(payload.method in window)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
+			var rez_win_call = window[payload.method](payload.arg, this);
+			console.log('rez_win_call:', rez_win_call);
+			if (payload.cbid) {
+				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
+					rez_win_call.then(
 						function(aVal) {
-							// aVal must be an array
-							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, aVal]);
-						},
-						function(aReason) {
-							console.error('aReject:', aReason);
-							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aReason]]);
-						}
-					).catch(
-						function(aCatch) {
-							console.error('aCatch:', aCatch);
-							contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, ['promise_rejected', aCatch]]);
-						}
-					);
+							console.log('Fullfilled - rez_win_call - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_win_call', 0)
+					).catch(genericCatch.bind(null, 'rez_win_call', 0));
 				} else {
-					// assume array
-					contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, [callbackPendingId, rez_fs_call]);
+					console.log('calling postMessage for callback with rez_win_call:', rez_win_call);
+					this.postMessage(payload.cbid, rez_win_call);
 				}
 			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
 		}
-		else { console.warn('funcName', funcName, 'not in scope of this.funcScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
+	}.bind(this);
+	
+	this.nextcbid = 1; //next callback id
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
 		
-	}
-};
-contentMMFromContentWindow_Method2(content).addMessageListener(core.addon.id, bootstrapMsgListener);
-// end - comm layer with server
-
-// start - load unload stuff
-function fsUnloaded() {
-	// framescript on unload
-	console.log('fsReturnIconset.js framworker unloading');
-	contentMMFromContentWindow_Method2(content).removeMessageListener(core.addon.id, bootstrapMsgListener); // framescript comm
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined - this is the assumption as i use it prorgramtic
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+		
+		// return;
+		port.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	};
+	
+	this.callbackReceptacle = {};
+	
+	var port;
+	
+	var winMsgListener = function(e) {
+		var data = e.data;
+		console.log('incoming message to HTML, data:', data, 'source:', e.source, 'ports:', e.ports);
+		switch (data.topic) {
+			case 'msgchanComm_handshake':
+				
+					window.removeEventListener('message', winMsgListener, false);
+					port = data.port2;
+					port.onmessage = this.listener;
+					this.postMessage('msgchanComm_handshake_finalized');
+					handshakeComplete = true;
+					if (onHandshakeComplete) {
+						onHandshakeComplete(true);
+					}
+					
+				break;
+			default:
+				console.error('unknown topic to HTML, data:', data);
+		}
+	}.bind(this);
+	window.addEventListener('message', winMsgListener, false);
 
 }
-function onPageReady(aEvent) {
-	var aContentWindow = aEvent.target.defaultView;
-	console.info('domcontentloaded time:', (new Date().getTime() - timeStart1.getTime()));
-	console.log('fsReturnIconset.js page ready, content.location:', content.location.href, 'aContentWindow.location:', aContentWindow.location.href);
-	contentMMFromContentWindow_Method2(content).sendAsyncMessage(core.addon.id, ['frameworkerReady']);
-}
-
-addEventListener('unload', fsUnloaded, false);
-var timeStart1 = new Date();
-if (content.location.href == 'chrome://profilist/content/content_remote/frameworker.htm') {
-	console.log('no need for DOMContentLoaded event, as current location is already of frameworker.htm:', content.location.href);
-	onPageReady({target:{defaultView:content}});
-} else {
-	addEventListener('DOMContentLoaded', onPageReady, false);
-	console.log('added DOMContentLoaded event, as frameworker.htm not yet loaded, current location is:', content.location.href);
-}
-// end - load unload stuff
