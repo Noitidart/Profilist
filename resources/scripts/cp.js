@@ -1,41 +1,10 @@
-// Imports
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-Cu.import('resource://gre/modules/Services.jsm');
-Cu.import('resource://gre/modules/XPCOMUtils.jsm');
-
 // Globals
-var core = {
-	addon: {
-		name: 'Profilist',
-		id: 'Profilist@jetpack',
-		path: {
-			name: 'profilist',
-			//
-			content: 'chrome://profilist/content/',
-			locale: 'chrome://profilist/locale/',
-			//
-			modules: 'chrome://profilist/content/modules/',
-			workers: 'chrome://profilist/content/modules/workers/',
-			//
-			resources: 'chrome://profilist/content/resources/',
-			images: 'chrome://profilist/content/resources/images/',
-			scripts: 'chrome://profilist/content/resources/scripts/',
-			styles: 'chrome://profilist/content/resources/styles/',
-			fonts: 'chrome://profilist/content/resources/styles/fonts/',
-			pages: 'chrome://profilist/content/resources/pages/'
-		},
-		cache_key: Math.random() // set to version on release
-	}
-};
+var core;
 
 var gIniObj;
 var gKeyInfoStore;
 
 var gCFMM; // needed for contentMMFromContentWindow_Method2
-
-// Lazy imports
-var myServices = {};
-XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'cp.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 
 // Start - DOM Event Attachments
 function doOnBeforeUnload() {
@@ -139,7 +108,7 @@ window.addEventListener('message', function(e) {
 
 // :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
 function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
-	if (!isFocused(window)) {
+	if (!document.hasFocus()) {
 		attachFocusListener();
 	}
 }
@@ -194,6 +163,8 @@ function initPage() {
 			gIniObj = aObjs.aIniObj;
 			gKeyInfoStore = aObjs.aKeyInfoStore;
 			
+			initDOMInfo();
+			
 			initReactComponent();
 			
 			window.addEventListener('blur', attachFocusListener, false); // link147928272
@@ -214,116 +185,119 @@ function initReactComponent() {
 }
 
 // create dom instructions
-var gDOMInfo = [ // order here is the order it is displayed in, in the dom
-	{
-		section: myServices.sb.GetStringFromName('profilist.cp.general'),
-		rows: [
-			// {
-			// 	label: myServices.sb.GetStringFromName('profilist.cp.updates'),
-			// 	id: 'updates',
-			// 	type: 'select',
-			// 	values: {
-			// 		0: myServices.sb.GetStringFromName('profilist.cp.off'),
-			// 		1: myServices.sb.GetStringFromName('profilist.cp.on')
-			// 	}
-			// },
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.notif'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.notif-desc'),
-				type: 'select',
-				key: 'ProfilistNotif',
-				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'), // :note: '0' because i match it to getPrefLikeValForKeyInIniEntry which returns strings only as i store strings only, as this reads from the stuff in inientry that is not in noWriteObj
-					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
+var gDOMInfo;
+function initDOMInfo() {
+	gDOMInfo = [ // order here is the order it is displayed in, in the dom
+		{
+			section: formatStringFromNameCore('profilist.cp.general', 'cp'),
+			rows: [
+				// {
+				// 	label: formatStringFromNameCore('profilist.cp.updates', 'cp'),
+				// 	id: 'updates',
+				// 	type: 'select',
+				// 	values: {
+				// 		0: formatStringFromNameCore('profilist.cp.off', 'cp'),
+				// 		1: formatStringFromNameCore('profilist.cp.on', 'cp')
+				// 	}
+				// },
+				{
+					label: formatStringFromNameCore('profilist.cp.notif', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.notif-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistNotif',
+					values: {
+						'0': formatStringFromNameCore('profilist.cp.disabled', 'cp'), // :note: '0' because i match it to getPrefLikeValForKeyInIniEntry which returns strings only as i store strings only, as this reads from the stuff in inientry that is not in noWriteObj
+						'1': formatStringFromNameCore('profilist.cp.enabled', 'cp')
+					},
+					tooltip_id: 'notifications'
 				},
-				tooltip_id: 'notifications'
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.launch'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.launch-desc'),
-				type: 'select',
-				key: 'ProfilistLaunch',
-				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
+				{
+					label: formatStringFromNameCore('profilist.cp.launch', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.launch-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistLaunch',
+					values: {
+						'0': formatStringFromNameCore('profilist.cp.disabled', 'cp'),
+						'1': formatStringFromNameCore('profilist.cp.enabled', 'cp')
+					},
+					tooltip_id: 'launch'
 				},
-				tooltip_id: 'launch'
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.sort'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.sort-desc'),
-				type: 'select',
-				key: 'ProfilistSort',
-				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.created'),
-					'2': myServices.sb.GetStringFromName('profilist.cp.alphanum'),
-					// '0': myServices.sb.GetStringFromName('profilist.cp.created-asc'),
-					// '1': myServices.sb.GetStringFromName('profilist.cp.created-desc'),
-					// '2': myServices.sb.GetStringFromName('profilist.cp.alphanum-asc'),
-					// '3': myServices.sb.GetStringFromName('profilist.cp.alphanum-desc')
+				{
+					label: formatStringFromNameCore('profilist.cp.sort', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.sort-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistSort',
+					values: {
+						'0': formatStringFromNameCore('profilist.cp.created', 'cp'),
+						'2': formatStringFromNameCore('profilist.cp.alphanum', 'cp'),
+						// '0': formatStringFromNameCore('profilist.cp.created-asc', 'cp'),
+						// '1': formatStringFromNameCore('profilist.cp.created-desc', 'cp'),
+						// '2': formatStringFromNameCore('profilist.cp.alphanum-asc', 'cp'),
+						// '3': formatStringFromNameCore('profilist.cp.alphanum-desc', 'cp')
+					},
+					tooltip_id: 'sort'
 				},
-				tooltip_id: 'sort'
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.dev'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.dev-desc'),
-				type: 'select',
-				key: 'ProfilistDev',
-				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
+				{
+					label: formatStringFromNameCore('profilist.cp.dev', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.dev-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistDev',
+					values: {
+						'0': formatStringFromNameCore('profilist.cp.disabled', 'cp'),
+						'1': formatStringFromNameCore('profilist.cp.enabled', 'cp')
+					},
+					tooltip_id: 'dev'
+				}
+			]
+		},
+		{
+			section: formatStringFromNameCore('profilist.cp.system', 'cp'),
+			rows: [
+				{
+					label: formatStringFromNameCore('profilist.cp.badgeloc', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.badgeloc-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistBadgeLoc',
+					values: {
+						'1': formatStringFromNameCore('profilist.cp.badgeloc-topleft', 'cp'),
+						'2': formatStringFromNameCore('profilist.cp.badgeloc-topright', 'cp'),
+						'3': formatStringFromNameCore('profilist.cp.badgeloc-bottomleft', 'cp'),
+						'4': formatStringFromNameCore('profilist.cp.badgeloc-bottomright', 'cp')
+					},
+					tooltip_id: 'badge'
 				},
-				tooltip_id: 'dev'
-			}
-		]
-	},
-	{
-		section: myServices.sb.GetStringFromName('profilist.cp.system'),
-		rows: [
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.badgeloc'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.badgeloc-desc'),
-				type: 'select',
-				key: 'ProfilistBadgeLoc',
-				values: {
-					'1': myServices.sb.GetStringFromName('profilist.cp.badgeloc-topleft'),
-					'2': myServices.sb.GetStringFromName('profilist.cp.badgeloc-topright'),
-					'3': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomleft'),
-					'4': myServices.sb.GetStringFromName('profilist.cp.badgeloc-bottomright')
+				{
+					label: formatStringFromNameCore('profilist.cp.desktop-shortcut', 'cp'),
+					type: 'select',
+					id: 'desktop-shortcut'
+				}
+			]
+		},
+		{
+			section: formatStringFromNameCore('profilist.cp.developer', 'cp'),
+			rows: [
+				{
+					label: formatStringFromNameCore('profilist.cp.temp', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.temp-desc', 'cp'),
+					type: 'select',
+					key: 'ProfilistTemp',
+					values: {
+						'0': formatStringFromNameCore('profilist.cp.disabled', 'cp'),
+						'1': formatStringFromNameCore('profilist.cp.enabled', 'cp')
+					},
+					tooltip_id: 'temp'
 				},
-				tooltip_id: 'badge'
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.desktop-shortcut'),
-				type: 'select',
-				id: 'desktop-shortcut'
-			}
-		]
-	},
-	{
-		section: myServices.sb.GetStringFromName('profilist.cp.developer'),
-		rows: [
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.temp'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.temp-desc'),
-				type: 'select',
-				key: 'ProfilistTemp',
-				values: {
-					'0': myServices.sb.GetStringFromName('profilist.cp.disabled'),
-					'1': myServices.sb.GetStringFromName('profilist.cp.enabled')
-				},
-				tooltip_id: 'temp'
-			},
-			{
-				label: myServices.sb.GetStringFromName('profilist.cp.builds'),
-				desc: myServices.sb.GetStringFromName('profilist.cp.builds-desc'),
-				key: 'ProfilistBuilds',
-				type: 'custom',
-				tooltip_id: 'builds'
-			}
-		]
-	}
-];
+				{
+					label: formatStringFromNameCore('profilist.cp.builds', 'cp'),
+					desc: formatStringFromNameCore('profilist.cp.builds-desc', 'cp'),
+					key: 'ProfilistBuilds',
+					type: 'custom',
+					tooltip_id: 'builds'
+				}
+			]
+		}
+	];
+}
 
 // react components
 var ControlPanel = React.createClass({
@@ -410,10 +384,10 @@ var ControlPanel = React.createClass({
 		
 		for (var i=0; i<gDOMInfo.length; i++) {
 			console.log('gDOMInfo[i]:', gDOMInfo[i]);
-			if (gDOMInfo[i].section == myServices.sb.GetStringFromName('profilist.cp.developer') && !jProfilistDev) {
+			if (gDOMInfo[i].section == formatStringFromNameCore('profilist.cp.developer', 'cp') && !jProfilistDev) {
 				continue;
 			}
-			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != myServices.sb.GetStringFromName('profilist.cp.developer') ? undefined : this.state.sBuildsLastRow), sHelp:this.state.sHelp }));
+			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != formatStringFromNameCore('profilist.cp.developer', 'cp') ? undefined : this.state.sBuildsLastRow), sHelp:this.state.sHelp }));
 		}
 		
 		if (!this.state.sHelp) {
@@ -433,7 +407,7 @@ var Section = React.createClass({
 		//	sIniObj
 		//	sCurProfIniEntry
 		//	sGenIniEntry
-		//	sBuildsLastRow - only if this is gSectionInfo.section == myServices.sb.GetStringFromName('profilist.cp.developer')
+		//	sBuildsLastRow - only if this is gSectionInfo.section == formatStringFromNameCore('profilist.cp.developer', 'cp')
 		//	sHelp
 		var aProps = {
 			className: 'section'
@@ -447,7 +421,7 @@ var Section = React.createClass({
 		));
 		
 		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
-			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != myServices.sb.GetStringFromName('profilist.cp.builds') ? undefined : this.props.sBuildsLastRow), sHelp:this.props.sHelp }));
+			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != formatStringFromNameCore('profilist.cp.builds', 'cp') ? undefined : this.props.sBuildsLastRow), sHelp:this.props.sHelp }));
 		}
 		
 		return React.createElement('div', aProps,
@@ -484,7 +458,7 @@ var Row = React.createClass({
 		//	sIniObj
 		//	sCurProfIniEntry
 		//	sGenIniEntry
-		// sBuildsLastRow - only if  this is gRowInfo.label == myServices.sb.GetStringFromName('profilist.cp.builds')
+		// sBuildsLastRow - only if  this is gRowInfo.label == formatStringFromNameCore('profilist.cp.builds', 'cp')
 		//	sHelp
 		
 		var aProps = {
@@ -557,9 +531,9 @@ var Row = React.createClass({
 				// add in modded desc
 				specificnessDesc = '\n\n';
 				if (gKeyInfoStore[this.props.gRowInfo.key].unspecificOnly) {
-					specificnessDesc = myServices.sb.GetStringFromName('profilist.cp.unspecfic-only');
+					specificnessDesc = formatStringFromNameCore('profilist.cp.unspecfic-only', 'cp');
 				} else {
-					specificnessDesc = myServices.sb.GetStringFromName('profilist.cp.specfic-only');
+					specificnessDesc = formatStringFromNameCore('profilist.cp.specfic-only', 'cp');
 				}
 			}
 		}
@@ -582,7 +556,7 @@ var Row = React.createClass({
 					if (this.props.gRowInfo.id && this.props.gRowInfo.id == 'desktop-shortcut') { // gRowInfo does not have to have an id
 						// :todo: clean this up, im using globals and recalculating stuff here, not good
 						options.push(React.createElement('option', {value:''},
-									myServices.sb.GetStringFromName('profilist.cp.select-profile')
+									formatStringFromNameCore('profilist.cp.select-profile', 'cp')
 						));
 						var sortedIniObj = JSON.parse(JSON.stringify(gIniObj));
 						var keyValSort = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistSort');
@@ -607,7 +581,7 @@ var Row = React.createClass({
 							// if (sortedIniObj[i].Path) { // no need for this check i already filtered it out above link2319938
 								var aOptEl = React.createElement('option', {value:sortedIniObj[i].Path},
 									sortedIniObj[i].Name,
-									!sortedIniObj[i].isTemp ? undefined : ' ' + myServices.sb.GetStringFromName('profilist.cp.temporary-profile')
+									!sortedIniObj[i].isTemp ? undefined : ' ' + formatStringFromNameCore('profilist.cp.temporary-profile', 'cp')
 								);
 								if (sortedIniObj[i].noWriteObj.currentProfile) {
 									options.splice(1, 0, [aOptEl]);
@@ -1168,8 +1142,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		
 		if (this.props.jProfilistBuildsEntry && this.props.jProfilistBuildsEntry == 'head') {
 			return React.createElement('div', {className:'builds-widget-row'},
-				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.icon')),
-				React.createElement('span', {}, myServices.sb.GetStringFromName('profilist.cp.path-to-exe')),
+				React.createElement('span', {}, formatStringFromNameCore('profilist.cp.icon', 'cp')),
+				React.createElement('span', {}, formatStringFromNameCore('profilist.cp.path-to-exe', 'cp')),
 				React.createElement('span', {},
 					React.createElement('span', {className:'fontello-icon icon-tools'})
 				)
@@ -1216,9 +1190,9 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					React.createElement('img', {onClick:this.clickIcon, src: imgSrc, width:imgSize, height:imgSize})
 				),
 				React.createElement('span', {},
-					// React.createElement('input', {type:'text', value:textVal, onClick:this.clickBrowseExe, placeholder:myServices.sb.GetStringFromName('profilist.cp.click-to-browse')})
+					// React.createElement('input', {type:'text', value:textVal, onClick:this.clickBrowseExe, placeholder:formatStringFromNameCore('profilist.cp.click-to-browse', 'cp')})
 					React.createElement('div', {className:cTextboxClass.join(' '), onClick:this.clickBrowse, onContextMenu:this.contextMenuBrowse},
-						textVal ? textVal : myServices.sb.GetStringFromName('profilist.cp.click-to-browse')
+						textVal ? textVal : formatStringFromNameCore('profilist.cp.click-to-browse', 'cp')
 					)
 				),
 				React.createElement('span', {},
@@ -1288,19 +1262,7 @@ function compareAlphaNumeric(a, b) {
         return aA > bA ? 1 : -1;
     }
 }
-function isFocused(window) {
-    var childTargetWindow = {};
-    Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
-    childTargetWindow = childTargetWindow.value;
 
-    var focusedChildWindow = {};
-    if (Services.focus.activeWindow) {
-        Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
-        focusedChildWindow = focusedChildWindow.value;
-    }
-
-    return (focusedChildWindow === childTargetWindow);
-}
 function validateOptionsObj(aOptions, aOptionsDefaults) {
 	// ensures no invalid keys are found in aOptions, any key found in aOptions not having a key in aOptionsDefaults causes throw new Error as invalid option
 	for (var aOptKey in aOptions) {
@@ -1317,16 +1279,23 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 		}
 	}
 }
-function justFormatStringFromName(aLocalizableStr, aReplacements) {
-	// justFormatStringFromName is formating only ersion of the worker version of formatStringFromName
+function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements) {
+	// 051916 update - made it core.addon.l10n based
+    // formatStringFromNameCore is formating only version of the worker version of formatStringFromName, it is based on core.addon.l10n cache
 	
-	var cLocalizedStr = aLocalizableStr;
-	if (aReplacements) {
-		for (var i=0; i<aReplacements.length; i++) {
-			cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
-		}
+	try {
+		var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n];
+	} catch (ex) {
+		console.error('formatStringFromNameCore error:', ex, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
 	}
-	
-	return cLocalizedStr;
+	var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr];
+	console.log('cLocalizedStr:', cLocalizedStr, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
+    if (aReplacements) {
+        for (var i=0; i<aReplacements.length; i++) {
+            cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+        }
+    }
+
+    return cLocalizedStr;
 }
 // end - common helper functions
