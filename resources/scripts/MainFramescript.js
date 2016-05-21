@@ -77,7 +77,36 @@ function bootstrapComm_unregAll() {
 		gBootstrapComms[i].unregister();
 	}
 }
+var bootstrapMethods = {
+	// methods called by bootstrap
+	UNINIT_FRAMESCRIPT: function() { // link4757484773732
+		uninit();
+	},
+	callInContent: function(aArg) {
+		var {method, arg, wait} = aArg;
+		// wait - bool - set to true if you want to wait for response from content, and then return it to bootstrap
+		
+		if (!gWinComm) {
+			console.warn('no currently connected window');
+			return 'no currently connected window';
+		} 
+		var cWinCommCb = undefined;
+		var rez = undefined;
+		if (wait) {
+			var deferred_callInContent = new Deferred();
+			
+			cWinCommCb = function(aVal) {
+				deferred_callInContent.resolve(aVal);
+			};
+			
+			rez = deferred_callInContent.promise;
+		}
+		gWinComm.postMessage(method, arg, undefined, cWinCommCb); // :todo: design a way so it can transfer to content. for sure though the info that comes here from bootstap is copied. but from here to content i should transfer if possible
+		return rez;
+	}
+};
 function bootstrapComm(aChannelID) {
+	// framescript side of bootstrap-framescript comm layer cross-file-link55565665464644
 	this.id = aChannelID;
 	gBootstrapComms.push(this);
 	
@@ -99,37 +128,23 @@ function bootstrapComm(aChannelID) {
 			// console.log('this in receiveMessage framescript:', this);
 			
 			if (payload.method) {
-				if (payload.method == 'UNINIT_FRAMESCRIPT') {
-					uninit(); // link4757484773732
-					return;
-				}
-				if (!gWinComm) {
-					console.warn('no currently connected window');
-					return 'no currently connected window';
-				}
-				// if (!(payload.method in content)) { console.error('method of "' + payload.method + '" not in CONTENT'); throw new Error('method of "' + payload.method + '" not in CONTENT') } // dev line remove on prod
-				// var rez_fs_call = content[payload.method](payload.arg, this);
-				var cWinCommCb = undefined;
+				if (!(payload.method in bootstrapMethods)) { console.error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS') } // dev line remove on prod
+				var rez_fs_call = bootstrapMethods[payload.method](payload.arg, this);
+				console.log('rez_fs_call:', rez_fs_call);
 				if (payload.cbid) {
-					cWinCommCb = function(rez_fs_call) {
-						console.log('rez_fs_call:', rez_fs_call);
-						if (payload.cbid) {
-							if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
-								rez_fs_call.then(
-									function(aVal) {
-										console.log('Fullfilled - rez_fs_call - ', aVal);
-										this.transcribeMessage(payload.cbid, aVal);
-									}.bind(this),
-									genericReject.bind(null, 'rez_fs_call', 0)
-								).catch(genericCatch.bind(null, 'rez_fs_call', 0));
-							} else {
-								console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
-								this.transcribeMessage(payload.cbid, rez_fs_call);
-							}
-						}
-					}.bind(this);
+					if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
+						rez_fs_call.then(
+							function(aVal) {
+								console.log('Fullfilled - rez_fs_call - ', aVal);
+								this.transcribeMessage(payload.cbid, aVal);
+							}.bind(this),
+							genericReject.bind(null, 'rez_fs_call', 0)
+						).catch(genericCatch.bind(null, 'rez_fs_call', 0));
+					} else {
+						console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
+						this.transcribeMessage(payload.cbid, rez_fs_call);
+					}
 				}
-				gWinComm.postMessage(payload.method, payload.arg, undefined, cWinCommCb);
 			} else if (!payload.method && payload.cbid) {
 				// its a cbid
 				this.callbackReceptacle[payload.cbid](payload.arg, this);
@@ -169,21 +184,32 @@ function bootstrapComm(aChannelID) {
 	addMessageListener(this.id, this.listener);
 }
 
-var msgChanFuncs = {
-	// funcs called my gFsComm from content
-	callInBootstrap: function(aArg, aComm) {
-		var { method, arg } = aArg;
-		
-		var deferred_callInBootstrap = new Deferred();
-		gMainComm.transcribeMessage(method, arg, function(aArg, aComm) {
-			console.log('callInBootstrap transcribe complete, aArg:', aArg);
-			deferred_callInBootstrap.resolve(aArg);
-		});
-		return deferred_callInBootstrap.promise;
-	}
-}
 
 var gWinComm;  // works with gFsComm in content
+
+// start - msgChanComm module
+var contentMethods = {
+	// methods called by content (gFsComm from content)
+	callInBootstrap: function(aArg, aComm) {
+		var {method, arg, wait} = aArg;
+		// wait - bool - set to true if you want value returned to content // cross-file-link11192911
+		
+		var rez;
+		var cbResolver = undefined;
+		
+		if (wait) {
+			var deferred_callInBootstrap = new Deferred();
+			cbResolver = function(aArg, aComm) {
+				console.log('callInBootstrap transcribe complete, aArg:', aArg);
+				deferred_callInBootstrap.resolve(aArg);
+			}
+			rez = deferred_callInBootstrap.promise;
+		}
+		gMainComm.transcribeMessage(method, arg, cbResolver);
+		
+		return rez;
+	}
+};
 function msgchanComm(aContentWindow) {
 	var portWorker = new Worker(core.addon.path.scripts + 'msgchanWorker.js');
 	
@@ -192,8 +218,8 @@ function msgchanComm(aContentWindow) {
 		console.log('incoming msgchan to framescript, payload:', payload, 'e:', e);
 		
 		if (payload.method) {
-			if (!(payload.method in msgChanFuncs)) { console.error('method of "' + payload.method + '" not in MSGCHANFUNCS'); throw new Error('method of "' + payload.method + '" not in MSGCHANFUNCS') } // dev line remove on prod
-			var rez_fs_call_for_win = msgChanFuncs[payload.method](payload.arg, this);
+			if (!(payload.method in contentMethods)) { console.error('method of "' + payload.method + '" not in CONTENTMETHODS'); throw new Error('method of "' + payload.method + '" not in CONTENTMETHODS') } // dev line remove on prod
+			var rez_fs_call_for_win = contentMethods[payload.method](payload.arg, this);
 			console.log('rez_fs_call_for_win:', rez_fs_call_for_win);
 			if (payload.cbid) {
 				if (rez_fs_call_for_win && rez_fs_call_for_win.constructor.name == 'Promise') {
@@ -263,6 +289,7 @@ function msgchanComm(aContentWindow) {
 	}.bind(this);
 	
 }
+// end - msgChanComm module
 
 // start - pageLoader
 var pageLoader = {

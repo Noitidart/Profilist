@@ -172,7 +172,8 @@ function fetchJustIniObj() {
 	gFsComm.postMessage(
 		'callInBootstrap',
 		{
-			method: 'fetchJustIniObj'
+			method: 'fetchJustIniObj',
+			wait: true
 		},
 		null, 
 		function(aIniObj) {
@@ -201,7 +202,8 @@ function refreshRunningStatuses() {
 		'callInBootstrap',
 		{
 			method: 'callInPromiseWorker',
-			arg: ['fetchJustIniObjJustRefreshed']
+			arg: ['fetchJustIniObjJustRefreshed'],
+			wait: true
 		},
 		null,
 		function(aIniObjIfRefreshed) {
@@ -234,9 +236,12 @@ function initPage() {
 		
 		gFsComm.postMessage(
 			'callInBootstrap',
-			{method:'fetchCoreAndConfigs'},
+			{
+				method:'fetchCoreAndConfigs',
+				wait: true // cross-file-link11192911 - whenever i have a callback in content side, like here i have on link1929992, i need to set wait to true
+			},
 			null, 
-			function(aObjs) {
+			function(aObjs) { // link1929992
 				console.timeEnd('fetchReq');
 				console.log('got core and configs:', aObjs);
 				core = aObjs.aCore;
@@ -880,7 +885,8 @@ var ToolbarButton = React.createClass({
 					'callInBootstrap',
 					{
 						method: 'launchOrFocusProfile',
-						arg: this.props.tbbIniEntry.Path
+						arg: this.props.tbbIniEntry.Path,
+						wait: true
 					},
 					null,
 					function() {
@@ -1215,7 +1221,8 @@ var PrimaryIcon = React.createClass({
 					'callInBootstrap',
 					{
 						method: 'callInPromiseWorker',
-						arg: ['replaceBadgeForProf', this.props.sKey, null]
+						arg: ['replaceBadgeForProf', this.props.sKey, null],
+						wait: true
 					},
 					null,
 					function(aErrorOrNewIniObj) {
@@ -1241,7 +1248,8 @@ var PrimaryIcon = React.createClass({
 				'callInBootstrap',
 				{
 					method:'callInPromiseWorker', 
-					arg: ['replaceBadgeForProf', this.props.sKey, aImgSlug]
+					arg: ['replaceBadgeForProf', this.props.sKey, aImgSlug],
+					wait: true
 				},
 				null,
 				function(aErrorOrNewIniObj) {
@@ -1582,7 +1590,8 @@ var SubiconSafe = React.createClass({
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}]
+					arg: ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}],
+					wait: true
 				},
 				null,
 				function() {
@@ -1805,7 +1814,8 @@ var SubiconTie = React.createClass({
 				'callInBootstrap',
 				{
 					method:'callInPromiseWorker',
-					arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId]
+					arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId],
+					wait: true
 				},
 				null, 
 				function(aErrorOrNewIniObj) {
@@ -1978,7 +1988,7 @@ function msgchanComm(aPort) {
 	// // test
 	// gFsComm.postMessage('callInBootstrap', {
 	// 	method: 'fetchCore',
-	// 	arg: null
+	// 	wait: true
 	// }, null, function(aArg, aComm) {
 	// 	console.log('back from calling in bootstrap, aArg:', aArg);
 	// });

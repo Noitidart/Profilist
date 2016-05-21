@@ -85,7 +85,7 @@ function msgchanComm(aPort) {
 	// // test
 	// gFsComm.postMessage('callInBootstrap', {
 	// 	method: 'fetchCore',
-	// 	arg: null
+	// 	wait: true
 	// }, null, function(aArg, aComm) {
 	// 	console.log('back from calling in bootstrap, aArg:', aArg);
 	// });
@@ -129,6 +129,7 @@ function doOnFocus() {
 		'callInBootstrap',
 		{
 			method: 'fetchJustIniObj',
+			wait: true
 		},
 		null,
 		function(aIniObj, aComm) {
@@ -154,7 +155,8 @@ function initPage() {
 	gFsComm.postMessage(
 		'callInBootstrap',
 		{
-			method: 'fetchCoreAndConfigs'
+			method: 'fetchCoreAndConfigs',
+			wait: true
 		},
 		null,
 		function (aObjs, aComm) {
@@ -319,7 +321,8 @@ var ControlPanel = React.createClass({
 			'callInBootstrap',
 			{
 				method: 'userManipulatedIniObj_updateIniFile',
-				arg: JSON.stringify(aNewIniObj)
+				arg: JSON.stringify(aNewIniObj),
+				wait: true
 			},
 			null,
 			function (aNewlyFormattedIniObj, aComm) {
@@ -604,7 +607,8 @@ var Row = React.createClass({
 								'callInBootstrap',
 								{
 									method: 'createDesktopShortcut',
-									arg: refsSelect.value
+									arg: refsSelect.value,
+									wait: true
 								},
 								null,
 								function (aArg, aComm) {
@@ -913,7 +917,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		gFsComm.postMessage(
 			'callInBootstrap',
 			{
-				method: 'browseiconRequest'
+				method: 'browseiconRequest',
+				wait: true
 			},
 			null,
 			function (aArg, aComm) {
@@ -962,7 +967,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					'callInBootstrap',
 					{
 						method: 'callInPromiseWorker',
-						arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]
+						arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry],
+						wait: true
 					},
 					null,
 					function (aErrorOrNewIniObj, aComm) {
@@ -998,7 +1004,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['removeBuild', this.props.jProfilistBuildsEntry.id, false]
+					arg: ['removeBuild', this.props.jProfilistBuildsEntry.id, false],
+					wait: true
 				},
 				null,
 				function (aErrorOrNewIniObj, aComm) {
@@ -1024,7 +1031,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			gFsComm.postMessage(
 				'callInBootstrap',
 				{
-					method: 'browseExe'
+					method: 'browseExe',
+					wait: true
 				},
 				null,
 				function(aBrowsedPlatPath, aComm) {
@@ -1045,7 +1053,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 								'callInBootstrap',
 								{
 									method: 'callInPromiseWorker',
-									arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry]
+									arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry],
+									wait: true
 								},
 								null,
 								function(aErrorOrNewIniObj, aComm) {
@@ -1111,7 +1120,8 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false]
+					arg: ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false],
+					wait: true
 				},
 				null,
 				function(aErrorOrNewIniObj, aComm) {

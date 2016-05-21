@@ -69,7 +69,10 @@ XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
 	testConnUpdate: function(aNewContent) {
-		gMainFsComm.transcribeMessage(gTestConnMM, 'testConnUpdate', aNewContent);
+		gMainFsComm.transcribeMessage(gTestConnMM, 'callInContent', {
+			method: 'testConnUpdate',
+			arg: aNewContent
+		});
 	},
 	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
 		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
@@ -823,9 +826,12 @@ var gTestConnMM;
 			function(aIniObj) {
 				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
 				
-				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
-					aIniObj: aIniObj,
-					aDoTbbEnterAnim: true
+				aComm.transcribeMessage(aMessageManager, 'callInContent', {
+					method: 'pushIniObj',
+					arg: { 
+						aIniObj: aIniObj,
+						aDoTbbEnterAnim: true
+					}
 				});
 			},
 			genericReject.bind(null, 'promise_workerCreate', 0)
@@ -847,8 +853,11 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerRename - ', rejObj);
 				// push aIniObj back to content, as it had premptively renamed
-				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
-					aIniObj: aReason.msg.aIniObj
+				aComm.transcribeMessage(aMessageManager, 'callInContent', {
+					method: 'pushIniObj',
+					arg: {
+						aIniObj: aReason.msg.aIniObj
+					}
 				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerRename', 0));
@@ -867,8 +876,11 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerDel - ', rejObj);
 				// push aIniObj back to content, as it had premptively deleted
-				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
-					aIniObj: aReason.msg.aIniObj
+				aComm.transcribeMessage(aMessageManager, 'callInContent', {
+					method: 'pushIniObj',
+					arg: {
+						aIniObj: aReason.msg.aIniObj
+					}
 				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerDel', 0));
@@ -887,8 +899,11 @@ var gTestConnMM;
 				};
 				console.error('Rejected - promise_workerTogDefault - ', rejObj);
 				// push aIniObj back to content, as it had premptively toggled default 
-				aComm.transcribeMessage(aMessageManager, 'pushIniObj', {
-					aIniObj: aReason.msg.aIniObj
+				aComm.transcribeMessage(aMessageManager, 'callInContent', {
+					method: 'pushIniObj',
+					arg: {
+						aIniObj: aReason.msg.aIniObj
+					}
 				});
 			}
 		).catch(genericCatch.bind(null, 'promise_workerTogDefault', 0));
@@ -1507,6 +1522,7 @@ function framescriptComm_unregAll() {
 	}
 }
 function framescriptComm(aChannelID) {
+	// bootstrap side of bootstrap-framescript comm layer cross-file-link55565665464644
 	this.id = aChannelID;
 	
 	gFramescriptComms.push(this);
