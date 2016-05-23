@@ -34,7 +34,7 @@ function initAndRegisterAboutProfilist() {
 			} else {
 				redirUrl = core.addon.path.pages + 'cp.xhtml';
 			}
-			
+
 			var channel;
 			if (Services.vc.compare(core.firefox.version, '47.*') > 0) {
 				var redirURI = Services.io.newURI(redirUrl, null, null);
@@ -44,11 +44,11 @@ function initAndRegisterAboutProfilist() {
 				channel = Services.io.newChannel(redirUrl, null, null);
 			}
 			channel.originalURI = aURI;
-			
+
 			return channel;
 		}
 	});
-	
+
 	// register it
 	aboutFactory_profilist = new AboutFactory(AboutProfilist);
 }
@@ -85,20 +85,20 @@ var bootstrapMethods = {
 	callInContent: function(aArg) {
 		var {method, arg, wait} = aArg;
 		// wait - bool - set to true if you want to wait for response from content, and then return it to bootstrap
-		
+
 		if (!gWinComm) {
 			console.warn('no currently connected window');
 			return 'no currently connected window';
-		} 
+		}
 		var cWinCommCb = undefined;
 		var rez = undefined;
 		if (wait) {
 			var deferred_callInContent = new Deferred();
-			
+
 			cWinCommCb = function(aVal) {
 				deferred_callInContent.resolve(aVal);
 			};
-			
+
 			rez = deferred_callInContent.promise;
 		}
 		gWinComm.postMessage(method, arg, undefined, cWinCommCb); // :todo: design a way so it can transfer to content. for sure though the info that comes here from bootstap is copied. but from here to content i should transfer if possible
@@ -109,10 +109,10 @@ function bootstrapComm(aChannelID) {
 	// framescript side of bootstrap-framescript comm layer cross-file-link55565665464644
 	this.id = aChannelID;
 	gBootstrapComms.push(this);
-	
+
 	this.unregister = function() {
 		removeMessageListener(this.id, this.listener);
-		
+
 		var l = gBootstrapComms.length;
 		for (var i=0; i<l; i++) {
 			if (gBootstrapComms[i] == this) {
@@ -126,7 +126,7 @@ function bootstrapComm(aChannelID) {
 			var payload = e.data;
 			console.log('incoming message to framescript, payload:', payload);
 			// console.log('this in receiveMessage framescript:', this);
-			
+
 			if (payload.method) {
 				if (!(payload.method in bootstrapMethods)) { console.error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS') } // dev line remove on prod
 				var rez_fs_call = bootstrapMethods[payload.method](payload.arg, this);
@@ -157,7 +157,7 @@ function bootstrapComm(aChannelID) {
 	this.nextcbid = 1; //next callback id
 	this.transcribeMessage = function(aMethod, aArg, aCallback) {
 		// console.log('framescript sending message to bootstrap', aMethod, aArg);
-		
+
 		// aMethod is a string - the method to call in framescript
 		// aCallback is a function - optional - it will be triggered when aMethod is done calling
 		var cbid = null;
@@ -171,7 +171,7 @@ function bootstrapComm(aChannelID) {
 				this.callbackReceptacle[cbid] = aCallback;
 			}
 		}
-		
+
 		// return;
 		gCFMM.sendAsyncMessage(this.id, {
 			method: aMethod,
@@ -180,7 +180,7 @@ function bootstrapComm(aChannelID) {
 		});
 	};
 	this.callbackReceptacle = {};
-	
+
 	addMessageListener(this.id, this.listener);
 }
 
@@ -193,10 +193,10 @@ var contentMethods = {
 	callInBootstrap: function(aArg, aComm) {
 		var {method, arg, wait} = aArg;
 		// wait - bool - set to true if you want value returned to content // cross-file-link11192911
-		
+
 		var rez;
 		var cbResolver = undefined;
-		
+
 		if (wait) {
 			var deferred_callInBootstrap = new Deferred();
 			cbResolver = function(aArg, aComm) {
@@ -206,17 +206,17 @@ var contentMethods = {
 			rez = deferred_callInBootstrap.promise;
 		}
 		gMainComm.transcribeMessage(method, arg, cbResolver);
-		
+
 		return rez;
 	}
 };
 function msgchanComm(aContentWindow) {
 	var portWorker = new Worker(core.addon.path.scripts + 'msgchanWorker.js');
-	
+
 	this.listener = function(e) {
 		var payload = e.data;
 		console.log('incoming msgchan to framescript, payload:', payload, 'e:', e);
-		
+
 		if (payload.method) {
 			if (!(payload.method in contentMethods)) { console.error('method of "' + payload.method + '" not in CONTENTMETHODS'); throw new Error('method of "' + payload.method + '" not in CONTENTMETHODS') } // dev line remove on prod
 			var rez_fs_call_for_win = contentMethods[payload.method](payload.arg, this);
@@ -243,18 +243,18 @@ function msgchanComm(aContentWindow) {
 			throw new Error('invalid combination');
 		}
 	}.bind(this);
-	
+
 	this.nextcbid = 1; //next callback id
-	
+
 	portWorker.onmessage = function(e) {
 		portWorker.terminate();
 		var port = e.data.port1;
 		var port2 = e.data.port2;
 		console.log('port:', port, 'port2:', port2);
 
-		
+
 		this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-			
+
 			// aMethod is a string - the method to call in framescript
 			// aCallback is a function - optional - it will be triggered when aMethod is done calling
 			var cbid = null;
@@ -268,7 +268,7 @@ function msgchanComm(aContentWindow) {
 					this.callbackReceptacle[cbid] = aCallback;
 				}
 			}
-			
+
 			// return;
 			this.port.postMessage({
 				method: aMethod,
@@ -276,18 +276,18 @@ function msgchanComm(aContentWindow) {
 				cbid
 			}, aTransfers ? [aTransfers] : undefined);
 		}
-		
+
 		this.port = port;
 		port.onmessage = this.listener;
 		this.callbackReceptacle = {};
-		
+
 		aContentWindow.postMessage({
 			topic: 'msgchanComm_handshake',
 			port2: port2
 		}, '*', [port2]);
-		
+
 	}.bind(this);
-	
+
 }
 // end - msgChanComm module
 
@@ -305,21 +305,21 @@ var pageLoader = {
 		// triggered on page ready
 		// triggered for each frame if IGNORE_FRAMES is false
 		// to test if frame do `if (aContentWindow.frameElement)`
-		
+
 		var contentWindow = aContentWindow;
 		console.log('reallyReady enter');
-		
+
 		// contentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
 		// var waivedWindow = Components.utils.waiveXrays(contentWindow);
 		// Cu.exportFunction(gMainComm.transcribeMessage, contentWindow, {
 			// defineAs: 'transcribeMessage'
 		// });
-		
+
 		// contentWindow.postMessage({
 			// test: true
 		// }, '*')
 		gWinComm = new msgchanComm(contentWindow);
-		
+
 		console.log('reallyReady done');
 	},
 	load: function(aContentWindow) {}, // triggered on page load if IGNORE_LOAD is false
@@ -355,30 +355,30 @@ var pageLoader = {
 		// DO NOT EDIT
 		// boilerpate triggered on DOMContentLoaded
 		// frames are skipped if IGNORE_FRAMES is true
-		
+
 		var contentWindow = e.target.defaultView;
 		console.log('page ready, contentWindow.location.href:', contentWindow.location.href);
-		
+
 		// i can skip frames, as DOMContentLoaded is triggered on frames too
 		if (pageLoader.IGNORE_FRAMES && contentWindow.frameElement) { return }
-		
+
 		var href = contentWindow.location.href.toLowerCase();
 		if (pageLoader.matches(href, contentWindow.location)) {
 			// ok its our intended, lets make sure its not an error page
 			var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIWebNavigation);
 			var docURI = webNav.document.documentURI;
 			// console.info('docURI:', docURI);
-			
+
 			if (docURI.indexOf('about:neterror') === 0) {
 				pageLoader.error(contentWindow, docURI);
 			} else {
 				// our page ready without error
-				
+
 				if (!pageLoader.IGNORE_LOAD) {
 					// i can attach the load listener here, and remove it on trigger of it, because for sure after this point the load will fire
 					contentWindow.addEventListener('load', pageLoader.onPageLoad, false);
 				}
-				
+
 				pageLoader.ready(contentWindow);
 			}
 		} else {
@@ -387,17 +387,17 @@ var pageLoader = {
 				var webNav = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIWebNavigation);
 				var docURI = webNav.document.documentURI;
 				// console.info('docURI:', docURI);
-				
+
 				if (docURI.indexOf('about:neterror') === 0) {
 					pageLoader.errorNonmatch(contentWindow, docURI);
 				} else {
 					// our page ready without error
-					
+
 					if (!pageLoader.IGNORE_LOAD) {
 						// i can attach the load listener here, and remove it on trigger of it, because for sure after this point the load will fire
 						contentWindow.addEventListener('load', pageLoader.onPageLoadNonmatch, false);
 					}
-					
+
 					pageLoader.readyNonmatch(contentWindow);
 				}
 			}
@@ -423,15 +423,15 @@ var pageLoader = {
 
 function init() {
 	gMainComm = new bootstrapComm(core.addon.id);
-	
+
 	gMainComm.transcribeMessage('fetchCore', null, function(aCore, aComm) {
 		core = aCore;
 		console.log('ok updated core to:', core);
-		
+
 		addEventListener('unload', uninit, false);
-		
+
 		pageLoader.register(); // pageLoader boilerpate
-		
+
 		try {
 			initAndRegisterAboutProfilist();
 		} catch(ignore) {} // its non-e10s so it will throw saying already registered
@@ -444,9 +444,9 @@ function uninit() { // link4757484773732
 		aboutFactory_profilist.unregister();
 	}
 	removeEventListener('unload', uninit, false);
-	
+
 	pageLoader.unregister(); // pageLoader boilerpate
-	
+
 	bootstrapComm_unregAll();
 }
 init();
@@ -454,22 +454,13 @@ init();
 
 // start - common helper functions
 function Deferred() {
-	try {
-		this.resolve = null;
-
-
-		this.reject = null;
-
-
-		this.promise = new Promise(function(resolve, reject) {
-			this.resolve = resolve;
-			this.reject = reject;
-		}.bind(this));
-		Object.freeze(this);
-	} catch (ex) {
-		console.log('Promise not available!', ex);
-		throw new Error('Promise not available!');
-	}
+	this.resolve = null;
+	this.reject = null;
+	this.promise = new Promise(function(resolve, reject) {
+		this.resolve = resolve;
+		this.reject = reject;
+	}.bind(this));
+	Object.freeze(this);
 }
 
 function genericReject(aPromiseName, aPromiseToReject, aReason) {

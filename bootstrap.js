@@ -1,8 +1,7 @@
 // Imports
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-// Cm.QueryInterface(Ci.nsIComponentRegistrar);
-Cu.import('resource://gre/modules/AddonManager.jsm');
-Cu.import('resource://gre/modules/devtools/Console.jsm');
+const {interfaces: Ci, utils: Cu} = Components;
+// Cu.import('resource://gre/modules/AddonManager.jsm');
+Cu.import('resource://gre/modules/Console.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 const PromiseWorker = Cu.import('resource://gre/modules/PromiseWorker.jsm').BasePromiseWorker;
@@ -57,6 +56,7 @@ var bootstrap = this;
 var BOOTSTRAP = this;
 var ADDON_MANAGER_ENTRY;
 var gMainFsComm;
+var gTestWorker;
 
 // Lazy Imports
 const myServices = {};
@@ -640,7 +640,7 @@ function startup(aData, aReason) {
 		promise_afterBootstrapInit.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
-
+				gTestWorker = new workerComm(core.addon.path.modules + 'TestWorker.js');
 			},
 			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
 		).catch(genericCatch.bind(null, 'promise_afterBootstrapInit', 0));
@@ -1515,6 +1515,9 @@ function getNativeHandlePtrStr(aDOMWindow) {
 // common to all of these apis
 	// whenever you use the message method, the method MUST not be a number, as if it is, then it is assumed it is a callback
 	// if you want to do a transfer of data from a callback, if transferring is supported by the api, then you must wrapp it in aComm.CallbackTransferReturn
+
+var gBootstrap = this;
+
 // start - CommAPI for bootstrap-framescript - bootstrap side - cross-file-link55565665464644
 // message method - transcribeMessage - it is meant to indicate nothing can be transferred, just copied/transcribed to the other process
 // first arg to transcribeMessage is a message manager, this is different from the other comm api's
@@ -1528,6 +1531,7 @@ function crossprocComm_unregAll() {
 function crossprocComm(aChannelId) {
 	// when a new framescript creates a crossprocComm on framscript side, it requests whatever it needs on init, so i dont offer a onBeforeInit or onAfterInit on bootstrap side
 
+	var scope = gBootstrap;
 	gCrossprocComms.push(this);
 
 	this.unregister = function() {
@@ -1550,12 +1554,12 @@ function crossprocComm(aChannelId) {
 			var messageManager = e.target.messageManager;
 			var browser = e.target;
 			var payload = e.data;
-			console.log('incoming message to bootstrap, payload:', payload);
+			console.log('bootstrap crossprocComm - incoming, payload:', payload); //, 'e:', e);
 			// console.log('this in receiveMessage bootstrap:', this);
 
 			if (payload.method) {
-				if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') }  // dev line remove on prod
-				var rez_bs_call = BOOTSTRAP[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
+				if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') }  // dev line remove on prod
+				var rez_bs_call = scope[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
 				if (payload.cbid) {
 					if (rez_bs_call && rez_bs_call.constructor.name == 'Promise') {
 						rez_bs_call.then(
@@ -1618,6 +1622,7 @@ function contentComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 	// no unregister for this really, as no listeners setup, to unregister you just need to GC everything, so just break all references to it
 
 	var handshakeComplete = false; // indicates this.postMessage will now work i think. it might work even before though as the messages might be saved till a listener is setup? i dont know i should ask
+	var scope = gBootstrap;
 
 	this.CallbackTransferReturn = function(aArg, aTransfers) {
 		// aTransfers should be an array
@@ -1627,7 +1632,7 @@ function contentComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 
 	this.listener = function(e) {
 		var payload = e.data;
-		console.log('incoming msgchan to bootstrap, payload:', payload, 'e:', e);
+		console.log('bootstrap contentComm - incoming, payload:', payload); //, 'e:', e);
 
 		if (payload.method) {
 			if (payload.method == 'contentComm_handshake_finalized') {
@@ -1637,8 +1642,8 @@ function contentComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 				}
 				return;
 			}
-			if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') } // dev line remove on prod
-			var rez_bs_call_for_win = BOOTSTRAP[payload.method](payload.arg, this);
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') } // dev line remove on prod
+			var rez_bs_call_for_win = scope[payload.method](payload.arg, this);
 			console.log('rez_bs_call_for_win:', rez_bs_call_for_win);
 			if (payload.cbid) {
 				if (rez_bs_call_for_win && rez_bs_call_for_win.constructor.name == 'Promise') {
@@ -1704,7 +1709,7 @@ function contentComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 	}, '*', [aPort2]);
 
 }
-// start - CommAPI for bootstrap-content - bootstrap side - cross-file-link0048958576532536411
+// end - CommAPI for bootstrap-content - bootstrap side - cross-file-link0048958576532536411
 // start - CommAPI for bootstrap-worker - bootstrap side - cross-file-link5323131347
 // message method - postMessage
 // on unregister, workers are terminated
@@ -1715,8 +1720,14 @@ function workerComm_unregAll() {
 		gWorkerComms[i].unregister();
 	}
 }
-function workerComm(aWorkerPath, onBeforeInit, onAfterInit) {
-	// worker is lazy loaded, it is not created until the first call
+function workerComm(aWorkerPath, onBeforeInit, onAfterInit, aWebWorker) {
+	// limitations:
+		// the first call is guranteed
+		// devuser should never postMessage from worker with method name "triggerOnAfterInit" - this is reserved for programtic use
+		// devuser should never postMessage from bootstrap with method name "init" - progmaticcaly this is automatically done in this.createWorker
+
+	// worker is lazy loaded, it is not created until the first call. if you want instant instantiation, call this.createWorker() with no args
+	// creates a ChromeWorker, unless aWebWorker is true
 
 	// if onBeforeInit is set
 		// if worker has `init` function
@@ -1724,13 +1735,14 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit) {
 	// if onBeforeInit is NOT set
 		// if worker has `init` function
 			// it is called by the worker before the first call to any method in the worker
-	// onAfterInit is not called if not `init` function exists in the worker
+	// onAfterInit is not called if `init` function does NOT exist in the worker. it is called by worker doing postMessage to bootstrap
 
-	// onBeforeInit - it is a function, it is run to build the data the worker should be inited with
-	// onAfterInit - a callback that happens after init is complete
+	// onBeforeInit - args: this - it is a function, return a single var to send to init function in worker. can return CallbackTransferReturn if you want to transfer. it is run to build the data the worker should be inited with.
+	// onAfterInit - args: aArg, this - a callback that happens after init is complete. aArg is return value of init from in worker. the first call to worker will happen after onAfterInit runs in bootstrap
 	// these init features are offered because most times, workers need some data before starting off. and sometimes data is sent back to bootstrap like from init of MainWorker's
 	// no featuere for prep term, as the prep term should be done in the `self.onclose = function(event) { ... }` of the worker
 	var worker;
+	var scope = gBootstrap;
 	this.nextcbid = 1; //next callback id
 	this.callbackReceptacle = {};
 	this.CallbackTransferReturn = function(aArg, aTransfers) {
@@ -1738,33 +1750,62 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit) {
 		this.arg = aArg;
 		this.xfer = aTransfers;
 	};
-	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-		// aMethod is a string - the method to call in framescript
-		// aCallback is a function - optional - it will be triggered when aMethod is done calling
-		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
-			// aTransfers is undefined
-			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
-			aTransfers = aArg.xfer;
-			aArg = aArg.arg;
-		}
-		var cbid = null;
-		if (typeof(aMethod) == 'number') {
-			// this is a response to a callack waiting in framescript
-			cbid = aMethod;
-			aMethod = null;
-		} else {
-			if (aCallback) {
-				cbid = this.nextcbid++;
-				this.callbackReceptacle[cbid] = aCallback;
+	this.createWorker = function(onAfterCreate) {
+		// only triggered by postMessage when `var worker` has not yet been set
+		worker = aWebWorker ? new Worker(aWorkerPath) : new ChromeWorker(aWorkerPath);
+		worker.addEventListener('message', this.listener);
+
+		if (onAfterInit) {
+			onAfterInit = function() {
+				onAfterInit();
+				if (onAfterCreate) {
+					onAfterCreate(); // link39399999
+				}
 			}
 		}
 
-		// return;
-		worker.postMessage({
-			method: aMethod,
-			arg: aArg,
-			cbid
-		}, aTransfers ? aTransfers : undefined);
+		var initArg;
+		if (onBeforeInit) {
+			initArg = onBeforeInit(this);
+			this.postMessage('init', initArg); // i dont put onAfterCreate as a callback here, because i want to gurantee that the call of onAfterCreate happens after onAfterInit is triggered link39399999
+		} else {
+			// else, worker is responsible for calling init. worker will know because it keeps track in listener, what is the first postMessage, if it is not "init" then it will run init
+			if (onAfterCreate) {
+				onAfterCreate(); // as postMessage i the only one who calls this.createWorker(), onAfterCreate is the origianl postMessage intended by the devuser
+			}
+		}
+	};
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+
+		if (!worker) {
+			this.createWorker(this.postMessage.bind(this, aMethod, aArg, aTransfers, aCallback));
+		} else {
+			if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+				// aTransfers is undefined
+				// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+				aTransfers = aArg.xfer;
+				aArg = aArg.arg;
+			}
+			var cbid = null;
+			if (typeof(aMethod) == 'number') {
+				// this is a response to a callack waiting in framescript
+				cbid = aMethod;
+				aMethod = null;
+			} else {
+				if (aCallback) {
+					cbid = this.nextcbid++;
+					this.callbackReceptacle[cbid] = aCallback;
+				}
+			}
+
+			worker.postMessage({
+				method: aMethod,
+				arg: aArg,
+				cbid
+			}, aTransfers ? aTransfers : undefined);
+		}
 	};
 	this.unregister = function() {
 
@@ -1779,11 +1820,45 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit) {
 		worker.terminate();
 
 	};
-	this.listener = function() {
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('bootstrap workerComm - incoming, payload:', payload); //, 'e:', e);
 
-	};
+		if (payload.method) {
+			if (payload.method == 'triggerOnAfterInit') {
+				if (onAfterInit) {
+					onAfterInit();
+				}
+				return;
+			}
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') } // dev line remove on prod
+			var rez_bs_call_for_worker = scope[payload.method](payload.arg, this);
+			console.log('rez_bs_call_for_worker:', rez_bs_call_for_worker);
+			if (payload.cbid) {
+				if (rez_bs_call_for_worker && rez_bs_call_for_worker.constructor.name == 'Promise') {
+					rez_bs_call_for_worker.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_bs_call_for_worker - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_bs_call_for_worker', 0)
+					).catch(genericCatch.bind(null, 'rez_bs_call_for_worker', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_bs_call_for_worker:', rez_bs_call_for_worker, 'this:', this);
+					this.postMessage(payload.cbid, rez_bs_call_for_worker);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			console.error('bootstrap workerComm - invalid combination');
+			throw new Error('bootstrap workerComm - invalid combination');
+		}
+	}.bind(this);
 }
-// start - CommAPI for bootstrap-worker - bootstrap side - cross-file-link5323131347
+// end - CommAPI for bootstrap-worker - bootstrap side - cross-file-link5323131347
 // end - CommAPI
 
 // end - common helper functions
