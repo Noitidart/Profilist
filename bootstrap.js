@@ -64,7 +64,7 @@ XPCOMUtils.defineLazyGetter(myServices, 'hph', function () { return Cc['@mozilla
 XPCOMUtils.defineLazyGetter(myServices, 'sb', function () { return Services.strings.createBundle(core.addon.path.locale + 'bootstrap.properties?' + core.addon.cache_key); /* Randomize URI to work around bug 719376 */ });
 XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.org/alerts-service;1'].getService(Ci.nsIAlertsService) });
 
-// START - Addon Functionalities	
+// START - Addon Functionalities
 
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
@@ -79,7 +79,7 @@ var MainWorkerMainThreadFuncs = {
 		// return ['hi arr 1']; // :note: this is how to return no promise
 		// :note: this is how to return with promise
 		var deferredMain_createIcon = new Deferred();
-		
+
 		// deferredMain_createIcon.resolve(['hi arr 1 from promise']);
 		var triggerCreation = function() {
 			console.log('in triggerCreation');
@@ -88,7 +88,7 @@ var MainWorkerMainThreadFuncs = {
 				deferredMain_createIcon.resolve([aStatusObj]);
 			});
 		};
-		
+
 		if (typeof(ICGenWorker) == 'undefined') {
 			console.log('sicing icgenworker');
 			var promise_getICGenWorker = SICWorker('ICGenWorker', core.addon.path.modules + 'ICGenWorker/worker.js?' + core.addon.cache_key, ICGenWorkerFuncs);
@@ -102,8 +102,8 @@ var MainWorkerMainThreadFuncs = {
 		} else {
 			triggerCreation();
 		}
-		
-		
+
+
 		return deferredMain_createIcon.promise;
 	},
 	showNotification: function(aTitle, aBody) {
@@ -117,19 +117,19 @@ var MainWorkerMainThreadFuncs = {
 		// aPrefVal - new value
 		switch (typeof(aPrefVal)) {
 			case 'string':
-					
+
 					Services.prefs.setCharPref(aPrefName, aPrefVal);
-					
+
 				break;
 			case 'number':
-					
+
 					Services.prefs.setIntPref(aPrefName, aPrefVal);
-					
+
 				break;
 			case 'boolean':
-					
+
 					Services.prefs.setBoolPref(aPrefName, aPrefVal);
-					
+
 				break;
 			default:
 				console.error('invalid type!!!!');
@@ -164,15 +164,15 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 	fwInstances: {}, // frameworker instances, obj with id is aId which is arg of setupFrameworker
 	setupFrameworker: function(aArg) {
 		var {aId, aBootPort, aFwPort} = aArg;
-		
+
 		// aId is the id to create frameworker with
 		console.log('mainthread: setupFrameworker, aId:', aId);
 
 		var deferredMain_setupFrameworker = new Deferred();
-		
+
 		var aWindow = Services.wm.getMostRecentWindow('navigator:browser');
 		var aDocument = aWindow.document;
-		
+
 		var doAfterAppShellDomWinReady = function() {
 			var aBrowser = aDocument.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'browser');
 			// aBrowser.setAttribute('data-icon-container-generator-fwinstance-id', aId);
@@ -182,41 +182,41 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 			// aBrowser.setAttribute('style', 'height:100px;border:10px solid steelblue;');
 			aBrowser.setAttribute('style', 'display:none;');
 
-			
+
 			var initFw = function(aComm) {
 				aComm.postMessage('initFw', aId);
 			};
-			
-			
+
+
 			ICGenWorkerFuncs.fwInstances[aId] = {
 				browser: aBrowser,
 				// comm is added in DOMContentLoaded
 				deferredMain_setupFrameworker: deferredMain_setupFrameworker
 			};
-			
+
 			aBrowser.addEventListener('DOMContentLoaded', function(e) { // cross-file-link381743613524242 - need this because there is no aBrowser.contentWindow until the page loads
 				// for now im going with assumption of this test - this DOMContentLoaded is triggering after the DOMContentLoaded in fsReturnIconset.js of fsReturnIconset.htm
 				aBrowser.removeEventListener('DOMContentLoaded', arguments.callee, false);
 				console.error('content loaded in aBrowser!, aBrowser.contentWindow.location.href:', aBrowser.contentWindow.location.href)
-				
-				ICGenWorkerFuncs.fwInstances[aId].comm = new msgchanComm(aBrowser.contentWindow, aBootPort, aFwPort, initFw);
+
+				ICGenWorkerFuncs.fwInstances[aId].comm = new contentComm(aBrowser.contentWindow, aBootPort, aFwPort, initFw);
 			}, false);
-			
+
 			aBrowser.setAttribute('src', core.addon.path.pages + 'fsReturnIconset.htm');
-			
 
 
-			
+
+
 			aDocument.documentElement.appendChild(aBrowser);
 			// console.log('aBrowser.messageManager:', aBrowser.messageManager);
-			// aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);			
-			
+			// aBrowser.messageManager.loadFrameScript(core.addon.path.scripts + 'fsReturnIconset.js?' + core.addon.cache_key, false);
+
 			// ICGenWorkerFuncs.fwInstances[aId].browser.messageManager.IconContainerGenerator_id = aId; // doesnt work
 			// console.log('ICGenWorkerFuncs.fwInstances[aId].browser.messageManager:', ICGenWorkerFuncs.fwInstances[aId].browser.messageManager);
-			
+
 		};
-		
-		
+
+
 		if (aDocument.readyState == 'complete') {
 			doAfterAppShellDomWinReady();
 		} else {
@@ -225,11 +225,11 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 				doAfterAppShellDomWinReady();
 			}, false);
 		}
-		
+
 		return deferredMain_setupFrameworker.promise;
 	},
 	destroyFrameworker: function(aId) {
-		
+
 		// var aTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
 		// aTimer.initWithCallback({
 			// notify: function() {
@@ -238,7 +238,7 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 					delete ICGenWorkerFuncs.fwInstances[aId];
 			// }
 		// }, 10000, Ci.nsITimer.TYPE_ONE_SHOT);
-		
+
 
 	},
 	tellFrameworkerLoadImg: function(aProvidedPath, aLoadPath, aId) {
@@ -278,21 +278,21 @@ var ICGenWorkerFuncs = { // functions for worker to call in main thread
 				resolveWithArr.push(bufTrans);
 				resolveWithArr.push(SIC_TRANS_WORD);
 			}
-			deferredMain_tellFrameworker_dSoBoOOSb.resolve(resolveWithArr);	
+			deferredMain_tellFrameworker_dSoBoOOSb.resolve(resolveWithArr);
 		});
 		return deferredMain_tellFrameworker_dSoBoOOSb.promise;
 	},
 	tellFrameworkerGetImgDatasOfFinals: function(reqObj, aId) {
 		var deferredMain_tellFrameworker_gIDOF = new Deferred();
 		ICGenWorkerFuncs.fwInstances[aId].comm.postMessage('getImgDatasOfFinals', reqObj, null, function(aObjOfBufs, aComm) {
-			
+
 			var resolveWithArr = [aObjOfBufs, [], SIC_TRANS_WORD];
 			for (var p in aObjOfBufs) {
 				resolveWithArr[1].push(aObjOfBufs[p]);
 			}
 			console.log('in bootstrap callback of tellFrameworkerGetImgDatasOfFinals, resolving with:', resolveWithArr);
 
-			deferredMain_tellFrameworker_gIDOF.resolve(resolveWithArr);	
+			deferredMain_tellFrameworker_gIDOF.resolve(resolveWithArr);
 		});
 		return deferredMain_tellFrameworker_gIDOF.promise;
 	}
@@ -320,7 +320,7 @@ function windowListenerForPuiBtn() {
 	var profilistHBoxJSON = ['xul:toolbarbutton', {id:'PanelUI-profilist-box', label:myServices.sb.GetStringFromName('moved'), image:core.addon.path.images + 'icon16.png', onclick:onclick}]
 
 	var xulCssUri = Services.io.newURI(core.addon.path.styles + 'xul.css', null, null);
-	
+
 	var getPUIMembers = function(aDOMWindow) {
 		// returns null if DNE or the object
 		var PUI = aDOMWindow.PanelUI;
@@ -331,7 +331,7 @@ function windowListenerForPuiBtn() {
 				PUIf: null
 			}
 		}
-		
+
 		var PUIp;
 		if (!PUI._initialized) {
 			PUIp = aDOMWindow.document.getElementById('PanelUI-popup'); // have to do it this way, doing PanelUI.panel does getElementById anyways so this is no pref loss
@@ -341,47 +341,47 @@ function windowListenerForPuiBtn() {
 
 		// console.log('PUI.mainView:', PUI.mainView, PUI.mainView.childNodes);
 		var PUIf = PUI.mainView ? PUI.mainView.childNodes[1] : null; // PanelUI-footer // aDOMWindow.PanelUI.mainView.childNodes == NodeList [ <vbox#PanelUI-contents-scroller>, <footer#PanelUI-footer> ]
-		
+
 		return {
 			PUI: PUI,
 			PUIp: PUIp,
 			PUIf: PUIf
 		};
 	};
-	
+
 	var insertProfilistBox = function(e) {
 		var aDOMWindow = e.view;
-		
+
 		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
 		if (!PUI) { return null }
-		
+
 		PUIp.removeEventListener('popupshowing', insertProfilistBox, false);
 		PUIf.insertBefore(jsonToDOM(profilistHBoxJSON, aDOMWindow.document, {}), PUIf.firstChild);
 	};
-	
+
 	var loadIntoWindow = function(aDOMWindow) {
 		if (!aDOMWindow) { return }
-		
+
 		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
 		if (!PUI) { return }
-		
+
 		var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-		domWinUtils.loadSheet(xulCssUri, domWinUtils.AUTHOR_SHEET); 
-		
+		domWinUtils.loadSheet(xulCssUri, domWinUtils.AUTHOR_SHEET);
+
 		if (PUIp.state == 'open' || PUIp.state == 'showing') {
 			insertProfilistBox({view:aDOMWindow});
 		} else {
 			PUIp.addEventListener('popupshowing', insertProfilistBox, false);
 		}
-		
+
 	};
-	
+
 	var unloadFromWindow = function(aDOMWindow) {
 		if (!aDOMWindow) { return }
-		
+
 		var {PUI, PUIp, PUIf} = getPUIMembers(aDOMWindow);
 		if (!PUI) { return }
-		
+
 		var PUIprofilist = aDOMWindow.document.getElementById('PanelUI-profilist-box');
 		if (PUIprofilist) {
 			PUIprofilist.parentNode.removeChild(PUIprofilist);
@@ -390,12 +390,12 @@ function windowListenerForPuiBtn() {
 			PUIp.removeEventListener('popupshowing', insertProfilistBox, false);
 			console.error('ok removed listener');
 		}
-		
+
 		var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-		domWinUtils.removeSheet(xulCssUri, domWinUtils.AUTHOR_SHEET); 
-		
+		domWinUtils.removeSheet(xulCssUri, domWinUtils.AUTHOR_SHEET);
+
 	};
-	
+
 	var windowListener = {
 		//DO NOT EDIT HERE
 		onOpenWindow: function (aXULWindow) {
@@ -410,9 +410,9 @@ function windowListenerForPuiBtn() {
 		onWindowTitleChange: function (aXULWindow, aNewTitle) {}
 		//END - DO NOT EDIT HERE
 	};
-	
+
 	var register = function() {
-		
+
 		// Load into any existing windows
 		var DOMWindows = Services.wm.getEnumerator(null);
 		while (DOMWindows.hasMoreElements()) {
@@ -429,7 +429,7 @@ function windowListenerForPuiBtn() {
 		// Listen to new windows
 		Services.wm.addListener(windowListener);
 	};
-	
+
 	var unregister = function() {
 		// Unload from any existing windows
 		var DOMWindows = Services.wm.getEnumerator(null);
@@ -445,38 +445,38 @@ function windowListenerForPuiBtn() {
 		//Stop listening so future added windows dont get this attached
 		Services.wm.removeListener(windowListener);
 	};
-	
+
 	register();
-	
+
 	return unregister;
 }
 
 var gWorkerWindowListener;
 function workerWindowListenerRegister() {
 	// returns function - unregisterer
-	
+
 	var loadIntoWindow = function(aDOMWindow) {
 		var promise_updateIntoWindow = MainWorker.post('updateIntoWindow', [getNativeHandlePtrStr(aDOMWindow)]);
 		promise_updateIntoWindow.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_updateIntoWindow - ', aVal);
-				
+
 			},
 			genericReject.bind(null, 'promise_updateIntoWindow', 0)
 		).catch(genericCatch.bind(null, 'promise_updateIntoWindow', 0));
 	};
-	
+
 	var unloadFromWindow = function(aDOMWindow) {
 		var promise_unloadFromWindow = MainWorker.post('unloadFromWindow', [getNativeHandlePtrStr(aDOMWindow)]);
 		promise_unloadFromWindow.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_unloadFromWindow - ', aVal);
-				
+
 			},
 			genericReject.bind(null, 'promise_unloadFromWindow', 0)
 		).catch(genericCatch.bind(null, 'promise_unloadFromWindow', 0));
 	};
-	
+
 	var windowListener = {
 		//DO NOT EDIT HERE
 		onOpenWindow: function (aXULWindow) {
@@ -491,7 +491,7 @@ function workerWindowListenerRegister() {
 		onWindowTitleChange: function (aXULWindow, aNewTitle) {}
 		//END - DO NOT EDIT HERE
 	};
-	
+
 	var register = function() {
 		// Load into any existing windows
 		var DOMWindows = Services.wm.getEnumerator(null);
@@ -509,7 +509,7 @@ function workerWindowListenerRegister() {
 		// Listen to new windows
 		Services.wm.addListener(windowListener);
 	};
-	
+
 	var reLoadIntoWindows = function() {
 		// Load into any existing windows
 		var DOMWindows = Services.wm.getEnumerator(null);
@@ -525,7 +525,7 @@ function workerWindowListenerRegister() {
 			// }
 		}
 	};
-	
+
 	var unregister = function() {
 		// Unload from any existing windows
 		var DOMWindows = Services.wm.getEnumerator(null);
@@ -541,9 +541,9 @@ function workerWindowListenerRegister() {
 		//Stop listening so future added windows dont get this attached
 		Services.wm.removeListener(windowListener);
 	};
-	
+
 	register();
-	
+
 	return {
 		unregister: unregister,
 		reLoadIntoWindows: reLoadIntoWindows
@@ -554,7 +554,7 @@ function install() {}
 
 function uninstall(aData, aReason) {
 	if (aReason == ADDON_UNINSTALL) {
-		
+
 	}
 }
 
@@ -562,7 +562,7 @@ var gWindowListenerForPuiBtn;
 function startup(aData, aReason) {
 	// core.addon.aData = aData;
 	extendCore();
-	
+
 	// custom core extending
 	core.profilist = {};
 	core.profilist.path = {
@@ -570,7 +570,7 @@ function startup(aData, aReason) {
 		defProfLRt: Services.dirsvc.get('DefProfLRt', Ci.nsIFile).path,
 		XREExeF: Services.dirsvc.get('XREExeF', Ci.nsIFile).path
 	};
-	
+
 	// get pictures folder, used by iconsetpicker readSubdirsInDir
 	try {
 		core.profilist.path.pictures = Services.dirsvc.get('XDGPict', Ci.nsIFile).path; // works on linux
@@ -585,7 +585,7 @@ function startup(aData, aReason) {
 			}
 		}
 	}
-	
+
 	// get documents folder
 	try {
 		core.profilist.path.documents = Services.dirsvc.get('XDGDocs', Ci.nsIFile).path; // works on linux
@@ -600,15 +600,15 @@ function startup(aData, aReason) {
 			}
 		}
 	}
-	
+
 	core.profilist.path.downloads = Services.dirsvc.get('DfltDwnld', Ci.nsIFile).path;
-	
+
 	core.FileUtils = {
 		PERMS_DIRECTORY: FileUtils.PERMS_DIRECTORY
 	};
 	core.firefox.channel = Services.prefs.getCharPref('app.update.channel'); // esr|release|beta|aurora|dev|nightly|default
-	
-	
+
+
 	if (['winnt', 'wince', 'winmo'].indexOf(OS.Constants.Sys.Name.toLowerCase()) > -1) {
 		try {
 			core.firefox.prefs['taskbar.grouping.useprofile'] = Services.prefs.getBoolPref('taskbar.grouping.useprofile');
@@ -620,32 +620,32 @@ function startup(aData, aReason) {
 			core.firefox.prefs['taskbar.grouping.useprofile'] = false;
 		}
 	}
-	
-	var afterWorker = function() { // because i init worker, then continue init		
+
+	var afterWorker = function() { // because i init worker, then continue init
 		// register framescript listener
-		gMainFsComm = new framescriptComm(core.addon.id);
-		
+		gMainFsComm = new crossprocComm(core.addon.id);
+
 		// register framescript injector
 		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
 
 		// // bring in react
 		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
 		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
-		// 
+		//
 		// testReact();
-		
+
 		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
-		
+
 		var promise_afterBootstrapInit = MainWorker.post('afterBootstrapInit', []);
 		promise_afterBootstrapInit.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
-				
+
 			},
 			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
 		).catch(genericCatch.bind(null, 'promise_afterBootstrapInit', 0));
 	};
-	
+
 	/*
 	// add to core the l10n properties
 	var coreForMainWorker = JSON.parse(JSON.stringify(core));
@@ -664,7 +664,7 @@ function startup(aData, aReason) {
 		coreForMainWorker.l10n.bootstrap[l10nPropKey] = l10nPropStr;
 	}
 	*/
-	
+
 	// startup worker
 	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js', core, MainWorkerMainThreadFuncs).post();
 	promise_initMainWorker.then(
@@ -692,31 +692,29 @@ function startup(aData, aReason) {
 			console.error('Caught - promise_initMainWorker - ', rejObj);
 		}
 	);
-	
+
 }
 
 function shutdown(aData, aReason) {
-	
+
 	if (aReason == APP_SHUTDOWN) { return }
-	
-	// unregister about pages listener
-	framescriptComm_unregAll();
-	
+
+	crossprocComm_unregAll();
+
+	workerComm_unregAll();
+
 	// unregister framescript injector
 	Services.mm.removeDelayedFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key);
-	
-	// kill framescripts
-	Services.mm.broadcastAsyncMessage(core.addon.id, ['destroySelf']);
-	
+
 	// unregister gPUIprUnreg
 	if (gWindowListenerForPuiBtn) {
 		gWindowListenerForPuiBtn();
 	}
-	
+
 	if (gWorkerWindowListener) {
 		gWorkerWindowListener.unregister();
 	}
-	
+
 	// terminate worker
 	if (typeof(MainWorker) != 'undefined') {
 		var promise_prepForTerm = MainWorker.post('prepForTerminate', []);
@@ -729,7 +727,7 @@ function shutdown(aData, aReason) {
 			genericReject.bind(null, 'promise_prepForTerm', 0)
 		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));
 	}
-	
+
 	if (typeof(ICGenWorker) != 'undefined') {
 		ICGenWorker.terminate();
 	}
@@ -743,7 +741,7 @@ var gTestConnMM;
 	function fsReturnIconsetReady(aArg, aComm) {
 		var {id} = aArg; // id is fwInstanceId
 		console.info('fwInstanceId:', id);
-		
+
 		ICGenWorkerFuncs.fwInstances[id].deferredMain_setupFrameworker.resolve([true]); // 'ok send me imgs now baby'
 	}
 	// end - fsReturnIconset.js functions
@@ -751,9 +749,9 @@ var gTestConnMM;
 		var deferredMain_fetchConfigObjs = new Deferred();
 		gTestConnMM = aMessageManager;
 		MainWorker._worker.postMessage(['testConnInit']);
-		
+
 		console.log('sending over fetchCoreAndConfigs');
-		
+
 		var promise_fetch = MainWorker.post('fetchAll', []);
 		promise_fetch.then(
 			function(aVal) {
@@ -763,7 +761,7 @@ var gTestConnMM;
 				// end - do stuff here - promise_fetch
 			}
 		);
-		
+
 		return deferredMain_fetchConfigObjs.promise;
 	}
 	function fetchCore(aArg, aMessageManager, aBrowser, aComm) {
@@ -772,7 +770,7 @@ var gTestConnMM;
 	function fetchJustIniObj(aArg, aMessageManager, aBrowser, aComm) {
 		// just gets gIniObj
 		var deferredMain_fetchJustIniObj = new Deferred();
-		
+
 		var promise_fetch = MainWorker.post('fetchJustIniObj', []);
 		promise_fetch.then(
 			function(aVal) {
@@ -782,13 +780,13 @@ var gTestConnMM;
 				// end - do stuff here - promise_fetch
 			}
 		);
-		
+
 		return deferredMain_fetchJustIniObj.promise;
 	}
 	function userManipulatedIniObj_updateIniFile(aNewIniObjStr, aMessageManager, aBrowser, aComm) {
 		var deferredMain_userManipulatedIniObj_updateIniFile = new Deferred();
 		console.log('telling mainworker userManipulatedIniObj_updateIniFile');
-		
+
 		var promise_updateini = MainWorker.post('userManipulatedIniObj_updateIniFile', [aNewIniObjStr]);
 		promise_updateini.then(
 			function(aNewlyFormattedIniObj) {
@@ -798,7 +796,7 @@ var gTestConnMM;
 				// end - do stuff here - promise_updateini
 			}
 		);
-		
+
 		return deferredMain_userManipulatedIniObj_updateIniFile.promise;
 	}
 	function launchOrFocusProfile(aProfPath, aMessageManager, aBrowser, aComm) {
@@ -812,7 +810,7 @@ var gTestConnMM;
 			},
 			genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile)
 		).catch(genericReject.bind(null, 'promise_launchfocus', deferredMain_launchOrFocusProfile));
-		
+
 		return deferredMain_launchOrFocusProfile.promise;
 	}
 	function createNewProfile(aArg, aMessageManager, aBrowser, aComm) {
@@ -825,10 +823,10 @@ var gTestConnMM;
 		promise_workerCreate.then(
 			function(aIniObj) {
 				console.log('Fullfilled - promise_workerCreate - ', aIniObj);
-				
+
 				aComm.transcribeMessage(aMessageManager, 'callInContent', {
 					method: 'pushIniObj',
-					arg: { 
+					arg: {
 						aIniObj: aIniObj,
 						aDoTbbEnterAnim: true
 					}
@@ -844,7 +842,7 @@ var gTestConnMM;
 		promise_workerRename.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_workerRename - ', aVal);
-				
+
 			},
 			function(aReason) {
 				var rejObj = {
@@ -867,7 +865,7 @@ var gTestConnMM;
 		promise_workerDel.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_workerDel - ', aVal);
-				
+
 			},
 			function(aReason) {
 				var rejObj = {
@@ -890,7 +888,7 @@ var gTestConnMM;
 		promise_workerTogDefault.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_workerTogDefault - ', aVal);
-				
+
 			},
 			function(aReason) {
 				var rejObj = {
@@ -898,7 +896,7 @@ var gTestConnMM;
 					aReason: aReason
 				};
 				console.error('Rejected - promise_workerTogDefault - ', rejObj);
-				// push aIniObj back to content, as it had premptively toggled default 
+				// push aIniObj back to content, as it had premptively toggled default
 				aComm.transcribeMessage(aMessageManager, 'callInContent', {
 					method: 'pushIniObj',
 					arg: {
@@ -910,9 +908,9 @@ var gTestConnMM;
 	}
 	function createDesktopShortcut(aProfPath, aMessageManager, aBrowser, aComm) {
 
-		
+
 		var deferredMain_createDesktopShortcut = new Deferred();
-		
+
 		gCreateDesktopShortcutId++;
 		var thisCreateDesktopShortcutId = 'createDesktopShortcut_callback_' + gCreateDesktopShortcutId;
 		MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] = function() {
@@ -920,7 +918,7 @@ var gTestConnMM;
 			delete MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId];
 			deferredMain_createDesktopShortcut.resolve();
 		};
-		
+
 		var promise_workerCreateDeskCut = MainWorker.post('createDesktopShortcut', [aProfPath, thisCreateDesktopShortcutId]);
 		promise_workerCreateDeskCut.then(
 			function(aVal) {
@@ -929,49 +927,49 @@ var gTestConnMM;
 			},
 			genericReject.bind(null, 'promise_workerCreateDeskCut', 0)
 		).catch(genericCatch.bind(null, 'promise_workerCreateDeskCut', 0));
-		
+
 		return deferredMain_createDesktopShortcut.promise;
 	}
 	function browseExe(aArg, aMessageManager, aBrowser, aComm) {
 
 		var fp = Cc['@mozilla.org/filepicker;1'].createInstance(Ci.nsIFilePicker);
-		
+
 		var browseExeDialogTitle;
-		
+
 		switch (OS.Constants.Sys.Name.toLowerCase()) {
 			case 'winnt':
 			case 'wince':
 			case 'winmo':
-				
+
 					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-win');
-				
+
 				break;
 			case 'darwin':
-				
+
 					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-mac');
-				
+
 				break;
 			default:
-			
+
 					// assume unix, it has no extension apparently
 					browseExeDialogTitle = myServices.sb.GetStringFromName('browse-exe-nix');
 
 		}
-		
+
 		fp.init(Services.wm.getMostRecentWindow(null), browseExeDialogTitle, Ci.nsIFilePicker.modeOpen);
-		
+
 		switch (OS.Constants.Sys.Name.toLowerCase()) {
 			case 'winnt':
 			case 'wince':
 			case 'winmo':
-				
+
 					// fp.appendFilter('Firefox Executeable (application/exe)', 'firefoxg.exe');
 					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-win'), 'firefox.exe');
 					fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent;
-					
+
 				break;
 			case 'darwin':
-				
+
 					// fp.appendFilter('Firefox Application Bundle', '*.app');
 					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-mac'), '*.app');
 					// fp.displayDirectory = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent;
@@ -980,10 +978,10 @@ var gTestConnMM;
 					// .parent.parent = Contents
 					// .parent.parent.parent = .app
 					// .parent.parent.parent.parent = parent of .app
-					
+
 				break;
 			default:
-			
+
 					// assume unix, it has no extension apparently
 					// fp.appendFilter('Firefox Binary (application/x-sharedlib)', 'firefox');
 					fp.appendFilter(myServices.sb.GetStringFromName('filter-exe-nix'), 'firefox');
@@ -993,19 +991,19 @@ var gTestConnMM;
 
 		var rv = fp.show();
 		if (rv == Ci.nsIFilePicker.returnOK) {
-			
+
 			return fp.file.path;
 
 		}// else { // cancelled	}
-		
+
 		return undefined; // cancelled
 	}
 	// start - iconpicker set
 	function callInPromiseWorker(aArrOfFuncnameThenArgs, aMessageManager, aBrowser, aComm) {
 		// for use with sendAsyncMessageWithCallback from framescripts
-		
+
 		var mainDeferred_callInPromiseWorker = new Deferred();
-		
+
 		var rez_pwcall = MainWorker.post(aArrOfFuncnameThenArgs.shift(), aArrOfFuncnameThenArgs);
 		rez_pwcall.then(
 			function(aVal) {
@@ -1030,7 +1028,7 @@ var gTestConnMM;
 				mainDeferred_callInPromiseWorkerr.resolve(rejObj);
 			}
 		);
-		
+
 		return mainDeferred_callInPromiseWorker.promise;
 	}
 	// end - iconpicker set
@@ -1073,32 +1071,32 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 	// returns promise
 		// resolve value: jsBool true
 	// aCore is what you want aCore to be populated with
-	// aPath is something like `core.addon.path.content + 'modules/workers/blah-blah.js'`	
+	// aPath is something like `core.addon.path.content + 'modules/workers/blah-blah.js'`
 	var deferredMain_SICWorker = new Deferred();
 
 	if (!(workerScopeName in bootstrap)) {
 		bootstrap[workerScopeName] = new ChromeWorker(aPath);
-		
+
 		if ('addon' in aCore && 'aData' in aCore.addon) {
 			delete aCore.addon.aData; // we delete this because it has nsIFile and other crap it, but maybe in future if I need this I can try JSON.stringify'ing it
 		}
-		
+
 		var afterInitListener = function(aMsgEvent) {
 			// note:all msgs from bootstrap must be postMessage([nameOfFuncInWorker, arg1, ...])
 			var aMsgEventData = aMsgEvent.data;
 			console.log('mainthread receiving message:', aMsgEventData);
-			
+
 			// postMessageWithCallback from worker to mt. so worker can setup callbacks after having mt do some work
 			var callbackPendingId;
 			if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SIC_CB_PREFIX) == 0) {
 				callbackPendingId = aMsgEventData.pop();
 			}
-			
+
 			var funcName = aMsgEventData.shift();
-			
+
 			if (funcName in aFuncExecScope) {
 				var rez_mainthread_call = aFuncExecScope[funcName].apply(null, aMsgEventData);
-				
+
 				if (callbackPendingId) {
 					if (rez_mainthread_call.constructor.name == 'Promise') {
 						rez_mainthread_call.then(
@@ -1137,7 +1135,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 			else { console.warn('funcName', funcName, 'not in scope of aFuncExecScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
 
 		};
-		
+
 		var beforeInitListener = function(aMsgEvent) {
 			// note:all msgs from bootstrap must be postMessage([nameOfFuncInWorker, arg1, ...])
 			var aMsgEventData = aMsgEvent.data;
@@ -1150,7 +1148,7 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 				}
 			}
 		};
-		
+
 		// var lastCallbackId = -1; // dont do this, in case multi SICWorker's are sharing the same aFuncExecScope so now using new Date().getTime() in its place // link8888881
 		bootstrap[workerScopeName].postMessageWithCallback = function(aPostMessageArr, aCB, aPostMessageTransferList) {
 			// lastCallbackId++; // link8888881
@@ -1165,16 +1163,16 @@ function SICWorker(workerScopeName, aPath, aFuncExecScope=bootstrap, aCore=core)
 			// console.log('aPostMessageArr:', aPostMessageArr);
 			bootstrap[workerScopeName].postMessage(aPostMessageArr, aPostMessageTransferList);
 		};
-		
+
 		bootstrap[workerScopeName].addEventListener('message', beforeInitListener);
 		bootstrap[workerScopeName].postMessage(['init', aCore]);
-		
+
 	} else {
 		deferredMain_SICWorker.reject('Something is loaded into bootstrap[workerScopeName] already');
 	}
-	
+
 	return deferredMain_SICWorker.promise;
-	
+
 }
 
 // SIPWorker - rev9 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
@@ -1190,25 +1188,25 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 		// resolve value: jsBool true
 	// aCore is what you want aCore to be populated with
 	// aPath is something like `core.addon.path.content + 'modules/workers/blah-blah.js'`
-	
+
 	// :todo: add support and detection for regular ChromeWorker // maybe? cuz if i do then ill need to do ChromeWorker with callback
-	
+
 	// var deferredMain_SIPWorker = new Deferred();
 
 	var cWorkerInited = false;
 	var cWorkerPost_orig;
-	
+
 	if (!(workerScopeName in bootstrap)) {
 		bootstrap[workerScopeName] = new PromiseWorker(aPath);
-		
+
 		cWorkerPost_orig = bootstrap[workerScopeName].post;
-		
+
 		bootstrap[workerScopeName].post = function(pFun, pArgs, pCosure, pTransfers) {
 			if (!cWorkerInited) {
 				var deferredMain_post = new Deferred();
-				
+
 				bootstrap[workerScopeName].post = cWorkerPost_orig;
-				
+
 				var doInit = function() {
 					var promise_initWorker = bootstrap[workerScopeName].post('init', [aCore]);
 					promise_initWorker.then(
@@ -1226,7 +1224,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 						genericReject.bind(null, 'promise_initWorker', deferredMain_post)
 					).catch(genericCatch.bind(null, 'promise_initWorker', deferredMain_post));
 				};
-				
+
 				var doOrigPost = function() {
 					var promise_origPosted = bootstrap[workerScopeName].post(pFun, pArgs, pCosure, pTransfers);
 					promise_origPosted.then(
@@ -1237,18 +1235,18 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 						genericReject.bind(null, 'promise_origPosted', deferredMain_post)
 					).catch(genericCatch.bind(null, 'promise_origPosted', deferredMain_post));
 				};
-				
+
 				doInit();
 				return deferredMain_post.promise;
 			}
 		};
-		
+
 		// start 010516 - allow worker to execute functions in bootstrap scope and get value
 		if (aFuncExecScope) {
 			// this triggers instantiation of the worker immediately
 			var origOnmessage = bootstrap[workerScopeName]._worker.onmessage;
 			var origOnerror = bootstrap[workerScopeName]._worker.onerror;
-			
+
 			bootstrap[workerScopeName]._worker.onerror = function(onErrorEvent) {
 				// got an error that PromiseWorker did not know how to serialize. so we didnt get a {fail:.....} postMessage. so in onerror it does pop of the deferred. however with allowing promiseworker to return async, we cant simply pop if there are more then 1 promises pending
 				var cQueue = bootstrap[workerScopeName]._queue._array;
@@ -1261,7 +1259,7 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 					console.error('queue has more then one promises in there, i dont know which one to reject', 'onErrorEvent:', onErrorEvent, 'queue:', bootstrap[workerScopeName]._queue._array);
 				}
 			};
-			
+
 			bootstrap[workerScopeName]._worker.onmessage = function(aMsgEvent) {
 				////// start - my custom stuff
 				var aMsgEventData = aMsgEvent.data;
@@ -1269,16 +1267,16 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 				if (Array.isArray(aMsgEventData)) {
 					// my custom stuff, PromiseWorker did self.postMessage to call a function from here
 					console.log('promsieworker is trying to execute function in mainthread');
-					
+
 					var callbackPendingId;
 					if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SIP_CB_PREFIX) == 0) {
 						callbackPendingId = aMsgEventData.pop();
 					}
-					
+
 					var funcName = aMsgEventData.shift();
 					if (funcName in aFuncExecScope) {
 						var rez_mainthread_call = aFuncExecScope[funcName].apply(null, aMsgEventData);
-						
+
 						if (callbackPendingId) {
 							if (rez_mainthread_call.constructor.name == 'Promise') { // if get undefined here, that means i didnt return an array from the function in main thread that the worker called
 								rez_mainthread_call.then(
@@ -1342,17 +1340,17 @@ function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP)
 			}
 		}
 		// end 010516 - allow worker to execute functions in bootstrap scope and get value
-		
+
 		if ('addon' in aCore && 'aData' in aCore.addon) {
 			delete aCore.addon.aData; // we delete this because it has nsIFile and other crap it, but maybe in future if I need this I can try JSON.stringify'ing it
 		}
 	} else {
 		throw new Error('Something is loaded into bootstrap[workerScopeName] already');
 	}
-	
+
 	// return deferredMain_SIPWorker.promise;
 	return bootstrap[workerScopeName];
-	
+
 }
 
 function aReasonMax(aReason) {
@@ -1385,13 +1383,13 @@ function extendCore() {
 				core.os.version_name = 'xp';
 			}
 			break;
-			
+
 		case 'darwin':
 			var userAgent = myServices.hph.userAgent;
 
 			var version_osx = userAgent.match(/Mac OS X 10\.([\d\.]+)/);
 
-			
+
 			if (!version_osx) {
 				throw new Error('Could not identify Mac OS X version.');
 			} else {
@@ -1409,14 +1407,14 @@ function extendCore() {
 				// this makes it so that 10.10.0 becomes 10.100
 				// 10.10.1 => 10.101
 				// so can compare numerically, as 10.100 is less then 10.101
-				
+
 				//core.os.version = 6.9; // note: debug: temporarily forcing mac to be 10.6 so we can test kqueue
 			}
 			break;
 		default:
 			// nothing special
 	}
-	
+
 
 }
 function genericReject(aPromiseName, aPromiseToReject, aReason) {
@@ -1513,32 +1511,40 @@ function getNativeHandlePtrStr(aDOMWindow) {
 }
 
 
-/////// framescript comm
-var gFramescriptComms = [];
-function framescriptComm_unregAll() {
-	var l = gFramescriptComms.length;
+// start - CommAPI
+// common to all of these apis
+	// whenever you use the message method, the method MUST not be a number, as if it is, then it is assumed it is a callback
+	// if you want to do a transfer of data from a callback, if transferring is supported by the api, then you must wrapp it in aComm.CallbackTransferReturn
+// start - CommAPI for bootstrap-framescript - bootstrap side - cross-file-link55565665464644
+// message method - transcribeMessage - it is meant to indicate nothing can be transferred, just copied/transcribed to the other process
+// first arg to transcribeMessage is a message manager, this is different from the other comm api's
+var gCrossprocComms = [];
+function crossprocComm_unregAll() {
+	var l = gCrossprocComms.length;
 	for (var i=0; i<l; i++) {
-		gFramescriptComms[i].unregister();
+		gCrossprocComms[i].unregister();
 	}
 }
-function framescriptComm(aChannelID) {
-	// bootstrap side of bootstrap-framescript comm layer cross-file-link55565665464644
-	this.id = aChannelID;
-	
-	gFramescriptComms.push(this);
-	
+function crossprocComm(aChannelId) {
+	// when a new framescript creates a crossprocComm on framscript side, it requests whatever it needs on init, so i dont offer a onBeforeInit or onAfterInit on bootstrap side
+
+	gCrossprocComms.push(this);
+
 	this.unregister = function() {
-		Services.mm.addMessageListener(this.id, this.listener);
-		
-		var l = gFramescriptComms.length;
+		Services.mm.removeMessageListener(aChannelId, this.listener);
+
+		var l = gCrossprocComms.length;
 		for (var i=0; i<l; i++) {
-			if (gFramescriptComms[i] == this) {
-				gFramescriptComms.splice(i, 1);
+			if (gCrossprocComms[i] == this) {
+				gCrossprocComms.splice(i, 1);
 				break;
 			}
 		}
+
+		// kill framescripts
+		Services.mm.broadcastAsyncMessage(aChannelId, ['destroySelf']);
 	};
-	
+
 	this.listener = {
 		receiveMessage: function(e) {
 			var messageManager = e.target.messageManager;
@@ -1546,7 +1552,7 @@ function framescriptComm(aChannelID) {
 			var payload = e.data;
 			console.log('incoming message to bootstrap, payload:', payload);
 			// console.log('this in receiveMessage bootstrap:', this);
-			
+
 			if (payload.method) {
 				if (!(payload.method in BOOTSTRAP)) { console.error('method of "' + payload.method + '" not in BOOTSTRAP'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAP') }  // dev line remove on prod
 				var rez_bs_call = BOOTSTRAP[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
@@ -1578,7 +1584,7 @@ function framescriptComm(aChannelID) {
 		// console.log('bootstrap sending message to framescript', aMethod, aArg);
 		// aMethod is a string - the method to call in framescript
 		// aCallback is a function - optional - it will be triggered when aMethod is done calling
-		
+
 		var cbid = null;
 		if (typeof(aMethod) == 'number') {
 			// this is a response to a callack waiting in framescript
@@ -1590,9 +1596,9 @@ function framescriptComm(aChannelID) {
 				this.callbackReceptacle[cbid] = aCallback;
 			}
 		}
-		
+
 		// return;
-		aMessageManager.sendAsyncMessage(this.id, {
+		aMessageManager.sendAsyncMessage(aChannelId, {
 			method: aMethod,
 			arg: aArg,
 			cbid
@@ -1600,27 +1606,31 @@ function framescriptComm(aChannelID) {
 	};
 	this.callbackReceptacle = {};
 
-	Services.mm.addMessageListener(this.id, this.listener);
+	Services.mm.addMessageListener(aChannelId, this.listener);
 }
-
-function msgchanComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
-	// cross-file-link0048958576532536411 - this is the bootstrap side msgchanComm
+// start - CommAPI for bootstrap-framescript - bootstrap side - cross-file-link55565665464644
+// start - CommAPI for bootstrap-content - bootstrap side - cross-file-link0048958576532536411
+// message method - postMessage - content is in-process-content-windows, transferring works
+// there is a framescript version of this, because framescript cant get aPort1 and aPort2 so it has to create its own
+function contentComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 	// onHandshakeComplete is triggered when handshake is complete
+	// when a new contentWindow creates a contentComm on contentWindow side, it requests whatever it needs on init, so i dont offer a onBeforeInit. I do offer a onHandshakeComplete which is similar to onAfterInit, but not exactly the same
+	// no unregister for this really, as no listeners setup, to unregister you just need to GC everything, so just break all references to it
 
 	var handshakeComplete = false; // indicates this.postMessage will now work i think. it might work even before though as the messages might be saved till a listener is setup? i dont know i should ask
-	
+
 	this.CallbackTransferReturn = function(aArg, aTransfers) {
 		// aTransfers should be an array
 		this.arg = aArg;
 		this.xfer = aTransfers;
 	};
-	
+
 	this.listener = function(e) {
 		var payload = e.data;
 		console.log('incoming msgchan to bootstrap, payload:', payload, 'e:', e);
-		
+
 		if (payload.method) {
-			if (payload.method == 'msgchanComm_handshake_finalized') {
+			if (payload.method == 'contentComm_handshake_finalized') {
 				handshakeComplete = false;
 				if (onHandshakeComplete) {
 					onHandshakeComplete(this);
@@ -1652,11 +1662,11 @@ function msgchanComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 			throw new Error('invalid combination');
 		}
 	}.bind(this);
-	
+
 	this.nextcbid = 1; //next callback id
-	
+
 	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-		
+
 		// aMethod is a string - the method to call in framescript
 		// aCallback is a function - optional - it will be triggered when aMethod is done calling
 		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
@@ -1676,7 +1686,7 @@ function msgchanComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 				this.callbackReceptacle[cbid] = aCallback;
 			}
 		}
-		
+
 		// return;
 		aPort1.postMessage({
 			method: aMethod,
@@ -1684,14 +1694,96 @@ function msgchanComm(aContentWindow, aPort1, aPort2, onHandshakeComplete) {
 			cbid
 		}, aTransfers ? aTransfers : undefined);
 	}
-	
+
 	aPort1.onmessage = this.listener;
 	this.callbackReceptacle = {};
-	
+
 	aContentWindow.postMessage({
-		topic: 'msgchanComm_handshake',
+		topic: 'contentComm_handshake',
 		port2: aPort2
 	}, '*', [aPort2]);
-	
+
 }
+// start - CommAPI for bootstrap-content - bootstrap side - cross-file-link0048958576532536411
+// start - CommAPI for bootstrap-worker - bootstrap side - cross-file-link5323131347
+// message method - postMessage
+// on unregister, workers are terminated
+var gWorkerComms = [];
+function workerComm_unregAll() {
+	var l = gWorkerComms.length;
+	for (var i=0; i<l; i++) {
+		gWorkerComms[i].unregister();
+	}
+}
+function workerComm(aWorkerPath, onBeforeInit, onAfterInit) {
+	// worker is lazy loaded, it is not created until the first call
+
+	// if onBeforeInit is set
+		// if worker has `init` function
+			// it is called by bootstrap, (progrmatically, i determine this by basing the first call to the worker)
+	// if onBeforeInit is NOT set
+		// if worker has `init` function
+			// it is called by the worker before the first call to any method in the worker
+	// onAfterInit is not called if not `init` function exists in the worker
+
+	// onBeforeInit - it is a function, it is run to build the data the worker should be inited with
+	// onAfterInit - a callback that happens after init is complete
+	// these init features are offered because most times, workers need some data before starting off. and sometimes data is sent back to bootstrap like from init of MainWorker's
+	// no featuere for prep term, as the prep term should be done in the `self.onclose = function(event) { ... }` of the worker
+	var worker;
+	this.nextcbid = 1; //next callback id
+	this.callbackReceptacle = {};
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers;
+	};
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+
+		// return;
+		worker.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	};
+	this.unregister = function() {
+
+		var l = gWorkerComms.length;
+		for (var i=0; i<l; i++) {
+			if (gWorkerComms[i] == this) {
+				gWorkerComms.splice(i, 1);
+				break;
+			}
+		}
+
+		worker.terminate();
+
+	};
+	this.listener = function() {
+
+	};
+}
+// start - CommAPI for bootstrap-worker - bootstrap side - cross-file-link5323131347
+// end - CommAPI
+
 // end - common helper functions
