@@ -55,7 +55,7 @@ const NS_XUL = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 var bootstrap = this;
 var BOOTSTRAP = this;
 var ADDON_MANAGER_ENTRY;
-var gMainFsComm;
+var gFsComm;
 var gTestWorker;
 
 // Lazy Imports
@@ -69,7 +69,7 @@ XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.
 // Start - Launching profile and other profile functionality
 var MainWorkerMainThreadFuncs = {
 	testConnUpdate: function(aNewContent) {
-		gMainFsComm.transcribeMessage(gTestConnMM, 'callInContent', {
+		gFsComm.transcribeMessage(gTestConnMM, 'callInContent', {
 			method: 'testConnUpdate',
 			arg: aNewContent
 		});
@@ -623,16 +623,10 @@ function startup(aData, aReason) {
 
 	var afterWorker = function() { // because i init worker, then continue init
 		// register framescript listener
-		gMainFsComm = new crossprocComm(core.addon.id);
+		gFsComm = new crossprocComm(core.addon.id);
 
-		// register framescript injector
+		// register framescript injector - i register gFsComm first, because on inject of this, it inits by sending message
 		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
-
-		// // bring in react
-		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react.dev.js', bootstrap);
-		// Services.scriptloader.loadSubScript(core.addon.path.scripts + 'react-dom.dev.js', bootstrap);
-		//
-		// testReact();
 
 		gWindowListenerForPuiBtn = windowListenerForPuiBtn();
 
@@ -641,6 +635,7 @@ function startup(aData, aReason) {
 			function(aVal) {
 				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
 				gTestWorker = new workerComm(core.addon.path.modules + 'TestWorker.js');
+
 			},
 			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
 		).catch(genericCatch.bind(null, 'promise_afterBootstrapInit', 0));
@@ -1546,7 +1541,9 @@ function crossprocComm(aChannelId) {
 		}
 
 		// kill framescripts
-		Services.mm.broadcastAsyncMessage(aChannelId, ['destroySelf']);
+		Services.mm.broadcastAsyncMessage(aChannelId, {
+			method: 'UNINIT_FRAMESCRIPT'
+		});
 	};
 
 	this.listener = {
@@ -1741,6 +1738,8 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit, aWebWorker) {
 	// onAfterInit - args: aArg, this - a callback that happens after init is complete. aArg is return value of init from in worker. the first call to worker will happen after onAfterInit runs in bootstrap
 	// these init features are offered because most times, workers need some data before starting off. and sometimes data is sent back to bootstrap like from init of MainWorker's
 	// no featuere for prep term, as the prep term should be done in the `self.onclose = function(event) { ... }` of the worker
+	gWorkerComms.push(this);
+
 	var worker;
 	var scope = gBootstrap;
 	this.nextcbid = 1; //next callback id
@@ -1756,8 +1755,9 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit, aWebWorker) {
 		worker.addEventListener('message', this.listener);
 
 		if (onAfterInit) {
-			onAfterInit = function() {
-				onAfterInit();
+			var oldOnAfterInit = onAfterInit;
+			onAfterInit = function(aArg, aComm) {
+				oldOnAfterInit(aArg, aComm);
 				if (onAfterCreate) {
 					onAfterCreate(); // link39399999
 				}
@@ -1817,7 +1817,9 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit, aWebWorker) {
 			}
 		}
 
-		worker.terminate();
+		if (worker) { // because maybe it was setup, but never instantiated
+			worker.terminate();
+		}
 
 	};
 	this.listener = function(e) {
@@ -1827,7 +1829,7 @@ function workerComm(aWorkerPath, onBeforeInit, onAfterInit, aWebWorker) {
 		if (payload.method) {
 			if (payload.method == 'triggerOnAfterInit') {
 				if (onAfterInit) {
-					onAfterInit();
+					onAfterInit(payload.arg, this);
 				}
 				return;
 			}

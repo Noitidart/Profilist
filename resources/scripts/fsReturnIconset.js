@@ -8,19 +8,19 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 		var {aProvidedPath, aLoadPath} = aArg;
 		// aProvidedPath must be file uri, or chrome path, or http NOT os path
 		console.log('in loadImg');
-		
+
 		var deferredMain_loadImg = new Deferred();
-		
+
 		if (aProvidedPath in imgPathData) {
 			console.log('aProvidedPath is already loaded in imgPathData so dont reload it');
 			deferredMain_drawScaled.resolve(imgPathData[aProvidedPath]);
 			return deferredMain_drawScaled.promise;
 		}
-		
+
 		imgPathData[aProvidedPath] = {};
-		
+
 		imgPathData[aProvidedPath].Image = new Image();
-		
+
 		imgPathData[aProvidedPath].Image.onload = function() {
 			// imgPathData[aProvidedPath].Canvas = document.createElementNS(NS_HTML, 'canvas')
 			// imgPathData[aProvidedPath].Ctx = imgPathData[aProvidedPath].Canvas.getContext('2d');
@@ -33,23 +33,23 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 				h: imgPathData[aProvidedPath].h
 			});
 		};
-		
+
 		imgPathData[aProvidedPath].Image.onabort = function() {
 			imgPathData[aProvidedPath].status = 'img-abort';
 			deferredMain_loadImg.resolve({
 				status: 'img-abort'
 			});
 		};
-		
+
 		imgPathData[aProvidedPath].Image.onerror = function() {
 			imgPathData[aProvidedPath].status = 'img-error';
 			deferredMain_loadImg.resolve({
 				status: 'img-error'
 			});
 		};
-		
+
 		imgPathData[aProvidedPath].Image.src = aLoadPath;
-		
+
 		return deferredMain_loadImg.promise;
 	}
 	function drawScaled(aArg, aComm) {
@@ -60,26 +60,26 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 		// a canvas is created, and and saved in this object
 		console.error('in drawScaled, arguments:', aProvidedPath, aDrawAtSize);
 		var deferredMain_drawScaled = new Deferred();
-		
+
 		if (!('scaleds' in imgPathData[aProvidedPath])) {
 			imgPathData[aProvidedPath].scaleds = {};
 		}
-		
+
 		if (!(aDrawAtSize in imgPathData[aProvidedPath].scaleds)) {
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize] = {};
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = document.createElement('canvas');
 			var Ctx = imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.getContext('2d');
-			
+
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.width = aDrawAtSize;
 			imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.height = aDrawAtSize;
-			
+
 			if (aDrawAtSize == imgPathData[aProvidedPath].w) {
 				Ctx.drawImage(imgPathData[aProvidedPath].Image, 0, 0)
 			} else {
 				Ctx.drawImage(imgPathData[aProvidedPath].Image, 0, 0, aDrawAtSize, aDrawAtSize);
 			}
 		}
-		
+
 		(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlobHD || imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.toBlob).call(imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can, function(blob) {
 			var reader = new FileReader();
 			reader.onloadend = function() {
@@ -103,13 +103,13 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 			};
 			reader.readAsArrayBuffer(blob);
 		}, 'image/png');
-		
+
 		return deferredMain_drawScaled.promise;
 	}
 	function drawScaled_optBuf_optOverlapOptScaled_buf(aArg, aComm) {
 		var {aProvidedPath, aDrawAtSize, optBuf, optOverlapObj} = aArg;
 		// this method will polute the imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can with the overlap // link165151
-		
+
 		// aProvidedPath
 		// aDrawAtSize - size to draw aProvidedImgPath at. this will also be the canvas size
 		// optBuf - after drawing scaled aProvidedImgPath then optionally get non-overlaped buf. set to true. only obyed if optOverlapProvidedImgPath is set, else throws
@@ -120,7 +120,7 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 		//  	aDrawAtSize
 		//  }
 		var deferredMain_dSoBoOOSb = new Deferred();
-		
+
 		if (optBuf && !optOverlapObj) {
 			deferredMain_dSoBoOOSb.resolve({
 				status: 'fail',
@@ -128,11 +128,11 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 			});
 			return deferredMain_dSoBoOOSb.promise;
 		}
-		
+
 		// globals for steps
 		var rezObj = {};
 		var Ctx;
-		
+
 		//////
 		var step1 = function() {
 			console.error('step1');
@@ -140,15 +140,15 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 			if (!('scaleds' in imgPathData[aProvidedPath])) {
 				imgPathData[aProvidedPath].scaleds = {};
 			}
-			
+
 			if (!(aDrawAtSize in imgPathData[aProvidedPath].scaleds)) {
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize] = {};
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can = document.createElement('canvas');
 				Ctx = imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.getContext('2d');
-				
+
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.width = aDrawAtSize;
 				imgPathData[aProvidedPath].scaleds[aDrawAtSize].Can.height = aDrawAtSize;
-				
+
 				if (aDrawAtSize == imgPathData[aProvidedPath].w) {
 					Ctx.drawImage(imgPathData[aProvidedPath].Image, 0, 0)
 				} else {
@@ -159,7 +159,7 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 			}
 			step2();
 		};
-		
+
 		var step2 = function() {
 			console.error('step2');
 			// optBuf
@@ -198,7 +198,7 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 				step3();
 			}
 		};
-		
+
 		var step3 = function() {
 			console.error('step3');
 			// overlap
@@ -214,7 +214,7 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 				step4();
 			}
 		};
-		
+
 		var step4 = function() {
 			console.error('step4');
 			// final buf
@@ -253,7 +253,7 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 
 		step1();
 		//////
-		
+
 		return deferredMain_dSoBoOOSb.promise;
 	}
 	function getImgDatasOfFinals(reqObj, aComm) {
@@ -269,10 +269,10 @@ var imgPathData = {}; //keys are image path, and value is object holding data
 	}
 // };
 
-		
+
 function blobCb(aProvidedPath, aDeferred_blobCb, blob) {
 	// gets arrbuf
-	
+
 	var reader = new FileReader();
 	reader.onloadend = function() {
 		// reader.result contains the ArrayBuffer.
@@ -296,11 +296,10 @@ function onPageReady(aEvent) {
 	console.info('domcontentloaded time:', (new Date().getTime() - timeStart1));
 	console.log('fsReturnIconset.js page ready, window.location:', window.location.href, 'aContentWindow.location:', aContentWindow.location.href);
 }
-var gBsComm = new msgchanComm(); // handshake doesnt happen till after DOMContentLoaded so i dont need to use onPageReady. this is becaseu aBrowser.addEventListener for DOMContentLoaded see cross-file-link381743613524242
 var gId;
 
 function initFw(aId) {
-	// will not fire till after onPageReady because i dont register msgchanComm till onPageReady
+	// will not fire till after onPageReady because i dont register contentComm till onPageReady
 	gId = aId;
 	gBsComm.postMessage('fsReturnIconsetReady', {
 		id: aId
@@ -312,18 +311,13 @@ window.addEventListener('DOMContentLoaded', onPageReady, false);
 
 // start - common helper functions
 function Deferred() {
-	try {
-		this.resolve = null;
-		this.reject = null;
-		this.promise = new Promise(function(resolve, reject) {
-			this.resolve = resolve;
-			this.reject = reject;
-		}.bind(this));
-		Object.freeze(this);
-	} catch (ex) {
-		console.log('Promise not available!', ex);
-		throw new Error('Promise not available!');
-	}
+	this.resolve = null;
+	this.reject = null;
+	this.promise = new Promise(function(resolve, reject) {
+		this.resolve = resolve;
+		this.reject = reject;
+	}.bind(this));
+	Object.freeze(this);
 }
 
 function genericReject(aPromiseName, aPromiseToReject, aReason) {
@@ -347,26 +341,30 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 	}
 }
 
-function msgchanComm(onHandshakeComplete) {
-	// cross-file-link0048958576532536411 - this is the contentWindow/html side msgchanComm
-	
+// start - CommAPI
+var gContent = window;
+// start - CommAPI for bootstrap-content - content side - cross-file-link0048958576532536411
+function contentComm(onHandshakeComplete) {
 	// onHandshakeComplete is triggerd when handshake completed and this.postMessage becomes usable
+	var scope = gContent;
 	var handshakeComplete = false; // indicates this.postMessage will now work
-	
+	var port;
+	this.nextcbid = 1; // next callback id
+	this.callbackReceptacle = {};
+
 	this.CallbackTransferReturn = function(aArg, aTransfers) {
 		// aTransfers should be an array
 		this.arg = aArg;
 		this.xfer = aTransfers
 	};
-	
 	this.listener = function(e) {
 		var payload = e.data;
-		console.log('incoming msgchan to window, payload:', payload, 'e:', e, 'this:', this);
-		
+		console.log('content contentComm - incoming, payload:', payload); // , 'e:', e, 'this:', this);
+
 		if (payload.method) {
-			if (!(payload.method in window)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
-			var rez_win_call = window[payload.method](payload.arg, this);
-			console.log('rez_win_call:', rez_win_call);
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
+			var rez_win_call = scope[payload.method](payload.arg, this);
+			console.log('content contentComm - rez_win_call:', rez_win_call);
 			if (payload.cbid) {
 				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
 					rez_win_call.then(
@@ -377,7 +375,6 @@ function msgchanComm(onHandshakeComplete) {
 						genericReject.bind(null, 'rez_win_call', 0)
 					).catch(genericCatch.bind(null, 'rez_win_call', 0));
 				} else {
-					console.log('calling postMessage for callback with rez_win_call:', rez_win_call);
 					this.postMessage(payload.cbid, rez_win_call);
 				}
 			}
@@ -386,13 +383,12 @@ function msgchanComm(onHandshakeComplete) {
 			this.callbackReceptacle[payload.cbid](payload.arg, this);
 			delete this.callbackReceptacle[payload.cbid];
 		} else {
-			throw new Error('invalid combination');
+			console.error('contentComm - invalid combination');
+			throw new Error('contentComm - invalid combination');
 		}
 	}.bind(this);
-	
-	this.nextcbid = 1; //next callback id
 	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-		
+
 		// aMethod is a string - the method to call in framescript
 		// aCallback is a function - optional - it will be triggered when aMethod is done calling
 		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
@@ -412,7 +408,7 @@ function msgchanComm(onHandshakeComplete) {
 				this.callbackReceptacle[cbid] = aCallback;
 			}
 		}
-		
+
 		// return;
 		port.postMessage({
 			method: aMethod,
@@ -420,31 +416,31 @@ function msgchanComm(onHandshakeComplete) {
 			cbid
 		}, aTransfers ? aTransfers : undefined);
 	};
-	
-	this.callbackReceptacle = {};
-	
-	var port;
-	
+
 	var winMsgListener = function(e) {
 		var data = e.data;
-		console.log('incoming message to HTML, data:', data, 'source:', e.source, 'ports:', e.ports);
+		console.log('content contentComm - incoming window message, data:', data); //, 'source:', e.source, 'ports:', e.ports);
 		switch (data.topic) {
-			case 'msgchanComm_handshake':
-				
+			case 'contentComm_handshake':
+
 					window.removeEventListener('message', winMsgListener, false);
 					port = data.port2;
 					port.onmessage = this.listener;
-					this.postMessage('msgchanComm_handshake_finalized');
+					this.postMessage('contentComm_handshake_finalized');
 					handshakeComplete = true;
 					if (onHandshakeComplete) {
 						onHandshakeComplete(true);
 					}
-					
+
 				break;
 			default:
-				console.error('unknown topic to HTML, data:', data);
+				console.error('content contentComm - unknown topic, data:', data);
 		}
 	}.bind(this);
 	window.addEventListener('message', winMsgListener, false);
 
 }
+// end - CommAPI for bootstrap-content - content side - cross-file-link0048958576532536411
+// end - CommAPI
+
+var gBsComm = new contentComm(); // handshake doesnt happen till after DOMContentLoaded so i dont need to use onPageReady. this is becaseu aBrowser.addEventListener for DOMContentLoaded see cross-file-link381743613524242

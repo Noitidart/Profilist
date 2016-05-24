@@ -1,15 +1,13 @@
-const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
+// Imports
+const {interfaces: Ci, manager: Cm, results: Cr} = Components;
 Cm.QueryInterface(Ci.nsIComponentRegistrar);
-Cu.import('resource://gre/modules/Services.jsm');
+// Cu.import('resource://gre/modules/Services.jsm'); // already available in framescript
+// Cu.import('resource://gre/modules/XPCOMUtils.jsm'); // already available in framescript
 
-var core = {
-	addon: {
-		id: 'Profilist@jetpack'
-	}
-};
-console.error('this:', this);
-var gCFMM = this;
-var gMainComm;
+// Globals
+var core = {addon: {id:'Profilist@jetpack'}}; // all that should be needed is core.addon.id, the rest is brought over on init
+var gBsComm; // works with gFsComm in bootstrap
+var gWinComm;  // works with gFsComm in content
 
 // start - about module
 var aboutFactory_profilist;
@@ -70,226 +68,6 @@ function AboutFactory(component) {
 	this.register();
 }
 // end - about module
-var gBootstrapComms = [];
-function bootstrapComm_unregAll() {
-	var l = gBootstrapComms.length;
-	for (var i=0; i<l; i++) {
-		gBootstrapComms[i].unregister();
-	}
-}
-var bootstrapMethods = {
-	// methods called by bootstrap
-	UNINIT_FRAMESCRIPT: function() { // link4757484773732
-		uninit();
-	},
-	callInContent: function(aArg) {
-		var {method, arg, wait} = aArg;
-		// wait - bool - set to true if you want to wait for response from content, and then return it to bootstrap
-
-		if (!gWinComm) {
-			console.warn('no currently connected window');
-			return 'no currently connected window';
-		}
-		var cWinCommCb = undefined;
-		var rez = undefined;
-		if (wait) {
-			var deferred_callInContent = new Deferred();
-
-			cWinCommCb = function(aVal) {
-				deferred_callInContent.resolve(aVal);
-			};
-
-			rez = deferred_callInContent.promise;
-		}
-		gWinComm.postMessage(method, arg, undefined, cWinCommCb); // :todo: design a way so it can transfer to content. for sure though the info that comes here from bootstap is copied. but from here to content i should transfer if possible
-		return rez;
-	}
-};
-function bootstrapComm(aChannelID) {
-	// framescript side of bootstrap-framescript comm layer cross-file-link55565665464644
-	this.id = aChannelID;
-	gBootstrapComms.push(this);
-
-	this.unregister = function() {
-		removeMessageListener(this.id, this.listener);
-
-		var l = gBootstrapComms.length;
-		for (var i=0; i<l; i++) {
-			if (gBootstrapComms[i] == this) {
-				gBootstrapComms.splice(i, 1);
-				break;
-			}
-		}
-	};
-	this.listener = {
-		receiveMessage: function(e) {
-			var payload = e.data;
-			console.log('incoming message to framescript, payload:', payload);
-			// console.log('this in receiveMessage framescript:', this);
-
-			if (payload.method) {
-				if (!(payload.method in bootstrapMethods)) { console.error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS'); throw new Error('method of "' + payload.method + '" not in BOOTSTRAPMETHODS') } // dev line remove on prod
-				var rez_fs_call = bootstrapMethods[payload.method](payload.arg, this);
-				console.log('rez_fs_call:', rez_fs_call);
-				if (payload.cbid) {
-					if (rez_fs_call && rez_fs_call.constructor.name == 'Promise') {
-						rez_fs_call.then(
-							function(aVal) {
-								console.log('Fullfilled - rez_fs_call - ', aVal);
-								this.transcribeMessage(payload.cbid, aVal);
-							}.bind(this),
-							genericReject.bind(null, 'rez_fs_call', 0)
-						).catch(genericCatch.bind(null, 'rez_fs_call', 0));
-					} else {
-						console.log('calling transcribeMessage for callback with rez_fs_call:', rez_fs_call);
-						this.transcribeMessage(payload.cbid, rez_fs_call);
-					}
-				}
-			} else if (!payload.method && payload.cbid) {
-				// its a cbid
-				this.callbackReceptacle[payload.cbid](payload.arg, this);
-				delete this.callbackReceptacle[payload.cbid];
-			} else {
-				throw new Error('invalid combination');
-			}
-		}.bind(this)
-	};
-	this.nextcbid = 1; //next callback id
-	this.transcribeMessage = function(aMethod, aArg, aCallback) {
-		// console.log('framescript sending message to bootstrap', aMethod, aArg);
-
-		// aMethod is a string - the method to call in framescript
-		// aCallback is a function - optional - it will be triggered when aMethod is done calling
-		var cbid = null;
-		if (typeof(aMethod) == 'number') {
-			// this is a response to a callack waiting in framescript
-			cbid = aMethod;
-			aMethod = null;
-		} else {
-			if (aCallback) {
-				cbid = this.nextcbid++;
-				this.callbackReceptacle[cbid] = aCallback;
-			}
-		}
-
-		// return;
-		gCFMM.sendAsyncMessage(this.id, {
-			method: aMethod,
-			arg: aArg,
-			cbid
-		});
-	};
-	this.callbackReceptacle = {};
-
-	addMessageListener(this.id, this.listener);
-}
-
-
-var gWinComm;  // works with gFsComm in content
-
-// start - msgChanComm module
-var contentMethods = {
-	// methods called by content (gFsComm from content)
-	callInBootstrap: function(aArg, aComm) {
-		var {method, arg, wait} = aArg;
-		// wait - bool - set to true if you want value returned to content // cross-file-link11192911
-
-		var rez;
-		var cbResolver = undefined;
-
-		if (wait) {
-			var deferred_callInBootstrap = new Deferred();
-			cbResolver = function(aArg, aComm) {
-				console.log('callInBootstrap transcribe complete, aArg:', aArg);
-				deferred_callInBootstrap.resolve(aArg);
-			}
-			rez = deferred_callInBootstrap.promise;
-		}
-		gMainComm.transcribeMessage(method, arg, cbResolver);
-
-		return rez;
-	}
-};
-function msgchanComm(aContentWindow) {
-	var portWorker = new Worker(core.addon.path.scripts + 'msgchanWorker.js');
-
-	this.listener = function(e) {
-		var payload = e.data;
-		console.log('incoming msgchan to framescript, payload:', payload, 'e:', e);
-
-		if (payload.method) {
-			if (!(payload.method in contentMethods)) { console.error('method of "' + payload.method + '" not in CONTENTMETHODS'); throw new Error('method of "' + payload.method + '" not in CONTENTMETHODS') } // dev line remove on prod
-			var rez_fs_call_for_win = contentMethods[payload.method](payload.arg, this);
-			console.log('rez_fs_call_for_win:', rez_fs_call_for_win);
-			if (payload.cbid) {
-				if (rez_fs_call_for_win && rez_fs_call_for_win.constructor.name == 'Promise') {
-					rez_fs_call_for_win.then(
-						function(aVal) {
-							console.log('Fullfilled - rez_fs_call_for_win - ', aVal);
-							this.postMessage(payload.cbid, aVal);
-						}.bind(this),
-						genericReject.bind(null, 'rez_fs_call_for_win', 0)
-					).catch(genericCatch.bind(null, 'rez_fs_call_for_win', 0));
-				} else {
-					console.log('calling postMessage for callback with rez_fs_call_for_win:', rez_fs_call_for_win, 'this:', this);
-					this.postMessage(payload.cbid, rez_fs_call_for_win);
-				}
-			}
-		} else if (!payload.method && payload.cbid) {
-			// its a cbid
-			this.callbackReceptacle[payload.cbid](payload.arg, this);
-			delete this.callbackReceptacle[payload.cbid];
-		} else {
-			throw new Error('invalid combination');
-		}
-	}.bind(this);
-
-	this.nextcbid = 1; //next callback id
-
-	portWorker.onmessage = function(e) {
-		portWorker.terminate();
-		var port = e.data.port1;
-		var port2 = e.data.port2;
-		console.log('port:', port, 'port2:', port2);
-
-
-		this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-
-			// aMethod is a string - the method to call in framescript
-			// aCallback is a function - optional - it will be triggered when aMethod is done calling
-			var cbid = null;
-			if (typeof(aMethod) == 'number') {
-				// this is a response to a callack waiting in framescript
-				cbid = aMethod;
-				aMethod = null;
-			} else {
-				if (aCallback) {
-					cbid = this.nextcbid++;
-					this.callbackReceptacle[cbid] = aCallback;
-				}
-			}
-
-			// return;
-			this.port.postMessage({
-				method: aMethod,
-				arg: aArg,
-				cbid
-			}, aTransfers ? [aTransfers] : undefined);
-		}
-
-		this.port = port;
-		port.onmessage = this.listener;
-		this.callbackReceptacle = {};
-
-		aContentWindow.postMessage({
-			topic: 'msgchanComm_handshake',
-			port2: port2
-		}, '*', [port2]);
-
-	}.bind(this);
-
-}
-// end - msgChanComm module
 
 // start - pageLoader
 var pageLoader = {
@@ -311,14 +89,14 @@ var pageLoader = {
 
 		// contentWindow.wrappedJSObject.sendAsyncMessageWithCallback = sendAsyncMessageWithCallback;
 		// var waivedWindow = Components.utils.waiveXrays(contentWindow);
-		// Cu.exportFunction(gMainComm.transcribeMessage, contentWindow, {
+		// Cu.exportFunction(gBsComm.transcribeMessage, contentWindow, {
 			// defineAs: 'transcribeMessage'
 		// });
 
 		// contentWindow.postMessage({
 			// test: true
 		// }, '*')
-		gWinComm = new msgchanComm(contentWindow);
+		gWinComm = new contentComm(contentWindow); // cross-file-link884757009
 
 		console.log('reallyReady done');
 	},
@@ -422,9 +200,9 @@ var pageLoader = {
 // end - pageLoader
 
 function init() {
-	gMainComm = new bootstrapComm(core.addon.id);
+	gBsComm = new crossprocComm(core.addon.id);
 
-	gMainComm.transcribeMessage('fetchCore', null, function(aCore, aComm) {
+	gBsComm.transcribeMessage('fetchCore', null, function(aCore, aComm) {
 		core = aCore;
 		console.log('ok updated core to:', core);
 
@@ -440,17 +218,18 @@ function init() {
 
 function uninit() { // link4757484773732
 	// an issue with this unload is that framescripts are left over, i want to destory them eventually
-	if (aboutFactory_profilist) {
-		aboutFactory_profilist.unregister();
-	}
-	removeEventListener('unload', uninit, false);
+
+	crossprocComm_unregAll();
 
 	pageLoader.unregister(); // pageLoader boilerpate
 
-	bootstrapComm_unregAll();
-}
-init();
+	if (aboutFactory_profilist) {
+		aboutFactory_profilist.unregister();
+	}
 
+	removeEventListener('unload', uninit, false);
+
+}
 
 // start - common helper functions
 function Deferred() {
@@ -462,7 +241,6 @@ function Deferred() {
 	}.bind(this));
 	Object.freeze(this);
 }
-
 function genericReject(aPromiseName, aPromiseToReject, aReason) {
 	var rejObj = {
 		name: aPromiseName,
@@ -483,5 +261,267 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 		aPromiseToReject.reject(rejObj);
 	}
 }
+// start - CommAPI
+// common to all of these apis
+	// whenever you use the message method, the method MUST not be a number, as if it is, then it is assumed it is a callback
+	// if you want to do a transfer of data from a callback, if transferring is supported by the api, then you must wrapp it in aComm.CallbackTransferReturn
+
+var gCFMM = this;
+var gCommScope = {
+	UNINIT_FRAMESCRIPT: function() { // link4757484773732
+		// called by bootstrap - but i guess content can call it too, but i dont see it ever wanting to
+		console.error('doing UNINIT_FRAMESCRIPT');
+		uninit();
+	},
+	callInContent: function(aArg) {
+		// called by bootstrap
+		var {method, arg, wait} = aArg;
+		// wait - bool - set to true if you want to wait for response from content, and then return it to bootstrap
+
+		if (!gWinComm) {
+			console.warn('no currently connected window');
+			return 'no currently connected window';
+		}
+		var cWinCommCb = undefined;
+		var rez = undefined;
+		if (wait) {
+			var deferred_callInContent = new Deferred();
+
+			cWinCommCb = function(aVal) {
+				deferred_callInContent.resolve(aVal);
+			};
+
+			rez = deferred_callInContent.promise;
+		}
+		gWinComm.postMessage(method, arg, undefined, cWinCommCb); // :todo: design a way so it can transfer to content. for sure though the info that comes here from bootstap is copied. but from here to content i should transfer if possible
+		return rez;
+	},
+	callInBootstrap: function(aArg, aComm) {
+		// called by content
+		var {method, arg, wait} = aArg;
+		// wait - bool - set to true if you want value returned to content // cross-file-link11192911
+
+		var rez;
+		var cbResolver = undefined;
+
+		if (wait) {
+			var deferred_callInBootstrap = new Deferred();
+			cbResolver = function(aArg, aComm) {
+				console.log('callInBootstrap transcribe complete, aArg:', aArg);
+				deferred_callInBootstrap.resolve(aArg);
+			}
+			rez = deferred_callInBootstrap.promise;
+		}
+		gBsComm.transcribeMessage(method, arg, cbResolver);
+
+		return rez;
+	}
+};
+
+// start - CommAPI for bootstrap-framescript - bootstrap side - cross-file-link55565665464644
+// message method - transcribeMessage - it is meant to indicate nothing can be transferred, just copied/transcribed to the other process
+// first arg to transcribeMessage is a message manager, this is different from the other comm api's
+var gCrossprocComms = [];
+function crossprocComm_unregAll() {
+	var l = gCrossprocComms.length;
+	for (var i=0; i<l; i++) {
+		gCrossprocComms[i].unregister();
+	}
+}
+function crossprocComm(aChannelId) {
+	// when a new framescript creates a crossprocComm on framscript side, it requests whatever it needs on init, so i dont offer a onBeforeInit or onAfterInit on bootstrap side
+
+	var scope = gCommScope;
+	this.nextcbid = 1; // next callback id // doesnt have to be defined on this. but i do it so i can check nextcbid from debug sources
+	this.callbackReceptacle = {};
+
+	gCrossprocComms.push(this);
+
+	this.unregister = function() {
+		removeMessageListener(aChannelId, this.listener);
+
+		var l = gCrossprocComms.length;
+		for (var i=0; i<l; i++) {
+			if (gCrossprocComms[i] == this) {
+				gCrossprocComms.splice(i, 1);
+				break;
+			}
+		}
+	};
+
+	this.listener = {
+		receiveMessage: function(e) {
+			var messageManager = e.target.messageManager;
+			var browser = e.target;
+			var payload = e.data;
+			console.log('bootstrap crossprocComm - incoming, payload:', payload); //, 'e:', e);
+			// console.log('this in receiveMessage bootstrap:', this);
+
+			if (payload.method) {
+				if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') }  // dev line remove on prod
+				var rez_bs_call = scope[payload.method](payload.arg, messageManager, browser, this); // only on bootstrap side, they get extra 2 args
+				if (payload.cbid) {
+					if (rez_bs_call && rez_bs_call.constructor.name == 'Promise') {
+						rez_bs_call.then(
+							function(aVal) {
+								console.log('Fullfilled - rez_bs_call - ', aVal);
+								this.transcribeMessage(messageManager, payload.cbid, aVal);
+							}.bind(this),
+							genericReject.bind(null, 'rez_bs_call', 0)
+						).catch(genericCatch.bind(null, 'rez_bs_call', 0));
+					} else {
+						console.log('calling transcribeMessage for callbck with args:', payload.cbid, rez_bs_call);
+						this.transcribeMessage(messageManager, payload.cbid, rez_bs_call);
+					}
+				}
+			} else if (!payload.method && payload.cbid) {
+				// its a cbid
+				this.callbackReceptacle[payload.cbid](payload.arg, messageManager, browser, this);
+				delete this.callbackReceptacle[payload.cbid];
+			} else {
+				throw new Error('invalid combination');
+			}
+		}.bind(this)
+	};
+
+	this.transcribeMessage = function(aMethod, aArg, aCallback) { // framescript version doesnt have messageManager arg
+		// console.log('bootstrap sending message to framescript', aMethod, aArg);
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+
+		gCFMM.sendAsyncMessage(aChannelId, {
+			method: aMethod,
+			arg: aArg,
+			cbid
+		});
+	};
+
+	addMessageListener(aChannelId, this.listener);
+}
+// end - CommAPI for bootstrap-framescript - bootstrap side - cross-file-link55565665464644
+// start - CommAPI for framescript-content - bootstrap side - cross-file-link0048958576532536411
+// message method - postMessage - content is in-process-content-windows, transferring works
+// there is a bootstrap version of this that requires a feed of the ports.
+function contentComm(aContentWindow, onHandshakeComplete) { // framescript version doesnt have aPort1/aPort2 args, it generates its own with a WebWorker
+	// onHandshakeComplete is triggered when handshake is complete
+	// when a new contentWindow creates a contentComm on contentWindow side, it requests whatever it needs on init, so i dont offer a onBeforeInit. I do offer a onHandshakeComplete which is similar to onAfterInit, but not exactly the same
+	// no unregister for this really, as no listeners setup, to unregister you just need to GC everything, so just break all references to it
+
+	var portWorker = new Worker(core.addon.path.scripts + 'contentComm_framescriptWorker.js');
+
+	var aPort1;
+	var aPort2;
+	var handshakeComplete = false; // indicates this.postMessage will now work i think. it might work even before though as the messages might be saved till a listener is setup? i dont know i should ask
+	var scope = gCommScope;
+
+	this.nextcbid = 1; // next callback id // doesnt have to be defined on this. but i do it so i can check nextcbid from debug sources
+	this.callbackReceptacle = {};
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers;
+	};
+
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('framescript contentComm - incoming, payload:', uneval(payload)); //, 'e:', e);
+
+		if (payload.method) {
+			if (payload.method == 'contentComm_handshake_finalized') {
+				handshakeComplete = false;
+				if (onHandshakeComplete) {
+					onHandshakeComplete(this);
+				}
+				return;
+			}
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') } // dev line remove on prod
+			var rez_fs_call_for_win = scope[payload.method](payload.arg, this);
+			console.log('rez_fs_call_for_win:', rez_fs_call_for_win);
+			if (payload.cbid) {
+				if (rez_fs_call_for_win && rez_fs_call_for_win.constructor.name == 'Promise') {
+					rez_fs_call_for_win.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_fs_call_for_win - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_fs_call_for_win', 0)
+					).catch(genericCatch.bind(null, 'rez_fs_call_for_win', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_fs_call_for_win:', rez_fs_call_for_win, 'this:', this);
+					this.postMessage(payload.cbid, rez_fs_call_for_win);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			throw new Error('invalid combination');
+		}
+	}.bind(this);
+
+
+
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+
+		// return;
+		aPort1.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	}
+
+
+	portWorker.onmessage = function(e) {
+		portWorker.terminate();
+		aPort1 = e.data.port1;
+		aPort2 = e.data.port2;
+
+		aPort1.onmessage = this.listener;
+
+		aContentWindow.postMessage({
+			topic: 'contentComm_handshake',
+			port2: aPort2
+		}, '*', [aPort2]);
+	}.bind(this);
+
+}
+// end - CommAPI for framescript-content - framescript side - cross-file-link0048958576532536411
+// end - CommAPI
 
 // end - common helper functions
+
+init(); // needs to go after the CommApi stuff, as otherwise i get gCrossprocComms is undefined

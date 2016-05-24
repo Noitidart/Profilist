@@ -1,7 +1,11 @@
-var gBsComm = new workerComm();
+var gBsComm;
 
-function init() {
+function init(aArg, aComm) {
+	console.log('doing init');
+}
 
+function test(aArg, aComm) {
+	return 'hi';
 }
 
 // start - common helper functions
@@ -38,7 +42,7 @@ function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
 var gWorker = this;
 
 // start - CommAPI for bootstrap-worker - worker side - cross-file-link5323131347
-function workerComm(onBeforeInit, onAfterInit, aWebWorker) {
+function workerComm() {
 
 	var scope = gWorker;
 	var firstMethodCalled = false;
@@ -85,13 +89,14 @@ function workerComm(onBeforeInit, onAfterInit, aWebWorker) {
 			if (!firstMethodCalled) {
 				firstMethodCalled = true;
 				if (payload.method != 'init' && scope.init) {
-					scope.init();
+					this.postMessage('triggerOnAfterInit', scope.init(undefined, this));
 				}
 			}
+			console.log('scope:', scope);
 			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') } // dev line remove on prod
 			var rez_worker_call_for_bs = scope[payload.method](payload.arg, this);
 			console.log('rez_worker_call_for_bs:', rez_worker_call_for_bs);
-			if (payloa d.cbid) {
+			if (payload.cbid) {
 				if (rez_worker_call_for_bs && rez_worker_call_for_bs.constructor.name == 'Promise') {
 					rez_worker_call_for_bs.then(
 						function(aVal) {
@@ -104,6 +109,10 @@ function workerComm(onBeforeInit, onAfterInit, aWebWorker) {
 					console.log('calling postMessage for callback with rez_worker_call_for_bs:', rez_worker_call_for_bs, 'this:', this);
 					this.postMessage(payload.cbid, rez_worker_call_for_bs);
 				}
+			}
+			// gets here on programtic init, as it for sure does not have a callback
+			if (payload.method == 'init') {
+				this.postMessage('triggerOnAfterInit', rez_worker_call_for_bs);
 			}
 		} else if (!payload.method && payload.cbid) {
 			// its a cbid
@@ -120,3 +129,6 @@ function workerComm(onBeforeInit, onAfterInit, aWebWorker) {
 // end - CommAPI for bootstrap-worker - worker side - cross-file-link5323131347
 // end - CommAPI
 // end - common helper functions
+
+// startup
+ gBsComm = new workerComm();

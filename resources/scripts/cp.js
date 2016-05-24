@@ -4,7 +4,7 @@ var core;
 var gIniObj;
 var gKeyInfoStore;
 
-var gCFMM; // needed for contentMMFromContentWindow_Method2
+var gFsComm;
 
 // Start - DOM Event Attachments
 function doOnBeforeUnload() {
@@ -18,93 +18,9 @@ function doOnContentLoad() {
 	// setTimeout(initPage, 0);
 }
 
+gFsComm = new contentComm();
 document.addEventListener('DOMContentLoaded', doOnContentLoad, false);
 window.addEventListener('beforeunload', doOnBeforeUnload, false);
-
-// start - message channel module
-function msgchanComm(aPort) {
-	
-	this.listener = function(e) {
-		var payload = e.data;
-		console.log('incoming msgchan to window, payload:', payload, 'e:', e, 'this:', this);
-		
-		if (payload.method) {
-			if (!(payload.method in window)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
-			var rez_win_call = window[payload.method](payload.arg, this);
-			console.log('rez_win_call:', rez_win_call);
-			if (payload.cbid) {
-				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
-					rez_win_call.then(
-						function(aVal) {
-							console.log('Fullfilled - rez_win_call - ', aVal);
-							this.postMessage(payload.cbid, aVal);
-						}.bind(this),
-						genericReject.bind(null, 'rez_win_call', 0)
-					).catch(genericCatch.bind(null, 'rez_win_call', 0));
-				} else {
-					console.log('calling postMessage for callback with rez_win_call:', rez_win_call);
-					this.postMessage(payload.cbid, rez_win_call);
-				}
-			}
-		} else if (!payload.method && payload.cbid) {
-			// its a cbid
-			this.callbackReceptacle[payload.cbid](payload.arg, this);
-			delete this.callbackReceptacle[payload.cbid];
-		} else {
-			throw new Error('invalid combination');
-		}
-	}.bind(this);
-	
-	this.nextcbid = 1; //next callback id
-	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
-		
-		// aMethod is a string - the method to call in framescript
-		// aCallback is a function - optional - it will be triggered when aMethod is done calling
-		var cbid = null;
-		if (typeof(aMethod) == 'number') {
-			// this is a response to a callack waiting in framescript
-			cbid = aMethod;
-			aMethod = null;
-		} else {
-			if (aCallback) {
-				cbid = this.nextcbid++;
-				this.callbackReceptacle[cbid] = aCallback;
-			}
-		}
-		
-		// return;
-		aPort.postMessage({
-			method: aMethod,
-			arg: aArg,
-			cbid
-		}, aTransfers ? [aTransfers] : undefined);
-	}
-	aPort.onmessage = this.listener;
-	this.callbackReceptacle = {};
-	
-	// // test
-	// gFsComm.postMessage('callInBootstrap', {
-	// 	method: 'fetchCore',
-	// 	wait: true
-	// }, null, function(aArg, aComm) {
-	// 	console.log('back from calling in bootstrap, aArg:', aArg);
-	// });
-}
-var gFsComm; // works with gWinComm in framescript
-window.addEventListener('message', function(e) {
-	var data = e.data;
-	console.log('incoming message to HTML, data:', data, 'source:', e.source, 'ports:', e.ports);
-	switch (data.topic) {
-		case 'msgchanComm_handshake':
-			
-				gFsComm = new msgchanComm(data.port2);
-				initPage();
-			
-			break;
-		default:
-			console.error('unknown topic to HTML, data:', data);
-	}
-}, false);
 
 // :note: should attach doOnBlur to window.blur after page is init'ed for first time, or if widnow not focused, then attach focus listener link147928272
 function ifNotFocusedDoOnBlur() { // was ifNotFocusedAttachFocusListener
@@ -136,7 +52,7 @@ function doOnFocus() {
 			console.log('ok got new ini obj, will now set global nad update react component:', aIniObj);
 			// alert('ok got new ini obj, will now set global nad update react component');
 			gIniObj = aIniObj;
-			
+
 			MyStore.setState({
 				sIniObj: gIniObj
 			})
@@ -148,9 +64,9 @@ function doOnFocus() {
 // Start - Page Functionalities
 function initPage() {
 	// if isReInit then it will skip some stuff
-	
+
 	console.log('in init');
-	
+
 	// get core and config objs
 	gFsComm.postMessage(
 		'callInBootstrap',
@@ -164,11 +80,11 @@ function initPage() {
 			core = aObjs.aCore;
 			gIniObj = aObjs.aIniObj;
 			gKeyInfoStore = aObjs.aKeyInfoStore;
-			
+
 			initDOMInfo();
-			
+
 			initReactComponent();
-			
+
 			window.addEventListener('blur', attachFocusListener, false); // link147928272
 			ifNotFocusedDoOnBlur();
 		}
@@ -177,9 +93,9 @@ function initPage() {
 
 var MyStore = {};
 function initReactComponent() {
-	
+
 	var myControlPanel = React.createElement(ControlPanel);
-	
+
 	ReactDOM.render(
 		myControlPanel,
 		document.getElementById('wrapContent')
@@ -315,7 +231,7 @@ var ControlPanel = React.createClass({
 		// aNewIniObj should always be reference to gIniObj. meaning on change i should always update gIniObj. i want to keep gIniObj synced with sIniObj
 		// send update to MainWorker.js to write sIniObj to file
 		// onChange of each row, should call this
-		
+
 		// var fetchTimeSt = Date.now();
 		gFsComm.postMessage(
 			'callInBootstrap',
@@ -327,9 +243,9 @@ var ControlPanel = React.createClass({
 			null,
 			function (aNewlyFormattedIniObj, aComm) {
 				console.log('userManipulatedIniObj_updateIniFile completed');
-				
+
 				gIniObj = JSON.parse(aNewlyFormattedIniObj);
-				
+
 				if (aDelaySetState) {
 					// :todo: from aDelaySetState remove the time it took to get back here
 					// var fetchTimeTotal = Date.now() - fetchTimeSt;
@@ -346,7 +262,7 @@ var ControlPanel = React.createClass({
 				}
 			}.bind(this)
 		);
-		
+
 	},
 	componentDidMount: function() {
 		MyStore.updateStatedIniObj = this.updateStatedIniObj; // no need for bind here else React warns "Warning: bind(): You are binding a component method to the component. React does this for you automatically in a high-performance way, so you can safely remove this call. See Menu"
@@ -364,7 +280,7 @@ var ControlPanel = React.createClass({
 		if (this.state.sIniObj.length == 0) {
 			this.state.sIniObj = JSON.parse(JSON.stringify(gIniObj));
 		}
-		
+
 		var aProps = {
 			className: 'wrap-react',
 			component:'div',
@@ -372,19 +288,19 @@ var ControlPanel = React.createClass({
 			transitionEnterTimeout: 300,
 			transitionLeaveTimeout: 300
 		};
-		
+
 		var children = [];
-		
+
 		children.push(React.createElement(Row, {gRowInfo:{id:'help', type:'ignore'}, sHelp:this.state.sHelp})); // otherwise link8484888888 will give a warning
-		
+
 		// console.log('gDOMInfo.length:', gDOMInfo.length);
-		
+
 		var sGenIniEntry = getIniEntryByKeyValue(this.state.sIniObj, 'groupName', 'General');
 		var sCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(this.state.sIniObj, 'currentProfile', true);
 		console.info('sGenIniEntry:', sGenIniEntry);
-		
+
 		var jProfilistDev = getPrefLikeValForKeyInIniEntry(sCurProfIniEntry, sGenIniEntry, 'ProfilistDev') == '1' ? true : false;
-		
+
 		for (var i=0; i<gDOMInfo.length; i++) {
 			console.log('gDOMInfo[i]:', gDOMInfo[i]);
 			if (gDOMInfo[i].section == formatStringFromNameCore('profilist.cp.developer', 'cp') && !jProfilistDev) {
@@ -392,11 +308,11 @@ var ControlPanel = React.createClass({
 			}
 			children.push(React.createElement(Section, {gSectionInfo:gDOMInfo[i], sIniObj: this.state.sIniObj, sGenIniEntry: sGenIniEntry, sCurProfIniEntry: sCurProfIniEntry, sBuildsLastRow: (gDOMInfo[i].section != formatStringFromNameCore('profilist.cp.developer', 'cp') ? undefined : this.state.sBuildsLastRow), sHelp:this.state.sHelp }));
 		}
-		
+
 		if (!this.state.sHelp) {
 			aProps.className += ' help-off';
 		}
-		
+
 		return React.createElement(React.addons.CSSTransitionGroup, aProps,
 			children
 		);
@@ -415,18 +331,18 @@ var Section = React.createClass({
 		var aProps = {
 			className: 'section'
 		};
-		
+
 		var children = [];
-		
+
 		// console.log('this.props.gSectionInfo.length:', this.props.gSectionInfo.length);
 		children.push(React.createElement('h3', {className:'section-head'},
 			this.props.gSectionInfo.section
 		));
-		
+
 		for (var i=0; i<this.props.gSectionInfo.rows.length; i++) {
 			children.push(React.createElement(Row, {gRowInfo:this.props.gSectionInfo.rows[i], sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow:(this.props.gSectionInfo.rows[i].label != formatStringFromNameCore('profilist.cp.builds', 'cp') ? undefined : this.props.sBuildsLastRow), sHelp:this.props.sHelp }));
 		}
-		
+
 		return React.createElement('div', aProps,
 			children
 		);
@@ -438,18 +354,18 @@ var Row = React.createClass({
 		// only attached if the element has a key in gRowInfo
 		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile
 		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
-		
+
 		// alert(e.target.value);
 		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, e.target.value);
-		
+
 		console.log('ok gIniObj updated');
-		
+
 		MyStore.onComponentChange(gIniObj);
 	},
 	toggleSpecificness: function() {
 		var curSpecificness = getSpecificnessForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
 		var curKeyVal = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
-		
+
 		var gIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true); // ini entry for the current profile in global. need global as it is by reference i make a change on it with setPrefLikeValForKeyInIniEntry
 		var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General'); // same with gGenIniEntry, i dont use thsi.props.sGenIniEntry because i might affect it with setPrefLikeValForKeyInIniEntry
 		setPrefLikeValForKeyInIniEntry(gIniEntry, gGenIniEntry, this.props.gRowInfo.key, curKeyVal, curSpecificness == 2 ? 1 : 2);
@@ -463,22 +379,22 @@ var Row = React.createClass({
 		//	sGenIniEntry
 		// sBuildsLastRow - only if  this is gRowInfo.label == formatStringFromNameCore('profilist.cp.builds', 'cp')
 		//	sHelp
-		
+
 		var aProps = {
 			className: 'row'
 		};
-		
+
 		var children = [];
-		
+
 		if (this.props.gRowInfo.id && this.props.gRowInfo.key) {
 			console.error('gRowInfo must have one or the other! key OR id! never both!');
 			throw new Error('gRowInfo must have one or the other! key OR id! never both!');
 		}
-		
+
 		if (this.props.gRowInfo.id) {
 			switch (this.props.gRowInfo.id) {
 				case 'help':
-					
+
 						console.log('this.props.sHelp:', this.props.sHelp);
 						aProps.className += ' row-help';
 						var cHelpIconProps = {
@@ -492,31 +408,31 @@ var Row = React.createClass({
 						children.push(
 							React.createElement('span', cHelpIconProps)
 						);
-					
+
 					break;
 				default:
-					
+
 						////
-					
+
 			}
 		} else if (this.props.gRowInfo.key) {
 			switch (this.props.gRowInfo.key) {
 				default:
-				
+
 						////
-					
+
 			}
 		} else {
 			console.error('gRowInfo does not have an id or key!!! it must have one of them!');
 			throw new Error('gRowInfo does not have an id or key!!! it must have one of them!');
 		}
-		
+
 		if (this.props.gRowInfo.label) {
 			children.push(React.createElement('label', {},
 				this.props.gRowInfo.label
 			));
 		}
-		
+
 		// can specificty be toggled? if so then add in toggler ELSE explain specificness in desc
 		var specificnessDesc;
 		var specificnessEl;
@@ -540,7 +456,7 @@ var Row = React.createClass({
 				}
 			}
 		}
-		
+
 		// add in desc
 		if (this.props.sHelp && (this.props.gRowInfo.desc || specificnessDesc)) {
 			var cChildProps = {className:'fontello-icon icon-info', 'data-specificness': !specificnessDesc ? undefined : specificnessDesc};
@@ -549,10 +465,10 @@ var Row = React.createClass({
 			}
 			children.push(React.createElement('span', cChildProps));
 		}
-		
+
 		switch (this.props.gRowInfo.type) { // must have type link8484888888 or you get a warning, it doesnt break, but its a warning
 			case 'select':
-				
+
 					var options = [];
 					var aSelectProps;
 
@@ -563,7 +479,7 @@ var Row = React.createClass({
 						));
 						var sortedIniObj = JSON.parse(JSON.stringify(gIniObj));
 						var keyValSort = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistSort');
-						
+
 						for (var i=0; i<sortedIniObj.length; i++) {
 							if (sortedIniObj[i].Path) {
 								sortedIniObj[i].noWriteObj.lowerCaseName = sortedIniObj[i].Name.toLowerCase();
@@ -572,14 +488,14 @@ var Row = React.createClass({
 								i--;
 							}
 						}
-						
+
 						if (keyValSort == '2') {
 							// sort it alphanum
-							sortedIniObj.sort(function(a, b) {	// by alpha-numeric-insensitive profile name ASC		
+							sortedIniObj.sort(function(a, b) {	// by alpha-numeric-insensitive profile name ASC
 								return compareAlphaNumeric(a.noWriteObj.lowerCaseName, b.noWriteObj.lowerCaseName);
 							})
 						}
-						
+
 						for (var i=0; i<sortedIniObj.length; i++) {
 							// if (sortedIniObj[i].Path) { // no need for this check i already filtered it out above link2319938
 								var aOptEl = React.createElement('option', {value:sortedIniObj[i].Path},
@@ -593,7 +509,7 @@ var Row = React.createClass({
 								}
 							// }
 						}
-						
+
 						// attach on change listener
 						aSelectProps = {};
 						aSelectProps.onChange = function(e) {
@@ -614,7 +530,7 @@ var Row = React.createClass({
 								function (aArg, aComm) {
 									// this callback doesnt handle errors, errors notification comes from mainworker doing showNotification
 									refsLoader.setAttribute('src', core.addon.path.images + 'cp/loading-done.gif');
-									
+
 									setTimeout(function() {
 										refsLoader.style.opacity = 0;
 										refsSelect.removeAttribute('disabled');
@@ -638,7 +554,7 @@ var Row = React.createClass({
 						};
 						// console.log('fetching pref val for key:', this.props.gRowInfo.key);
 						aSelectProps.value = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, this.props.gRowInfo.key);
-						
+
 						aSelectProps.onChange = this.onChange;
 					}
 					children.push(React.createElement('div', {},
@@ -647,33 +563,33 @@ var Row = React.createClass({
 							options
 						)
 					));
-				
+
 				break;
 			case 'custom':
-				
+
 					switch (this.props.gRowInfo.key ? this.props.gRowInfo.key : this.props.gRowInfo.id) {
 						case 'ProfilistBuilds':
-						
+
 								aProps.className += ' row-builds-widget'
 								children.push(React.createElement(BuildsWidget, {gRowInfo: this.props.gRowInfo, sIniObj: this.props.sIniObj, sGenIniEntry: this.props.sGenIniEntry, sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow: this.props.sBuildsLastRow}));
-						
+
 							break;
 						default:
 							console.error('should never get here ever!');
 					}
-				
+
 				break;
 			default:
-			
+
 					////
 		}
-		
+
 		if (this.props.gRowInfo.id && this.props.gRowInfo.id == 'desktop-shortcut') { // gRowInfo does not have to have an id
 			// add in the loader image
 			aProps.style = {position:'relative'};
 			children.push(React.createElement('img', {ref:'loader', src:core.addon.path.images + 'cp/loading.gif', style:{position:'absolute',top:'50%',height:'7px',marginTop:'-3px', right:'-34px', opacity:0, transition:'opacity 500ms'}}));
 		}
-		
+
 		return React.createElement('div', aProps,
 			children
 		);
@@ -690,27 +606,27 @@ var BuildsWidget = React.createClass({
 	},
 	dragMove: function(e) {
 		// console.log('drag moved', e);
-		
+
 		var rowStepSlots = this.refs[this.draggingRef].rowStepSlots;
-		
+
 		// calc newStyleTop
 		var yNow = e.clientY;
 		var yDiff = yNow - this.yInit;
 		var newStyleTop = this.topInit + yDiff;
-		
+
 		// check if should set, and if so, then set it
 		var didSet = false;
-		
+
 		if (newStyleTop >= rowStepSlots[0] && newStyleTop <= rowStepSlots[rowStepSlots.length-1]) {
 			this.lastDidSet = newStyleTop; // last top that a set happend on
 			this.draggingRowEl.style.top = newStyleTop + 'px';
 			didSet = true;
 			// console.log('ok new styleTop:', newStyleTop);
-			
+
 		} else {
 			if (newStyleTop < rowStepSlots[0]) {
 				// need to max to bottom
-				
+
 				if (this.lastDidSet != rowStepSlots[0]) {
 					this.lastDidSet = rowStepSlots[0];
 					newStyleTop = rowStepSlots[0];
@@ -718,7 +634,7 @@ var BuildsWidget = React.createClass({
 					didSet = true;
 					// console.log('ok new styleTop:', newStyleTop);
 				}
-				
+
 			} else {
 				// need to max to top
 				if (this.lastDidSet != rowStepSlots[rowStepSlots.length-1]) {
@@ -730,7 +646,7 @@ var BuildsWidget = React.createClass({
 				}
 			}
 		}
-		
+
 		// if didSet, do the post didSet checks
 		if (didSet) {
 			// find position this row should be in, based on newStyleTop, check if we need to swap anything in the dom, and do it if needed
@@ -774,21 +690,21 @@ var BuildsWidget = React.createClass({
 				newJProfilistBuilds.push(this.jProfilistBuilds[indexInJProfilistBuilds]);
 				this.jProfilistBuilds[indexInJProfilistBuilds].tempOrder = this.jsRefToSlot[ref];
 			}
-			
+
 			newJProfilistBuilds.sort(function(a, b) {
 				return a.tempOrder - b.tempOrder;
 			});
-			
+
 			for (var i=0; i<newJProfilistBuilds.length; i++) {
 				delete newJProfilistBuilds[i].tempOrder;
 			}
 			console.log('newJProfilistBuilds:', newJProfilistBuilds, 'this.jsRefToSlot:', this.jsRefToSlot);
-			
+
 			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 			gGenIniEntry.ProfilistBuilds = JSON.stringify(newJProfilistBuilds);
-			
+
 			MyStore.onComponentChange(gIniObj, 100); // tell it before the 100ms is up but use 100ms delay before setState // cross file link381739311
-			
+
 			this.dragDropTimout = setTimeout(function() {
 				delete this.dragDropTimout;
 				ReactDOM.findDOMNode(this.refs.widget).classList.remove('builds-widget-indrag');
@@ -879,7 +795,7 @@ var BuildsWidget = React.createClass({
 	// 	// }, true);
 	// 	// window.addEventListener('load', function(e) {
 	// 	setTimeout(function() {
-    // 
+    //
 	// 	}.bind(this), 50); // it needs some time for a fresh dom (browser restart to load otherwise the offsetTop's are a bit weird)
 	// 	// }.bind(this), true); // must be true, didnt test false, but on document.add to load it needed to be true // i think this is because i need to wait for the stylesheet to load or something, otherwise the offsets are too spaced apart
 	// 	// using settimeout method instead, because sometimes page loads so fast, it doesnt get to this mount function before load
@@ -895,16 +811,16 @@ var BuildsWidget = React.createClass({
 
 		children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:'head', sCurProfIniEntry: this.props.sCurProfIniEntrym}));
 
-		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');		
+		var keyValBuilds = getPrefLikeValForKeyInIniEntry(this.props.sCurProfIniEntry, this.props.sGenIniEntry, 'ProfilistBuilds');
 		var jProfilistBuilds = JSON.parse(keyValBuilds);
 		this.jProfilistBuilds = jProfilistBuilds;
 		console.error('jProfilistBuilds:', jProfilistBuilds);
 		for (var i=0; i<jProfilistBuilds.length; i++) {
 			children.push(React.createElement(BuildsWidgetRow, {jProfilistBuildsEntry:jProfilistBuilds[i], sCurProfIniEntry: this.props.sCurProfIniEntry, ref:'row' + i, dragStart:this.dragStart.bind(this, 'row' + i), sGenIniEntry:this.props.sGenIniEntry}));
 		}
-		
+
 		children.push(React.createElement(BuildsWidgetRow, {sCurProfIniEntry: this.props.sCurProfIniEntry, sBuildsLastRow: this.props.sBuildsLastRow})); // last row
-		
+
 		return React.createElement('div', {className:'builds-widget', onClick:this.click, ref:'widget'},
 			children
 		);
@@ -932,10 +848,10 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		if (!this.props.jProfilistBuildsEntry) {
 			// its last row (well or head, but head doesnt have clickDel so its definitely last row)
 			// alert('ok clearing sBuildsLastRow');
-			
+
 			var IPStoreInitWithSlug;
 			var IPStoreInitWithUnselectCallback;
-			
+
 			if (this.props.sBuildsLastRow && this.props.sBuildsLastRow.imgSlug) {
 				IPStoreInitWithSlug = this.props.sBuildsLastRow.imgSlug;
 				IPStoreInitWithUnselectCallback = function() {
@@ -944,21 +860,21 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					});
 				}.bind(this)
 			}
-			
+
 			var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
 				console.error('ok applied icon, aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
 				this.userInputLastRow(undefined, aImgSlug, aImgObj);
 			}.bind(this);
-			
+
 			IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
-			
+
 		} else {
 			// its a build entry row
 			var IPStoreInitWithSlug = this.props.jProfilistBuildsEntry.i;
-			var IPStoreInitWithUnselectCallback = undefined; // no unselect allowed			
+			var IPStoreInitWithUnselectCallback = undefined; // no unselect allowed
 			var IPStoreInitWithSelectCallback = function(aImgSlug, aImgObj) {
 				console.error('ok replaced icon, new aImgSlug:', aImgSlug, 'aImgObj:', aImgObj);
-				
+
 				var new_jProfilistBuildEntry = JSON.parse(JSON.stringify(this.props.jProfilistBuildsEntry));
 				console.log('new_jProfilistBuildEntry:', new_jProfilistBuildEntry.toString());
 				new_jProfilistBuildEntry.i = aImgSlug;
@@ -986,7 +902,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					}
 				);
 			}.bind(this);
-			
+
 			IPStore.init(e.target, IPStoreInitWithSelectCallback, IPStoreInitWithSlug, IPStoreInitWithUnselectCallback, 0);
 		}
 	},
@@ -1095,7 +1011,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 			}
 		} else {
 			if (!aImgSlug || !aImgObj) { console.error('dev error, must provide aImgSlug and aImgObj togather'); throw new Error('dev error'); }
-			
+
 			if (!this.props.sBuildsLastRow.exePath) {
 				shouldSetBuildsRowInfo = {
 					sBuildsLastRow: {
@@ -1110,7 +1026,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				};
 			}
 		}
-		
+
 		if (shouldSetBuildsRowInfo) {
 			MyStore.setState(shouldSetBuildsRowInfo);
 		} else {
@@ -1149,7 +1065,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 		//	dragStart
 		//	sBuildsLastRow - only if this is last row
 		//	sGenIniEntry - only if this is NOT last row and NOT head row
-		
+
 		if (this.props.jProfilistBuildsEntry && this.props.jProfilistBuildsEntry == 'head') {
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {}, formatStringFromNameCore('profilist.cp.icon', 'cp')),
@@ -1159,7 +1075,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				)
 			);
 		} else {
-			
+
 			var imgSrc;
 			var textVal;
 			var imgSize;
@@ -1189,12 +1105,12 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					imgSize = '16';
 				}
 			}
-			
+
 			var cTextboxClass = ['builds-widget-textbox'];
 			if (!textVal) {
 				cTextboxClass.push('builds-widget-textbox-placeholder');
 			}
-			
+
 			return React.createElement('div', {className:'builds-widget-row'},
 				React.createElement('span', {},
 					React.createElement('img', {onClick:this.clickIcon, src: imgSrc, width:imgSize, height:imgSize})
@@ -1262,7 +1178,7 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 			throw new Error('aOptKey of ' + aOptKey + ' is an invalid key, as it has no default value');
 		}
 	}
-	
+
 	// if a key is not found in aOptions, but is found in aOptionsDefaults, it sets the key in aOptions to the default value
 	for (var aOptKey in aOptionsDefaults) {
 		if (!(aOptKey in aOptions)) {
@@ -1273,7 +1189,7 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements) {
 	// 051916 update - made it core.addon.l10n based
     // formatStringFromNameCore is formating only version of the worker version of formatStringFromName, it is based on core.addon.l10n cache
-	
+
 	try {
 		var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n];
 	} catch (ex) {
@@ -1289,4 +1205,105 @@ function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, 
 
     return cLocalizedStr;
 }
+// start - CommAPI
+var gContent = window;
+// start - CommAPI for bootstrap-content - content side - cross-file-link0048958576532536411
+function contentComm(onHandshakeComplete) {
+	// onHandshakeComplete is triggerd when handshake completed and this.postMessage becomes usable
+	var scope = gContent;
+	var handshakeComplete = false; // indicates this.postMessage will now work
+	var port;
+	this.nextcbid = 1; // next callback id
+	this.callbackReceptacle = {};
+
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers
+	};
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('content contentComm - incoming, payload:', payload); // , 'e:', e, 'this:', this);
+
+		if (payload.method) {
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in WINDOW'); throw new Error('method of "' + payload.method + '" not in WINDOW') } // dev line remove on prod
+			var rez_win_call = scope[payload.method](payload.arg, this);
+			console.log('content contentComm - rez_win_call:', rez_win_call);
+			if (payload.cbid) {
+				if (rez_win_call && rez_win_call.constructor.name == 'Promise') {
+					rez_win_call.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_win_call - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_win_call', 0)
+					).catch(genericCatch.bind(null, 'rez_win_call', 0));
+				} else {
+					this.postMessage(payload.cbid, rez_win_call);
+				}
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			console.error('contentComm - invalid combination');
+			throw new Error('contentComm - invalid combination');
+		}
+	}.bind(this);
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+
+		// aMethod is a string - the method to call in framescript
+		// aCallback is a function - optional - it will be triggered when aMethod is done calling
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined - this is the assumption as i use it prorgramtic
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+
+		// return;
+		port.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	};
+
+	var winMsgListener = function(e) {
+		var data = e.data;
+		console.log('content contentComm - incoming window message, data:', data); //, 'source:', e.source, 'ports:', e.ports);
+		switch (data.topic) {
+			case 'contentComm_handshake':
+
+					window.removeEventListener('message', winMsgListener, false);
+					port = data.port2;
+					port.onmessage = this.listener;
+					this.postMessage('contentComm_handshake_finalized');
+					handshakeComplete = true;
+					if (onHandshakeComplete) {
+						onHandshakeComplete(true);
+					}
+
+				break;
+			default:
+				console.error('content contentComm - unknown topic, data:', data);
+		}
+	}.bind(this);
+	window.addEventListener('message', winMsgListener, false);
+
+}
+// end - CommAPI for bootstrap-content - content side - cross-file-link0048958576532536411
+// end - CommAPI
 // end - common helper functions
