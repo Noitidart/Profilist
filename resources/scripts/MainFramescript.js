@@ -16,7 +16,7 @@ function AboutProfilist() {}
 function initAndRegisterAboutProfilist() {
 	// init it
 	AboutProfilist.prototype = Object.freeze({
-		classDescription: core.addon.l10n.bootstrap['about-page-class-description'],
+		classDescription: 'non localized - not needed', //core.addon.l10n.bootstrap['about-page-class-description'],
 		contractID: '@mozilla.org/network/protocol/about;1?what=profilist',
 		classID: Components.ID('{f7b6f390-a0c2-11e5-a837-0800200c9a66}'),
 		QueryInterface: XPCOMUtils.generateQI([Ci.nsIAboutModule]),
@@ -213,6 +213,14 @@ function init() {
 		try {
 			initAndRegisterAboutProfilist();
 		} catch(ignore) {} // its non-e10s so it will throw saying already registered
+
+		if (pageLoader.matches(content.window.location.href, content.window.location)) {
+			// need to reload it, as it it loaded before i registered it
+			content.window.location.reload();
+
+			// for non-about pages, i dont reload, i just initiate the ready of pageLoader
+			// pageLoader.onPageReady({e:{target:content}});
+		}
 	});
 }
 
