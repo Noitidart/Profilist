@@ -1222,7 +1222,7 @@ var PrimaryIcon = React.createClass({
 					'callInBootstrap',
 					{
 						method: 'callInPromiseWorker',
-						arg: ['replaceBadgeForProf', this.props.sKey, null],
+						arg: ['replaceBadgeForProf', {aProfPath:this.props.sKey, aNewBadge:null}],
 						wait: true
 					},
 					null,
@@ -1249,7 +1249,7 @@ var PrimaryIcon = React.createClass({
 				'callInBootstrap',
 				{
 					method:'callInPromiseWorker',
-					arg: ['replaceBadgeForProf', this.props.sKey, aImgSlug],
+					arg: ['replaceBadgeForProf', {aProfPath:this.props.sKey, aNewBadge:aImgSlug}],
 					wait: true
 				},
 				null,
@@ -1591,7 +1591,7 @@ var SubiconSafe = React.createClass({
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['launchOrFocusProfile', this.props.tbbIniEntry.Path, {args:'-safe-mode'}],
+					arg: ['launchOrFocusProfile', {aProfPath:this.props.tbbIniEntry.Path, aOptions:{args:'-safe-mode'}}],
 					wait: true
 				},
 				null,
@@ -1815,7 +1815,7 @@ var SubiconTie = React.createClass({
 				'callInBootstrap',
 				{
 					method:'callInPromiseWorker',
-					arg:['saveTieForProf', this.props.tbbIniEntry.Path, this.uiTieId],
+					arg:['saveTieForProf', {aProfPath:is.props.tbbIniEntry.Path, aNewTieId:this.uiTieId}],
 					wait: true
 				},
 				null,

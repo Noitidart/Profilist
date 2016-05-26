@@ -1,7 +1,7 @@
 // depnds on common helper functions:
 	//	justFormatStringFromName
 	//	validateOptionsObj
-	
+
 const gGithubDownloadPrefix = 'prflst-_-dl_-_'; // cross file link1110238471
 
 var IPStore = {
@@ -12,22 +12,22 @@ var IPStore = {
 		// aTargetElement is where the arrow of the dialog will point to
 		// must have iconsetpicker.css loaded in the html
 		console.log('aTargetElement:', uneval(aTargetElement));
-		
+
 		var cOptionsDefaults = {
 			aDirection: 0,
 			insertId: null,
 			onUninit: null // callback to run when picker is closed
 		};
-		
+
 		validateOptionsObj(aOptions, cOptionsDefaults);
-		
+
 		var wrap = document.createElement('div');
 		wrap.setAttribute('class', 'iconsetpicker-wrap');
 
 		var cover = document.createElement('div');
 		cover.setAttribute('class', 'iconsetpicker-cover');
 		document.body.appendChild(cover);
-		
+
 		if (aOptions.insertId) {
 			var insertEl = document.getElementById(aOptions.insertId);
 			insertEl.appendChild(wrap);
@@ -45,7 +45,7 @@ var IPStore = {
 		} else {
 			aTargetElement.parentNode.appendChild(wrap);
 		}
-		
+
 		var uninit = function(e, didSelect) {
 			// document.removeEventListener('keypress', uninitKeypress, false);
 			IPStore.setState({
@@ -57,12 +57,12 @@ var IPStore = {
 				ReactDOM.unmountComponentAtNode(wrap);
 				wrap.parentNode.removeChild(wrap);
 			}, 200);
-			
+
 			if (aOptions.onUninit) {
 				aOptions.onUninit();
 			}
 		};
-		
+
 		cover.addEventListener('mousedown', uninit, false);
 		// document.addEventListener('keypress', uninitKeypress, false);
 
@@ -70,7 +70,7 @@ var IPStore = {
 			uninit:uninit,
 			select_callback:aSelectCallback
 		};
-		
+
 		if (!aDirection) {
 			// todo - implement the cumOffset here
 			wrap.style.left = (aTargetElement.offsetLeft - ((100 + 150 + 200) / 2) + (10 / 2 / 2)) + 'px'; // 200 is width of .iconsetpicker-subwrap and 30 is width of .iconsetpicker-arrow
@@ -81,22 +81,22 @@ var IPStore = {
 			var calcdTop = (cumOffset.top - 120); // height of .iconsetpicker-preview and .iconsetpicker-dirlist + some for the controls
 			var calcdLeft = (cumOffset.left + aTargetElement.offsetWidth + 2) + 'px';
 			myIPProps.pDirection = aDirection;
-			
+
 			if (calcdTop < 0) {
 				var extraTopPadding = 4; // some extra padding so the top of the thing doesnt line up with the top
 				var arrowModStylesheet = document.createElement('style');
 				var bottomInCss = 104; // cross file link299949994849
 				arrowModStylesheet.textContent = '.iconsetpicker-arrow { bottom: ' + (bottomInCss + Math.abs(calcdTop) + extraTopPadding) + 'px !important; }';
 				cover.appendChild(arrowModStylesheet);
-				
+
 				calcdTop = 0 + extraTopPadding;
 			}
 			wrap.style.top = calcdTop + 'px';
 			wrap.style.left = calcdLeft;
 		}
-		
 
-		
+
+
 		if (aAppliedSlug) {
 			if (isSlugInChromeChannelIconsets(aAppliedSlug)) {
 				myIPProps.pAppliedSlugDir = core.addon.path.images + 'channel-iconsets/' + aAppliedSlug;
@@ -122,7 +122,7 @@ var IPStore = {
 		for (var i=0; i<sDirListHistory.length; i++) {
 			new_sDirListHistory.push(sDirListHistory[i]);
 		}
-		
+
 		if (!sDirListHistory.length || sDirListHistory[i - 1] != aDirPlatPath) {
 			new_sDirListHistory.push(aDirPlatPath);
 		}
@@ -143,7 +143,7 @@ var IPStore = {
 					});
 					throw new Error('readSubdirsInDir failed!!');
 				} else {
-					
+
 					IPStore.setState({
 						sDirSubdirs: aSubdirsArr,
 						sDirListHistory: new_sDirListHistory
@@ -213,7 +213,7 @@ var IPStore = {
 							function(aVal) {
 								console.log('Fullfilled - promiseAll_loadImgs - ', uneval(aVal));
 								// check if duplicate sizes
-								
+
 								// create cImgObj
 								var dupeSize = {}; // key is size, value is array of img src's having same size
 								var notSquare = []; // array of paths not having square sizes
@@ -244,7 +244,7 @@ var IPStore = {
 									}
 									cImgObj[cPathKeyImgObj[imgSrcPath].size] = imgSrcPath;
 								}
-								
+
 								var errObj = {};
 								if (notSquare.length) {
 									errObj.notSquare = notSquare;
@@ -313,7 +313,7 @@ var IPStore = {
 				IPStore.setState = this.setState.bind(this); // need bind here otherwise it doesnt work
 				setTimeout(function() {
 					this.setState({sInit:true});
-					
+
 					IPStore.readSubdirsInDir('profilist_user_images', null, []);
 				}.bind(this), 0);
 				document.addEventListener('keypress', this.keypress, true); // i use capturing because on bubble i listen to escape to clear out the text filter in html.js. so this escape will prevent it from clearing that filter
@@ -338,9 +338,9 @@ var IPStore = {
 					if (urlsInPrevAreBlobs) {
 						console.log('yes there are blobs in prev state, check if those urls are no longer being shown, if they are not then release from worker');
 						// i dont simply revoke the url here, because im holding onto to the blobs in global space over in worker
-						
+
 						var needToReleaseOldImgObj = false;
-						
+
 						// test if needToReleaseOldImgObj should be set to true
 						if (aPrevStateObj.sInit && !this.state.sInit) {
 							console.log('sInit was set to false, so is unmounting, so release them blobs if user DID NOT select');
@@ -369,7 +369,7 @@ var IPStore = {
 									urlsInNowState.push(cUrl);
 								}
 								console.log('urlsInNowState:', uneval(urlsInNowState));
-								
+
 								for (var i=0; i<urlsInPrevState.length; i++) {
 									if (urlsInNowState.indexOf(urlsInPrevState[i]) == -1) {
 										console.log('old url not found in new urls, old url:', uneval(urlsInPrevState[i]));
@@ -381,7 +381,7 @@ var IPStore = {
 						} else {
 							console.error('should never ever ever get here');
 						}
-						
+
 						if (needToReleaseOldImgObj) {
 							console.log('ok releeasing old obj urls');
 							gFsComm.postMessage(
@@ -400,7 +400,7 @@ var IPStore = {
 						console.log('no blob urls in previous so no need to worry about checking if its time to release');
 					}
 				}
-				
+
 
 				if (!aPrevStateObj.sInit && this.state.sInit == true && this.props.pAppliedSlugDir) {
 					// if pAppliedSlugDir is set, then pDirSelected has to be set its a given
@@ -412,16 +412,16 @@ var IPStore = {
 				if (this.state.sInit) { // because i have react animation, it is not unmounted till after anim. but i want to not listen to keypresses as soon as sInit goes to false
 					switch (e.key) {
 						case 'Escape':
-								
+
 								// alert('in esc');
 								// alert('calling uninit');
 								this.props.uninit();
 								e.stopPropagation();
 								e.preventDefault();
-								
+
 							break;
 						case 'Backspace':
-							
+
 								// alert('in bs');
 								if (this.state.sDirListHistory.length >= 2) {
 									// go back block - link1212333333
@@ -430,7 +430,7 @@ var IPStore = {
 								}
 								e.stopPropagation();
 								e.preventDefault();
-								
+
 							break;
 						default:
 							// do nothing
@@ -450,17 +450,17 @@ var IPStore = {
 					transitionLeaveTimeout:200,
 					className:'iconsetpicker-animwrap'
 				}
-				
+
 				switch (this.props.pDirection) {
 					case 1:
-						
+
 							// open rightwards, arrow on left
 							cProps.className += ' iconsetpicker-direction-rightwards';
-							
+
 						break;
 					default:
 						// do nothing, which means open upwards, arrow on bottom
-							
+
 							cProps.className += ' iconsetpicker-direction-upwards';
 				}
 
@@ -494,7 +494,7 @@ var IPStore = {
 				//	select_callback
 				//	sAppliedSlugDir
 				//	unselect_callback
-				
+
 				return React.createElement('div', {className:'iconsetpicker-content'},
 					React.createElement(IPStore.component.IPNav, {sNavSelected:this.props.sNavSelected, sNavItems:this.props.sNavItems, sDirListHistory:this.props.sDirListHistory}),
 					React.createElement(IPStore.component.IPRight, {sNavSelected:this.props.sNavSelected, sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sDirListHistory:this.props.sDirListHistory, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback})
@@ -508,7 +508,7 @@ var IPStore = {
 				//	sNavSelected
 				//	sNavItems
 				//	sDirListHistory
-				
+
 				var cChildren = []
 				for (var i=0; i<this.props.sNavItems.length; i++) {
 					var cChildProps = {
@@ -519,7 +519,7 @@ var IPStore = {
 						cChildProps.selected = true;
 					}
 					cChildren.push(React.createElement(IPStore.component.IPNavRow, cChildProps));
-					
+
 					// if this is browse and it is selected, show the quicklist
 					cChildren.push(React.createElement(React.addons.CSSTransitionGroup, {component:'div', className:'iconsetpicker-browsequicklist-animwrap', transitionName:'iconsetpicker-quicklist', transitionEnterTimeout:200, transitionLeaveTimeout:200},
 						!(cChildProps.sNavItem == 'browse' && cChildProps.selected) ? undefined : React.createElement('div', {className:'iconsetpicker-browsequicklist'},
@@ -538,7 +538,7 @@ var IPStore = {
 						)
 					));
 				}
-				
+
 				return React.createElement('div', {className:'iconsetpicker-nav'},
 					cChildren
 				);
@@ -553,7 +553,7 @@ var IPStore = {
 					sDirSelected: null,
 					sPreview: null
 				};
-				
+
 				if (!this.props.selected /* && this.props.sNavSelected != this.props.sNavItem*/) {
 					// user is switching categories so reset history
 					newState.sDirListHistory = [];
@@ -563,19 +563,19 @@ var IPStore = {
 				IPStore.setState(newState);
 				switch (this.props.sNavItem) {
 					case 'saved':
-					
+
 							IPStore.readSubdirsInDir('profilist_user_images', null, newState.sDirListHistory);
-						
+
 						break;
 					case 'browse':
-					
+
 							IPStore.readSubdirsInDir('home', null, newState.sDirListHistory);
-						
+
 						break;
 					case 'download':
-					
+
 							IPStore.readSubdirsInDir('profilist_github', null, newState.sDirListHistory);
-						
+
 						break;
 					default:
 						throw new Error('unknown sNavItem dont know what to readSubdirsInDir on');
@@ -586,7 +586,7 @@ var IPStore = {
 				//	sNavItem
 				//	selected - availble only if this is currently selected, if it is then this is true
 				//	sDirListHistory
-				
+
 				var cProps = {
 					className: 'iconsetpicker-navrow',
 					onClick: this.click
@@ -594,7 +594,7 @@ var IPStore = {
 				if (this.props.selected) {
 					cProps.className += ' iconsetpicker-selected';
 				}
-				
+
 				return React.createElement('div', cProps,
 					formatStringFromNameCore(this.props.sNavItem, 'iconsetpicker')
 				);
@@ -613,11 +613,11 @@ var IPStore = {
 				//	select_callback
 				//	sAppliedSlugDir
 				//	unselect_callback
-				
+
 				var cProps = {
 					className: 'iconsetpicker-right'
 				};
-				
+
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPRightTop, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
 					React.createElement(IPStore.component.IPControls, {sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory, sPreview:this.props.sPreview, sDirSelected:this.props.sDirSelected, uninit:this.props.uninit, select_callback:this.props.select_callback, sAppliedSlugDir:this.props.sAppliedSlugDir, unselect_callback:this.props.unselect_callback, sDirSubdirs:this.props.sDirSubdirs},
@@ -667,7 +667,7 @@ var IPStore = {
 			},
 			clickDelete: function() {
 				var cImgSlug = getSlugOfSlugDirPath(this.props.sDirSelected);
-				
+
 				// premptively remove from gui
 				var new_sDirSubdirs = this.props.sDirSubdirs.filter(function(aElVal) {
 					return aElVal.path != this.props.sDirSelected;
@@ -679,7 +679,7 @@ var IPStore = {
 					sDirSelected: null,
 					sDirSubdirs: new_sDirSubdirs
 				});
-					
+
 				gFsComm.postMessage(
 					'callInBootstrap',
 					{
@@ -711,19 +711,19 @@ var IPStore = {
 				//	sAppliedSlugDir
 				//	unselect_callback
 				//	sDirSubdirs
-				
+
 				var cProps = {
 					className: 'iconsetpicker-controls'
 				};
-				
+
 				var cChildren = [];
-				
+
 				var disableApply = false; // only set this to true in the logic below. dont set it to true then somewhere else to false, because then only the last one to set it to a bool will apply
 				switch (this.props.sNavSelected) {
 					case 'saved':
-						
+
 							// saved
-							
+
 							var disbleRenameDelete = false;
 							var specialTxtNote;
 							if (!this.props.sDirSelected) {
@@ -737,7 +737,7 @@ var IPStore = {
 									var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 									var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
 									console.error('j_gProfilistBuilds:', j_gProfilistBuilds);
-									
+
 									var imgSlugOfSelectedDir = this.props.sDirSelected.substr(core.profilist.path.images.length + core.os.filesystem_seperator.length);
 									console.error('imgSlugOfSelectedDir:', imgSlugOfSelectedDir);
 									if (getBuildEntryByKeyValue(j_gProfilistBuilds, 'i', imgSlugOfSelectedDir)) {
@@ -746,7 +746,7 @@ var IPStore = {
 									}
 								}
 							}
-							
+
 							// cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('rename', 'iconsetpicker'), disabled:((disbleRenameDelete) ? true : false)}));
 
 							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('delete', 'iconsetpicker') + (specialTxtNote ? ' ' + specialTxtNote : ''), disabled:((disbleRenameDelete) ? true : false), onClick:this.clickDelete}));
@@ -756,35 +756,35 @@ var IPStore = {
 									cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('unselect', 'iconsetpicker'), onClick:this.clickUnselect}));
 								}
 							}
-							
-						
+
+
 						break;
 					case 'browse':
-						
+
 							// browse
 							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('back', 'iconsetpicker'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Forward'}));
 							// cChildren.push(React.createElement('input', {type:'button', value:'Up'}));
-						
+
 						break;
 					case 'download':
-						
+
 							// download
 							cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('back', 'iconsetpicker'), disabled:((this.props.sDirListHistory.length < 2) ? true : false), onClick:this.clickBack}));
-						
+
 						break;
 					default:
 						// assume nothing is selected
 				}
-				
+
 				if (!this.props.sPreview || !this.props.sPreview.imgObj) {
 					disableApply = true;
 				}
-				
+
 				cChildren.push(React.createElement('div', {style:{flex:'1 0 auto'}})); // spacer, to keep the cancel/ok buttons on far right
 				cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('cancel', 'iconsetpicker'), onClick:this.props.uninit}));
 				cChildren.push(React.createElement('input', {type:'button', value:formatStringFromNameCore('select', 'iconsetpicker'), disabled:(disableApply ? true : false), onClick:this.clickSelect}));
-				
+
 				// return React.createElement.apply(this, ['div', cProps].concat(inner));
 				return React.createElement('div', cProps,
 					cChildren
@@ -804,7 +804,7 @@ var IPStore = {
 				var cProps = {
 					className: 'iconsetpicker-righttop'
 				};
-				
+
 				return React.createElement('div', cProps,
 					React.createElement(IPStore.component.IPDirList, {sDirSubdirs:this.props.sDirSubdirs, sDirSelected:this.props.sDirSelected, sNavSelected:this.props.sNavSelected, sDirListHistory:this.props.sDirListHistory}),
 					React.createElement(IPStore.component.IPPreview, {sDirSelected:this.props.sDirSelected, sPreview:this.props.sPreview})
@@ -819,13 +819,13 @@ var IPStore = {
 				//	sDirSelected
 				//	sNavSelected
 				//	sDirListHistory
-				
+
 				var cProps = {
 					className: 'iconsetpicker-dirlist'
 				};
-				
+
 				var cChildren = [];
-				
+
 				if (!this.props.sDirSubdirs) {
 					cChildren.push(React.createElement('img', {src:core.addon.path.images + 'cp/iconsetpicker-loading.gif'}));
 				} else if (this.props.sDirSubdirs == 'error') {
@@ -843,7 +843,7 @@ var IPStore = {
 						}
 					}
 				}
-				
+
 				return React.createElement('div', cProps,
 					cChildren
 				);
@@ -855,13 +855,13 @@ var IPStore = {
 				// props
 				//	sDirSelected
 				//	sPreview
-				
+
 				var cProps = {
 					className: 'iconsetpicker-preview'
 				};
-				
+
 				var cChildren = [];
-				
+
 				if (!this.props.sDirSelected) {
 					cChildren.push(React.createElement('span', {},
 						formatStringFromNameCore('preview-desc', 'iconsetpicker')
@@ -881,18 +881,18 @@ var IPStore = {
 							if (this.props.sPreview.errObj) {
 								var errObj = this.props.sPreview.errObj;
 								var errChildren = [];
-								
+
 								errChildren.push(React.createElement('h4', {},
 									formatStringFromNameCore('invalid-img-dir', 'iconsetpicker')
 								));
-								
+
 								if (errObj.dupeSize) {
 									var dupeSize = errObj.dupeSize;
 									var allSizesUls = [];
-									
+
 									for (var aSize in dupeSize) {
 										var sizeLis = [];
-										
+
 										for (var i=0; i<dupeSize[aSize].length; i++) {
 											sizeLis.push(React.createElement('li', {},
 												React.createElement('a', {href:dupeSize[aSize][i], target:'_blank'},
@@ -900,7 +900,7 @@ var IPStore = {
 												)
 											));
 										}
-										
+
 										var sizeUl = React.createElement('ul', {},
 											React.createElement('li', {},
 												justFormatStringFromName(formatStringFromNameCore('dimensions-no-dash', 'iconsetpicker'), [aSize, aSize]),
@@ -909,25 +909,25 @@ var IPStore = {
 												)
 											)
 										);
-										
+
 										allSizesUls.push(sizeUl);
 									}
-									
+
 									var topUl = React.createElement('ul', {},
 										React.createElement('li', {},
 											justFormatStringFromName(formatStringFromNameCore('dupe-sizes-err', 'iconsetpicker')),
 											allSizesUls
 										)
 									);
-									
+
 									errChildren.push(topUl);
 								}
-						
+
 								if (errObj.notSquare) {
 									var notSquare = errObj.notSquare;
-									
+
 									var sizeLis = [];
-									
+
 									for (var i=0; i<notSquare.length; i++) {
 										sizeLis.push(React.createElement('li', {},
 											justFormatStringFromName(formatStringFromNameCore('dimensions', 'iconsetpicker'), [notSquare[i].w, notSquare[i].h]) + ' ',
@@ -936,7 +936,7 @@ var IPStore = {
 											)
 										));
 									}
-									
+
 									var topUl = React.createElement('ul', {},
 										React.createElement('li', {},
 											justFormatStringFromName(formatStringFromNameCore('not-square-err', 'iconsetpicker')),
@@ -945,14 +945,14 @@ var IPStore = {
 											)
 										)
 									);
-									
+
 									errChildren.push(topUl);
 								}
-								
+
 								cChildren.push(React.createElement('div', {className:'iconsetpicker-preview-errobj'},
 									errChildren
 								));
-								
+
 							} else {
 								for (var aSize in this.props.sPreview.imgObj) {
 									cChildren.push(React.createElement(IPStore.component.IPPreviewImg, {size:aSize, src:this.props.sPreview.imgObj[aSize]}));
@@ -968,7 +968,7 @@ var IPStore = {
 						}
 					}
 				}
-				
+
 				return React.createElement('div', cProps,
 					cChildren
 				);
@@ -980,18 +980,18 @@ var IPStore = {
 				// props
 				//	src
 				//	size
-				
+
 				var cImgProps = {
 					src: this.props.src
 				};
-				
+
 				var cssVal = {
 					'.iconsetpicker-preview-img': 64 // match to cross-file-link881711729404
 				};
 				if (this.props.size > cssVal['.iconsetpicker-preview-img']) {
 					cImgProps.width = cssVal['.iconsetpicker-preview-img'];
 				}
-				
+
 				return React.createElement('div', {className:'iconsetpicker-preview-img', 'data-size':this.props.size + ' x ' + this.props.size},
 					React.createElement('img', cImgProps)
 				);
@@ -1000,7 +1000,7 @@ var IPStore = {
 		IPDirEntry: React.createClass({
 			displayName: 'IPDirEntry',
 			click: function() {
-				
+
 				if (this.props.selected) {
 					console.log('already selected, so dont do anything'); // on subdirs, clicking again should do nothing (currently i allow clicking again on main IPNavRow)
 					return;
@@ -1020,7 +1020,7 @@ var IPStore = {
 							sPreview: null
 						});
 					}
-					
+
 					var cDirSelected = this.props.path;
 					var readImgsInDirArg;
 					if (this.props.path.indexOf('chrome:') === 0 || this.props.path.indexOf(core.profilist.path.images) === 0) {
@@ -1033,10 +1033,10 @@ var IPStore = {
 			},
 			dblclick: function() {
 				// :todo: highlight this entry if this is in "saved" --- what the hell does this mean? i dont know i wrote it here before
-				
+
 				// if its not a chrome path, then open the dir
 				// if (this.props.path.indexOf('chrome:') == -1 && ) {
-					
+
 				// is it double clickable?
 				if (this.props.sNavSelected == 'browse' || (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length)) {
 					// yes its double clickable
@@ -1063,19 +1063,19 @@ var IPStore = {
 					onClick: this.click,
 					onDoubleClick: this.dblclick
 				};
-				
+
 				if (this.props.selected) {
 					cProps.className += ' iconsetpicker-selected';
 				}
-				
-				// is it double clickable?				
+
+				// is it double clickable?
 				if (this.props.sNavSelected == 'browse' || (this.props.sNavSelected == 'download' && this.props.name.indexOf(' - Collection') > -1 && this.props.name.indexOf(' - Collection') == this.props.name.length - ' - Collection'.length)) {
 					// yes its double clickable
 				} else {
 					// no its not
 					cProps.className += ' iconsetpicker-iconsetentry';
 				}
-				
+
 				return React.createElement('div', cProps,
 					this.props.name
 				);

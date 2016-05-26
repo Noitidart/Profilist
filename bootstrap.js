@@ -65,14 +65,15 @@ XPCOMUtils.defineLazyGetter(myServices, 'as', function () { return Cc['@mozilla.
 // START - Addon Functionalities
 
 // Start - Launching profile and other profile functionality
-var MainWorkerMainThreadFuncs = {
-	testConnUpdate: function(aNewContent) {
+// start - MainWorkerMainThreadFuncs
+	function testConnUpdate(aNewContent, aComm) {
 		gFsComm.transcribeMessage(gTestConnMM, 'callInContent', {
 			method: 'testConnUpdate',
 			arg: aNewContent
 		});
-	},
-	createIcon: function(aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions) {
+	}
+	function createIcon(aArg, aComm) {
+		var { aCreateType, aCreateName, aCreatePathDir, aBaseSrcImgPathArr, aOutputSizesArr, aOptions } = aArg;
 		console.log('in createIcon in MainWorkerMainThreadFuncs, arguments:', arguments);
 		// return ['hi arr 1']; // :note: this is how to return no promise
 		// :note: this is how to return with promise
@@ -96,14 +97,16 @@ var MainWorkerMainThreadFuncs = {
 
 
 		return deferredMain_createIcon.promise;
-	},
-	showNotification: function(aTitle, aBody) {
+	}
+	function showNotification(aArg, aComm) {
+		var { aTitle, aBody } = aArg;
 		myServices.as.showAlertNotification(core.addon.path.content + 'icon.png', aTitle, aBody, false, null, null, 'Profilist');
-	},
-	registerWorkerWindowListener: function() {
+	}
+	function registerWorkerWindowListener() {
 		gWorkerWindowListener = workerWindowListenerRegister();
-	},
-	setPref: function(aPrefName, aPrefVal) {
+	}
+	function setPref(aArg, aComm) {
+		var { aPrefName, aPrefVal } = aArg;
 		// aPrefName - string like "taskbar.grouping.useprofile"
 		// aPrefVal - new value
 		switch (typeof(aPrefVal)) {
@@ -125,26 +128,12 @@ var MainWorkerMainThreadFuncs = {
 			default:
 				console.error('invalid type!!!!');
 		}
-	},
-	reUpdateIntoAllWindows: function() {
+	}
+	function reUpdateIntoAllWindows() {
 		gWorkerWindowListener.reLoadIntoWindows();
 	}
-};
+// end - MainWorkerMainThreadFuncs
 // End - Launching profile and other profile functionality
-
-function setupMainWorkerCustomErrors() {
-	// Define a custom error prototype.
-	function MainWorkerError(name, msg) {
-		this.msg = msg;
-		this.name = name;
-	}
-	MainWorkerError.fromMsg = function(aErrParams) {
-		return new MainWorkerError(aErrParams.name, aErrParams.msg);
-	};
-
-	// Register a constructor.
-	MainWorker.ExceptionHandlers['MainWorkerError'] = MainWorkerError.fromMsg;
-}
 
 // start - icon generator stuff - ICGenWorkerFuncs - functions for worker to call in main thread
 	function loadImagePathsAndSendBackBytedata(aArg, aComm) {
@@ -628,8 +617,6 @@ function startup(aData, aReason) {
 		promise_afterBootstrapInit.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_afterBootstrapInit - ', aVal);
-				gTestWorker = new workerComm(core.addon.path.modules + 'TestWorker.js');
-
 			},
 			genericReject.bind(null, 'promise_afterBootstrapInit', 0)
 		).catch(genericCatch.bind(null, 'promise_afterBootstrapInit', 0));
@@ -655,33 +642,14 @@ function startup(aData, aReason) {
 	*/
 
 	// startup worker
-	var promise_initMainWorker = SIPWorker('MainWorker', core.addon.path.workers + 'MainWorker.js', core, MainWorkerMainThreadFuncs).post();
-	promise_initMainWorker.then(
-		function(aVal) {
-			console.log('Fullfilled - promise_initMainWorker - ', aVal);
-			// start - do stuff here - promise_initMainWorker
-			core = aVal;
-			setupMainWorkerCustomErrors();
-			afterWorker();
-			// end - do stuff here - promise_initMainWorker
-		},
-		function(aReason) {
-			var rejObj = {
-				name: 'promise_initMainWorker',
-				aReason: aReason
-			};
-			console.warn('Rejected - promise_initMainWorker - ', rejObj);
-		}
-	).catch(
-		function(aCaught) {
-			var rejObj = {
-				name: 'promise_initMainWorker',
-				aCaught: aCaught
-			};
-			console.error('Caught - promise_initMainWorker - ', rejObj);
-		}
-	);
-
+	var MainWorker = new workerComm(core.addon.path.workers + 'MainWorker.js', ()=>{return core}, function(aArg, aComm) {
+		console.log('Fullfilled - promise_initMainWorker - ', aVal);
+		// start - do stuff here - promise_initMainWorker
+		core = aVal;
+		afterWorker();
+		// end - do stuff here - promise_initMainWorker
+	});
+	MainWorker.postMessage('dummyForInstantInstantiate');
 }
 
 function shutdown(aData, aReason) {
@@ -689,8 +657,6 @@ function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) { return }
 
 	crossprocComm_unregAll();
-
-	workerComm_unregAll();
 
 	// unregister framescript injector
 	Services.mm.removeDelayedFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key);
@@ -704,22 +670,7 @@ function shutdown(aData, aReason) {
 		gWorkerWindowListener.unregister();
 	}
 
-	// terminate worker
-	if (typeof(MainWorker) != 'undefined') {
-		var promise_prepForTerm = MainWorker.post('prepForTerminate', []);
-		promise_prepForTerm.then(
-			function(aVal) {
-				console.log('Fullfilled - promise_prepForTerm - ', aVal);
-				MainWorker._worker.terminate();
-				console.log('mainworker terminated');
-			},
-			genericReject.bind(null, 'promise_prepForTerm', 0)
-		).catch(genericReject.bind(null, 'promise_prepForTerm', 0));
-	}
-
-	if (typeof(ICGenWorker) != 'undefined') {
-		ICGenWorker.terminate();
-	}
+	workerComm_unregAll();
 }
 // END - Addon Functionalities
 // start - server/framescript comm layer
@@ -902,17 +853,17 @@ var gTestConnMM;
 
 		gCreateDesktopShortcutId++;
 		var thisCreateDesktopShortcutId = 'createDesktopShortcut_callback_' + gCreateDesktopShortcutId;
-		MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] = function() {
+		gBootstrap[thisCreateDesktopShortcutId] = function() {
 			console.error('ok in mainthread callback for createDesktopShortcut');
-			delete MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId];
+			delete gBootstrap[thisCreateDesktopShortcutId];
 			deferredMain_createDesktopShortcut.resolve();
 		};
 
-		var promise_workerCreateDeskCut = MainWorker.post('createDesktopShortcut', [aProfPath, thisCreateDesktopShortcutId]);
+		var promise_workerCreateDeskCut = MainWorker.postMessage('createDesktopShortcut', {aProfPath, aCbIdToResolveToFramescript:thisCreateDesktopShortcutId});
 		promise_workerCreateDeskCut.then(
 			function(aVal) {
 				console.log('Fullfilled - promise_workerCreateDeskCut - ', aVal);
-				// dont do anything, as this calls in mainworker launchOrFocusProfile which does async stuff, that will call MainWorkerMainThreadFuncs[thisCreateDesktopShortcutId] when it finishes
+				// dont do anything, as this calls in mainworker launchOrFocusProfile which does async stuff, that will call gBootstrap[thisCreateDesktopShortcutId] when it finishes
 			},
 			genericReject.bind(null, 'promise_workerCreateDeskCut', 0)
 		).catch(genericCatch.bind(null, 'promise_workerCreateDeskCut', 0));
@@ -993,30 +944,10 @@ var gTestConnMM;
 
 		var mainDeferred_callInPromiseWorker = new Deferred();
 
-		var rez_pwcall = MainWorker.post(aArrOfFuncnameThenArgs.shift(), aArrOfFuncnameThenArgs);
-		rez_pwcall.then(
-			function(aVal) {
-				console.log('Fullfilled - rez_pwcall - ', aVal);
-				mainDeferred_callInPromiseWorker.resolve(aVal);
-			},
-			function(aReason) {
-				var rejObj = {
-					name: 'rez_pwcall',
-					aReason: aReason
-				};
-				console.error('Rejected - rez_pwcall - ', rejObj);
-				mainDeferred_callInPromiseWorker.resolve(rejObj);
-			}
-		).catch(
-			function(aCaught) {
-				var rejObj = {
-					name: 'rez_pwcall',
-					aCaught: aCaught
-				};
-				console.error('Caught - rez_pwcall - ', rejObj);
-				mainDeferred_callInPromiseWorkerr.resolve(rejObj);
-			}
-		);
+		 MainWorker.postMessage(aArrOfFuncnameThenArgs.shift(), aArrOfFuncnameThenArgs, function(aArg, aComm) {
+			 console.log('Fullfilled - callInPromiseWorker - ', aArg);
+			 mainDeferred_callInPromiseWorker.resolve(aArg);
+		 });
 
 		return mainDeferred_callInPromiseWorker.promise;
 	}
@@ -1046,184 +977,6 @@ function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3
 		console.log('Promise not available!', ex);
 		throw new Error('Promise not available!');
 	}
-}
-
-// SIPWorker - rev9 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
-const SIP_CB_PREFIX = '_a_gen_cb_';
-const SIP_TRANS_WORD = '_a_gen_trans_';
-var sip_last_cb_id = -1;
-function SIPWorker(workerScopeName, aPath, aCore=core, aFuncExecScope=BOOTSTRAP) {
-	// update 022016 - delayed init till first .post
-	// update 010516 - allowing pomiseworker to execute functions in this scope, supply aFuncExecScope, else leave it undefined and it will not set this part up
-	// update 122115 - init resolves the deferred with the value returned from Worker, rather then forcing it to resolve at true
-	// "Start and Initialize PromiseWorker"
-	// returns promise
-		// resolve value: jsBool true
-	// aCore is what you want aCore to be populated with
-	// aPath is something like `core.addon.path.content + 'modules/workers/blah-blah.js'`
-
-	// :todo: add support and detection for regular ChromeWorker // maybe? cuz if i do then ill need to do ChromeWorker with callback
-
-	// var deferredMain_SIPWorker = new Deferred();
-
-	var cWorkerInited = false;
-	var cWorkerPost_orig;
-
-	if (!(workerScopeName in bootstrap)) {
-		bootstrap[workerScopeName] = new PromiseWorker(aPath);
-
-		cWorkerPost_orig = bootstrap[workerScopeName].post;
-
-		bootstrap[workerScopeName].post = function(pFun, pArgs, pCosure, pTransfers) {
-			if (!cWorkerInited) {
-				var deferredMain_post = new Deferred();
-
-				bootstrap[workerScopeName].post = cWorkerPost_orig;
-
-				var doInit = function() {
-					var promise_initWorker = bootstrap[workerScopeName].post('init', [aCore]);
-					promise_initWorker.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_initWorker - ', aVal);
-							// start - do stuff here - promise_initWorker
-							if (pFun) {
-								doOrigPost();
-							} else {
-								// pFun is undefined, meaning devuser asked for instant init
-								deferredMain_post.resolve(aVal);
-							}
-							// end - do stuff here - promise_initWorker
-						},
-						genericReject.bind(null, 'promise_initWorker', deferredMain_post)
-					).catch(genericCatch.bind(null, 'promise_initWorker', deferredMain_post));
-				};
-
-				var doOrigPost = function() {
-					var promise_origPosted = bootstrap[workerScopeName].post(pFun, pArgs, pCosure, pTransfers);
-					promise_origPosted.then(
-						function(aVal) {
-							console.log('Fullfilled - promise_origPosted - ', aVal);
-							deferredMain_post.resolve(aVal);
-						},
-						genericReject.bind(null, 'promise_origPosted', deferredMain_post)
-					).catch(genericCatch.bind(null, 'promise_origPosted', deferredMain_post));
-				};
-
-				doInit();
-				return deferredMain_post.promise;
-			}
-		};
-
-		// start 010516 - allow worker to execute functions in bootstrap scope and get value
-		if (aFuncExecScope) {
-			// this triggers instantiation of the worker immediately
-			var origOnmessage = bootstrap[workerScopeName]._worker.onmessage;
-			var origOnerror = bootstrap[workerScopeName]._worker.onerror;
-
-			bootstrap[workerScopeName]._worker.onerror = function(onErrorEvent) {
-				// got an error that PromiseWorker did not know how to serialize. so we didnt get a {fail:.....} postMessage. so in onerror it does pop of the deferred. however with allowing promiseworker to return async, we cant simply pop if there are more then 1 promises pending
-				var cQueue = bootstrap[workerScopeName]._queue._array;
-				if (cQueue.length === 1) {
-					// console.log('its fine for origOnerror it will just pop the only one there, which is the one to reject for sure as there are no other promises');
-					// DO NOTE THOUGH - .onerror message might come in from any error, it is innate to worker to send this message on error, so it will pop out the promise early, so maybe i might run this origOnerror before the actual promise rejects due to catch
-					origOnerror(onErrorEvent);
-				} else {
-					onErrorEvent.preventDefault(); // as they do this in origOnerror so i prevent here too
-					console.error('queue has more then one promises in there, i dont know which one to reject', 'onErrorEvent:', onErrorEvent, 'queue:', bootstrap[workerScopeName]._queue._array);
-				}
-			};
-
-			bootstrap[workerScopeName]._worker.onmessage = function(aMsgEvent) {
-				////// start - my custom stuff
-				var aMsgEventData = aMsgEvent.data;
-				console.log('promiseworker receiving msg:', aMsgEventData);
-				if (Array.isArray(aMsgEventData)) {
-					// my custom stuff, PromiseWorker did self.postMessage to call a function from here
-					console.log('promsieworker is trying to execute function in mainthread');
-
-					var callbackPendingId;
-					if (typeof aMsgEventData[aMsgEventData.length-1] == 'string' && aMsgEventData[aMsgEventData.length-1].indexOf(SIP_CB_PREFIX) == 0) {
-						callbackPendingId = aMsgEventData.pop();
-					}
-
-					var funcName = aMsgEventData.shift();
-					if (funcName in aFuncExecScope) {
-						var rez_mainthread_call = aFuncExecScope[funcName].apply(null, aMsgEventData);
-
-						if (callbackPendingId) {
-							if (rez_mainthread_call.constructor.name == 'Promise') { // if get undefined here, that means i didnt return an array from the function in main thread that the worker called
-								rez_mainthread_call.then(
-									function(aVal) {
-										if (aVal.length >= 2 && aVal[aVal.length-1] == SIP_TRANS_WORD && Array.isArray(aVal[aVal.length-2])) {
-											// to transfer in callback, set last element in arr to SIP_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
-											console.error('doing transferrrrr');
-											aVal.pop();
-											bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, aVal], aVal.pop());
-										} else {
-											bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, aVal]);
-										}
-									},
-									function(aReason) {
-										console.error('aReject:', aReason);
-										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aReason]]);
-									}
-								).catch(
-									function(aCatch) {
-										console.error('aCatch:', aCatch);
-										bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, ['promise_rejected', aCatch]]);
-									}
-								);
-							} else {
-								// assume array
-								if (rez_mainthread_call.length > 2 && rez_mainthread_call[rez_mainthread_call.length-1] == SIP_TRANS_WORD && Array.isArray(rez_mainthread_call[rez_mainthread_call.length-2])) {
-									// to transfer in callback, set last element in arr to SIP_TRANS_WORD and 2nd to last element an array of the transferables									// cannot transfer on promise reject, well can, but i didnt set it up as probably makes sense not to
-									rez_mainthread_call.pop();
-									console.log('doiing traansfer');
-									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call], rez_mainthread_call.pop());
-								} else {
-									bootstrap[workerScopeName]._worker.postMessage([callbackPendingId, rez_mainthread_call]);
-								}
-							}
-						}
-					}
-					else { console.error('funcName', funcName, 'not in scope of aFuncExecScope') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
-					////// end - my custom stuff
-				} else {
-					// find the entry in queue that matches this id, and move it to first position, otherwise i get the error `Internal error: expecting msg " + handler.id + ", " + " got " + data.id + ` --- this guy uses pop and otherwise might get the wrong id if i have multiple promises pending
-					var cQueue = bootstrap[workerScopeName]._queue._array;
-					var cQueueItemFound;
-					for (var i=0; i<cQueue.length; i++) {
-						if (cQueue[i].id == aMsgEvent.data.id) {
-							cQueueItemFound = true;
-							if (i !== 0) {
-								// move it to first position
-								var wasQueue = cQueue.slice(); // console.log('remove on production');
-								cQueue.splice(0, 0, cQueue.splice(i, 1)[0]);
-								console.log('ok moved q item from position', i, 'to position 0, this should fix that internal error, aMsgEvent.data.id:', aMsgEvent.data.id, 'queue is now:', cQueue, 'queue was:', wasQueue);
-							}
-							else { console.log('no need to reorder queue, the element of data.id:', aMsgEvent.data.id, 'is already in first position:', bootstrap[workerScopeName]._queue._array); }
-							break;
-						}
-					}
-					if (!cQueueItemFound) {
-						console.error('errrrror: how on earth can it not find the item with this id in the queue? i dont throw here as the .pop will throw the internal error, aMsgEvent.data.id:', aMsgEvent.data.id, 'cQueue:', cQueue);
-					}
-					origOnmessage(aMsgEvent);
-				}
-			}
-		}
-		// end 010516 - allow worker to execute functions in bootstrap scope and get value
-
-		if ('addon' in aCore && 'aData' in aCore.addon) {
-			delete aCore.addon.aData; // we delete this because it has nsIFile and other crap it, but maybe in future if I need this I can try JSON.stringify'ing it
-		}
-	} else {
-		throw new Error('Something is loaded into bootstrap[workerScopeName] already');
-	}
-
-	// return deferredMain_SIPWorker.promise;
-	return bootstrap[workerScopeName];
-
 }
 
 function aReasonMax(aReason) {

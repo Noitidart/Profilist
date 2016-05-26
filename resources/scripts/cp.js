@@ -883,7 +883,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 					'callInBootstrap',
 					{
 						method: 'callInPromiseWorker',
-						arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry],
+						arg: ['replaceBuildEntry', {aBuildId:new_jProfilistBuildEntry.id, aNewBuildEntry:new_jProfilistBuildEntry}],
 						wait: true
 					},
 					null,
@@ -920,7 +920,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['removeBuild', this.props.jProfilistBuildsEntry.id, false],
+					arg: ['removeBuild', { aBuildId:this.props.jProfilistBuildsEntry.id, aBool_doNotPostProcess:false }],
 					wait: true
 				},
 				null,
@@ -969,7 +969,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 								'callInBootstrap',
 								{
 									method: 'callInPromiseWorker',
-									arg: ['replaceBuildEntry', new_jProfilistBuildEntry.id, new_jProfilistBuildEntry],
+									arg: ['replaceBuildEntry', { aBuildId:new_jProfilistBuildEntry.id, aNewBuildEntry:new_jProfilistBuildEntry}],
 									wait: true
 								},
 								null,
@@ -1036,7 +1036,7 @@ var BuildsWidgetRow = React.createClass({ // this is the non header row
 				'callInBootstrap',
 				{
 					method: 'callInPromiseWorker',
-					arg: ['addBuild', newRowInfo.imgSlug, newRowInfo.exePath, false],
+					arg: ['addBuild', { aImgSlug:newRowInfo.imgSlug, aExePath:newRowInfo.exePath, aBool_doNotPostProcess:false }],
 					wait: true
 				},
 				null,

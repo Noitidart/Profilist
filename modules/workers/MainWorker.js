@@ -1,18 +1,8 @@
 // Imports
 importScripts('resource://gre/modules/osfile.jsm');
-importScripts('resource://gre/modules/workers/require.js');
 
 // Globals
-var core = { // have to set up the main keys that you want when aCore is merged from mainthread in init
-	addon: {
-		path: {
-			modules: 'chrome://profilist/content/modules/'
-		}
-	},
-	os: {
-		name: OS.Constants.Sys.Name.toLowerCase()
-	}
-};
+var core;
 
 var OSStuff = {}; // global vars populated by init, based on OS
 var gIniObj;
@@ -20,136 +10,7 @@ var gKeyInfoStore;
 var gJProfilistBuilds;
 var gJProfilistDev;
 
-// Imports that use stuff defined in chrome
-// I don't import ostypes_*.jsm yet as I want to init core first, as they use core stuff like core.os.isWinXP etc
-// imported scripts have access to global vars on MainWorker.js
-importScripts(core.addon.path.modules + 'cutils.jsm');
-importScripts(core.addon.path.modules + 'ctypes_math.jsm');
-importScripts(core.addon.path.modules + 'commonProfilistFuncs.js');
-
-// Setup PromiseWorker
-// SIPWorker - rev9 - https://gist.github.com/Noitidart/92e55a3f7761ed60f14c
-var PromiseWorker = require('resource://gre/modules/workers/PromiseWorker.js');
-
-// Instantiate AbstractWorker (see below).
-var worker = new PromiseWorker.AbstractWorker()
-
-// worker.dispatch = function(method, args = []) {
-worker.dispatch = function(method, args = []) {// start - noit hook to allow PromiseWorker methods to return promises
-  // Dispatch a call to method `method` with args `args`
-  // start - noit hook to allow PromiseWorker methods to return promises
-  // return self[method](...args);
-  console.log('dispatch args:', args);
-  var earlierResult = gEarlyDispatchResults[args[0]]; // i change args[0] to data.id
-  delete gEarlyDispatchResults[args[0]];
-  if (Array.isArray(earlierResult) && earlierResult[0] == 'noit::throw::') {
-	  console.error('ok need to throw but i want to ensure .constructor.name is in promiseworker.js"s EXCEPTION_NAMES, it is:', earlierResult[1].constructor.name);
-	  throw earlierResult[1];
-  }
-  return earlierResult;
-  // end - noit hook to allow PromiseWorker methods to return promises
-};
-worker.postMessage = function(...args) {
-  // Post a message to the main thread
-  self.postMessage(...args);
-};
-worker.close = function() {
-  // Close the worker
-  self.close();
-};
-worker.log = function(...args) {
-  // Log (or discard) messages (optional)
-  dump('Worker: ' + args.join(' ') + '\n');
-};
-
-// Connect it to message port.
-// self.addEventListener('message', msg => worker.handleMessage(msg)); // this is what you do if you want PromiseWorker without mainthread calling ability
-// start - setup SIPWorker
-var WORKER = this;
-var gEarlyDispatchResults = {};
-self.addEventListener('message', function(aMsgEvent) { // this is what you do if you want SIPWorker mainthread calling ability
-	var aMsgEventData = aMsgEvent.data;
-	if (Array.isArray(aMsgEventData)) {
-		// console.log('worker got response for main thread calling SIPWorker functionality:', aMsgEventData)
-		var funcName = aMsgEventData.shift();
-		if (funcName in WORKER) {
-			var rez_worker_call = WORKER[funcName].apply(null, aMsgEventData);
-		}
-		else { console.error('funcName', funcName, 'not in scope of WORKER') } // else is intentionally on same line with console. so on finde replace all console. lines on release it will take this out
-	} else {
-		// console.log('no this is just regular promise worker message');
-		var earlyDispatchErr;
-		var earlyDispatchRes;
-		try {
-			earlyDispatchRes = self[aMsgEvent.data.fun](...aMsgEvent.data.args);
-			console.error('earlyDispatchRes:', earlyDispatchRes);
-		} catch(earlyDispatchErr) {
-			earlyDispatchRes = ['noit::throw::', earlyDispatchErr];
-			console.error('error in earlyDispatchRes:', earlyDispatchErr);
-			// throw new Error('blah');
-		}
-		aMsgEvent.data.args.splice(0, 0, aMsgEvent.data.id)
-		if (earlyDispatchRes && earlyDispatchRes.constructor.name == 'Promise') { // as earlyDispatchRes may be undefined
-			console.log('in earlyDispatchRes as promise block');
-			earlyDispatchRes.then(
-				function(aVal) {
-					console.log('earlyDispatchRes resolved:', aVal);
-					gEarlyDispatchResults[aMsgEvent.data.id] = aVal;
-					worker.handleMessage(aMsgEvent);
-				},
-				function(aReason) {
-					console.warn('earlyDispatchRes rejected:', aReason);
-				}
-			).catch(
-				function(aCatch) {
-					console.error('earlyDispatchRes caught:', aCatch);
-					gEarlyDispatchResults[aMsgEvent.data.id] = ['noit::throw::', aCatch];
-					console.error('aCatch:', aCatch);
-				}
-			);
-		} else {
-			console.log('not a promise so setting it to gEarlyDispatchResults, it is:', earlyDispatchRes);
-			if (earlyDispatchRes) {
-				console.log('not undefined or null so constructor is:', earlyDispatchRes.constructor.name);
-			}
-			gEarlyDispatchResults[aMsgEvent.data.id] = earlyDispatchRes;
-			worker.handleMessage(aMsgEvent);
-		}
-	}
-});
-
-const SIP_CB_PREFIX = '_a_gen_cb_';
-const SIP_TRANS_WORD = '_a_gen_trans_';
-var sip_last_cb_id = -1;
-self.postMessageWithCallback = function(aPostMessageArr, aCB, aPostMessageTransferList) {
-	var aFuncExecScope = WORKER;
-
-	sip_last_cb_id++;
-	var thisCallbackId = SIP_CB_PREFIX + sip_last_cb_id;
-	aFuncExecScope[thisCallbackId] = function(aResponseArgsArr) {
-		delete aFuncExecScope[thisCallbackId];
-		console.log('in worker callback trigger wrap, will apply aCB with these arguments:', aResponseArgsArr);
-		aCB.apply(null, aResponseArgsArr);
-	};
-	aPostMessageArr.push(thisCallbackId);
-	self.postMessage(aPostMessageArr, aPostMessageTransferList);
-};
-// end - setup SIPWorker
-
-// Define a custom error prototype.
-function MainWorkerError(name, msg) {
-  this.msg = msg;
-  this.name = name;
-}
-MainWorkerError.prototype.toMsg = function() {
-	return {
-		exn: 'MainWorkerError',
-		msg: this.msg,
-		name: this.name
-	};
-};
-////// end of imports and definitions
-
+function dummyForInstantInstantiate() {}
 function init(objCore) { // function name init required for SIPWorker
 	//console.log('in worker init');
 
@@ -157,6 +18,10 @@ function init(objCore) { // function name init required for SIPWorker
 	// core and objCore is object with main keys, the sub props
 
 	core = objCore;
+
+	importScripts(core.addon.path.modules + 'cutils.jsm');
+	importScripts(core.addon.path.modules + 'ctypes_math.jsm');
+	importScripts(core.addon.path.modules + 'commonProfilistFuncs.js');
 
 	core.profilist.path.root = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data');
 	core.profilist.path.icons = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist_data', 'icons');
@@ -192,10 +57,7 @@ function init(objCore) { // function name init required for SIPWorker
 			importScripts(core.addon.path.modules + 'ostypes_mac.jsm');
 			break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 	console.log('brought in ostypes');
 
@@ -281,7 +143,7 @@ function afterBootstrapInit() {
 				var groupPrefStartup = core.firefox.prefs['taskbar.grouping.useprofile'];
 				OSStuff.groupPrefStartup = groupPrefStartup;
 				if (groupPrefStartup != groupPrefShouldBe) {
-					self.postMessage(['setPref', 'taskbar.grouping.useprofile', groupPrefShouldBe]);
+					gBsComm.postMessage('setPref', {aPrefName:'taskbar.grouping.useprofile', aPrefVal:groupPrefShouldBe});
 					core.firefox.prefs['taskbar.grouping.useprofile'] = groupPrefShouldBe; // as currently mainthread does not update prefs in the worker, or even in the core. but its not important
 				}
 
@@ -309,13 +171,13 @@ function afterBootstrapInit() {
 				// }
 
 				// start the window listener, needs to just go after readIni - but i like it here after the "taskbar.grouping.useprofile" stuff
-				self.postMessage(['registerWorkerWindowListener']);
+				gBsComm.postMessage('registerWorkerWindowListener');
 
 			break;
 		case 'gtk':
 
 				// if not unity de, then set up window listener, else dont, for now am setting it up
-				self.postMessage(['registerWorkerWindowListener']);
+				gBsComm.postMessage('registerWorkerWindowListener');
 
 			break;
 		case 'darwin':
@@ -339,11 +201,11 @@ function afterBootstrapInit() {
 
 */
 
-function prepForTerminate() {
-	return 'ok ready to terminate';
+self.onclose = function() {
+	console.log('ok ready to terminate');
 }
 
-function testConnInit() {
+function testConnInit(aArg, aComm) {
 	setInterval(function() {
 		self.postMessage(['testConnUpdate', (new Date()).toLocaleString() + ' -- ' + (new Date()).getTime()])
 	}, 1000);
@@ -1008,8 +870,8 @@ function getImgSrcsForImgSlug(aImgSlug) {
 							rezObj[cImgSize] = OS.Path.toFileURI(aEntry.path);
 						});
 					} catch(OSFileError) {
-						// console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
-						throw new MainWorkerError('getImgSrcsForImgSlug', OSFileError);
+						console.error('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
+						throw new Error('getImgSrcsForImgSlug, OSFileError');
 					} finally {
 						cImgDirIterator.close();
 					}
@@ -1050,7 +912,8 @@ function getImgPathOfSlug(aSlug) {
 				return OS.Path.join(core.profilist.path.icons, aSlug, aSlug + '_16.png');
 	}
 }
-function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
+function addBuild(aArg, aComm) {
+	var { aImgSlug, aExePath, aBool_doNotPostProcess } = aArg;
 	// adds a new build t ProfilistBuilds and saves/reformats ini
 	// aBool_doNotPostProcess is for use when dev will handle formating ini obj (if needed) and writing to ini, this is done only in one case right now, which is in mainworker in saveTieForProf
 
@@ -1095,7 +958,8 @@ function addBuild(aImgSlug, aExePath, aBool_doNotPostProcess) {
 		return j_gProfilistBuilds[j_gProfilistBuilds.length - 1];
 	}
 }
-function removeBuild(aBuildId, aBool_doNotPostProcess) {
+function removeBuild(aArg, aComm) {
+	var { aBuildId, aBool_doNotPostProcess } = aArg;
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 	var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 	var j_gProfilistBuilds = JSON.parse(getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistBuilds'));
@@ -1130,7 +994,8 @@ function removeBuild(aBuildId, aBool_doNotPostProcess) {
 
 	return gIniObj;
 }
-function replaceBuildEntry(aBuildId, aNewBuildEntry) {
+function replaceBuildEntry(aArg, aComm) {
+	var { aBuildId, aNewBuildEntry } = aArg;
 	// aBuildId - number
 	// aNewBuildEntry - js object of what the new entry should be
 	// returns an array hold ref to new gIniObj
@@ -1157,7 +1022,8 @@ function replaceBuildEntry(aBuildId, aNewBuildEntry) {
 	return gIniObj;
 }
 
-function replaceBadgeForProf(aProfPath, aNewBadge) {
+function replaceBadgeForProf(aArg, aComm) {
+	var { aProfPath, aNewBadge } = aArg;
 	// aNewBadge - string which is new imgSlug to apply, or null/undefined t oremove it
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 	console.log('replaceBadgeForProf:', aProfPath, aNewBadge, 'cIniEntry:', cIniEntry);
@@ -1185,8 +1051,8 @@ function replaceBadgeForProf(aProfPath, aNewBadge) {
 	}
 }
 
-function saveTieForProf(aProfPath, aNewTieId) {
-
+function saveTieForProf(aArg, aComm) {
+	var { aProfPath, aNewTieId } = aArg;
 	var gIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
 
 	var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
@@ -1200,7 +1066,7 @@ function saveTieForProf(aProfPath, aNewTieId) {
 		var curProfBuildsEntry = getBuildEntryByKeyValue(j_gProfilistBuilds, 'p', gCurProfIniEntry.noWriteObj.exePath);
 		if (!curProfBuildsEntry) {
 			// curProfBuildsEntry is null meaning its not in jProfilistBuilds so we have to insert one
-			aNewProfilistTie = addBuild(gCurProfIniEntry.noWriteObj.exeIconSlug, gCurProfIniEntry.noWriteObj.exePath, true).id + '';
+			aNewProfilistTie = addBuild({ aImgSlug:gCurProfIniEntry.noWriteObj.exeIconSlug, aExePath:gCurProfIniEntry.noWriteObj.exePath, aBool_doNotPostProcess:true }).id + '';
 		} else {
 			aNewProfilistTie = curProfBuildsEntry.id + '';
 		}
@@ -1287,10 +1153,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						cIsRunning = 0;
 					} else {
 						console.error('getIsRunningFromIniFromPlat', {msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',OSFileError: OSFileError});
-						throw new MainWorkerError('getIsRunningFromIniFromPlat', {
-							msg: 'Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"',
-							OSFileError: OSFileError
-						});
+						throw new Error('getIsRunningFromIniFromPlat - Could not open profile lock file and it was NOT locked. Path of lock file: "' + cParentLockPath + '"');
 					}
 				}
 
@@ -1335,10 +1198,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						cIsRunning = 0;
 					} else {
 						console.error('should never get here - getIsRunningFromIniFromPlat -> ostypes.api.open', {msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',errno: ctypes.errno});
-						throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.open', {
-							msg: 'failed to open cParentLockPath: "' + cParentLockPath + '"',
-							errno: ctypes.errno
-						});
+						throw new Error('getIsRunningFromIniFromPlat -> ostypes.api.open - failed to open cParentLockPath: "' + cParentLockPath + '"');
 					}
 				}
 
@@ -1349,10 +1209,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						console.log('rez_closeLockFd:', rez_closeLockFd);
 						if (!cutils.jscEqual(rez_closeLockFd, 0)) {
 							// failed to close
-							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.close', {
-								msg: 'failed to close cParentLockPath: "' + cParentLockPath + '"',
-								errno: ctypes.errno
-							});
+							throw new Error('getIsRunningFromIniFromPlat -> ostypes.api.close - failed to close cParentLockPath: "' + cParentLockPath + '"');
 						}
 					} else {
 						console.info('NO NEED TO CLOSE LOCKFD');
@@ -1371,10 +1228,11 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 						console.log('rez_fcntl:', rez_fcntl);
 						if (cutils.jscEqual(rez_fcntl, -1)) {
 							// failed to open
-							throw new MainWorkerError('getIsRunningFromIniFromPlat -> ostypes.api.fcntl', {
+							console.error({
 								msg: 'failed to fcntl cParentLockPath: "' + cParentLockPath + '"',
 								errno: ctypes.errno
 							});
+							throw new Error('getIsRunningFromIniFromPlat -> ostypes.api.fcntl - failed to fcntl cParentLockPath: "' + cParentLockPath + '"');
 						}
 
 						// l_pid is unchanged if it wasnt locked, and since js-ctypes instatiates the struct at value of 0, i can just return that value, so 0 means its not running
@@ -1400,10 +1258,7 @@ function getIsRunningFromIniFromPlat(aProfPath, aOptions={}) {
 
 			break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 	// :note: maybe verify or something - there seems to be some platform called vms, but i cant find such an os for virtualmachine - http://mxr.mozilla.org/mozilla-release/source/profile/dirserviceprovider/src/nsProfileLock.cpp#581
 
@@ -1467,7 +1322,7 @@ function getLastExePathForProfFromFS(aProfPath) {
 	var cLastPlatformDir = /LastPlatformDir=(.*?)$/m.exec(rez_readCompatIni);
 	if (!cLastPlatformDir) {
 		console.error('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
-		throw new MainWorkerError('getLastExePathForProfFromFS', 'regex failed on cLastPlatformDir');
+		throw new Error('getLastExePathForProfFromFS -> regex failed on cLastPlatformDir');
 	}
 	cLastPlatformDir = cLastPlatformDir[1];
 
@@ -1497,10 +1352,7 @@ function getLastExePathForProfFromFS(aProfPath) {
 
 			break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 
 	return cLastExePath;
@@ -1527,7 +1379,7 @@ function getCalcdExePathForProfFromIniFromFS(aProfPath) {
 			var cBuildEntry = getBuildEntryByKeyValue(gJProfilistBuilds, 'id', cIniEntry.ProfilistTie);
 			if (!cBuildEntry) {
 				console.error('no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied'); // :todo: ensure this comment, code up the untie on tie deletion
-				throw new MainWorkerError('should_never_happen!', 'no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied');
+				throw new Error('should_never_happen! -> no build entry found for this, this should never happen, as when an id is deleted, all things tied to it should have been untied');
 			}
 			return cBuildEntry.p;
 		}
@@ -1588,7 +1440,7 @@ function getExeChanForParamsFromFSFromCache(aExePath) {
 			if (!channel_name) {
 				_cache_getExeChanForParamsFromFSFromCache[aExePath] = null;
 				console.error('should-nver-happen!', 'as a exe path must exist for all builds!!!');
-				throw new MainWorkerError('should-nver-happen!', 'as a exe path must exist for all builds!!!');
+				throw new Error('should-nver-happen! -> as a exe path must exist for all builds!!!');
 			} else {
 				_cache_getExeChanForParamsFromFSFromCache[aExePath] = channel_name[1];
 			}
@@ -1705,7 +1557,7 @@ function getLinuxIsIconInstalledFromFS(aIconName) {
 		case 'qt':
 
 				console.error('unsupported-platform', 'QT platform not yet supported, only GTK as of right now.');
-				throw new MainWorkerError('unsupported-platform', 'QT platform not yet supported');
+				throw new Error('unsupported-platform -> QT platform not yet supported');
 
 			break;
 		case 'gtk':
@@ -1726,7 +1578,7 @@ function getLinuxIsIconInstalledFromFS(aIconName) {
 
 			break;
 		default:
-			throw new MainWorkerError('unsupported-platform', 'This function is only for Linux platforms, GTK only right now.');
+			throw new Error('unsupported-platform -> This function is only for Linux platforms, GTK only right now.');
 	}
 }
 
@@ -1734,7 +1586,7 @@ function uninstallLinuxIconForParamsFromFS(aIconName) {
 	// NOT aIconSlug, but aIconName, which is the safedForPlatFS
 	// because linux output sizes are [16, 24, 48, 96];, i will just check in folder of 16 for existence
 	if (core.os.mname != 'gtk') {
-		throw new MainWorkerError('unsupported-platform', 'This function is only for Linux platforms, GTK or QT.');
+		throw new Error('unsupported-platform - This function is only for Linux platforms, GTK or QT.');
 	}
 
 	var linuxIconOutputSizes = [16, 24, 48, 96];
@@ -1818,10 +1670,7 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 
 				break
 			default:
-				throw new MainWorkerError({
-					name: 'addon-error',
-					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-				});
+				throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 		}
 
 		// populate cBaseSrcImgPathArr
@@ -1860,9 +1709,9 @@ function createIconForParamsFromFS(aIconInfosObj, aBadgeLoc) {
 		}
 
 		console.time('promiseWorker-createIcon');
-		console.log('rawr:', ['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions]);
+		console.log('sending createIcons args:', {aCreateType:cCreateType, aCreateName:cCreateName, aCreatePathDir:cCreatePathDir, aBaseSrcImgPathArr:cBaseSrcImgPathArr, aOutputSizesArr:cOutputSizesArr, aOptions:cOptions});
 		console.log('aIconInfosObj:', aIconInfosObj);
-		self.postMessageWithCallback(['createIcon', cCreateType, cCreateName, cCreatePathDir, cBaseSrcImgPathArr, cOutputSizesArr, cOptions], function(aCreateIconRez) { // :note: this is how to call WITH callback
+		gBsComm.postMessage('createIcon', {aCreateType:cCreateType, aCreateName:cCreateName, aCreatePathDir:cCreatePathDir, aBaseSrcImgPathArr:cBaseSrcImgPathArr, aOutputSizesArr:cOutputSizesArr, aOptions:cOptions}, function(aCreateIconRez) { // :note: this is how to call WITH callback
 			console.timeEnd('promiseWorker-createIcon');
 			console.log('back in promiseworker after calling createIcon, aCreateIconRez:', aCreateIconRez);
 			if (aCreateIconRez.status == 'fail') {
@@ -1986,10 +1835,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 
 			break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 
 	var cLauncherPath = OS.Path.join(aLauncherDirPath, aLauncherName + '.' + cLauncherExtension);
@@ -2010,7 +1856,8 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 	} catch(OSFileError) {
 		console.info('OSFileError:', OSFileError, 'OSFileError.becauseNoSuchFile:', OSFileError.becauseNoSuchFile, 'OSFileError.becauseExists:', OSFileError.becauseExists, 'OSFileError.becauseClosed:', OSFileError.becauseClosed, 'OSFileError.unixErrno:', OSFileError.unixErrno, 'OSFileError.winLastError:', OSFileError.winLastError, '');
 		if (!OSFileError.becauseNoSuchFile) {
-			throw new MainWorkerError('createeLauncher', OSFileError);
+			console.error('createeLauncher', OSFileError);
+			throw new Error('createeLauncher -> OSFileError');
 		} // if it does not exist, thats ok, this func will carry on to create the launcher :todo: should make the dir though at this point, when we get error that dir doesnt exist
 	} finally {
 		if (!eLauncherEntry) {
@@ -2358,10 +2205,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 
 					break;
 				default:
-					throw new MainWorkerError({
-						name: 'addon-error',
-						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-					});
+					throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 			}
 
 	} else {
@@ -2476,7 +2320,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 						var promise_writeScript = OS.File.writeAtomic(cLauncherPath, cmdArr.join('\n'), {encoding:'utf-8', /*unixMode:0o4777,*/ noOverwrite:true}); // doing unixMode:0o4777 here doesn't work, i have to `OS.File.setPermissions(path_toFile, {unixMode:0o4777})` after the file is made
 					} catch(ex) {
 						console.error('createLauncher-platform-error', ex);
-						throw new MainWorkerError('createLauncher-platform-error', ex);
+						throw new Error('createLauncher-platform-error');
 					}
 
 					var promise_setPermsScript = OS.File.setPermissions(cLauncherPath, {unixMode:0o4777});
@@ -2547,10 +2391,7 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 
 				break;
 			default:
-				throw new MainWorkerError({
-					name: 'addon-error',
-					message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-				});
+				throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 		}
 	}
 
@@ -2558,7 +2399,9 @@ function createLauncherForParams(aLauncherDirPath, aLauncherName, aLauncherIconP
 }
 
 var debugVar = false;
-function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopShortcutToResolve) {
+function launchOrFocusProfile(aArg, aComm) {
+	var { aProfPath, aOptions, aDeferredForCreateDesktopShortcutToResolve } = aArg;
+	if (!aOptions) { aOptions = {} }
 	// get path to launcher. if it doesnt exist create it then return the path. if it exists, just return the path.
 	// aDeferredForCreateDesktopShortcutToResolve is a deferred that is resolved after all things are done. setting this, will not focus or launch, it will just create the launcher as if it were launching. resolves with path to the launcher.
 
@@ -2572,7 +2415,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 
 	// console.error('core.profilist.path.XREExeF:', core.profilist.path.XREExeF);
 	var cIniEntry = getIniEntryByKeyValue(gIniObj, 'Path', aProfPath);
-	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new MainWorkerError('should-nver-happen!', 'cIniEntry could not be found'); }
+	if (!cIniEntry) { console.error('should-nver-happen!', 'cIniEntry could not be found'); throw new Error('should-nver-happen! - cIniEntry could not be found'); }
 
 	/*
 	if (aOptions.refreshRunningStatus) {
@@ -2740,10 +2583,7 @@ function launchOrFocusProfile(aProfPath, aOptions={}, aDeferredForCreateDesktopS
 
 					break;
 				default:
-					throw new MainWorkerError({
-						name: 'addon-error',
-						message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-					});
+					throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 			}
 
 			return;
@@ -3023,7 +2863,10 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 			// DO NOT COPY: parent.lock/.parentlock
 
 			if (keyValNotif == '1') {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-started', 'mainworker'), formatStringFromName('notif-body_clone-started', 'mainworker')]);
+				gBsComm.postMessage('showNotification', {
+					aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-started', 'mainworker'),
+					aBody: formatStringFromName('notif-body_clone-started', 'mainworker')
+				});
 			}
 			var cCloneProfPlatPathToRootDir = getFullPathToProfileDirFromIni(aCloneProfPath);
 			copyDirRecursive(cCloneProfPlatPathToRootDir, OS.Path.dirname(cProfPlatPathToRootDir), {
@@ -3073,16 +2916,23 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
 			if (!aCloneProfPath) {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_create-failed', 'mainworker'), formatStringFromName('notif-body_create-failed', 'mainworker', [cFailedReason])]);
+				gBsComm.postMessage('showNotification', {
+					aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_create-failed', 'mainworker'),
+					aBody: formatStringFromName('notif-body_create-failed', 'mainworker', [cFailedReason])
+				});
 			} else {
 				// clone
-				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-failed', 'mainworker'), formatStringFromName('notif-body_clone-failed', 'mainworker', [cFailedReason])]);
+				gBsComm.postMessage('showNotification', {
+					aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_clone-failed', 'mainworker'),
+					aBody: formatStringFromName('notif-body_clone-failed', 'mainworker', [cFailedReason])
+				});
 			}
 		}
-		throw new MainWorkerError('something-bad-happend', {
+		console.error('something-bad-happend', {
 			reason: cFailedReason,
 			aIniObj: gIniObj
 		});
+		throw new Error('something-bad-happend');
 	} else {
 		/*
 		if (keyValNotif == '1') {
@@ -3097,8 +2947,10 @@ function createNewProfile(aNewProfName, aCloneProfPath, aNameIsPlatPath, aLaunch
 		// :debug:
 		if (aLaunchIt) {
 			setTimeout(function() { // setTimeout so it triggers after the return
-				launchOrFocusProfile(newIniEntry.Path, {
-					args: '"' + OS.Path.join(getFullPathToProfileDirFromIni(gCurProfIniEntry.Path), 'extensions', 'Profilist@jetpack.xpi') + '"'
+				launchOrFocusProfile({
+					aProfPath:newIniEntry.Path,
+					aOptions: { args: '"' + OS.Path.join(getFullPathToProfileDirFromIni(gCurProfIniEntry.Path), 'extensions', 'Profilist@jetpack.xpi') + '"' },
+					aDeferredForCreateDesktopShortcutToResolve: undefined
 				});
 			}, 0);
 		}
@@ -3136,12 +2988,16 @@ function renameProfile(aProfPath, aNewProfName) {
 
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', 'mainworker'), formatStringFromName('notif-body_rename-failed', 'mainworker', [gTargetIniEntry.Name, aNewProfName, cFailedReason])]);
+			gBsComm.postMessage('showNotification', {
+				aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_rename-failed', 'mainworker'),
+				aBody: formatStringFromName('notif-body_rename-failed', 'mainworker', [gTargetIniEntry.Name, aNewProfName, cFailedReason])
+			});
 		}
-		throw new MainWorkerError('something-bad-happend', {
+		console.error('something-bad-happend', {
 			reason: cFailedReason,
 			aIniObj: gIniObj
 		});
+		throw new Error('something-bad-happend');
 	}
 }
 
@@ -3207,12 +3063,16 @@ function deleteProfile(aProfPath) {
 
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', 'mainworker'), formatStringFromName('notif-body_delete-failed', 'mainworker', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason])]);
+			gBsComm.postMessage('showNotification', {
+				aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_delete-failed', 'mainworker'),
+				aBody: formatStringFromName('notif-body_delete-failed', 'mainworker', [gTargetIniEntry ? gTargetIniEntry.Name : 'NULL', cFailedReason])
+			});
 		}
-		throw new MainWorkerError('something-bad-happend', {
+		console.error('something-bad-happend', {
 			reason: cFailedReason,
 			aIniObj: gIniObj
 		});
+		throw new Error('something-bad-happend');
 	}
 }
 
@@ -3258,20 +3118,28 @@ function toggleDefaultProfile(aProfPath) {
 
 	if (cFailedReason) {
 		if (keyValNotif == '1') {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_default-failed', 'mainworker'), formatStringFromName('notif-body_default-failed', 'mainworker', [cFailedReason])]);
+			gBsComm.postMessage('showNotification', {
+				aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + formatStringFromName('notif-title_default-failed', 'mainworker'),
+				aBody: formatStringFromName('notif-body_default-failed', 'mainworker', [cFailedReason])
+			});
 		}
-		throw new MainWorkerError('something-bad-happend', {
+		console.error('something-bad-happend', {
 			reason: cFailedReason,
 			aIniObj: gIniObj
 		});
+		throw new Error('something-bad-happend');
 	}
 }
 
-function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
+function createDesktopShortcut(aArg, aComm) {
+	var { aProfPath, aCbIdToResolveToFramescript } = aArg;
 
 	var deferred_ensureLauncher = new Deferred();
 
-	self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut', 'for aProfPath of ' + aProfPath]);
+	gBsComm.postMessage('showNotification', {
+		aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut',
+		aBody: 'for aProfPath of ' + aProfPath
+	});
 
 	deferred_ensureLauncher.promise.then(
 		function(aPathToLauncher) {
@@ -3311,23 +3179,33 @@ function createDesktopShortcut(aProfPath, aCbIdToResolveToFramescript) {
 						}
 			}
 
-			self.postMessage([aCbIdToResolveToFramescript]);
+			gBsComm.postMessage(aCbIdToResolveToFramescript);
 
 			var gGenIniEntry = getIniEntryByKeyValue(gIniObj, 'groupName', 'General');
 			var gCurProfIniEntry = getIniEntryByNoWriteObjKeyValue(gIniObj, 'currentProfile', true);
 			var keyValNotif = getPrefLikeValForKeyInIniEntry(gCurProfIniEntry, gGenIniEntry, 'ProfilistNotif');
 			if (keyValNotif) {
-				self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'created desktop shortcut', 'ok destop shortcut was successfully made']);
+				gBsComm.postMessage('showNotification', {
+					aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + 'created desktop shortcut',
+					aBody: 'ok destop shortcut was successfully made'
+				});
 			}
 		},
 		function() {
-			self.postMessage(['showNotification', formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut failed', 'failed ensuring launcher']);
-			self.postMessage([aCbIdToResolveToFramescript]);
+			gBsComm.postMessage('showNotification', {
+				aTitle: formatStringFromName('addon-name', 'mainworker') + ' - ' + 'creating deskcut failed',
+				aBody: 'failed ensuring launcher'
+			});
+			gBsComm.postMessage(aCbIdToResolveToFramescript);
 		}
 	);
 
 	console.log('calling launchOrFocusProfile with deferred_ensureLauncher');
-	launchOrFocusProfile(aProfPath, {}, deferred_ensureLauncher);
+	launchOrFocusProfile({
+		aProfPath,
+		aOptions: undefined,
+		aDeferredForCreateDesktopShortcutToResolve: deferred_ensureLauncher
+	});
 
 	// will not return anything here, because this calls launchOrFocusProfile with params to not launch and not focus, just to createLauncher as if it were laucnhing or focusing though and that might call async function of createIcon
 }
@@ -4142,7 +4020,8 @@ function readImgsInDir(aDirPlatPath) {
 
 				});
 			} catch(OSFileError) {
-				throw new MainWorkerError('readImgsInDir', OSFileError);
+				console.error('readImgsInDir', OSFileError);
+				throw new Error('readImgsInDir - OSFileError');
 			} finally {
 				if (rezObj != 'error-toomanyimgs') {
 					// cuz if too many images reached it closes it already to break the iteration
@@ -4246,7 +4125,8 @@ function readSubdirsInDir(aDirPlatPath) {
 		});
 	} catch(OSFileError) {
 		if (!OSFileError.becauseNoSuchFile) {
-			throw new MainWorkerError('readSubdirsInDir', OSFileError);
+			console.error('readSubdirsInDir', OSFileError);
+			throw new Error('readSubdirsInDir - OSFileError');
 		} // its ok if it doesnt exist, then just report back no files. for instance core.profilist.path.images doesnt exist and so will get here
 	} finally {
 		cDirIterator.close();
@@ -4669,10 +4549,7 @@ function adoptOrphanTempProfs(aOptions={}) {
 
 			break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 	console.timeEnd('populate lockPlatPath');
 	console.log('lockPlatPath:', lockPlatPath);
@@ -6169,10 +6046,7 @@ function getAllPID(aOptions={}) {
 
 			// break;
 		default:
-			throw new MainWorkerError({
-				name: 'addon-error',
-				message: 'Operating system, "' + OS.Constants.Sys.Name + '" is not supported'
-			});
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
 
 	console.timeEnd('getAllPID');
@@ -6318,63 +6192,6 @@ function validateOptionsObj(aOptions, aOptionsDefaults) {
 		if (!(aOptKey in aOptions)) {
 			aOptions[aOptKey] = aOptionsDefaults[aOptKey];
 		}
-	}
-}
-function Deferred() { // rev3 - https://gist.github.com/Noitidart/326f1282c780e3cb7390
-	// update 062115 for typeof
-	if (typeof(Promise) != 'undefined' && Promise.defer) {
-		//need import of Promise.jsm for example: Cu.import('resource:/gree/modules/Promise.jsm');
-		return Promise.defer();
-	} else if (typeof(PromiseUtils) != 'undefined'  && PromiseUtils.defer) {
-		//need import of PromiseUtils.jsm for example: Cu.import('resource:/gree/modules/PromiseUtils.jsm');
-		return PromiseUtils.defer();
-	} else {
-		/* A method to resolve the associated Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} value : This value is used to resolve the promise
-		 * If the value is a Promise then the associated promise assumes the state
-		 * of Promise passed as value.
-		 */
-		this.resolve = null;
-
-		/* A method to reject the assocaited Promise with the value passed.
-		 * If the promise is already settled it does nothing.
-		 *
-		 * @param {anything} reason: The reason for the rejection of the Promise.
-		 * Generally its an Error object. If however a Promise is passed, then the Promise
-		 * itself will be the reason for rejection no matter the state of the Promise.
-		 */
-		this.reject = null;
-
-		/* A newly created Pomise object.
-		 * Initially in pending state.
-		 */
-		this.promise = new Promise(function(resolve, reject) {
-			this.resolve = resolve;
-			this.reject = reject;
-		}.bind(this));
-		Object.freeze(this);
-	}
-}
-function genericReject(aPromiseName, aPromiseToReject, aReason) {
-	var rejObj = {
-		name: aPromiseName,
-		aReason: aReason
-	};
-	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
-	if (aPromiseToReject) {
-		aPromiseToReject.reject(rejObj);
-	}
-}
-function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
-	var rejObj = {
-		name: aPromiseName,
-		aCaught: aCaught
-	};
-	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
-	if (aPromiseToReject) {
-		aPromiseToReject.reject(rejObj);
 	}
 }
 
@@ -6690,4 +6507,127 @@ function formatStringFromName(aKey, aLocalizedPackageName, aReplacements) {
 
 	return cLocalizedStr;
 }
+
+function Deferred() { // revFinal
+	this.resolve = null;
+	this.reject = null;
+	this.promise = new Promise(function(resolve, reject) {
+		this.resolve = resolve;
+		this.reject = reject;
+	}.bind(this));
+	Object.freeze(this);
+}
+function genericReject(aPromiseName, aPromiseToReject, aReason) {
+	var rejObj = {
+		name: aPromiseName,
+		aReason: aReason
+	};
+	console.error('Rejected - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+function genericCatch(aPromiseName, aPromiseToReject, aCaught) {
+	var rejObj = {
+		name: aPromiseName,
+		aCaught: aCaught
+	};
+	console.error('Caught - ' + aPromiseName + ' - ', rejObj);
+	if (aPromiseToReject) {
+		aPromiseToReject.reject(rejObj);
+	}
+}
+// start - CommAPI
+var gWorker = this;
+
+// start - CommAPI for bootstrap-worker - worker side - cross-file-link5323131347
+function workerComm() {
+
+	var scope = gWorker;
+	var firstMethodCalled = false;
+	this.nextcbid = 1; // next callback id
+	this.callbackReceptacle = {};
+	this.CallbackTransferReturn = function(aArg, aTransfers) {
+		// aTransfers should be an array
+		this.arg = aArg;
+		this.xfer = aTransfers;
+	};
+	this.postMessage = function(aMethod, aArg, aTransfers, aCallback) {
+		// aMethod is a string - the method to call in bootstrap
+		// aCallback is a function - optional - it will be triggered in scope when aMethod is done calling
+
+		if (aArg && aArg.constructor == this.CallbackTransferReturn) {
+			// aTransfers is undefined
+			// i needed to create CallbackTransferReturn so that callbacks can transfer data back
+			aTransfers = aArg.xfer;
+			aArg = aArg.arg;
+		}
+		var cbid = null;
+		if (typeof(aMethod) == 'number') {
+			// this is a response to a callack waiting in framescript
+			cbid = aMethod;
+			aMethod = null;
+		} else {
+			if (aCallback) {
+				cbid = this.nextcbid++;
+				this.callbackReceptacle[cbid] = aCallback;
+			}
+		}
+
+		self.postMessage({
+			method: aMethod,
+			arg: aArg,
+			cbid
+		}, aTransfers ? aTransfers : undefined);
+	};
+	this.listener = function(e) {
+		var payload = e.data;
+		console.log('worker workerComm - incoming, payload:', payload); //, 'e:', e);
+
+		if (payload.method) {
+			if (!firstMethodCalled) {
+				firstMethodCalled = true;
+				if (payload.method != 'init' && scope.init) {
+					this.postMessage('triggerOnAfterInit', scope.init(undefined, this));
+				}
+			}
+			console.log('scope:', scope);
+			if (!(payload.method in scope)) { console.error('method of "' + payload.method + '" not in scope'); throw new Error('method of "' + payload.method + '" not in scope') } // dev line remove on prod
+			var rez_worker_call_for_bs = scope[payload.method](payload.arg, this);
+			console.log('rez_worker_call_for_bs:', rez_worker_call_for_bs);
+			if (payload.cbid) {
+				if (rez_worker_call_for_bs && rez_worker_call_for_bs.constructor.name == 'Promise') {
+					rez_worker_call_for_bs.then(
+						function(aVal) {
+							console.log('Fullfilled - rez_worker_call_for_bs - ', aVal);
+							this.postMessage(payload.cbid, aVal);
+						}.bind(this),
+						genericReject.bind(null, 'rez_worker_call_for_bs', 0)
+					).catch(genericCatch.bind(null, 'rez_worker_call_for_bs', 0));
+				} else {
+					console.log('calling postMessage for callback with rez_worker_call_for_bs:', rez_worker_call_for_bs, 'this:', this);
+					this.postMessage(payload.cbid, rez_worker_call_for_bs);
+				}
+			}
+			// gets here on programtic init, as it for sure does not have a callback
+			if (payload.method == 'init') {
+				this.postMessage('triggerOnAfterInit', rez_worker_call_for_bs);
+			}
+		} else if (!payload.method && payload.cbid) {
+			// its a cbid
+			this.callbackReceptacle[payload.cbid](payload.arg, this);
+			delete this.callbackReceptacle[payload.cbid];
+		} else {
+			console.error('worker workerComm - invalid combination');
+			throw new Error('worker workerComm - invalid combination');
+		}
+	}.bind(this);
+
+	self.onmessage = this.listener;
+}
+// end - CommAPI for bootstrap-worker - worker side - cross-file-link5323131347
+// end - CommAPI
 // end - common helper functions
+
+// startup
+ gBsComm = new workerComm();
