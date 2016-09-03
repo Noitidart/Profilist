@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
+var globalForPNGJS = this;
 (function() {
   var PNG;
 
@@ -453,6 +453,6 @@
 
   })();
 
-  gWorker.PNG = PNG;
+  globalForPNGJS.PNG = PNG;
 
 }).call(this);

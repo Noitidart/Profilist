@@ -109,7 +109,7 @@ function testgl() {
 	var img, tex, vloc, tloc, sloc, vertexBuff, texBuff;
 
 	var cvs3d = new OffscreenCanvas(64, 64);
-	var ctx3d = cvs3d.getContext('webgl', {
+	var ctx3d = cvs3d.getContext('experimental-webgl', {
 		preserveDrawingBuffer: true,
 	});
 	var uLoc;
@@ -258,7 +258,7 @@ function testgl() {
 
 	var handleArrBuf = function() {
 		var buf = this.result;
-		OS.File.writeAtomic(OS.Path.join(OS.Constants.Path.desktopDir, 'webgl.png'), new Uint8Array(buf));
+		OS.File.writeAtomic(OS.Path.join(OS.Constants.Path.desktopDir, 'webgl1.png'), new Uint8Array(buf));
 		console.log('ok done saving to disk');
 	};
 }
