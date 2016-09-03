@@ -26,7 +26,6 @@ function init(objCore) {
 	// formatStringFromName('blah', 'chrome://global/locale/dateFormat.properties');
 	core.addon.l10n = _cache_formatStringFromName_packages;
 
-	// importScripts(core.addon.path.scripts + '3rd/PNGReader.js');
 	importScripts(core.addon.path.scripts + '3rd/zlib.js');
 	importScripts(core.addon.path.scripts + '3rd/png.js');
 
@@ -204,42 +203,7 @@ function testgl() {
 
 	var deferred_baseimg = new Deferred();
 	var deferred_badgeimg = new Deferred();
-
 	var promiseallarr_imgs = [deferred_baseimg.promise, deferred_badgeimg.promise];
-
-
-	// PNGReader.js fails to read the twitter 64 image, its really weird. but png.js and zlib.js works ah!
-	// var req_base = xhr('file:///C:/Users/Mercurius/Documents/GitHub/Firefox-PNG-Icon-Collections/_nightly/64.png', {
-	// 	responseType: 'arraybuffer'
-	// });
-	// var pngreader_base = new PNGReader(req_base.response);
-	// pngreader_base.parse({
-	// 	data: true
-	// }, function(err, png) {
-	// 	if (err) {
-	// 		console.error('failed to read png data:', err);
-	// 		deferred_baseimg.resolve(err);
-	// 	} else {
-	// 		console.log('png:', png);
-	// 		deferred_baseimg.resolve(png);
-	// 	}
-	// });
-	//
-	// var req_badge = xhr('file:///C:/Users/Mercurius/Documents/GitHub/Firefox-PNG-Icon-Collections/Badges%20Random%20-%20Collection/Twitter%20-%20Collection/Identity%20by%20Chameleon%20Design/64.png', {
-	// 	responseType: 'arraybuffer'
-	// });
-	// var pngreader_badge = new PNGReader(req_badge.response);
-	// pngreader_badge.parse({
-	// 	data: true
-	// }, function(err, png) {
-	// 	if (err) {
-	// 		console.error('failed to read png data:', err);
-	// 		deferred_badgeimg.resolve(err);
-	// 	} else {
-	// 		console.log('png:', png);
-	// 		deferred_badgeimg.resolve(png);
-	// 	}
-	// });
 
 	PNG.load('file:///C:/Users/Mercurius/Documents/GitHub/Firefox-PNG-Icon-Collections/_nightly/64.png', function(pnginfo) {
 		var imagedata = new ImageData(pnginfo.width, pnginfo.height);
