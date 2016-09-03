@@ -214,7 +214,7 @@ function init() {
 			initAndRegisterAboutProfilist();
 		} catch(ignore) {} // its non-e10s so it will throw saying already registered
 
-		if (pageLoader.matches(content.window.location.href, content.window.location)) {
+		if (pageLoader.matches(content.window.location.href.toLowerCase(), content.window.location)) {
 			// need to reload it, as it it loaded before i registered it
 			content.window.location.reload();
 

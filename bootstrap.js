@@ -642,7 +642,7 @@ function startup(aData, aReason) {
 	*/
 
 	// startup worker
-	var MainWorker = new workerComm(core.addon.path.workers + 'MainWorker.js', ()=>{return core}, function(aArg, aComm) {
+	MainWorker = new workerComm(core.addon.path.workers + 'MainWorker.js', ()=>{return core}, function(aArg, aComm) {
 		console.log('Fullfilled - promise_initMainWorker - ', aVal);
 		// start - do stuff here - promise_initMainWorker
 		core = aVal;
