@@ -9,6 +9,11 @@ var gWorker = this; // needed for png.js
 var gBsComm = new Comm.client.worker();
 
 var OSStuff = {};
+var gMenu = [
+	{
+		label: 'Create New Profile'
+	}
+];
 
 function dummyForInstantInstantiate() {}
 function init(objCore) {
@@ -18,8 +23,15 @@ function init(objCore) {
 
 	addOsInfoToCore();
 
-	// core.addon.path.storage = OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id, 'simple-storage');
-	// core.addon.path.filestore = OS.Path.join(core.addon.path.storage, 'store.json');
+	core.addon.path.storage = OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id, 'simple-storage');
+	core.addon.path.filestore = OS.Path.join(core.addon.path.storage, 'store.json');
+	core.addon.path.dirstore = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist');
+	// core.addon.path.filestore = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist.json');
+
+	core.addon.path.exestore = OS.Path.join(core.addon.path.dirstore, 'exe');
+	core.addon.path.iconstore = OS.Path.join(core.addon.path.dirstore, 'icon');
+	core.addon.path.iconimgsstore = OS.Path.join(core.addon.path.dirstore, 'iconimgs');
+	core.addon.path.inibkp = OS.Path.join(core.addon.path.dirstore, 'profiles.profilist.ini');
 
 	// load all localization pacakages
 	formatStringFromName('blah', 'main');
@@ -86,7 +98,7 @@ function onBeforeTerminate() {
 }
 
 function fetchCore(aArg) {
-	console.log('in fetchCore');
+	console.error('in fetchCore, aArg:', aArg);
 	var { hydrant_ex_instructions, nocore } = aArg || {};
 
 	var deferredmain = new Deferred();
@@ -96,6 +108,37 @@ function fetchCore(aArg) {
 
 	if (!nocore) {
 		rez.core = core;
+	}
+
+	if (hydrant_ex_instructions) {
+		// hydrant_ex_instructions is object with keys:
+			// filestore_entries - optional;array - of strings, each is a key found in filestore
+			//
+		rez.hydrant_ex = {};
+
+		if (hydrant_ex_instructions.menu) {
+			rez.hydrant_ex.menu = gMenu;
+		}
+
+		if (hydrant_ex_instructions.filestore_entries) {
+			for (var filestore_entry of hydrant_ex_instructions.filestore_entries) {
+				let deferred = new Deferred();
+				promiseallarr.push(deferred.promise);
+				fetchFilestoreEntry({ mainkey:filestore_entry }).then(function(val) {
+					rez.hydrant_ex[filestore_entry] = val;
+					deferred.resolve();
+				});
+			}
+		}
+
+		if (hydrant_ex_instructions.addon_info) {
+			let deferred = new Deferred();
+			promiseallarr.push(deferred.promise);
+			callInBootstrap('getAddonInfo', undefined, function(aAddonInfo) {
+				rez.hydrant_ex.addon_info = aAddonInfo;
+				deferred.resolve();
+			});
+		}
 	}
 
 	Promise.all(promiseallarr).then(function(vals) {
@@ -264,6 +307,141 @@ function testgl() {
 }
 
 // start - common worker functions
+
+// start - filestore stuff for worker - updated based on mainworker for async - 091516
+var gFilestore;
+var gFilestoreDefaultGetters = []; // after default is set, it runs all these functions
+var gFilestoreDefault = {
+
+};
+function readFilestore() {
+	// reads from disk, if not found, it uses the default filestore
+	// does not return anything, use the `gFilestore`, but does return a promise
+
+	var promiseallarr = [];
+
+	if (!gFilestore) {
+		try {
+			gFilestore = JSON.parse(OS.File.read(core.addon.path.filestore, {encoding:'utf-8'}));
+		} catch(OSFileError) {
+			if (OSFileError.becauseNoSuchFile) {
+				gFilestore = gFilestoreDefault ? gFilestoreDefault : {};
+				// run default gFilestoreDefaultGetters
+				for (var getter of gFilestoreDefaultGetters) {
+					promiseallarr.push(getter());
+				}
+			}
+		}
+	}
+
+	return Promise.all(promiseallarr);
+}
+
+function updateFilestoreEntry(aArg, aComm) {
+	// does not return/resolve to anything, even on error
+
+	// updates in memory (global), does not write to disk
+	// if gFilestore not yet read, it will readFilestore first
+
+	var { mainkey, value, key, verb } = aArg;
+	// verb
+		// "filter" - `value` must be a function to determine what to remove
+
+	// key is optional. if key is not set, then gFilestore[mainkey] is set to value
+	// if key is set, then gFilestore[mainkey][key] is set to value
+	// if verb is set
+
+	// REQUIRED: mainkey, value
+
+	Promise.all([!gFilestore ? readFilestore() : undefined]).then( () => {
+		var dirty = true;
+		switch (verb) {
+			case 'push':
+					// acts on arrays only
+					if (key) {
+						gFilestore[mainkey][key].push(value);
+					} else {
+						gFilestore[mainkey].push(value);
+					}
+				break;
+			case 'filter':
+					// acts on arrays only
+					// removes entires that match verb_do
+					var verb_do = value;
+					dirty = false;
+					var arr;
+					if (key) {
+						arr = gFilestore[mainkey][key];
+					} else {
+						arr = gFilestore[mainkey];
+					}
+					var lm1 = arr.length - 1;
+					for (var i=lm1; i>-1; i--) {
+						var el = arr[i];
+						if (verb_do(el)) {
+							arr.splice(i, 1);
+							dirty = true;
+						}
+					}
+				break;
+			default:
+				if (key) {
+					gFilestore[mainkey][key] = value;
+				} else {
+					gFilestore[mainkey] = value;
+				}
+		}
+
+		if (dirty) {
+			gFilestore.dirty = dirty; // meaning not yet written to disk
+			clearTimeout(gWriteFilestoreTimeout);
+
+			gWriteFilestoreTimeout = setTimeout(writeFilestore, 10000);
+		}
+	});
+}
+
+function fetchFilestoreEntry(aArg) {
+	var { mainkey, key } = aArg;
+	// key is optional. if key is not set, then gFilestore[mainkey] is returned
+	// if key is set, then gFilestore[mainkey][key] is returned
+
+	// REQUIRED: mainkey
+
+	var deferred = new Deferred();
+
+	Promise.all([!gFilestore ? readFilestore() : undefined]).then(() => {
+		if (key) {
+			deferred.resolve(gFilestore[mainkey][key]);
+		} else {
+			deferred.resolve(gFilestore[mainkey]);
+		}
+	});
+
+	return deferred.promise;
+}
+
+var gWriteFilestoreTimeout;
+function writeFilestore(aArg, aComm) {
+	// writes gFilestore to file (or if it is undefined, it writes gFilestoreDefault)
+	if (!gFilestore) return;
+
+	if (!gFilestore.dirty) {
+		console.warn('filestore is not dirty, so no need to write it');
+		return;
+	}
+
+	clearTimeout(gWriteFilestoreTimeout);
+	delete gFilestore.dirty;
+
+	try {
+		writeThenDir(core.addon.path.filestore, JSON.stringify(gFilestore || gFilestoreDefault), OS.Constants.Path.profileDir);
+	} catch(ex) {
+		gFilestore.dirty = true;
+		throw ex;
+	}
+}
+// end - filestore stuff for worker - updated based on mainworker for async - 091516
 
 function bootstrapTimeout(milliseconds) {
 	var mainDeferred_bootstrapTimeout = new Deferred();

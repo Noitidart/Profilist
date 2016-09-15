@@ -135,6 +135,9 @@ function shutdown(aData, aReason) {
     Comm.server.unregAll('framescript');
     Comm.server.unregAll('worker');
     Comm.server.unregAll('content');
+	for (var entry in gContentComms) {
+		Cu.nukeSandbox(entry.sandbox);
+	}
 	gContentComms = null;
 
     // // desktop_android:insert_gui
@@ -214,22 +217,29 @@ var windowListener = {
 				// 	domWinUtils.loadSheet(gCuiCssUri, domWinUtils.AUTHOR_SHEET);
 				// 	domWinUtils.loadSheet(gGenCssUri, domWinUtils.AUTHOR_SHEET);
 				// }
+
 				if (aDOMWindow.gBrowser) {
-					if (!aDOMWindow.Comm) {
-						// resource://devtools/client/shared/vendor/react.js
-						Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-with-addons.js?' + core.addon.cache_key, aDOMWindow); // even if i load it into aDOMWindow.blah and .blah is an object, it goes into global, so i just do aDOMWindow now
-						// resource://devtools/client/shared/vendor/react-dom.js
-						Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-dom.js?' + core.addon.cache_key, aDOMWindow);
+					var sandbox = Cu.Sandbox(aDOMWindow.document.nodePrincipal, {
+						sandboxPrototype: aDOMWindow,
+						wantXrays: true, // only set this to false if you need direct access to the page's javascript. true provides a safer, isolated context.
+						sameZoneAs: aDOMWindow,
+						wantComponents: false
+					});
 
-						Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/redux.js?' + core.addon.cache_key, aDOMWindow);
-						Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-redux.js?' + core.addon.cache_key, aDOMWindow);
+					// resource://devtools/client/shared/vendor/react.js
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-with-addons.js?' + core.addon.cache_key, sandbox, 'UTF-8');
+					// resource://devtools/client/shared/vendor/react-dom.js
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-dom.js?' + core.addon.cache_key, sandbox, 'UTF-8');
 
-						Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/Comm.js?' + core.addon.cache_key, aDOMWindow);
-					}
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/redux.js?' + core.addon.cache_key, sandbox, 'UTF-8');
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-redux.js?' + core.addon.cache_key, sandbox, 'UTF-8');
 
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'xul.js?' + core.addon.cache_key, aDOMWindow);
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/Comm.js?' + core.addon.cache_key, sandbox, 'UTF-8');
+
+					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'xul.js?' + core.addon.cache_key, sandbox, 'UTF-8');
 					var comm = new Comm.server.content(aDOMWindow, ()=>console.error('ok bootstrap side setup'), undefined, undefined, Services.vc.compare(core.firefox.version, '46.*') > 0 ? true : false);
 					gContentComms.push({
+						sandbox,
 						win: aDOMWindow,
 						comm,
 						callInContent: Comm.callInX.bind(null, comm, null)
@@ -280,10 +290,6 @@ function getAddonInfo(aAddonId=core.addon.id) {
 	return deferredmain_getaddoninfo.promise;
 }
 
-function testalert(aArg, aReportProgress, aComm) {
-	// triggered by content
-	Services.wm.getMostRecentWindow('navigator:browser').setTimeout(()=>Services.prompt.alert(null, 'rawr', 'testing alert post load'), 1000);
-}
 // start - common helper functions
 var ostypes;
 var OSStuff = {};
