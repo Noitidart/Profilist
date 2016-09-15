@@ -1,0 +1,5 @@
+{
+    "comm": "chrome://profilist/content/resources/scripts/comm/Comm.js",
+    "ostypes_dir": "chrome://profilist/content/resources/scripts/ostypes/",
+    "watcher_dir": "chrome://profilist/content/resources/scripts/watcher/"
+}

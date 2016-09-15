@@ -163,12 +163,12 @@ function testgl() {
 	uLoc = ctx3d.getUniformLocation(progObj, 'pos');
 	sLoc = ctx3d.getUniformLocation(progObj, 'scale');
 
-	var drawImage = function(imgobj, x, y, w, h) {
+	var drawImage = function(imgobj, x, y, w, h, ow, oh) {
 		tex = ctx3d.createTexture();
 		ctx3d.bindTexture(ctx3d.TEXTURE_2D, tex);
 		ctx3d.texParameteri(ctx3d.TEXTURE_2D, ctx3d.TEXTURE_MIN_FILTER, ctx3d.NEAREST);
 		ctx3d.texParameteri(ctx3d.TEXTURE_2D, ctx3d.TEXTURE_MAG_FILTER, ctx3d.NEAREST);
-		ctx3d.texImage2D(ctx3d.TEXTURE_2D, 0, ctx3d.RGBA, w, h, 0, ctx3d.RGBA, ctx3d.UNSIGNED_BYTE, imgobj);
+		ctx3d.texImage2D(ctx3d.TEXTURE_2D, 0, ctx3d.RGBA, ow, oh, 0, ctx3d.RGBA, ctx3d.UNSIGNED_BYTE, imgobj);
 
 		ctx3d.enableVertexAttribArray(vloc);
 		ctx3d.bindBuffer(ctx3d.ARRAY_BUFFER, vertexBuff);
@@ -239,8 +239,8 @@ function testgl() {
 		callInBootstrap('testDraw', badge_img.pixels.buffer);
 
 		// draw them
-		drawImage(base_img.pixels, 0, 0, 64, 64);
-		drawImage(badge_img.pixels, 64 - 16, 64 - 16, 16, 16);
+		drawImage(base_img.pixels, 0, 0, 64, 64, base_img.width, base_img.height);
+		drawImage(badge_img.pixels, 64 - 16, 64 - 16, 16, 16, badge_img.width, badge_img.height);
 
 		// make blob
 		cvs3d.toBlob().then(handleBlob);
