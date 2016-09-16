@@ -100,7 +100,6 @@ function startup(aData, aReason) {
 		// desktop:insert_gui
 		if (core.os.name != 'android') {
 
-			// gGenCssUri = Services.io.newURI(core.addon.path.styles + 'general.css', null, null);
 			// gCuiCssUri = Services.io.newURI(core.addon.path.styles + getCuiCssFilename(), null, null);
 			//
 			// // insert cui
@@ -134,11 +133,19 @@ function shutdown(aData, aReason) {
 
     Comm.server.unregAll('framescript');
     Comm.server.unregAll('worker');
-    Comm.server.unregAll('content');
-	for (var entry in gContentComms) {
-		Cu.nukeSandbox(entry.sandbox);
+	var promiseallarr_content = [];
+	for (var entry of gContentComms) {
+		let deferred = new Deferred();
+		promiseallarr_content.push(deferred.promise);
+		entry.callInContent('uninit', undefined, () => deferred.resolve())
 	}
-	gContentComms = null;
+	Promise.all(promiseallarr_content).then(vals => {
+		for (var entry of gContentComms) {
+			Cu.nukeSandbox(entry.sandbox);
+		}
+		Comm.server.unregAll('content');
+		gContentComms = null;
+	});
 
     // // desktop_android:insert_gui
     // if (core.os.name != 'android') {
@@ -154,7 +161,7 @@ function shutdown(aData, aReason) {
 	// 	}
 	// }
 
-	// windowListener.unregister();
+	windowListener.unregister();
 
 }
 
@@ -169,7 +176,20 @@ var windowListener = {
 			windowListener.loadIntoWindow(aDOMWindow);
 		}, false);
 	},
-	onCloseWindow: function (aXULWindow) {},
+	onCloseWindow: function (aXULWindow) {
+		var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
+		var l = gContentComms.length;
+		for (var i=0; i<l; i++) {
+			var entry = gContentComms[i];
+			if (entry.win == aDOMWindow) {
+				console.error('FOUND AND KILLING ENTRY!');
+				entry.comm.unregister();
+				console.error('ok comm unregistered!');
+				gContentComms.splice(i, 1);
+				break;
+			}
+		}
+	},
 	onWindowTitleChange: function (aXULWindow, aNewTitle) {},
 	register: function () {
 
@@ -212,11 +232,11 @@ var windowListener = {
             // desktop_android:insert_gui
 			if (core.os.name != 'android') {
                 // // desktop:insert_gui
-				// if (aDOMWindow.gBrowser) {
-				// 	var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+				if (aDOMWindow.gBrowser) {
+					var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 				// 	domWinUtils.loadSheet(gCuiCssUri, domWinUtils.AUTHOR_SHEET);
-				// 	domWinUtils.loadSheet(gGenCssUri, domWinUtils.AUTHOR_SHEET);
-				// }
+					domWinUtils.loadSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
+				}
 
 				if (aDOMWindow.gBrowser) {
 					var sandbox = Cu.Sandbox(aDOMWindow.document.nodePrincipal, {
@@ -261,11 +281,11 @@ var windowListener = {
 
         // desktop:insert_gui
         if (core.os.name != 'android') {
-            // if (aDOMWindow.gBrowser) {
-			// 	var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+            if (aDOMWindow.gBrowser) {
+				var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 			// 	domWinUtils.removeSheet(gCuiCssUri, domWinUtils.AUTHOR_SHEET);
-			// 	domWinUtils.removeSheet(gGenCssUri, domWinUtils.AUTHOR_SHEET);
-			// }
+				domWinUtils.removeSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
+			}
 
         }
 	}

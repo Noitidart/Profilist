@@ -9,11 +9,7 @@ var gWorker = this; // needed for png.js
 var gBsComm = new Comm.client.worker();
 
 var OSStuff = {};
-var gMenu = [
-	{
-		label: 'Create New Profile'
-	}
-];
+var gProfiles = [];
 
 function dummyForInstantInstantiate() {}
 function init(objCore) {
@@ -116,8 +112,8 @@ function fetchCore(aArg) {
 			//
 		rez.hydrant_ex = {};
 
-		if (hydrant_ex_instructions.menu) {
-			rez.hydrant_ex.menu = gMenu;
+		if (hydrant_ex_instructions.profiles) {
+			rez.hydrant_ex.profiles = gProfiles;
 		}
 
 		if (hydrant_ex_instructions.filestore_entries) {

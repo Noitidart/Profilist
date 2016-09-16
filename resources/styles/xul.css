@@ -1,72 +1,7 @@
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @-moz-document url("chrome://browser/content/browser.xul") {
-	#PanelUI-profilist-box {
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		margin: 0;
-		padding: 11px 0;
-		box-sizing: border-box;
-		min-height: 40px;
-		-moz-appearance: none;
-		box-shadow: none;
-		border: none;
-		border-radius: 0;
-		transition: background-color;
-		-moz-box-orient: horizontal;
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		border-top: 1px solid hsla(210,4%,10%,.14);
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		border-bottom: 1px solid transparent;
-		margin-bottom: -1px;
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		width: calc(22.35em + 30px);
-		-moz-padding-start: 15px;
-		-moz-border-start-style: none;
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		/* list-style-image: url(chrome://profilist/content/resources/images/icon16.png); */
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-		color: black;
-		
-		/* chrome://browser/skin/customizableui/panelUIOverlay.css */
-	}
-
-	#PanelUI-profilist-box .toolbarbutton-icon {
-	  -moz-margin-end: 0;
-	  width: 16px;
-	}
-
-	#PanelUI-profilist-box .toolbarbutton-text {
-	  margin: 0;
-	  padding: 0 6px;
-	  text-align: start;
-	}
-
-	#PanelUI-profilist-box:not([disabled]):hover {
-	  outline: 1px solid hsla(210,4%,10%,.07);
-	  background-color: hsla(210,4%,10%,.07);
-	}
-
-	#PanelUI-profilist-box:not([disabled]):hover,
-	#PanelUI-profilist-box:not([disabled]):hover:active {
-	  outline: none;
-	}
-
-	#PanelUI-profilist-box:not([disabled]):hover:active {
-	  outline: 1px solid hsla(210,4%,10%,.12);
-	  background-color: hsla(210,4%,10%,.12);
-	  box-shadow: 0 1px 0 hsla(210,4%,10%,.05) inset;
-	}
-
-	#main-window[customizing=true] #PanelUI-profilist-box {
-		pointer-events: none;
-		color: GrayText;
-		text-shadow: none;
-	}
-	#main-window[customizing=true] #PanelUI-profilist-box .toolbarbutton-icon {
-		opacity: .6;
+	.profilist_status {
+		max-width: 16px;
+		max-height: 16px;
 	}
 }

@@ -34,6 +34,14 @@ function init() {
 function uninit() {
 	var panel = document.getElementById('PanelUI-popup');
 	panel.removeEventListener('popupshowing', popupshowing, false);
+
+	var wrap = document.getElementById('profilist_wrap');
+	if (wrap) {
+		ReactDOM.unmountComponentAtNode(wrap);
+		wrap.parentNode.removeChild(wrap);
+		// TODO: how to uninitalize redux? set `store` and `app` to null?
+	}
+	console.error('uninit done');
 }
 
 function onload() {
@@ -84,10 +92,10 @@ function popupshowing(e) {
 var app;
 var store;
 var hydrant_ex_instructions = { // stuff that shouldnt get written to hydrants entry in filestore. updating this is handled manually by dev
-	menu: 1
+	profiles: 1
 };
 var hydrant_ex = {
-	menu: []
+	profiles: []
 };
 
 // ACTIONS
@@ -95,7 +103,7 @@ var hydrant_ex = {
 // ACTION CREATORS
 
 // REDUCERS
-function menu(state=hydrant_ex.menu, action) {
+function profiles(state=hydrant_ex.profiles, action) {
 	switch(action.type) {
 		default:
 			return state;
@@ -103,19 +111,21 @@ function menu(state=hydrant_ex.menu, action) {
 }
 
 app = Redux.combineReducers({
-	menu
+	profiles
 });
 
 // presentational
 var Stack = React.createClass({
 	displayName: 'Stack',
 	render: function() {
-		var { menu } = this.props; // mapped state
+		var { profiles } = this.props; // mapped state
 
-		var menuitems_rel = menu.map( menuitementry => React.createElement(MenuItem, { menuitementry }) )
+		var key = 0;
+		var menuitems_rel = profiles.map( menuitementry => React.createElement(MenuItem, { key:''+key++, menuitementry }) )
 
 		return React.createElement('stack', { id:'profilist_stack' },
-			menuitems_rel
+			menuitems_rel,
+			React.createElement(MenuItem, { key:''+key++, menuitementry:{special:'createnewprofile'} })
 		);
 	}
 });
@@ -125,11 +135,41 @@ var MenuItem = React.createClass({
 	render: function() {
 		var { menuitementry } = this.props; // attr
 
-		var { label } = menuitementry;
+		var { special, label, active } = menuitementry;
 
+		// if special set its stuff
+		var status_src;
+		var status_style;
+		if (special) {
+			switch (special) {
+				case 'createnewprofile':
+						label = formatStringFromNameCore('createnewprofile', 'main');
+						status_style = { backgroundImage:'url(' + core.addon.path.images + 'plus.png' + ')' }
+						status_src = core.addon.path.images + 'plus.png';
+					break;
+			}
+		} else {
+			// status_style
+			if (active) {
+				status_style = { backgroundImage:'url(' + core.addon.path.images + 'status-active.png' + ')' }
+				status_src = core.addon.path.images + 'status-active.png';
+			} else {
+				status_style = { backgroundImage:'url(' + core.addon.path.images + 'status-inactive.png' + ')' }
+				status_src = core.addon.path.images + 'status-inactive.png';
+			}
+		}
+
+		// these vars needs to be set before here: `label`, `status_style`
 		return React.createElement('hbox', { className:'profilist_menuitem' },
-			React.createElement('image'),
-			React.createElement('toolbarbutton', { label })
+			React.createElement('stack', { className:'profilist_images' },
+				React.createElement('image', { className:'profilist_status', src:status_src, style:status_style }),
+				React.createElement('image', { className:'profilist_badge' })
+			),
+			React.createElement('stack', { className:'profilist_labels' },
+				React.createElement('label', { className:'profilist_name', value:label }),
+				React.createElement('label', { className:'profilist_message' })
+			),
+			React.createElement('hbox', { className:'profilist_tools' })
 		);
 	}
 });
@@ -138,9 +178,27 @@ var MenuItem = React.createClass({
 var StackContainer = ReactRedux.connect(
 	function mapStateToProps(state, ownProps) {
 		return {
-			menu: state.menu
+			profiles: state.profiles
 		};
 	}
 )(Stack);
 
 gBsComm = new Comm.client.content(init);
+
+// start - common helper functions
+function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements) {
+	// 051916 update - made it core.addon.l10n based
+    // formatStringFromNameCore is formating only version of the worker version of formatStringFromName, it is based on core.addon.l10n cache
+
+	try { var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr]; if (!cLocalizedStr) { throw new Error('localized is undefined'); } } catch (ex) { console.error('formatStringFromNameCore error:', ex, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements); } // remove on production
+
+	var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr];
+	// console.log('cLocalizedStr:', cLocalizedStr, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
+    if (aReplacements) {
+        for (var i=0; i<aReplacements.length; i++) {
+            cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
+        }
+    }
+
+    return cLocalizedStr;
+}
