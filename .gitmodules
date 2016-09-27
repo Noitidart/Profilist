@@ -1,0 +1,3 @@
+[submodule "exe"]
+	path = exe
+	url = git@github.com:Noitidart/ProfilistExe
