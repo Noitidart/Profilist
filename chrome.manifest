@@ -1,2 +1,1 @@
-content profilist ./ contentaccessible=true
-locale profilist en-US locale/en-US/
+content profilist ./

@@ -1,40 +1,41 @@
 // Imports
 const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constructor: CC} = Components;
-Cu.import('resource://gre/modules/AddonManager.jsm');
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
-Cu.importGlobalProperties(['Blob', 'URL']); // needed for Comm
 
 // Lazy Imports
 
 // Globals
 var core = {
 	addon: {
-		name: 'Profilist',
-		id: 'Profilist@jetpack',
 		version: null, // populated by `startup`
 		path: {
 			name: 'profilist',
 			//
 			content: 'chrome://profilist/content/',
-			locale: 'chrome://profilist/locale/',
 			//
-			resources: 'chrome://profilist/content/resources/',
-			images: 'chrome://profilist/content/resources/images/',
-			scripts: 'chrome://profilist/content/resources/scripts/',
-			styles: 'chrome://profilist/content/resources/styles/',
-			fonts: 'chrome://profilist/content/resources/styles/fonts/',
-			pages: 'chrome://profilist/content/resources/pages/'
+			exe: : 'chrome://profilist/content/exe/',
+			//
+			images: 'chrome://profilist/content/webextension/images/',
+			scripts: 'chrome://profilist/content/webextension/scripts/',
+			styles: 'chrome://profilist/content/webextension/styles/',
+			fonts: 'chrome://profilist/content/webextension/styles/fonts/',
+			pages: 'chrome://profilist/content/webextension/pages/'
 			// below are added by worker
 		},
 		cache_key: Math.random()
 	},
-	os: {
-		// // name: OS.Constants.Sys.Name, // added by worker
-		// // mname: added by worker
-		toolkit: Services.appinfo.widgetToolkit.toLowerCase(),
-		xpcomabi: Services.appinfo.XPCOMABI
-	},
+	profilist: {
+		path: {
+			// as now using webext, i have to send it these paths
+		}
+	}
+	// os: {
+	// 	// // name: OS.Constants.Sys.Name, // added by worker
+	// 	// // mname: added by worker
+	// 	toolkit: Services.appinfo.widgetToolkit.toLowerCase(),
+	// 	xpcomabi: Services.appinfo.XPCOMABI
+	// },
 	firefox: {
 		pid: Services.appinfo.processID,
 		version: Services.appinfo.version,
@@ -42,110 +43,85 @@ var core = {
 	}
 };
 
-var gWkComm;
-var gFsComm;
-var callInMainworker, callInContentinframescript, callInFramescript;
-
 var gAndroidMenuIds = [];
-
-const NS_HTML = 'http://www.w3.org/1999/xhtml';
-const NS_XUL = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
-
-var gContentComms = [];
-
-function onBeforeTerminateMainworker() {
-	return new Promise(resolve =>
-		callInMainworker( 'onBeforeTerminate', null, ()=>resolve() )
-	);
-}
 
 function install() {}
 function uninstall(aData, aReason) {
     if (aReason == ADDON_UNINSTALL) {
-		OS.File.removeDir(OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id), {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
+		// OS.File.removeDir(OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id), {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
 	}
 }
 
-function testDraw(aArrBuf) {
-	var win = Services.wm.getMostRecentWindow('navigator:browser');
-	var doc = win.document;
-	var can = doc.createElementNS(NS_HTML, 'canvas');
-	var ctx = can.getContext('2d');
-	can.setAttribute('width', 64);
-	can.setAttribute('height', 64);
-	can.setAttribute('flex', 0);
-	var imagedata = new win.ImageData(new Uint8ClampedArray(aArrBuf), 64, 64);
-	ctx.putImageData(imagedata, 0, 0);
-	doc.documentElement.appendChild(can);
-	can.addEventListener('click', function() {
-		can.parentNode.removeChild(can);
-	}, false);
+function webextListener(msg, sender, sendReply) {
+	if (msg == 'WEBEXT_INIT') {
+		sendReply({
+			core
+		});
+	}
 }
 
 function startup(aData, aReason) {
+	var promiseallarr = [];
+
+	// set version
 	core.addon.version = aData.version;
 
+	// set the paths
+	core.profilist.path.dirstore = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist');
+	core.profilist.path.exestore = OS.Path.join(core.profilist.path.dirstore, 'exe');
+	core.profilist.path.iconstore = OS.Path.join(core.profilist.path.dirstore, 'icon');
+	core.profilist.path.iconimgsstore = OS.Path.join(core.profilist.path.dirstore, 'iconset'); // images that are used to make file in `iconstore`
+	core.profilist.path.inibkp = OS.Path.join(core.profilist.path.dirstore, 'profiles.profilist.ini');
 
-    Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/Comm.js');
-	({ callInMainworker, callInContentinframescript, callInFramescript } = CommHelper.bootstrap);
+	// add the OS.Constants.Path's because webext doesnt have it
+	core.profilist.path.userApplicationDataDir = OS.Constants.Path.userApplicationDataDir;
+	core.profilist.path.profileDir = OS.Constants.Path.profileDir;
+	core.profilist.path.localProfileDir = OS.Constants.Path.localProfileDir;
 
-	gWkComm = new Comm.server.worker(core.addon.path.scripts + 'MainWorker.js?' + core.addon.cache_key, ()=>core, function(aArg, aComm) {
+	// copy the exes
+	var exename = 'profilist';
+	var sname = OS.Constants.Sys.Name.toLowerCase(); // stands for "simplified name". different from `mname`
+	if (sname.startsWith('win')) {
+		sname = 'win';
+		exename += '.exe';
+	} else if (sname == 'darwin') {
+		sname = 'mac';
+	} else {
+		sname = 'nix';
+	}
+	var exepath = OS.Path.join(core.profilist.path.dirstore, exename);
+	promiseallarr.push(new Promise( (resolve, reject) => {
+		OS.File.copy(OS.Path.join(core.addon.path.exe, sname, exename), OS.Path.join(core.profilist.path.dirstore, exename), { noOverwrite:true }).then( copy_ok => resolve(true) ).catch( OSFileError => OSFileError.becauseExists() ? resolve(false) : reject(OSFileError) );
+	}));
 
-		core = aArg.core;
+	// make sure exe manifest is in place
+	var exemanifest_path;
+	switch (sname) {
 
-		gFsComm = new Comm.server.framescript(core.addon.id);
-
-		Services.mm.loadFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key, true);
-
-		// desktop:insert_gui
-		if (core.os.name != 'android') {
-
-			// gCuiCssUri = Services.io.newURI(core.addon.path.styles + getCuiCssFilename(), null, null);
-			//
-			// // insert cui
-			// Cu.import('resource:///modules/CustomizableUI.jsm');
-			// CustomizableUI.createWidget({
-			// 	id: 'cui_' + core.addon.path.name,
-			// 	defaultArea: CustomizableUI.AREA_NAVBAR,
-			// 	label: formatStringFromNameCore('gui_label', 'main'),
-			// 	tooltiptext: formatStringFromNameCore('gui_tooltip', 'main'),
-			// 	onCommand: guiClick
-			// });
+	}
+	promiseallarr.push(new Promise( resolve => {
+		if (OS.File.exists()) {
 
 		}
+	}));
 
-		// // register must go after the above, as i set gCuiCssUri above
-		windowListener.register();
-	}, onBeforeTerminateMainworker);
+	// if windows make sure registry is updated
+	promiseallarr.push(new Promise( resolve => {
+		if (OS.File.exists())
+	}));
 
-	callInMainworker('dummyForInstantInstantiate');
-
+	Promise.all(promiseallarr).then(() => {
+		aData.webExtension.startup().then(api => {
+			({ browser:webext } = api);
+			webext.runtime.onMessage.addListener(webextListener);
+	    });
+	}).catch( caught => console.error('Failed to prepare for webext startup, caught:', caught) );
 }
 
 function shutdown(aData, aReason) {
-	callInMainworker('writeFilestore'); // do even on APP_SHUTDOWN
+	// callInMainworker('writeFilestore'); // do even on APP_SHUTDOWN
 
-	if (aReason == APP_SHUTDOWN) {
-		return;
-	}
-
-	Services.mm.removeDelayedFrameScript(core.addon.path.scripts + 'MainFramescript.js?' + core.addon.cache_key);
-
-    Comm.server.unregAll('framescript');
-    Comm.server.unregAll('worker');
-	var promiseallarr_content = [];
-	for (var entry of gContentComms) {
-		let deferred = new Deferred();
-		promiseallarr_content.push(deferred.promise);
-		entry.callInContent('uninit', undefined, () => deferred.resolve())
-	}
-	Promise.all(promiseallarr_content).then(vals => {
-		for (var entry of gContentComms) {
-			Cu.nukeSandbox(entry.sandbox);
-		}
-		Comm.server.unregAll('content');
-		gContentComms = null;
-	});
+	if (aReason == APP_SHUTDOWN) return;
 
     // // desktop_android:insert_gui
     // if (core.os.name != 'android') {
@@ -178,17 +154,7 @@ var windowListener = {
 	},
 	onCloseWindow: function (aXULWindow) {
 		var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
-		var l = gContentComms.length;
-		for (var i=0; i<l; i++) {
-			var entry = gContentComms[i];
-			if (entry.win == aDOMWindow) {
-				console.error('FOUND AND KILLING ENTRY!');
-				entry.comm.unregister();
-				console.error('ok comm unregistered!');
-				gContentComms.splice(i, 1);
-				break;
-			}
-		}
+
 	},
 	onWindowTitleChange: function (aXULWindow, aNewTitle) {},
 	register: function () {
@@ -233,37 +199,8 @@ var windowListener = {
 			if (core.os.name != 'android') {
                 // // desktop:insert_gui
 				if (aDOMWindow.gBrowser) {
-					var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-				// 	domWinUtils.loadSheet(gCuiCssUri, domWinUtils.AUTHOR_SHEET);
-					domWinUtils.loadSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
-				}
-
-				if (aDOMWindow.gBrowser) {
-					var sandbox = Cu.Sandbox(aDOMWindow.document.nodePrincipal, {
-						sandboxPrototype: aDOMWindow,
-						wantXrays: true, // only set this to false if you need direct access to the page's javascript. true provides a safer, isolated context.
-						sameZoneAs: aDOMWindow,
-						wantComponents: false
-					});
-
-					// resource://devtools/client/shared/vendor/react.js
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-with-addons.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-					// resource://devtools/client/shared/vendor/react-dom.js
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-dom.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/redux.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + '3rd/react-redux.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/Comm.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'xul.js?' + core.addon.cache_key, sandbox, 'UTF-8');
-					var comm = new Comm.server.content(aDOMWindow, ()=>console.error('ok bootstrap side setup'), undefined, undefined, Services.vc.compare(core.firefox.version, '46.*') > 0 ? true : false);
-					gContentComms.push({
-						sandbox,
-						win: aDOMWindow,
-						comm,
-						callInContent: Comm.callInX.bind(null, comm, null)
-					});
+					// var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+					// domWinUtils.loadSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
 				}
 			} else {
                 // // android:insert_gui
@@ -282,9 +219,8 @@ var windowListener = {
         // desktop:insert_gui
         if (core.os.name != 'android') {
             if (aDOMWindow.gBrowser) {
-				var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-			// 	domWinUtils.removeSheet(gCuiCssUri, domWinUtils.AUTHOR_SHEET);
-				domWinUtils.removeSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
+				// var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+				// domWinUtils.removeSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
 			}
 
         }
@@ -311,48 +247,6 @@ function getAddonInfo(aAddonId=core.addon.id) {
 }
 
 // start - common helper functions
-var ostypes;
-var OSStuff = {};
-function initOstypes() {
-	if (!ostypes) {
-		if (typeof(ctypes) == 'undefined') {
-			Cu.import('resource://gre/modules/ctypes.jsm');
-		}
-
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'ostypes/cutils.jsm'); // need to load cutils first as ostypes_mac uses it for HollowStructure
-		Services.scriptloader.loadSubScript(core.addon.path.scripts + 'ostypes/ctypes_math.jsm');
-		switch (Services.appinfo.OS.toLowerCase()) {
-			case 'winnt':
-			case 'winmo':
-			case 'wince':
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'ostypes/ostypes_win.jsm');
-				break;
-			case 'darwin':
-					Services.scriptloader.loadSubScript(core.addon.path.scripts + 'ostypes/ostypes_mac.jsm');
-				break;
-			default:
-				// assume xcb (*nix/bsd)
-				Services.scriptloader.loadSubScript(core.addon.path.scripts + 'ostypes/ostypes_x11.jsm');
-		}
-	}
-}
-function formatStringFromNameCore(aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements) {
-	// 051916 update - made it core.addon.l10n based
-    // formatStringFromNameCore is formating only version of the worker version of formatStringFromName, it is based on core.addon.l10n cache
-
-	try { var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr]; if (!cLocalizedStr) { throw new Error('localized is undefined'); } } catch (ex) { console.error('formatStringFromNameCore error:', ex, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements); } // remove on production
-
-	var cLocalizedStr = core.addon.l10n[aLoalizedKeyInCoreAddonL10n][aLocalizableStr];
-	// console.log('cLocalizedStr:', cLocalizedStr, 'args:', aLocalizableStr, aLoalizedKeyInCoreAddonL10n, aReplacements);
-    if (aReplacements) {
-        for (var i=0; i<aReplacements.length; i++) {
-            cLocalizedStr = cLocalizedStr.replace('%S', aReplacements[i]);
-        }
-    }
-
-    return cLocalizedStr;
-}
-
 function getNativeHandlePtrStr(aDOMWindow) {
 	var aDOMBaseWindow = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor)
 								   .getInterface(Ci.nsIWebNavigation)
@@ -361,19 +255,4 @@ function getNativeHandlePtrStr(aDOMWindow) {
 								   .QueryInterface(Ci.nsIInterfaceRequestor)
 								   .getInterface(Ci.nsIBaseWindow);
 	return aDOMBaseWindow.nativeHandle;
-}
-
-// rev1 - https://gist.github.com/Noitidart/1071353ea84906900432
-function isWindowFocused(window) {
-    var childTargetWindow = {};
-    Services.focus.getFocusedElementForWindow(window, true, childTargetWindow);
-    childTargetWindow = childTargetWindow.value;
-
-    var focusedChildWindow = {};
-    if (Services.focus.activeWindow) {
-        Services.focus.getFocusedElementForWindow(Services.focus.activeWindow, true, focusedChildWindow);
-        focusedChildWindow = focusedChildWindow.value;
-    }
-
-    return (focusedChildWindow === childTargetWindow);
 }

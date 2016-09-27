@@ -1,0 +1,23 @@
+{
+	"name": "__MSG_addon_name__",
+	"description": "__MSG_addon_desc__",
+	"version": "5.0b",
+
+	"manifest_version": 2,
+	"applications": {
+		"gecko": {
+			"id": "Profilist@jetpack",
+			"strict_min_version": "50.0"
+		}
+	},
+
+	"permissions": ["nativeMessaging"],
+
+	"background": {
+		"scripts": ["background.js"]
+	},
+
+	"browser_action": {
+		"default_icon": "icons/group-outline.svg"
+	}
+}
