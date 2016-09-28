@@ -72,7 +72,9 @@ function uninstall(aData, aReason) {
 		// delete storage
 		OS.File.removeDir(core.addon.path.jetpackdir, {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
 
-		uninstallNativeMessaging().then(valarr => console.log('uninstalled:', vallarr)).catch(err => console.error('uninstall error:', err));
+		uninstallNativeMessaging()
+		.then(valarr => console.log('uninstalled:', valarr))
+		.catch(err => console.error('uninstall error:', err));
 	}
 }
 
@@ -171,12 +173,12 @@ function getNativeMessagingInfo() {
 				exemanifest_from = core.addon.path.userApplicationDataDir;
 			break;
 		case 'mac':
-				exemanifest_path = OS.Path.join(core.profilist.path.homeDir, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts', 'profilist.json');
-				exemanifest_from = OS.Path.join(core.profilist.path.homeDir, 'Library', 'Application Support');
+				exemanifest_path = OS.Path.join(core.addon.path.homeDir, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts', 'profilist.json');
+				exemanifest_from = OS.Path.join(core.addon.path.homeDir, 'Library', 'Application Support');
 			break;
 		case 'nix':
-				exemanifest_path = OS.Path.join(core.profilist.path.homeDir, '.mozilla', 'native-messaging-hosts', 'profilist.json');
-				exemanifest_from = core.profilist.path.homeDir;
+				exemanifest_path = OS.Path.join(core.addon.path.homeDir, '.mozilla', 'native-messaging-hosts', 'profilist.json');
+				exemanifest_from = core.addon.path.homeDir;
 			break;
 	}
 
@@ -208,7 +210,15 @@ function installNativeMessaging() {
 				// i actually i tested it on 092816 in "52.0a1 (2016-09-28) (64-bit)", and on fail, it does not neuter the arrbuf, only on success
 			writeThenDirMT(exe_path, new Uint8Array(xhr.response), exe_from, { encoding:undefined })
 			// OS.File.writeAtomic(exe_path, new Uint8Array(xhr.response), { encoding:undefined })
-			.then( copied => resolve() )
+			.then( copied => {
+				if (os_sname != 'win') {
+					OS.File.setPermissions(exe_path, { unixMode:0o4777 }) // makes it executable, tested on mac, not yet on nix
+					.then( resolve() )
+					.catch( osfileerr => reject(osfileerr) )
+				} else {
+					resolve();
+				}
+			})
 			.catch( osfileerr => reject(osfileerr) )
 		})
 		.catch( osfileerr => reject(osfileerr) )
