@@ -8,13 +8,19 @@
 		"page": "pages/options.html",
 		"open_in_tab": true
 	},
-	"icons": "images/group.svg",
+	"icons": {
+		"16": "images/group.svg",
+	    "48": "images/group.svg",
+	    "64": "images/group.svg",
+	    "96": "images/group.svg",
+		"128": "images/group.svg"
+	},
 
 	"manifest_version": 2,
 	"applications": {
 		"gecko": {
 			"id": "Profilist@jetpack",
-			"strict_min_version": "50.0"
+			"strict_min_version": "51.0"
 		}
 	},
 
@@ -23,10 +29,10 @@
 	"permissions": ["nativeMessaging"],
 
 	"background": {
-		"scripts": ["background.js"]
+		"scripts": ["scripts/background.js"]
 	},
 
 	"browser_action": {
-		"default_icon": "images/group-outline.svg"
+		"default_icon": "images/group.svg"
 	}
 }

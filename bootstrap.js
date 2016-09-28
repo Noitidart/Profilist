@@ -15,7 +15,7 @@ var core = {
 			//
 			content: 'chrome://profilist/content/',
 			//
-			exe: : 'chrome://profilist/content/exe/',
+			exe: 'chrome://profilist/content/exe/',
 			//
 			images: 'chrome://profilist/content/webextension/images/',
 			scripts: 'chrome://profilist/content/webextension/scripts/',
@@ -30,7 +30,7 @@ var core = {
 		path: {
 			// as now using webext, i have to send it these paths
 		}
-	}
+	},
 	os: {
 		// // name: OS.Constants.Sys.Name, // added by worker
 		// // mname: added by worker
@@ -46,8 +46,11 @@ var core = {
 
 var gAndroidMenuIds = [];
 
+var webext;
+
 // set addon paths
-core.addon.path.storage = OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id, 'simple-storage');
+core.addon.path.jetpackdir = OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id);
+core.addon.path.storage = OS.Path.join(core.addon.path.jetpackdir, 'simple-storage');
 core.addon.path.filestore = OS.Path.join(core.addon.path.storage, 'store.json');
 
 // set the paths
@@ -67,9 +70,9 @@ function install() {}
 function uninstall(aData, aReason) {
     if (aReason == ADDON_UNINSTALL) {
 		// delete storage
-		OS.File.removeDir(core.addon.path.storage, {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
+		OS.File.removeDir(core.addon.path.jetpackdir, {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
 
-		uninstallNativeMessaging();
+		uninstallNativeMessaging().then(valarr => console.log('uninstalled:', vallarr)).catch(err => console.error('uninstall error:', err));
 	}
 }
 
@@ -90,7 +93,8 @@ function startup(aData, aReason) {
 	promiseallarr.push( installNativeMessaging() );
 
 	// wait for all promises, then startup webext
-	Promise.all(promiseallarr).then(() => {
+	Promise.all(promiseallarr).then(valarr => {
+		console.log('valarr:', valarr)
 		aData.webExtension.startup().then(api => {
 			({ browser:webext } = api);
 			webext.runtime.onMessage.addListener(webextListener);
@@ -161,8 +165,10 @@ function getNativeMessagingInfo() {
 	var exemanifest_from; // dir that exists for sure in subpath of `exemanifest_path`. where to `makeDir` from for exe
 	switch (sname) {
 		case 'win':
-				exemanifest_path = OS.Path.join(core.addon.path.filestore, 'profilist.json');
-				exemanifest_from = core.profilist.path.profileDir;
+				// exemanifest_path = OS.Path.join(core.addon.path.storage, 'profilist.json');
+				// exemanifest_from = core.addon.path.profileDir;
+				exemanifest_path = OS.Path.join(core.addon.path.userApplicationDataDir, 'extension-exes', 'profilist.json');
+				exemanifest_from = core.addon.path.userApplicationDataDir;
 			break;
 		case 'mac':
 				exemanifest_path = OS.Path.join(core.profilist.path.homeDir, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts', 'profilist.json');
@@ -184,26 +190,41 @@ function getNativeMessagingInfo() {
 }
 
 function installNativeMessaging() {
-	var { exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json, os_sname } = getNativeMessagingInfo();
+	var { exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json, winregistry_path, os_sname } = getNativeMessagingInfo();
 
 	var promiseallarrmain = [];
 
 	// copy the exes
-	promiseallarrmain.push(new Promise(resolve, reject) =>
-		OS.File.makeDir(OS.Path.dirname(exe_path), { from:exe_from }).then( dirmade => {
-			OS.File.copy(core.addon.path.exe + '/' + os_sname + '/' exe_name), exe_path).then( copied => resolve() ).catch( osfileerr => reject(osfileerr) );
-		} ).catch(osfileerr => reject(osfileerr));
-	);
+	promiseallarrmain.push(new Promise( (resolve, reject) =>
+		OS.File.makeDir(OS.Path.dirname(exe_path), { from:exe_from })
+		.then( dirmade => {
+			var xhr = Cc['@mozilla.org/xmlextras/xmlhttprequest;1'].createInstance(Ci.nsIXMLHttpRequest);
+			console.log(core.addon.path.exe + os_sname + '/' + exe_name);
+			xhr.open('GET', core.addon.path.exe + os_sname + '/' + exe_name, false);
+			xhr.responseType = 'arraybuffer';
+			xhr.send();
+
+			// i dont use `writeThenDirMT` because ArrayBuffer's get neutred, so if first write fails, then the arrbuf is gone I think. it might not neuter on fail though.
+				// i actually i tested it on 092816 in "52.0a1 (2016-09-28) (64-bit)", and on fail, it does not neuter the arrbuf, only on success
+			writeThenDirMT(exe_path, new Uint8Array(xhr.response), exe_from, { encoding:undefined })
+			// OS.File.writeAtomic(exe_path, new Uint8Array(xhr.response), { encoding:undefined })
+			.then( copied => resolve() )
+			.catch( osfileerr => reject(osfileerr) )
+		})
+		.catch( osfileerr => reject(osfileerr) )
+	));
 
 	// make sure exe manifest is in place
 	promiseallarrmain.push(new Promise( (resolve, reject) =>
-		writeThenDir(exemanifest_path, JSON.stringify(exemanifest_json), { from:exemanifest_from, noOverwrite:true, encoding:'utf-8' }).then( ok => resolve() ).catch( osfileerr => osfileerr.becauseExists ? resolve() : reject(osfileerr) )
+		writeThenDirMT(exemanifest_path, JSON.stringify(exemanifest_json), exemanifest_from, { noOverwrite:true, encoding:'utf-8' })
+		.then( ok => resolve() )
+		.catch( osfileerr => osfileerr.becauseExists ? resolve() : reject(osfileerr) )
 	));
 
 	// if Windows then update registry
 	if (winregistry_path) {
 		var wrk = Cc['@mozilla.org/windows-registry-key;1'].createInstance(Ci.nsIWindowsRegKey);
-		wrk.create(wrk.ROOT_KEY_CURRENT_USER,   + '\\' + exemanifest_json.name, wrk.ACCESS_WRITE); // link39191
+		wrk.create(wrk.ROOT_KEY_CURRENT_USER, winregistry_path + '\\' + exemanifest_json.name, wrk.ACCESS_WRITE); // link39191
 		wrk.writeStringValue('', exemanifest_path);
 		wrk.close();
 		// not ignoring errors during write, if it errors, startup fails
