@@ -10,9 +10,9 @@
 	},
 	"icons": {
 		"16": "images/group.svg",
-	    "48": "images/group.svg",
-	    "64": "images/group.svg",
-	    "96": "images/group.svg",
+		"48": "images/group.svg",
+		"64": "images/group.svg",
+		"96": "images/group.svg",
 		"128": "images/group.svg"
 	},
 
