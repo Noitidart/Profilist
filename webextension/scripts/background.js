@@ -32,16 +32,16 @@ function onExeStartup() {
 	chrome.browserAction.onClicked.addListener(function() {
 
 		// if (callInExe) {
-			// chrome.tabs.create({
-			// 	url: chrome.extension.getURL('pages/options.html')
-			// });
+			chrome.tabs.create({
+				url: chrome.extension.getURL('pages/options.html')
+			});
 
-			// setTimeout(function() {
+			setTimeout(function() {
 				console.log('opening menu.html now');
 				chrome.tabs.create({
 					url: chrome.extension.getURL('pages/menu.html')
 				});
-			// }, 1000);
+			}, 1000);
 		// }
 		// else { console.error('callInExe is missing!') }
 
