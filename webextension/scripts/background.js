@@ -3,7 +3,11 @@ var callInExe;
 var callInContent;
 
 var gExeComm;
-var gContentComm;
+var gTabsComm;
+
+var callInTab = Comm.callInX2.bind(null, 'gTabsComm', null); // must pass first arg as `aTabId`
+var callInLastTab; // done dynamically to a tabid
+var callInExe = Comm.callInX.bind(null, gExeComm, null);
 
 browser.runtime.sendMessage('WEBEXT_INIT').then(aReply => {
 	console.log('background js received response to WEBEXT_INIT, aReply:', aReply);
@@ -68,11 +72,14 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aTabId) {
 	var tabid = aTabId;
 	setTimeout(function() {
 		console.log('ok starting calling into tab');
-		var callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid);
-		callInLastTab('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+		// callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid);
+		// callInLastTab('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+		// 	console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
+		// });
+
+		callInTab(tabid, 'testCallFromBgToTab', 'hithere', function(aArg, aComm) {
 			console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
 		});
-
 	}, 5000);
 	return 'ok after 5 sec will start calling into tab';
 }
