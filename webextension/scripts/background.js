@@ -74,18 +74,18 @@ function testCallFromPortToBg(aArg, aReportProgress, aComm, aPortName) {
 	return promisemain;
 }
 
-// function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aTabId) {
-// 	var tabid = aTabId;
-// 	setTimeout(function() {
-// 		console.log('ok starting calling into tab');
-// 		// callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid); // can use 'gTabsComm' as string here as well
-// 		// callInLastTab('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
-// 		// 	console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
-// 		// });
-//
-// 		callInTab(tabid, 'testCallFromBgToTab', 'hithere', function(aArg, aComm) {
-// 			console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
-// 		});
-// 	}, 5000);
-// 	return 'ok after 5 sec will start calling into tab';
-// }
+function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aPortName) {
+	var portname = aPortName;
+	setTimeout(function() {
+		console.log('ok starting calling into tab/port');
+		// callInLastPort = Comm.callInX2.bind(null, gPortsComm, null, portname); // can use 'gPortsComm' as string here as well
+		// callInLastPort('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+		// 	console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
+		// });
+
+		callInPort(portname, 'testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+			console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
+		});
+	}, 5000);
+	return 'ok after 5 sec will start calling into tab';
+}
