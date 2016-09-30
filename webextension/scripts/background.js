@@ -5,9 +5,9 @@ var callInContent;
 var gExeComm;
 var gTabsComm;
 
-var callInTab = Comm.callInX2.bind(null, 'gTabsComm', null); // must pass first arg as `aTabId`
+var callInTab = Comm.callInX2.bind(null, 'gTabsComm', null); // must pass first arg as `aTabId` // cannot use `gTabsComm` it must be `"gTabsComm"` as string because `gTabsComm` var was not yet assigned
 var callInLastTab; // done dynamically to a tabid
-var callInExe = Comm.callInX.bind(null, gExeComm, null);
+var callInExe = Comm.callInX.bind(null, 'gExeComm', null); // cannot use `gExeComm` it must be `"gExeComm"` as string because `gExeComm` var was not yet assigned
 
 browser.runtime.sendMessage('WEBEXT_INIT').then(aReply => {
 	console.log('background js received response to WEBEXT_INIT, aReply:', aReply);
@@ -72,7 +72,7 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aTabId) {
 	var tabid = aTabId;
 	setTimeout(function() {
 		console.log('ok starting calling into tab');
-		// callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid);
+		// callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid); // can use 'gTabsComm' as string here as well
 		// callInLastTab('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
 		// 	console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
 		// });
