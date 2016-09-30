@@ -1,7 +1,11 @@
 var gBgComm = new Comm.client.webextports('tab');
 
-var callInBackground = Comm.callInX.bind(null, gBgComm, null);
-var callInExe = Comm.callInX.bind(null, gBgComm, 'callInExe');
+// this is how to do it without CommHelper
+var callInBackground = Comm.callInX2.bind(null, gBgComm, null, null);
+var callInExe = Comm.callInX2.bind(null, gBgComm, 'callInExe', null);
+// // can also use CommHelper if using var name of `gBgComm`
+// var callInBackground = CommHelper.webextcontentscript.callInBackground;
+// var callInExe = CommHelper.webextcontentscript.callInExe;
 
 // callInBackground('testCallFromPortToBg', 'hi there');
 callInBackground('testCallFromPortToBg', 'hi there', function(aArg, aComm) {

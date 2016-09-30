@@ -5,8 +5,12 @@ var callInContent;
 var gExeComm;
 var gPortsComm;
 
-var callInPort = Comm.callInX2.bind(null, 'gPortsComm', null); // must pass first arg as `aPortName` // cannot use `gPortsComm` it must be `"gPortsComm"` as string because `gPortsComm` var was not yet assigned
-var callInExe = Comm.callInX.bind(null, 'gExeComm', null); // cannot use `gExeComm` it must be `"gExeComm"` as string because `gExeComm` var was not yet assigned
+// this is how to do it without CommHelper
+var callInAPort = Comm.callInX2.bind(null, 'gPortsComm', null); // must pass first arg as `aPortName` // cannot use `gPortsComm` it must be `"gPortsComm"` as string because `gPortsComm` var was not yet assigned
+var callInExe = Comm.callInX2.bind(null, 'gExeComm', null, null); // cannot use `gExeComm` it must be `"gExeComm"` as string because `gExeComm` var was not yet assigned
+// // can also use CommHelper if using var name of `gBgComm` and `gPortsComm`
+// var callInExe = CommHelper.webextbackground.callInExe;
+// var callInAPort = CommHelper.webextbackground.callInAPort;
 
 browser.runtime.sendMessage('WEBEXT_INIT').then(aReply => {
 	console.log('background js received response to WEBEXT_INIT, aReply:', aReply);
@@ -91,7 +95,7 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aPortName) {
 		// 	console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
 		// });
 
-		callInPort(portname, 'testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+		callInAPort(portname, 'testCallFromBgToTab', 'hithere', function(aArg, aComm) {
 			console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
 		});
 	}, 5000);
