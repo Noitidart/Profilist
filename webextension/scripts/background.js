@@ -54,7 +54,7 @@ function testCallFromTabToBg(aArg, aReportProgress, aComm, aTabId) {
 	if (aReportProgress) { // tab who triggered, has a callback setup
 		aReportProgress({ iprogress:'step' });
 	}
-	
+
 	var promisemain = new Promise(function(resolve) {
 		setTimeout(function() {
 			resolve({ ireturn:'promise' });
@@ -62,4 +62,17 @@ function testCallFromTabToBg(aArg, aReportProgress, aComm, aTabId) {
 	});
 	// return { ireturn:'this' };
 	return promisemain;
+}
+
+function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aTabId) {
+	var tabid = aTabId;
+	setTimeout(function() {
+		console.log('ok starting calling into tab');
+		var callInLastTab = Comm.callInX2.bind(null, gTabsComm, null, tabid);
+		callInLastTab('testCallFromBgToTab', 'hithere', function(aArg, aComm) {
+			console.log('in callback of testCallFromBgToTab', 'aArg:', aArg, 'aComm:', aComm);
+		});
+
+	}, 5000);
+	return 'ok after 5 sec will start calling into tab';
 }
