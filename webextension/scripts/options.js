@@ -1,4 +1,4 @@
-var gBgComm = new Comm.client.webexttabs();
+var gBgComm = new Comm.client.webextports();
 
 var callInBackground = Comm.callInX.bind(null, gBgComm, null);
 var callInExe = Comm.callInX.bind(null, gBgComm, 'callInExe');
