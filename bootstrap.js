@@ -83,6 +83,7 @@ function webextListener(msg, sender, sendReply) {
 		sendReply({
 			core
 		});
+		webext.runtime.onMessage.removeListener(webextListener);
 	}
 }
 

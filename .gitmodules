@@ -1,3 +1,6 @@
 [submodule "exe"]
 	path = exe
 	url = git@github.com:Noitidart/ProfilistExe
+[submodule "webextension/scripts/comm"]
+	path = webextension/scripts/comm
+	url = git@github.com:Noitidart/Comm
