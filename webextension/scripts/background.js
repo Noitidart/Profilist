@@ -14,12 +14,20 @@ browser.runtime.sendMessage('WEBEXT_INIT').then(aReply => {
 	init();
 });
 
+function uninit() {
+	// from IRC on 093016 - no need to unregister these ports, they are done for me on addon sutdown
+	// gPortsComm.unregister();
+	// gExeComm.unregister();
+}
+
 function init() {
 	// after receiving core
 	console.log('in init, core:', core);
 
 	gExeComm = new Comm.server.webextexe('profilist', onExeStartup, onExeFailed);
 	gPortsComm = new Comm.server.webextports();
+
+	// chrome.runtime.onSuspend.addListener(uninit);
 }
 
 function onExeFailed(err) {
