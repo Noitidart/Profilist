@@ -43,30 +43,40 @@ function onExeStartup() {
 
 	chrome.browserAction.onClicked.addListener(function() {
 
-		// if (callInExe) {
-			chrome.tabs.create({
-				url: chrome.extension.getURL('pages/options.html')
-			});
+		// chrome.tabs.create({
+		// 	url: chrome.extension.getURL('pages/options.html')
+		// });
+		//
+		// setTimeout(function() {
+		// 	console.log('opening menu.html now');
+		// 	chrome.tabs.create({
+		// 		url: chrome.extension.getURL('pages/menu.html')
+		// 	});
+		// }, 1000);
 
-			setTimeout(function() {
-				console.log('opening menu.html now');
-				chrome.tabs.create({
-					url: chrome.extension.getURL('pages/menu.html')
-				});
-			}, 1000);
-		// }
-		// else { console.error('callInExe is missing!') }
+		callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
+			console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
+		});
 
 	});
 
 }
 
-function CommServerExe() {
-	console.error('in bg.js');
-	var port = browser.runtime.connectNative('profilist');
-	port.onMessage.addListener(function (response) {
-		console.log('Received: ', response);
+function testCallFromExeToBg(aArg, aReportProgress, aComm) {
+	console.log('in testCallFromPortToBg', 'aArg:', aArg, 'aReportProgress:', aReportProgress, 'aComm:', aComm);
+	setTimeout(function() {
+		aReportProgress({step:'5k baby!'});
+	}, 1000);
+	setTimeout(function() {
+		aReportProgress({step:'ANOTHER 5k'});
+	}, 3000);
+
+	var promisemain = new Promise(function(resolve) {
+		setTimeout(function() {
+			resolve();
+		}, 5000);
 	});
+	return promisemain;
 }
 
 function testCallFromPortToBg(aArg, aReportProgress, aComm, aPortName) {
