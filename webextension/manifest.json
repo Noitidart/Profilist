@@ -9,11 +9,11 @@
 		"open_in_tab": true
 	},
 	"icons": {
-		"16": "images/group.svg",
-		"48": "images/group.svg",
-		"64": "images/group.svg",
-		"96": "images/group.svg",
-		"128": "images/group.svg"
+		"16": "images/group-outline.svg",
+		"48": "images/group-outline.svg",
+		"64": "images/group-outline.svg",
+		"96": "images/group-outline.svg",
+		"128": "images/group-outline.svg"
 	},
 
 	"manifest_version": 2,

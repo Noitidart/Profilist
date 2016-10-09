@@ -40,7 +40,9 @@ function onExeFailed(err) {
 
 function onExeStartup() {
 	console.log('ok exe started up');
-
+	callInExe('log', {what:"ONE"});
+	callInExe('log', {what:"TWO"});
+	callInExe('log', {what:"THREE"});
 	chrome.browserAction.onClicked.addListener(function() {
 
 		// chrome.tabs.create({
