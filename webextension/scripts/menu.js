@@ -7,6 +7,9 @@ var callInExe = Comm.callInX2.bind(null, gBgComm, 'callInExe', null);
 // var callInBackground = CommHelper.webextcontentscript.callInBackground;
 // var callInExe = CommHelper.webextcontentscript.callInExe;
 
+var callInBootstrap = Comm.callInX2.bind(null, gBgComm, 'callInBootstrap', null);
+var callInMainworker = Comm.callInX2.bind(null, gBgComm, 'callInMainworker', null);
+
 // callInBackground('testCallFromPortToBg', 'hi there');
 callInBackground('testCallFromPortToBg', 'hi there', function(aArg, aComm) {
 	console.log('in callback of testCallFromTabToBg', 'aArg:', aArg, 'aComm:', aComm);

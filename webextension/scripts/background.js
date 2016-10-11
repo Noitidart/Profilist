@@ -1,9 +1,8 @@
 var core;
-var callInExe;
-var callInContent;
 
 var gExeComm;
 var gPortsComm;
+var gBsComm = new Comm.client.webext();
 
 // this is how to do it without CommHelper
 var callInAPort = Comm.callInX2.bind(null, 'gPortsComm', null); // must pass first arg as `aPortName` // cannot use `gPortsComm` it must be `"gPortsComm"` as string because `gPortsComm` var was not yet assigned
@@ -11,12 +10,35 @@ var callInExe = Comm.callInX2.bind(null, 'gExeComm', null, null); // cannot use 
 // // can also use CommHelper if using var name of `gBgComm` and `gPortsComm`
 // var callInExe = CommHelper.webextbackground.callInExe;
 // var callInAPort = CommHelper.webextbackground.callInAPort;
+console.log('gBsComm:', gBsComm);
+var callInBootstrap = Comm.callInX2.bind(null, gBsComm, null, null);
+var callInMainworker = Comm.callInX2.bind(null, gBsComm, 'gWkComm', null);
 
-browser.runtime.sendMessage('WEBEXT_INIT').then(aReply => {
-	console.log('background js received response to WEBEXT_INIT, aReply:', aReply);
-	({ core } = aReply);
-	init();
+callInBootstrap('fetchCore', undefined, function(aArg) {
+	({ core } = aArg);
+	console.log('got core in background, core:', core);
+	console.log('geturl:', chrome.runtime.getURL('images/group-outline.svg'));
+	preinit();
 });
+
+function preinit() {
+
+	var promiseallarr = [];
+
+	promiseallarr.push(new Promise(function(resolve) {
+		chrome.runtime.getPlatformInfo(function(platinfo) {
+			console.log('platinfo:', platinfo);
+			core.platform = platinfo;
+			resolve();
+		});
+	}));
+
+	Promise.all(promiseallarr).then(function(valarr) {
+		console.log('valarr:', valarr);
+
+		init();
+	});
+}
 
 function uninit() {
 	// from IRC on 093016 - no need to unregister these ports, they are done for me on addon sutdown
@@ -28,10 +50,16 @@ function init() {
 	// after receiving core
 	console.log('in init, core:', core);
 
-	gExeComm = new Comm.server.webextexe('profilist', onExeStartup, onExeFailed);
-	gPortsComm = new Comm.server.webextports();
-
-	// chrome.runtime.onSuspend.addListener(uninit);
+	if (core.platform.os == 'android') {
+		callInBootstrap('startupAndroid', {
+			browseraction: {
+				title: chrome.i18n.getMessage('browseraction_label'),
+				iconpath: chrome.runtime.getURL('images/group-outline.svg')
+			}
+		});
+	} else {
+		gExeComm = new Comm.server.webextexe('profilist', onExeStartup, onExeFailed);
+	}
 }
 
 function onExeFailed(err) {
@@ -40,29 +68,32 @@ function onExeFailed(err) {
 
 function onExeStartup() {
 	console.log('ok exe started up');
-	callInExe('log', {what:"ONE"});
-	callInExe('log', {what:"TWO"});
-	callInExe('log', {what:"THREE"});
-	chrome.browserAction.onClicked.addListener(function() {
 
-		// chrome.tabs.create({
-		// 	url: chrome.extension.getURL('pages/options.html')
-		// });
-		//
-		// setTimeout(function() {
-		// 	console.log('opening menu.html now');
-		// 	chrome.tabs.create({
-		// 		url: chrome.extension.getURL('pages/menu.html')
-		// 	});
-		// }, 1000);
-
-		callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
-			console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
-		});
-
-	});
-
+	gPortsComm = new Comm.server.webextports();
+	startupBrowserAction();
 }
+
+// start - browseraction
+function startupBrowserAction() {
+	chrome.browserAction.onClicked.addListener(onBrowserActionClicked);
+}
+function onBrowserActionClicked() {
+	// chrome.tabs.create({
+	// 	url: chrome.extension.getURL('pages/options.html')
+	// });
+	//
+	// setTimeout(function() {
+	// 	console.log('opening menu.html now');
+	// 	chrome.tabs.create({
+	// 		url: chrome.extension.getURL('pages/menu.html')
+	// 	});
+	// }, 1000);
+
+	callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
+		console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
+	});
+}
+// end - browseraction
 
 function testCallFromExeToBg(aArg, aReportProgress, aComm) {
 	console.log('in testCallFromPortToBg', 'aArg:', aArg, 'aReportProgress:', aReportProgress, 'aComm:', aComm);

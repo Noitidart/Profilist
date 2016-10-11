@@ -33,6 +33,8 @@
 	},
 
 	"browser_action": {
-		"default_icon": "images/group-outline.svg"
+		"default_icon": "images/group-outline.svg",
+		"browser_style": true,
+		"default_title": "__MSG_browseraction_title__"
 	}
 }

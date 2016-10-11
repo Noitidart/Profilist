@@ -47,5 +47,9 @@
 
 	"createnewprofile": {
 		"message": "Create New Profile"
+	},
+
+	"browseraction_title": {
+		"message": "Profiles"
 	}
 }

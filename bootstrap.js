@@ -3,8 +3,6 @@ const {classes: Cc, interfaces: Ci, manager: Cm, results: Cr, utils: Cu, Constru
 Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 
-// Lazy Imports
-
 // Globals
 var core = {
 	addon: {
@@ -26,107 +24,188 @@ var core = {
 		},
 		cache_key: Math.random()
 	},
-	profilist: {
-		path: {
-			// as now using webext, i have to send it these paths
-		}
-	},
 	os: {
-		// // name: OS.Constants.Sys.Name, // added by worker
-		// // mname: added by worker
+		// name: OS.Constants.Sys.Name,
+		// mname:
 		// toolkit: Services.appinfo.widgetToolkit.toLowerCase(),
 		// xpcomabi: Services.appinfo.XPCOMABI
 	},
 	firefox: {
-		pid: Services.appinfo.processID,
-		version: Services.appinfo.version,
-		channel: Services.prefs.getCharPref('app.update.channel')
+		// pid: Services.appinfo.processID,
+		// version: Services.appinfo.version,
+		// channel: Services.prefs.getCharPref('app.update.channel')
 	}
 };
 
 var gAndroidMenuIds = [];
 
-var webext;
-
-// set addon paths
-core.addon.path.jetpackdir = OS.Path.join(OS.Constants.Path.profileDir, 'jetpack', core.addon.id);
-core.addon.path.storage = OS.Path.join(core.addon.path.jetpackdir, 'simple-storage');
-core.addon.path.filestore = OS.Path.join(core.addon.path.storage, 'store.json');
-
-// set the paths
-core.profilist.path.dirstore = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'profilist');
-core.profilist.path.exestore = OS.Path.join(core.profilist.path.dirstore, 'exe');
-core.profilist.path.iconstore = OS.Path.join(core.profilist.path.dirstore, 'icon');
-core.profilist.path.iconimgsstore = OS.Path.join(core.profilist.path.dirstore, 'iconset'); // images that are used to make file in `iconstore`
-core.profilist.path.inibkp = OS.Path.join(core.profilist.path.dirstore, 'profiles.profilist.ini');
-
-// add the OS.Constants.Path's because webext doesnt have it
-core.addon.path.homeDir = OS.Constants.Path.homeDir;
-core.addon.path.userApplicationDataDir = OS.Constants.Path.userApplicationDataDir;
-core.addon.path.profileDir = OS.Constants.Path.profileDir;
-core.addon.path.localProfileDir = OS.Constants.Path.localProfileDir;
+var gBgComm;
+var gWkComm;
+var callInBackground;
+var callInExe;
+var callInMainworker;
 
 function install() {}
 function uninstall(aData, aReason) {
     if (aReason == ADDON_UNINSTALL) {
-		// delete storage
-		OS.File.removeDir(core.addon.path.jetpackdir, {ignorePermissions:true, ignoreAbsent:true}); // will reject if `jetpack` folder does not exist
-
 		uninstallNativeMessaging()
-		.then(valarr => console.log('uninstalled:', valarr))
+		.then(valarr => { console.log('uninstalled:', valarr); cleanupNativeMessaging(); })
 		.catch(err => console.error('uninstall error:', err));
 	}
 }
 
-function webextListener(msg, sender, sendReply) {
-	if (msg == 'WEBEXT_INIT') {
-		sendReply({
-			core
-		});
-		webext.runtime.onMessage.removeListener(webextListener);
-	}
-}
-
 function startup(aData, aReason) {
-	var promiseallarr = [];
 
-	// set version
 	core.addon.version = aData.version;
 
-	promiseallarr.push( installNativeMessaging() );
+	Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/webext.js');
+
+	var promiseallarr = [];
+
+	if ([ADDON_DOWNGRADE, ADDON_UPGRADE, ADDON_INSTALL].includes(aReason)) {
+		promiseallarr.push( installNativeMessaging() );
+	}
 
 	// wait for all promises, then startup webext
-	Promise.all(promiseallarr).then(valarr => {
-		console.log('valarr:', valarr)
-		aData.webExtension.startup().then(api => {
-			({ browser:webext } = api);
-			webext.runtime.onMessage.addListener(webextListener);
-	    });
-	}).catch( caught => console.error('Failed to prepare for webext startup, caught:', caught) );
+	Promise.all(promiseallarr)
+	.then(valarr => {
+		console.log('valarr:', valarr);
+		gBgComm = new Comm.server.webext(aData.webExtension); // starts up the webext
+		callInBackground = Comm.callInX2.bind(null, gBgComm, null, null);
+		callInExe = Comm.callInX2.bind(null, gBgComm, 'gExeComm', null);
+	})
+	.catch( caught => console.error('Failed to prepare for webext startup, caught:', caught) );
 }
 
 function shutdown(aData, aReason) {
-	// callInMainworker('writeFilestore'); // do even on APP_SHUTDOWN
-
 	if (aReason == APP_SHUTDOWN) return;
 
-    // // desktop_android:insert_gui
-    // if (core.os.name != 'android') {
-	// 	CustomizableUI.destroyWidget('cui_' + core.addon.path.name);
-	// } else {
-	// 	for (var androidMenu of gAndroidMenus) {
-	// 		var domwin = getStrongReference(androidMenu.domwin);
-	// 		if (!domwin) {
-	// 			// its dead
-	// 			continue;
-	// 		}
-	// 		domwin.NativeWindow.menu.remove(androidMenu.menuid);
-	// 	}
-	// }
-
-	windowListener.unregister();
-
+	shutdownAndroid();
 }
+
+// start - mainworker stuff
+function startupMainworker(aArg) {
+	var { path, initdata } = aArg;
+
+	return new Promise(resolve => {
+		gWkComm = new Comm.server.worker(path, initdata ? ()=>initdata : undefined, ()=>resolve(), onMainworkerBeforeShutdown);
+		callInMainworker = Comm.callInX2.bind(null, gWkComm, null, null);
+	});
+}
+
+function onMainworkerBeforeTerminate() {}
+
+// end - mainworker stuff
+
+// start - android stuff
+var gBrowserAction; // object; keys[title, iconpath]
+var gStartedupAndroid = false;
+function startupAndroid(aArg) {
+	if (OS.Constants.Sys.Name != 'Android') return;
+
+	gStartedupAndroid = true;
+	gBrowserAction = aArg.browseraction;
+	windowListenerAndroid.register();
+}
+
+function shutdownAndroid() {
+
+	if (OS.Constants.Sys.Name != 'Android') return;
+	if (!gStartedupAndroid) return;
+
+	// Remove inserted menu entry
+	for (var androidmenu of gAndroidMenus) {
+		var { domwin, menuid } = androidmenu;
+		domwin.NativeWindow.menu.remove(menuid);
+	}
+}
+
+function onBrowserActionClicked() {
+	callInBackground('onBrowserActionClicked');
+}
+
+var windowListenerAndroid = {
+	//DO NOT EDIT HERE
+	onOpenWindow: function(aXULWindow) {
+		// Wait for the window to finish loading
+		var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
+		aDOMWindow.addEventListener('load', function () {
+			aDOMWindow.removeEventListener('load', arguments.callee, false);
+			windowListenerAndroid.loadIntoWindow(aDOMWindow);
+		}, false);
+	},
+	onCloseWindow: function(aXULWindow) {
+		if (windowListenerAndroid.windowClosed) {
+			var window = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
+			windowListenerAndroid.windowClosed(window);
+		}
+	},
+	onWindowTitleChange: function(aXULWindow, aNewTitle) {},
+	register: function() {
+
+		// Load into any existing windows
+		var windows = Services.wm.getEnumerator(null);
+		while (windows.hasMoreElements()) {
+			var window = windows.getNext();
+			if (window.document.readyState == 'complete') { //on startup `window.document.readyState` is `uninitialized`
+				windowListenerAndroid.loadIntoWindow(window);
+			} else {
+				window.addEventListener('load', function () {
+					window.removeEventListener('load', arguments.callee, false);
+					windowListenerAndroid.loadIntoWindow(window);
+				}, false);
+			}
+		}
+
+		// Listen to new windows
+		Services.wm.addListener(windowListenerAndroid);
+	},
+	unregister: function() {
+		// Unload from any existing windows
+		var windows = Services.wm.getEnumerator(null);
+		while (windows.hasMoreElements()) {
+			var window = windows.getNext();
+			windowListenerAndroid.unloadFromWindow(window);
+		}
+
+		// Stop listening so future added windows dont get this attached
+		Services.wm.removeListener(windowListenerAndroid);
+	},
+	//END - DO NOT EDIT HERE
+	loadIntoWindow: function (aDOMWindow) {
+		if (!aDOMWindow) { return }
+
+            // desktop_android:insert_gui
+			if (OS.Constants.Sys.Name == 'Android') {
+                // // android:insert_gui
+				if (aDOMWindow.NativeWindow && aDOMWindow.NativeWindow.menu) {
+					var menuid = aDOMWindow.NativeWindow.menu.add(gBrowserAction.title, gBrowserAction.iconpath, onBrowserActionClicked);
+					gAndroidMenus.push({
+						domwin: aDOMWindow,
+						menuid
+					});
+				}
+			}
+	},
+	unloadFromWindow: function (aDOMWindow) {
+		if (!aDOMWindow) { return }
+
+	},
+	windowClosed: function(aDOMWindow) {
+		// Remove from gAndroidMenus the entry for this aDOMWindow
+		if (OS.Constants.Sys.Name == 'Android') {
+			var l = gAndroidMenus.length;
+			for (var i=0; i<l; i++) {
+				var androidmenu = gAndroidMenus[i];
+				if (androidmenu.domwin == aDOMWindow) {
+					gAndroidMenus.splice(i, 1);
+					break;
+				}
+			}
+		}
+	}
+};
+// end - android stuff
 
 // start - native messaging stuff
 function getNativeMessagingInfo() {
@@ -156,9 +235,9 @@ function getNativeMessagingInfo() {
 	}
 
 	var exe_path;
-	exe_path = OS.Path.join(core.addon.path.userApplicationDataDir, 'extension-exes', exe_name);
+	exe_path = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'extension-exes', exe_name);
 
-	var exe_from = core.addon.path.userApplicationDataDir; // dir that exists for sure in subpath of `exe_path`. where to `makeDir` from for exe
+	var exe_from = OS.Constants.Path.userApplicationDataDir; // dir that exists for sure in subpath of `exe_path`. where to `makeDir` from for exe
 
 	// update exemanifest_json
 	exemanifest_json.path = exe_path;
@@ -170,16 +249,16 @@ function getNativeMessagingInfo() {
 		case 'win':
 				// exemanifest_path = OS.Path.join(core.addon.path.storage, 'profilist.json');
 				// exemanifest_from = core.addon.path.profileDir;
-				exemanifest_path = OS.Path.join(core.addon.path.userApplicationDataDir, 'extension-exes', 'profilist.json');
-				exemanifest_from = core.addon.path.userApplicationDataDir;
+				exemanifest_path = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'extension-exes', 'profilist.json');
+				exemanifest_from = OS.Constants.Path.userApplicationDataDir;
 			break;
 		case 'mac':
-				exemanifest_path = OS.Path.join(core.addon.path.homeDir, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts', 'profilist.json');
-				exemanifest_from = OS.Path.join(core.addon.path.homeDir, 'Library', 'Application Support');
+				exemanifest_path = OS.Path.join(OS.Constants.Path.homeDir, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts', 'profilist.json');
+				exemanifest_from = OS.Path.join(OS.Constants.Path.homeDir, 'Library', 'Application Support');
 			break;
 		case 'nix':
-				exemanifest_path = OS.Path.join(core.addon.path.homeDir, '.mozilla', 'native-messaging-hosts', 'profilist.json');
-				exemanifest_from = core.addon.path.homeDir;
+				exemanifest_path = OS.Path.join(OS.Constants.Path.homeDir, '.mozilla', 'native-messaging-hosts', 'profilist.json');
+				exemanifest_from = OS.Constants.Path.homeDir;
 			break;
 	}
 
@@ -272,92 +351,15 @@ function uninstallNativeMessaging() {
 	return Promise.all(promiseallarrmain);
 }
 
+function cleanupNativeMessaging() {
+	// delete the exe parent dir, if it is empty. because this parent dir is only used by my addons
+	OS.File.removeEmptyDir(OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'extension-exes'), { ignoreAbsent:true }).catch( err=>console.warn('This is totally acceptable, it means there is stuff left so should NOT cleanup. err:', err) );
+}
+
 // start - addon functions
-var windowListener = {
-	//DO NOT EDIT HERE
-	onOpenWindow: function (aXULWindow) {
-		// Wait for the window to finish loading
-		var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
-		aDOMWindow.addEventListener('load', function () {
-			aDOMWindow.removeEventListener('load', arguments.callee, false);
-			windowListener.loadIntoWindow(aDOMWindow);
-		}, false);
-	},
-	onCloseWindow: function (aXULWindow) {
-		var aDOMWindow = aXULWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindow);
-
-	},
-	onWindowTitleChange: function (aXULWindow, aNewTitle) {},
-	register: function () {
-
-		// Load into any existing windows
-		let DOMWindows = Services.wm.getEnumerator(null);
-		while (DOMWindows.hasMoreElements()) {
-			let aDOMWindow = DOMWindows.getNext();
-			if (aDOMWindow.document.readyState == 'complete') { //on startup `aDOMWindow.document.readyState` is `uninitialized`
-				windowListener.loadIntoWindow(aDOMWindow);
-			} else {
-				aDOMWindow.addEventListener('load', function () {
-					aDOMWindow.removeEventListener('load', arguments.callee, false);
-					windowListener.loadIntoWindow(aDOMWindow);
-				}, false);
-			}
-		}
-		// Listen to new windows
-		Services.wm.addListener(windowListener);
-	},
-	unregister: function () {
-		// Unload from any existing windows
-		let DOMWindows = Services.wm.getEnumerator(null);
-		while (DOMWindows.hasMoreElements()) {
-			let aDOMWindow = DOMWindows.getNext();
-			windowListener.unloadFromWindow(aDOMWindow);
-		}
-		/*
-		for (var u in unloaders) {
-			unloaders[u]();
-		}
-		*/
-
-		//Stop listening so future added windows dont get this attached
-		Services.wm.removeListener(windowListener);
-	},
-	//END - DO NOT EDIT HERE
-	loadIntoWindow: function (aDOMWindow) {
-		if (!aDOMWindow) { return }
-
-            // desktop_android:insert_gui
-			if (core.os.name != 'android') {
-                // // desktop:insert_gui
-				if (aDOMWindow.gBrowser) {
-					// var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-					// domWinUtils.loadSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
-				}
-			} else {
-                // // android:insert_gui
-				// if (aDOMWindow.NativeWindow && aDOMWindow.NativeWindow.menu) {
-				// 	var menuid = aDOMWindow.NativeWindow.menu.add(formatStringFromNameCore('gui_label', 'main'), core.addon.path.images + 'icon-color16.png', guiClick)
-				// 	gAndroidMenus.push({
-				// 		domwin: Cu.getWeakReference(aDOMWindow),
-				// 		menuid
-				// 	});
-				// }
-			}
-	},
-	unloadFromWindow: function (aDOMWindow) {
-		if (!aDOMWindow) { return }
-
-        // desktop:insert_gui
-        if (core.os.name != 'android') {
-            if (aDOMWindow.gBrowser) {
-				// var domWinUtils = aDOMWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-				// domWinUtils.removeSheet(Services.io.newURI(core.addon.path.styles + 'xul.css', null, null), domWinUtils.AUTHOR_SHEET);
-			}
-
-        }
-	}
-};
-
+function fetchCore(aArg, aReportProgress, aComm) {
+	return { core };
+}
 function setApplyBackgroundUpdates(aNewApplyBackgroundUpdates) {
 	// 0 - off, 1 - respect global setting, 2 - on
 	AddonManager.getAddonByID(core.addon.id, addon =>
