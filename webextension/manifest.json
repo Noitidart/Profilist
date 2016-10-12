@@ -26,10 +26,10 @@
 
 
 	"incognito": "split",
-	"permissions": ["nativeMessaging"],
+	"permissions": ["nativeMessaging", "storage", "tabs"],
 
 	"background": {
-		"scripts": ["scripts/comm/webext.js", "scripts/background.js"]
+		"scripts": ["scripts/comm/webext.js", "scripts/common/background.js", "scripts/3rd/ba-issemver.min.js", "scripts/background.js"]
 	},
 
 	"browser_action": {

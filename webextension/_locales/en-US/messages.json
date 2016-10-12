@@ -53,16 +53,45 @@
 		"message": "Profiles"
 	},
 
-	"startup_failed_critical_body": {
+	"startupfailed_title": {
+		"message": "Profilist - Critical Error"
+	},
+	"startupfailed_body": {
 		"message": "Profilist cannot be used because it failed to startup.\n\nReason: %REASON%",
 		"placeholders": {
 			"REASON": {
 				"content": "$1",
-				"example": "non localized string"
+				"example": "the startupfailed_ stuff below"
 			}
 		}
 	},
-	"startup_failed_critical_title": {
-		"message": "Profilist - Critical Error"
+	"startupfailed_seeconsole": {
+		"message": "See \"Browser Console\" for details."
+	},
+	"startupfailed_execonnect": {
+		"message": "Failed to connect to executable."
+	},
+	"startupfailed_exemismatch": {
+		"message": "Version of installed executable (%EXEVER%) does not match extension (%EXTVER%). (%HOWTOFIX%)",
+		"placeholders": {
+			"EXEVER": {
+				"content": "$1",
+				"example": "the version of the EXE, ex: 1.0"
+			},
+			"EXTVER": {
+				"content": "$2",
+				"example": "the version of the EXTENSION, ex: 1.0"
+			},
+			"HOWTOFIX": {
+				"content": "$3",
+				"example": "either `startupfailed_exemismatch_howtofix1` or `startupfailed_exemismatch_howtofix2`"
+			}
+		}
+	},
+	"startupfailed_exemismatch_howtofix1": {
+		"message": "Update the executable **OR** downgrade the extension."
+	},
+	"startupfailed_exemismatch_howtofix2": {
+		"message": "Downgrade the executable **OR** update the extension."
 	}
 }

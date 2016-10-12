@@ -4,38 +4,7 @@ Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 
 // Globals
-var core = {
-	addon: {
-		id: 'Profilist@jetpack',
-		version: null, // populated by `startup`
-		path: {
-			name: 'profilist',
-			//
-			content: 'chrome://profilist/content/',
-			//
-			exe: 'chrome://profilist/content/exe/',
-			//
-			images: 'chrome://profilist/content/webextension/images/',
-			scripts: 'chrome://profilist/content/webextension/scripts/',
-			styles: 'chrome://profilist/content/webextension/styles/',
-			fonts: 'chrome://profilist/content/webextension/styles/fonts/',
-			pages: 'chrome://profilist/content/webextension/pages/'
-			// below are added by worker
-		},
-		cache_key: Math.random()
-	},
-	os: {
-		// name: OS.Constants.Sys.Name,
-		// mname:
-		// toolkit: Services.appinfo.widgetToolkit.toLowerCase(),
-		// xpcomabi: Services.appinfo.XPCOMABI
-	},
-	firefox: {
-		// pid: Services.appinfo.processID,
-		// version: Services.appinfo.version,
-		// channel: Services.prefs.getCharPref('app.update.channel')
-	}
-};
+var core; // brought over from background.js if needed
 
 var gAndroidMenus = [];
 
@@ -56,15 +25,13 @@ function uninstall(aData, aReason) {
 
 function startup(aData, aReason) {
 
-	core.addon.version = aData.version;
-
 	Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/webext.js');
 
 	var promiseallarr = [];
 
-	if (OS.Constants.Sys.Name != 'Android' && [ADDON_DOWNGRADE, ADDON_UPGRADE, ADDON_INSTALL].includes(aReason)) {
-		promiseallarr.push( installNativeMessaging() );
-	}
+	// if (OS.Constants.Sys.Name != 'Android' && [ADDON_DOWNGRADE, ADDON_UPGRADE, ADDON_INSTALL].includes(aReason)) {
+	// 	promiseallarr.push( installNativeMessaging() );
+	// }
 
 	// wait for all promises, then startup webext
 	Promise.all(promiseallarr)

@@ -1,4 +1,60 @@
-var core = {};
+var core  = {
+	self: {
+		id: chrome.runtime.id,
+		version: chrome.runtime.getManifest().version,
+	},
+	browser: {
+		name: getBrowser().name,
+		version: getBrowser().version
+	},
+	path: {
+		// webext relative paths
+		images: 'images/',
+		fonts: 'styles/fonts/',
+		pages: 'pages/',
+		scripts: 'scripts/',
+		styles: 'styles/',
+		// non-webext paths - SPECIAL prefixed with underscore
+		_exe: 'exe/',
+		// chrome path version
+		get chrome(key) {
+			// key must be one of the keys in path or null/undefined/blank to just get chrome path
+			// if its a non-webext key, you dont need the prefix of underscore, it will figure it out
+			var prefix = 'chrome://' + core.self.id + '/content/';
+			var suffix;
+			if (key[0] == '_') key = key.substr(1);
+			if (core.path['_' + key]) {
+				// its a chrome path only
+				suffix = core.path['_' + key];
+			} else {
+				suffix = 'webextension/' + core.path[key];
+			}
+			return prefix + suffix;
+		}
+	}
+	// os: {
+	// 	name: OS.Constants.Sys.Name,
+	// 	mname: ['winnt', 'winmo', 'wince', 'darwin'].includes(OS.Constants.Sys.Name.toLowerCase()) ? OS.Constants.Sys.Name.toLowerCase() : 'gtk',
+	// 	toolkit: Services.appinfo.widgetToolkit.toLowerCase(),
+	// 	xpcomabi: Services.appinfo.XPCOMABI
+	// },
+	// firefox: {
+	// 	pid: Services.appinfo.processID,
+	// 	version: Services.appinfo.version,
+	// 	channel: Services.prefs.getCharPref('app.update.channel')
+	// }
+	nativemessaging: {
+
+	},
+	store: {
+		// defaults - keys that present in here during `preinit` are fetched on startup
+			// 3 types
+				// prefs are prefeixed with "pref_"
+				// mem are prefeixed with "mem_" - mem stands for extension specific "cookies"/"system memory"
+				// filesystem-like stuff is prefixied with "fs_"
+		mem_lastversion: '-1' // indicates not installed - the "last installed version"
+	}
+};
 
 var gExeComm;
 var gPortsComm = new Comm.server.webextports();
@@ -12,7 +68,9 @@ var callInMainworker = Comm.callInX2.bind(null, gBsComm, 'callInMainworker', nul
 // start - init
 preinit();
 
-function preinit() {
+function preinit(aRetryReasons={}) {
+	// in below cases, `preinit` can be retried. every time it retries it adds a key which signifies the reason for retrying.
+		// EXE_AUTOINSTALL - retrying due to `cantryexeautoinstall`
 
 	var promiseallarr = [];
 
@@ -28,7 +86,18 @@ function preinit() {
 		});
 	}));
 
+	// fetch storage
+	promiseallarr.push(new Promise(function(resolve) {
+		chrome.storage.local.get(Object.keys(core.store), function(storeds) {
+			for (var key in storeds) {
+				Object.assign(core.store[key], storeds[key]);
+			}
+			resolve();
+		});
+	}));
+
 	// get platform info - and startup exe (desktop) or mainworker (android)
+	var cantryexeautoinstall = false; // mark this to true, if reject due to exe error and auto-installing it can possibly fix it
 	promiseallarr.push(new Promise(function(resolve, reject) {
 		chrome.runtime.getPlatformInfo(function(platinfo) {
 			console.log('platinfo:', platinfo);
@@ -50,7 +119,37 @@ function preinit() {
 				// // 	()=>resolve('ok platinfo got AND mainworker started up')
 				// // );
 			} else {
-				gExeComm = new Comm.server.webextexe('profilist', ()=>resolve('ok platinfo got AND exe started up'), onExeFailed.bind(null, reject));
+				gExeComm = new Comm.server.webextexe(
+					'profilist',
+					function onExeConnected() {
+						// resolve('ok platinfo got AND exe started up')
+						// lets make sure the exe version and extension version match
+						callInExe('getVersion', undefined, function(exeversion) {
+							var extversion = core.self.version;
+							if (exeversion === extversion) {
+								resolve('ok platinfo got AND exe started up AND exe version matches extension version');
+							} else {
+								// reject('ok platinfo got AND exe started up BUT exe version does not match extension version')
+								cantryexeautoinstall = true;
+								var howtofixstr;
+								if (isSemVer(extversion, '>' + exeversion)) {
+									// user needs to upgrade the exe OR downgrade the extension
+									howtofixstr = chrome.i18n.getMessage('startupfailed_exemismatch_howtofix1');
+								} else {
+									// user needs to downgrade the exe OR upgrade the extension
+									howtofixstr = chrome.i18n.getMessage('startupfailed_exemismatch_howtofix2');
+								}
+								reject(chrome.i18n.getMessage('startupfailed_exemismatch', [exeversion, extversion, howtofixstr]));
+							}
+						});
+					},
+					function onExeFailed(err) {
+						cantryexeautoinstall = true;
+						console.error('failed to connect to exe, err:', err);
+						// reject('failed to connect to exe, err:' + err.toString());
+						reject(chrome.i18n.getMessage('startupfailed_execonnect') + ' ' err.toString());
+					}
+				);
 			}
 		});
 	}));
@@ -61,23 +160,41 @@ function preinit() {
 		// ok `preinit` completed successfully
 		init();
 	})
-	.catch(function(err) {
-		console.error('failed to complete `preinit` proc, err:', err)
+	.catch(function onPreinitFailed(err) {
 
-		callInBootstrap('showSystemAlert', {
-			title: chrome.i18n.getMessage('startup_failed_critical_title'),
-			body: chrome.i18n.getMessage('startup_failed_critical_body', ['Failed to complete `preinit` proc, see browser console.'])
-		});
-	});
-}
+		var displayError = function(errex) {
+			// errex - an additional error message to show due to retry failures
+			console.error('failed to complete `preinit` proc, err:', err)
+			if (!err) {
+				err = '';
+			} else {
+				err = err.toString();
+			}
 
-function onExeFailed(rejector, err) {
-	console.error('failed to connect to exe, err:', err);
-	rejector('failed to connect to exe, err:' + err.toString());
+			if (errex) {
+				console.error('failed on a retry as well, errex:', errex);
+				err += '\n\n' + errex.toString();
+			}
 
-	callInBootstrap('showSystemAlert', {
-		title: chrome.i18n.getMessage('startup_failed_critical_title'),
-		body: chrome.i18n.getMessage('startup_failed_critical_body', [err])
+			if (!err.length) err = null; // for link1992930
+
+			callInBootstrap('showSystemAlert', {
+				title: chrome.i18n.getMessage('startupfailed_title'),
+				body: chrome.i18n.getMessage('startupfailed_body', [err || chrome.i18n.getMessage('startupfailed_seeconsole') ]) // link1992930 is due to the `||` here
+			});
+		};
+		if (cantryexeautoinstall && !aRetryReasons.EXE_AUTOINSTALL && core.browser.name == 'Firefox') {
+			// !aRetryReasons.EXE_AUTOINSTALL - means it hasnt retried for this reason yet. as i dont want to retry for the same reason multiple times
+			callInBootstrap('installNativeMessaging', core.nativemessaging, function(failreason) {
+				if (!failreason) {
+					setTimeout(function(){ preinit(Object.assign({}, aRetryReasons, { EXE_AUTOINSTALL:true })); }, 0); // so it gets out of this catch scope
+				} else {
+					displayError(failreason);
+				}
+			});
+		} else {
+			displayError();
+		}
 	});
 }
 
@@ -86,6 +203,19 @@ function init() {
 	console.log('in init, core:', core);
 
 	startupBrowserAction();
+
+	var lastversion = core.store.mem_lastversion;
+	if (lastversion === '-1') {
+		// installed / first run
+	} else if (lastversion !== core.self.version) {
+		// downgrade or upgrade
+		if (isSemVer(core.self.version, '>' + lastversion)) {
+			// upgrade
+		} else {
+			// downgrade
+		}
+		chrome.storage.local.set({ mem_lastversion:core.self.version });
+	} // else if (lastversion === core.self.version) { } // browser startup OR enabled after having disabled
 }
 
 function uninit() {
@@ -132,9 +262,10 @@ function onBrowserActionClicked() {
 
 // start - polyfill for android
 function addTab(url) {
-	if (core.platform.os != 'android') {
+	if (chrome.tabs && chrome.tabs.create) {
 		chrome.tabs.create({ url:url });
 	} else {
+		// its android
 		callInBootstrap('addTab', { url:url });
 	}
 }
@@ -192,15 +323,3 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aPortName) {
 	}, 5000);
 	return 'ok after 5 sec will start calling into tab';
 }
-
-// start - common helper functions
-function Deferred() {
-	this.resolve = null;
-	this.reject = null;
-	this.promise = new Promise(function(resolve, reject) {
-		this.resolve = resolve;
-		this.reject = reject;
-	}.bind(this));
-	Object.freeze(this);
-}
-// end - common helper functions
