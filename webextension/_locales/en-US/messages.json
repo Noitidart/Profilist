@@ -51,5 +51,18 @@
 
 	"browseraction_title": {
 		"message": "Profiles"
+	},
+
+	"startup_failed_critical_body": {
+		"message": "Profilist cannot be used because it failed to startup.\n\nReason: %REASON%",
+		"placeholders": {
+			"REASON": {
+				"content": "$1",
+				"example": "non localized string"
+			}
+		}
+	},
+	"startup_failed_critical_title": {
+		"message": "Profilist - Critical Error"
 	}
 }

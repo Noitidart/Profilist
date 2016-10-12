@@ -1,43 +1,91 @@
-var core;
+var core = {};
 
 var gExeComm;
-var gPortsComm;
+var gPortsComm = new Comm.server.webextports();
 var gBsComm = new Comm.client.webext();
 
-// this is how to do it without CommHelper
-var callInAPort = Comm.callInX2.bind(null, 'gPortsComm', null); // must pass first arg as `aPortName` // cannot use `gPortsComm` it must be `"gPortsComm"` as string because `gPortsComm` var was not yet assigned
+var callInAPort = Comm.callInX2.bind(null, gPortsComm, null);
 var callInExe = Comm.callInX2.bind(null, 'gExeComm', null, null); // cannot use `gExeComm` it must be `"gExeComm"` as string because `gExeComm` var was not yet assigned
-// // can also use CommHelper if using var name of `gBgComm` and `gPortsComm`
-// var callInExe = CommHelper.webextbackground.callInExe;
-// var callInAPort = CommHelper.webextbackground.callInAPort;
-console.log('gBsComm:', gBsComm);
 var callInBootstrap = Comm.callInX2.bind(null, gBsComm, null, null);
-var callInMainworker = Comm.callInX2.bind(null, gBsComm, 'gWkComm', null);
+var callInMainworker = Comm.callInX2.bind(null, gBsComm, 'callInMainworker', null);
 
-callInBootstrap('fetchCore', undefined, function(aArg) {
-	({ core } = aArg);
-	console.log('got core in background, core:', core);
-	console.log('geturl:', chrome.runtime.getURL('images/group-outline.svg'));
-	preinit();
-});
+// start - init
+preinit();
 
 function preinit() {
 
 	var promiseallarr = [];
 
-	promiseallarr.push(new Promise(function(resolve) {
-		chrome.runtime.getPlatformInfo(function(platinfo) {
-			console.log('platinfo:', platinfo);
-			core.platform = platinfo;
-			resolve();
+	// fetch core from bootstrap - i dont use anything from here, but fetching it for hell of it (as this is how i used to do things pre webext)
+	promiseallarr.push(new Promise(resolve => {
+		callInBootstrap('fetchCore', undefined, function(aArg) {
+			var { core:gotcore } = aArg;
+
+			Object.assign(core, gotcore);
+
+			console.log('got core in background, core:', core);
+			resolve('ok got core from bootstrap into background');
 		});
 	}));
 
-	Promise.all(promiseallarr).then(function(valarr) {
-		console.log('valarr:', valarr);
+	// get platform info - and startup exe (desktop) or mainworker (android)
+	promiseallarr.push(new Promise(function(resolve, reject) {
+		chrome.runtime.getPlatformInfo(function(platinfo) {
+			console.log('platinfo:', platinfo);
+			core.platform = platinfo;
 
+			// if didnt have to startup exe/mainworker i could resolve here with `resolve('ok platinfo got')`
+
+			// startup exe or mainworker
+			if (core.platform.os == 'android') {
+				callInBootstrap('startupMainworker', { path:'chrome://profilist/content/webextension/scripts/mainworker.js' });
+				resolve('ok platinfo got AND mainworker started up');
+				// its lazy started up, so cant wait on it to startup with proimise
+				// // callInBootstrap(
+				// // 	'startupMainworker',
+				// // 	{
+				// // 		path: 'chrome://profilist/content/webextension/scripts/mainworker.js'
+				// // 		// path: chrome.runtime.getURL('scripts/mainworker.js') // cant use `chrome.runtime.getURL('scripts/mainworker.js')` as this will cause error of `SecurityError: Failed to load worker script at "moz-extension://269e9e5e-c45a-4863-8846-05311321b58b/scripts/mainworker.js"`
+				// // 	},
+				// // 	()=>resolve('ok platinfo got AND mainworker started up')
+				// // );
+			} else {
+				gExeComm = new Comm.server.webextexe('profilist', ()=>resolve('ok platinfo got AND exe started up'), onExeFailed.bind(null, reject));
+			}
+		});
+	}));
+
+	Promise.all(promiseallarr)
+	.then(function(valarr) {
+		console.log('valarr:', valarr);
+		// ok `preinit` completed successfully
 		init();
+	})
+	.catch(function(err) {
+		console.error('failed to complete `preinit` proc, err:', err)
+
+		callInBootstrap('showSystemAlert', {
+			title: chrome.i18n.getMessage('startup_failed_critical_title'),
+			body: chrome.i18n.getMessage('startup_failed_critical_body', ['Failed to complete `preinit` proc, see browser console.'])
+		});
 	});
+}
+
+function onExeFailed(rejector, err) {
+	console.error('failed to connect to exe, err:', err);
+	rejector('failed to connect to exe, err:' + err.toString());
+
+	callInBootstrap('showSystemAlert', {
+		title: chrome.i18n.getMessage('startup_failed_critical_title'),
+		body: chrome.i18n.getMessage('startup_failed_critical_body', [err])
+	});
+}
+
+function init() {
+	// after receiving core
+	console.log('in init, core:', core);
+
+	startupBrowserAction();
 }
 
 function uninit() {
@@ -45,58 +93,58 @@ function uninit() {
 	// gPortsComm.unregister();
 	// gExeComm.unregister();
 }
+// end - init
 
-function init() {
-	// after receiving core
-	console.log('in init, core:', core);
-
+// start - browseraction
+function startupBrowserAction() {
+	// browser_action/chrome.browserAction is not supported on Android, so tell bootstrap to inject action item to NativeWindow.menu
 	if (core.platform.os == 'android') {
 		callInBootstrap('startupAndroid', {
 			browseraction: {
-				title: chrome.i18n.getMessage('browseraction_label'),
+				title: chrome.i18n.getMessage('browseraction_title'),
 				iconpath: chrome.runtime.getURL('images/group-outline.svg')
 			}
 		});
 	} else {
-		gExeComm = new Comm.server.webextexe('profilist', onExeStartup, onExeFailed);
+		chrome.browserAction.onClicked.addListener(onBrowserActionClicked);
 	}
-}
-
-function onExeFailed(err) {
-	console.error('failed to connect to exe, err:', err)
-}
-
-function onExeStartup() {
-	console.log('ok exe started up');
-
-	gPortsComm = new Comm.server.webextports();
-	startupBrowserAction();
-}
-
-// start - browseraction
-function startupBrowserAction() {
-	chrome.browserAction.onClicked.addListener(onBrowserActionClicked);
 }
 function onBrowserActionClicked() {
 	// chrome.tabs.create({
 	// 	url: chrome.extension.getURL('pages/options.html')
 	// });
 	//
-	// setTimeout(function() {
-	// 	console.log('opening menu.html now');
-	// 	chrome.tabs.create({
-	// 		url: chrome.extension.getURL('pages/menu.html')
-	// 	});
-	// }, 1000);
 
-	callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
-		console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
-	});
+	console.log('opening menu.html now');
+	addTab(chrome.extension.getURL('pages/menu.html'));
+
+	if (core.platform.os == 'android') {
+		setTimeout(function() {
+			callInMainworker('getSystemDirectory_android', 'DIRECTORY_PICTURES', path=>console.log('got path in background.js, path:', path));
+		}, 10000);
+	}
+
+	// callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
+	// 	console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
+	// });
 }
 // end - browseraction
 
+// start - polyfill for android
+function addTab(url) {
+	if (core.platform.os != 'android') {
+		chrome.tabs.create({ url:url });
+	} else {
+		callInBootstrap('addTab', { url:url });
+	}
+}
+function reuseElseAddTab(url) {
+	// find tab by url, if it exists focus its window and tab and the reuse it. else add tab
+}
+// end - polyfill for android
+
 function testCallFromExeToBg(aArg, aReportProgress, aComm) {
-	console.log('in testCallFromPortToBg', 'aArg:', aArg, 'aReportProgress:', aReportProgress, 'aComm:', aComm);
+	console.log('in testCallFromExeToBg', 'aArg:', aArg, 'aReportProgress:', aReportProgress, 'aComm:', aComm);
 	setTimeout(function() {
 		aReportProgress({step:'5k baby!'});
 	}, 1000);
@@ -144,3 +192,15 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aPortName) {
 	}, 5000);
 	return 'ok after 5 sec will start calling into tab';
 }
+
+// start - common helper functions
+function Deferred() {
+	this.resolve = null;
+	this.reject = null;
+	this.promise = new Promise(function(resolve, reject) {
+		this.resolve = resolve;
+		this.reject = reject;
+	}.bind(this));
+	Object.freeze(this);
+}
+// end - common helper functions

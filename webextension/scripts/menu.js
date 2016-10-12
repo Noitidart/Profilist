@@ -33,5 +33,6 @@ function testCallFromBgToTab(aArg, aReportProgress, aComm, aTabId) {
 }
 
 setTimeout(function() {
-	callInBackground('callFromTabToBgTestTabId');
+	// callInBackground('callFromTabToBgTestTabId');
+	callInBootstrap('showSystemAlert', { title:'title ya', body:'body ya'});
 }, 5000);

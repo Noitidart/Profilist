@@ -37,7 +37,7 @@ var core = {
 	}
 };
 
-var gAndroidMenuIds = [];
+var gAndroidMenus = [];
 
 var gBgComm;
 var gWkComm;
@@ -47,7 +47,7 @@ var callInMainworker;
 
 function install() {}
 function uninstall(aData, aReason) {
-    if (aReason == ADDON_UNINSTALL) {
+    if (OS.Constants.Sys.Name != 'Android' && aReason == ADDON_UNINSTALL) {
 		uninstallNativeMessaging()
 		.then(valarr => { console.log('uninstalled:', valarr); cleanupNativeMessaging(); })
 		.catch(err => console.error('uninstall error:', err));
@@ -62,7 +62,7 @@ function startup(aData, aReason) {
 
 	var promiseallarr = [];
 
-	if ([ADDON_DOWNGRADE, ADDON_UPGRADE, ADDON_INSTALL].includes(aReason)) {
+	if (OS.Constants.Sys.Name != 'Android' && [ADDON_DOWNGRADE, ADDON_UPGRADE, ADDON_INSTALL].includes(aReason)) {
 		promiseallarr.push( installNativeMessaging() );
 	}
 
@@ -87,13 +87,15 @@ function shutdown(aData, aReason) {
 function startupMainworker(aArg) {
 	var { path, initdata } = aArg;
 
-	return new Promise(resolve => {
-		gWkComm = new Comm.server.worker(path, initdata ? ()=>initdata : undefined, ()=>resolve(), onMainworkerBeforeShutdown);
-		callInMainworker = Comm.callInX2.bind(null, gWkComm, null, null);
-	});
+	gWkComm = new Comm.server.worker(path, initdata ? ()=>initdata : undefined, undefined, onMainworkerBeforeShutdown);
+	callInMainworker = Comm.callInX2.bind(null, gWkComm, null, null);
+
+	// its lazy started, meaning it wont actually start till first call
 }
 
-function onMainworkerBeforeTerminate() {}
+function onMainworkerBeforeShutdown() {
+	return new Promise(resolve => callInMainworker('onBeforeTerminate', undefined, aArg => resolve()) );
+}
 
 // end - mainworker stuff
 
@@ -122,6 +124,12 @@ function shutdownAndroid() {
 
 function onBrowserActionClicked() {
 	callInBackground('onBrowserActionClicked');
+}
+
+function addTab(aArg, aReportProgress, aComm) {
+	var { url } = aArg;
+	var win = Services.wm.getMostRecentWindow('navigator:browser');
+	win.BrowserApp.addTab(url);
 }
 
 var windowListenerAndroid = {
@@ -179,7 +187,11 @@ var windowListenerAndroid = {
 			if (OS.Constants.Sys.Name == 'Android') {
                 // // android:insert_gui
 				if (aDOMWindow.NativeWindow && aDOMWindow.NativeWindow.menu) {
-					var menuid = aDOMWindow.NativeWindow.menu.add(gBrowserAction.title, gBrowserAction.iconpath, onBrowserActionClicked);
+					var menuid = aDOMWindow.NativeWindow.menu.add({
+						name: gBrowserAction.title,
+						// icon: gBrowserAction.iconpath,
+						callback: onBrowserActionClicked
+					});
 					gAndroidMenus.push({
 						domwin: aDOMWindow,
 						menuid
@@ -357,6 +369,11 @@ function cleanupNativeMessaging() {
 }
 
 // start - addon functions
+function showSystemAlert(aArg) {
+	var { title, body } = aArg;
+
+	Services.prompt.alert(Services.wm.getMostRecentWindow('navigator:browser'), title, body);
+}
 function fetchCore(aArg, aReportProgress, aComm) {
 	return { core };
 }
