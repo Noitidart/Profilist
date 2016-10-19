@@ -27,7 +27,7 @@
 		"message": "Firefox profile management reimagined."
 	},
 	"addon_version_short": {
-		"message": "v%NUMBER%",
+		"message": "v$NUMBER$",
 		"placeholders": {
 			"NUMBER": {
 				"content": "$1",
@@ -36,7 +36,7 @@
 		}
 	},
 	"addon_version_long": {
-		"message": "Version %NUMBER%",
+		"message": "Version $NUMBER$",
 		"placeholders": {
 			"NUMBER": {
 				"content": "$1",
@@ -57,7 +57,7 @@
 		"message": "Profilist - Critical Error"
 	},
 	"startupfailed_body": {
-		"message": "Profilist cannot be used because it failed to startup.\n\nReason: %REASON%",
+		"message": "Profilist cannot be used because it failed to startup.\n\n$REASON$",
 		"placeholders": {
 			"REASON": {
 				"content": "$1",
@@ -65,14 +65,14 @@
 			}
 		}
 	},
-	"startupfailed_seeconsole": {
-		"message": "See \"Browser Console\" for details."
+	"startupfailed_unknown": {
+		"message": "The error is unknown. Try checking the \"Browser Console\" for more details."
 	},
 	"startupfailed_execonnect": {
 		"message": "Failed to connect to executable."
 	},
 	"startupfailed_exemismatch": {
-		"message": "Version of installed executable (%EXEVER%) does not match extension (%EXTVER%). (%HOWTOFIX%)",
+		"message": "Version of installed executable ($EXEVER$) does not match extension ($EXTVER$). ($HOWTOFIX$)",
 		"placeholders": {
 			"EXEVER": {
 				"content": "$1",

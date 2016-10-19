@@ -4,7 +4,13 @@ Cu.import('resource://gre/modules/osfile.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 
 // Globals
-var core; // brought over from background.js if needed
+var core = { // brought over from background.js if needed
+	path: {
+		chrome: {
+			scripts: 'chrome://profilist/content/webextension/scripts/'
+		}
+	}
+};
 
 var gAndroidMenus = [];
 
@@ -17,7 +23,7 @@ var callInMainworker;
 function install() {}
 function uninstall(aData, aReason) {
     if (OS.Constants.Sys.Name != 'Android' && aReason == ADDON_UNINSTALL) {
-		uninstallNativeMessaging()
+		uninstallNativeMessaging() // if it wasnt installed, then this will do nothing
 		.then(valarr => { console.log('uninstalled:', valarr); cleanupNativeMessaging(); })
 		.catch(err => console.error('uninstall error:', err));
 	}
@@ -25,7 +31,7 @@ function uninstall(aData, aReason) {
 
 function startup(aData, aReason) {
 
-	Services.scriptloader.loadSubScript(core.addon.path.scripts + 'comm/webext.js');
+	Services.scriptloader.loadSubScript(core.path.chrome.scripts + 'comm/webext.js');
 
 	var promiseallarr = [];
 
@@ -47,7 +53,7 @@ function startup(aData, aReason) {
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) return;
 
-	shutdownAndroid();
+	shutdownAndroid(); // if its not android it wont do anything
 }
 
 // start - mainworker stuff
@@ -192,25 +198,25 @@ function getNativeMessagingInfo() {
 	// `winregistry_path` is undefined if not windows
 	// os_sname is win/mac/nix
 
-	var exemanifest_json = {
-	  'name': 'profilist', // i use this as child entry for windows registry entry, so make sure this name is compatible with injection into windows registry link39191
-	  'description': 'Platform helper for Profilist',
-	  'path': undefined, // set below to `exe_path`,
-	  'type': 'stdio',
-	  'allowed_extensions': [ core.addon.id ]
-	};
+	// core.nativemessaging.manifest_json = { // this is setup in background.js
+	//   'name': 'profilist', // i use this as child entry for windows registry entry, so make sure this name is compatible with injection into windows registry link39191
+	//   'description': 'Platform helper for Profilist',
+	//   'path': undefined, // set below to `exe_path`,
+	//   'type': 'stdio',
+	//   'allowed_extensions': [ core.self.id ]
+	// };
 
 	var exe_name;
 	var sname = OS.Constants.Sys.Name.toLowerCase(); // stands for "simplified name". different from `mname`
 	if (sname.startsWith('win')) {
 		sname = 'win';
-		exe_name = exemanifest_json.name + '.exe';
+		exe_name = core.nativemessaging.manifest_json.name + '.exe';
 	} else if (sname == 'darwin') {
 		sname = 'mac';
-		exe_name = exemanifest_json.name;
+		exe_name = core.nativemessaging.manifest_json.name;
 	} else {
 		sname = 'nix';
-		exe_name = exemanifest_json.name;
+		exe_name = core.nativemessaging.manifest_json.name;
 	}
 
 	var exe_path;
@@ -218,16 +224,16 @@ function getNativeMessagingInfo() {
 
 	var exe_from = OS.Constants.Path.userApplicationDataDir; // dir that exists for sure in subpath of `exe_path`. where to `makeDir` from for exe
 
-	// update exemanifest_json
-	exemanifest_json.path = exe_path;
-	exemanifest_json.description += ' for ' + sname;
+	// update core.nativemessaging.manifest_json
+	core.nativemessaging.manifest_json.path = exe_path;
+	core.nativemessaging.manifest_json.description += ' for ' + sname;
 
 	var exemanifest_path;
 	var exemanifest_from; // dir that exists for sure in subpath of `exemanifest_path`. where to `makeDir` from for exe
 	switch (sname) {
 		case 'win':
-				// exemanifest_path = OS.Path.join(core.addon.path.storage, 'profilist.json');
-				// exemanifest_from = core.addon.path.profileDir;
+				// exemanifest_path = OS.Path.join(core.path.storage, 'profilist.json');
+				// exemanifest_from = core.path.profileDir;
 				exemanifest_path = OS.Path.join(OS.Constants.Path.userApplicationDataDir, 'extension-exes', 'profilist.json');
 				exemanifest_from = OS.Constants.Path.userApplicationDataDir;
 			break;
@@ -246,11 +252,17 @@ function getNativeMessagingInfo() {
 		winregistry_path = 'SOFTWARE\\Mozilla\\NativeMessagingHosts';
 	}
 
-	return { os_sname:sname, exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json, winregistry_path };
+	return { os_sname:sname, exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json:core.nativemessaging.manifest_json, winregistry_path };
 
 }
 
-function installNativeMessaging() {
+function installNativeMessaging(aArg) {
+	// it should already be there due to `sendCore`, but just to make it not reliant on globals
+	core.nativemessaging = aArg.nativemessaging;
+	core.path = aArg.path;
+
+	Services.prefs.setCharPref('extensions.@profilist.namsg', core.nativemessaging.manifest_json.name);
+
 	var { exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json, winregistry_path, os_sname } = getNativeMessagingInfo();
 
 	var promiseallarrmain = [];
@@ -260,8 +272,8 @@ function installNativeMessaging() {
 		OS.File.makeDir(OS.Path.dirname(exe_path), { from:exe_from })
 		.then( dirmade => {
 			var xhr = Cc['@mozilla.org/xmlextras/xmlhttprequest;1'].createInstance(Ci.nsIXMLHttpRequest);
-			console.log(core.addon.path.exe + os_sname + '/' + exe_name);
-			xhr.open('GET', core.addon.path.exe + os_sname + '/' + exe_name, false);
+			console.log(core.path.chrome.exe + os_sname + '/' + exe_name);
+			xhr.open('GET', core.path.chrome.exe + os_sname + '/' + exe_name, false);
 			xhr.responseType = 'arraybuffer';
 			xhr.send();
 
@@ -284,6 +296,7 @@ function installNativeMessaging() {
 	));
 
 	// make sure exe manifest is in place
+	console.log('json stringify:', JSON.stringify(exemanifest_json));
 	promiseallarrmain.push(new Promise( (resolve, reject) =>
 		writeThenDirMT(exemanifest_path, JSON.stringify(exemanifest_json), exemanifest_from, { noOverwrite:true, encoding:'utf-8' })
 		.then( ok => resolve() )
@@ -299,10 +312,25 @@ function installNativeMessaging() {
 		// not ignoring errors during write, if it errors, startup fails
 	}
 
-	return Promise.all(promiseallarrmain);
+	return new Promise( (resolve, reject) => {
+		Promise.all(promiseallarrmain)
+		.then(resolve())
+		.catch(err => reject(err))
+	});
 }
 
 function uninstallNativeMessaging() {
+	// if installed then pref is set
+	var exemanifest_name;
+	try {
+		exemanifest_name = Services.prefs.getCharPref('extensions.@profilist.namsg');
+	} catch(ex) {
+		return Promise.reject('not installed');
+	}
+
+	Services.prefs.clearUserPref('extensions.@profilist.namsg');
+	core.nativemessaging = { manifest_json:{name:exemanifest_name} };
+
 	var { exe_path, exe_from, exe_name, exemanifest_path, exemanifest_from, exemanifest_json, winregistry_path } = getNativeMessagingInfo();
 
 	var promiseallarrmain = [];
@@ -313,7 +341,7 @@ function uninstallNativeMessaging() {
 	// TODO: if `exe_path` parent dir is empty, remove it, because parent dir is my own created one of "extensions-exes"
 
 	// delete manifest
-	promiseallarrmain.push( OS.File.remove(exemanifest_path, { ignorePermissions:true, ignoreAbsent:true }) ); // ignoreAbsent because if windows, then its in core.addon.path.filestore which is already deleted by now
+	promiseallarrmain.push( OS.File.remove(exemanifest_path, { ignorePermissions:true, ignoreAbsent:true }) ); // ignoreAbsent for the hell of it
 
 	// if Windows then update registry
 	if (winregistry_path) {
@@ -341,17 +369,17 @@ function showSystemAlert(aArg) {
 
 	Services.prompt.alert(Services.wm.getMostRecentWindow('navigator:browser'), title, body);
 }
-function fetchCore(aArg, aReportProgress, aComm) {
-	return { core };
+function sendCore(aArg, aReportProgress, aComm) {
+	core = aArg.core;
 }
 function setApplyBackgroundUpdates(aNewApplyBackgroundUpdates) {
 	// 0 - off, 1 - respect global setting, 2 - on
-	AddonManager.getAddonByID(core.addon.id, addon =>
+	AddonManager.getAddonByID(core.self.id, addon =>
 		addon.applyBackgroundUpdates = aNewApplyBackgroundUpdates
 	);
 }
 
-function getAddonInfo(aAddonId=core.addon.id) {
+function getAddonInfo(aAddonId=core.self.id) {
 	var deferredmain_getaddoninfo = new Deferred();
 	AddonManager.getAddonByID(aAddonId, addon =>
 		deferredmain_getaddoninfo.resolve({

@@ -2,6 +2,7 @@ var core  = {
 	self: {
 		id: chrome.runtime.id,
 		version: chrome.runtime.getManifest().version,
+		chromemanifestkey: 'profilist'
 	},
 	browser: {
 		name: getBrowser().name,
@@ -14,24 +15,11 @@ var core  = {
 		pages: 'pages/',
 		scripts: 'scripts/',
 		styles: 'styles/',
-		// non-webext paths - SPECIAL prefixed with underscore
+		// non-webext paths - SPECIAL prefixed with underscore - means it is from chrome://core.addon.id/content/
 		_exe: 'exe/',
-		// chrome path version
-		get chrome(key) {
-			// key must be one of the keys in path or null/undefined/blank to just get chrome path
-			// if its a non-webext key, you dont need the prefix of underscore, it will figure it out
-			var prefix = 'chrome://' + core.self.id + '/content/';
-			var suffix;
-			if (key[0] == '_') key = key.substr(1);
-			if (core.path['_' + key]) {
-				// its a chrome path only
-				suffix = core.path['_' + key];
-			} else {
-				suffix = 'webextension/' + core.path[key];
-			}
-			return prefix + suffix;
-		}
-	}
+		// chrome path versions set after this block
+		chrome: {}
+	},
 	// os: {
 	// 	name: OS.Constants.Sys.Name,
 	// 	mname: ['winnt', 'winmo', 'wince', 'darwin'].includes(OS.Constants.Sys.Name.toLowerCase()) ? OS.Constants.Sys.Name.toLowerCase() : 'gtk',
@@ -43,8 +31,14 @@ var core  = {
 	// 	version: Services.appinfo.version,
 	// 	channel: Services.prefs.getCharPref('app.update.channel')
 	// }
-	nativemessaging: {
-
+	nativemessaging: { // only used by firefox
+		manifest_json: {
+		  name: 'profilist', // i use this as child entry for windows registry entry, so make sure this name is compatible with injection into windows registry link39191
+		  description: 'Platform helper for Profilist',
+		  path: undefined, // set by `getNativeMessagingInfo` in bootstrap
+		  type: 'stdio',
+		  allowed_extensions: [ chrome.runtime.id ]
+		}
 	},
 	store: {
 		// defaults - keys that present in here during `preinit` are fetched on startup
@@ -55,6 +49,21 @@ var core  = {
 		mem_lastversion: '-1' // indicates not installed - the "last installed version"
 	}
 };
+
+// set chrome:// paths in core.path
+for (var pathkey in core.path) {
+	if (pathkey == 'chrome') continue;
+	var prefix = 'chrome://' + core.self.chromemanifestkey + '/content/';
+	var suffix;
+	if (pathkey[0] == '_') pathkey = pathkey.substr(1);
+	if (core.path['_' + pathkey]) {
+		// its a chrome path only
+		suffix = core.path['_' + pathkey];
+	} else {
+		suffix = 'webextension/' + core.path[pathkey];
+	}
+	core.path.chrome[pathkey] = prefix + suffix;
+}
 
 var gExeComm;
 var gPortsComm = new Comm.server.webextports();
@@ -68,90 +77,117 @@ var callInMainworker = Comm.callInX2.bind(null, gBsComm, 'callInMainworker', nul
 // start - init
 preinit();
 
-function preinit(aRetryReasons={}) {
-	// in below cases, `preinit` can be retried. every time it retries it adds a key which signifies the reason for retrying.
-		// EXE_AUTOINSTALL - retrying due to `cantryexeautoinstall`
+// never retries - only one special case of retry is after auto install native messaging
+function preinit(aIsRetry) {
 
 	var promiseallarr = [];
-
-	// fetch core from bootstrap - i dont use anything from here, but fetching it for hell of it (as this is how i used to do things pre webext)
-	promiseallarr.push(new Promise(resolve => {
-		callInBootstrap('fetchCore', undefined, function(aArg) {
-			var { core:gotcore } = aArg;
-
-			Object.assign(core, gotcore);
-
-			console.log('got core in background, core:', core);
-			resolve('ok got core from bootstrap into background');
-		});
-	}));
+	/*
+	 promises in promiseallarr when get rejected, reject with:
+		{
+			reason: string;enum[STORE_CONNECT, EXE_CONNECT, EXE_MISMATCH]
+			text: string - non-localized associated text to show - NOT formated text. this is something i would insert into the template shown
+			data: object - only if EXE_MISMATCH - keys: exeversion
+		}
+	*/
+	// give bootstrap core
+	callInBootstrap('sendCore', { core:core });
 
 	// fetch storage
-	promiseallarr.push(new Promise(function(resolve) {
-		chrome.storage.local.get(Object.keys(core.store), function(storeds) {
-			for (var key in storeds) {
-				Object.assign(core.store[key], storeds[key]);
+	promiseallarr.push(new Promise(function(resolve, reject) {
+		// start async-proc19292
+		var tries = 0;
+		const maxtries = 100;
+		const timebetween = 50; // ms
+
+		var getStore = function() {
+			tries++;
+			if (tries >= maxtries) {
+				reject({
+					reason: 'STORE_CONNECT',
+					text: chrome.runtime.lastError
+				});
+			} else {
+				chrome.storage.local.get(Object.keys(core.store), gotStore);
 			}
-			resolve();
-		});
+		};
+
+		var gotStore = function(storeds) {
+			if (chrome.runtime.lastError) {
+				setTimeout(getStore, timebetween);
+			} else {
+				for (var key in storeds) {
+					Object.assign(core.store[key], storeds[key]);
+				}
+				resolve();
+			}
+		};
+
+		getStore();
+
+		// end async-proc19292
 	}));
 
 	// get platform info - and startup exe (desktop) or mainworker (android)
-	var cantryexeautoinstall = false; // mark this to true, if reject due to exe error and auto-installing it can possibly fix it
 	promiseallarr.push(new Promise(function(resolve, reject) {
-		chrome.runtime.getPlatformInfo(function(platinfo) {
+		// start async-proc133934
+		var getPlat = function() {
+			chrome.runtime.getPlatformInfo(gotPlat);
+		};
+
+		var gotPlat = function(platinfo) {
 			console.log('platinfo:', platinfo);
 			core.platform = platinfo;
 
 			// if didnt have to startup exe/mainworker i could resolve here with `resolve('ok platinfo got')`
+			startNativeHost();
+		};
 
-			// startup exe or mainworker
+		var startNativeHost = function() {
 			if (core.platform.os == 'android') {
 				callInBootstrap('startupMainworker', { path:'chrome://profilist/content/webextension/scripts/mainworker.js' });
-				resolve('ok platinfo got AND mainworker started up');
-				// its lazy started up, so cant wait on it to startup with proimise
-				// // callInBootstrap(
-				// // 	'startupMainworker',
-				// // 	{
-				// // 		path: 'chrome://profilist/content/webextension/scripts/mainworker.js'
-				// // 		// path: chrome.runtime.getURL('scripts/mainworker.js') // cant use `chrome.runtime.getURL('scripts/mainworker.js')` as this will cause error of `SecurityError: Failed to load worker script at "moz-extension://269e9e5e-c45a-4863-8846-05311321b58b/scripts/mainworker.js"`
-				// // 	},
-				// // 	()=>resolve('ok platinfo got AND mainworker started up')
-				// // );
+				// worker doesnt start till first call, so just assume it connected
+				verifyNativeHost();
 			} else {
 				gExeComm = new Comm.server.webextexe(
 					'profilist',
-					function onExeConnected() {
-						// resolve('ok platinfo got AND exe started up')
-						// lets make sure the exe version and extension version match
-						callInExe('getVersion', undefined, function(exeversion) {
-							var extversion = core.self.version;
-							if (exeversion === extversion) {
-								resolve('ok platinfo got AND exe started up AND exe version matches extension version');
-							} else {
-								// reject('ok platinfo got AND exe started up BUT exe version does not match extension version')
-								cantryexeautoinstall = true;
-								var howtofixstr;
-								if (isSemVer(extversion, '>' + exeversion)) {
-									// user needs to upgrade the exe OR downgrade the extension
-									howtofixstr = chrome.i18n.getMessage('startupfailed_exemismatch_howtofix1');
-								} else {
-									// user needs to downgrade the exe OR upgrade the extension
-									howtofixstr = chrome.i18n.getMessage('startupfailed_exemismatch_howtofix2');
-								}
-								reject(chrome.i18n.getMessage('startupfailed_exemismatch', [exeversion, extversion, howtofixstr]));
-							}
-						});
+					function() {
+						// exe connected
+						verifyNativeHost();
 					},
-					function onExeFailed(err) {
-						cantryexeautoinstall = true;
-						console.error('failed to connect to exe, err:', err);
-						// reject('failed to connect to exe, err:' + err.toString());
-						reject(chrome.i18n.getMessage('startupfailed_execonnect') + ' ' err.toString());
+					function(aErr) {
+						// exe failed to connect
+						console.error('failed to connect to exe, aErr:', aErr);
+						if (aErr) aErr = aErr.toString(); // because at the time of me writing this, Comm::webext.js does not give an error reason fail, i tried but i couldnt get the error reason, it is only logged to console
+						verifyNativeHost({ reason:'EXE_CONNECT', text:aErr });
 					}
 				);
 			}
-		});
+		};
+
+		var verifyNativeHost = function(aRejectObj) {
+			// last step of async-proc - responsible for calling `resolve` or `reject`
+			console.log('in verifyNativeHost');
+			if (aRejectObj) {
+				reject(aRejectObj);
+			} else {
+				// verifies the native host version matches that of the extension
+				if (core.platform.os == 'android') {
+					resolve('ok platinfo got AND nativehost (mainworker) started up');
+				} else {
+					callInExe('getExeVersion', undefined, function(exeversion) {
+						var extversion = core.self.version;
+						if (exeversion === extversion) {
+							resolve('ok platinfo got AND exe started up AND exe version matches extension version');
+						} else {
+							reject({ reason:'EXE_MISMATCH', data:{ exeversion:exeversion } });
+						}
+					});
+				}
+			}
+		};
+
+		getPlat();
+		// end async-proc133934
 	}));
 
 	Promise.all(promiseallarr)
@@ -161,40 +197,80 @@ function preinit(aRetryReasons={}) {
 		init();
 	})
 	.catch(function onPreinitFailed(err) {
+		console.error('onPreinitFailed, err:', err);
+		// start sync-proc39
+		var shouldRetry = function() {
+			if (aIsRetry) {
+				// do not retry again, even if it was for another reason - i only do 1 retry
+				displayError();
+			} else {
+				switch (err.reason) {
+					case 'EXE_CONNECT':
+					case 'EXE_MISMATCH':
+							if (core.browser.name == 'Firefox')
+								doRetry();
+							else
+								displayError();
+						break;
+					default:
+						displayError();
+				}
+			}
+		};
+
+		var doRetry = function() {
+			if (err.reason.indexOf('EXE_') === 0) {
+				callInBootstrap('installNativeMessaging', { nativemessaging:core.nativemessaging, path:core.path }, function(aInstallFailed) {
+					if (!aInstallFailed)
+						setTimeout(preinit.bind(null, true), 0); // so it gets out of this catch scope
+					else
+						displayError(aInstallFailed);
+				});
+			}
+		};
 
 		var displayError = function(errex) {
-			// errex - an additional error message to show due to retry failures
-			console.error('failed to complete `preinit` proc, err:', err)
-			if (!err) {
-				err = '';
-			} else {
-				err = err.toString();
+			// last step
+
+			// build body, based on err.reason, with localized template and with err.text and errex
+			var body, bodyarr;
+			switch (err.reason) {
+				// case 'STORE_CONNECT': // let default handler take care of this
+				// 		//
+				// 	break;
+				case 'EXE_CONNECT':
+
+						bodyarr = [chrome.i18n.getMessage('startupfailed_execonnect') + ' ' + (err.text || chrome.i18n.getMessage('startupfailed_unknown'))]
+						if (errex) bodyarr[0] += ' ' + errex.toString();
+
+					break;
+				case 'EXE_MISMATCH':
+
+						// build howtofixstr
+						var extversion = core.self.version;
+						var exeversion = err.data.exeversion;
+						console.log('going to isSemVer', extversion, exeversion);
+						console.log('semver:', isSemVer(extversion, '>' + exeversion));
+						var howtofixstr = isSemVer(extversion, '>' + exeversion) ? chrome.i18n.getMessage('startupfailed_exemismatch_howtofix1') : chrome.i18n.getMessage('startupfailed_exemismatch_howtofix2');
+						bodyarr = [ chrome.i18n.getMessage('startupfailed_exemismatch', [exeversion, extversion, howtofixstr]) ];
+						if (errex) bodyarr[0] += ' ' + errex.toString();
+
+					break;
+				default:
+					var txt = '';
+					if (err && err.text) txt += err.text;
+					if (errex) txt += '\n' + errex;
+
+					body = chrome.i18n.getMessage('startupfailed_body', [ txt || chrome.i18n.getMessage('startupfailed_unknown') ]);
 			}
+			var body = chrome.i18n.getMessage('startupfailed_body', bodyarr);
 
-			if (errex) {
-				console.error('failed on a retry as well, errex:', errex);
-				err += '\n\n' + errex.toString();
-			}
-
-			if (!err.length) err = null; // for link1992930
-
-			callInBootstrap('showSystemAlert', {
-				title: chrome.i18n.getMessage('startupfailed_title'),
-				body: chrome.i18n.getMessage('startupfailed_body', [err || chrome.i18n.getMessage('startupfailed_seeconsole') ]) // link1992930 is due to the `||` here
-			});
+			// show error to user
+			callInBootstrap('showSystemAlert', { title:chrome.i18n.getMessage('startupfailed_title'), body:body });
 		};
-		if (cantryexeautoinstall && !aRetryReasons.EXE_AUTOINSTALL && core.browser.name == 'Firefox') {
-			// !aRetryReasons.EXE_AUTOINSTALL - means it hasnt retried for this reason yet. as i dont want to retry for the same reason multiple times
-			callInBootstrap('installNativeMessaging', core.nativemessaging, function(failreason) {
-				if (!failreason) {
-					setTimeout(function(){ preinit(Object.assign({}, aRetryReasons, { EXE_AUTOINSTALL:true })); }, 0); // so it gets out of this catch scope
-				} else {
-					displayError(failreason);
-				}
-			});
-		} else {
-			displayError();
-		}
+
+		shouldRetry();
+		// end sync-proc39
 	});
 }
 
@@ -285,7 +361,7 @@ function testCallFromExeToBg(aArg, aReportProgress, aComm) {
 
 	var promisemain = new Promise(function(resolve) {
 		setTimeout(function() {
-			resolve();
+			resolve('OK DONESKIS');
 		}, 5000);
 	});
 	return promisemain;
