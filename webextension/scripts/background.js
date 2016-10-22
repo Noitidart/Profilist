@@ -305,7 +305,7 @@ function onBrowserActionClicked() {
 	//
 
 	console.log('opening menu.html now');
-	addTab(chrome.extension.getURL('pages/menu.html'));
+	// addTab(chrome.extension.getURL('pages/menu.html'));
 
 	if (core.platform.os == 'android') {
 		setTimeout(function() {
@@ -313,6 +313,9 @@ function onBrowserActionClicked() {
 		}, 10000);
 	}
 
+	callInExe('log', 'LOGGING THIS', function(aArg) {
+		console.error('back in background from logging:', aArg);
+	});
 	// callInExe('testCallFromBgToExe', {sub:'hi there'}, function(aArg, aComm) {
 	// 	console.log('in callback of testCallFromBgToExe', 'aArg:', aArg, 'aComm:', aComm);
 	// });
@@ -395,11 +398,11 @@ function storageCall(aArea, aAction, aKeys, aOptions) {
 		// if aAction "get" then null/string/string[]
 		// if aAction "set" then object
 	// aOptions - object
-		// maxtries - int;default:100 - set to 0 if you want it to try infinitely
+		// maxtries - int;default:0 - set to 0 if you want it to try infinitely
 		// timebetween - int;default:50 - milliseconds
 
 	aOptions = aOptions ? aOptions : {};
-	const maxtries = aOptions.maxtries || 100;
+	const maxtries = aOptions.maxtries || 0;
 	const timebetween = aOptions.timebetween || 50;
 
 	const callid = _storagecall_callid++; // the id of this call to `storageCall` // only used for when `aAction` is "set"
