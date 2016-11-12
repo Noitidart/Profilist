@@ -386,6 +386,7 @@ function callFromTabToBgTestTabId(aArg, aReportProgress, aComm, aPortName) {
 	return 'ok after 5 sec will start calling into tab';
 }
 
+// rev2 - https://gist.github.com/Noitidart/bcb964207ac370d3301720f3d5c9eb2b
 var _storagecall_pendingset = {};
 var _storagecall_callid = 1;
 function storageCall(aArea, aAction, aKeys, aOptions) {
@@ -470,7 +471,7 @@ function storageCall(aArea, aAction, aKeys, aOptions) {
 							}
 
 							// SPECIAL - udpate core.store
-							if (core && core.store) {
+							if (typeof(core) == 'object' && core.store) {
 								for (var setkey in aKeys) {
 									core.store[setkey] = aKeys[setkey];
 								}
